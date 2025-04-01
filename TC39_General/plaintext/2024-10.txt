@@ -1,0 +1,1024 @@
+2024-10-02
+[22:36:09.0957] <rkirsling>
+wait I don't think I realized that it's legal to return random crap from a constructor
+
+[22:37:22.0625] <rkirsling>
+so `class C { foo() { return 3; } constructor() { return [1]; } }` in an uninstantiable class then? (in the sense that you can call `new C()` but you can never get "a `C`")
+
+[22:37:39.0164] <rkirsling>
+does that have a non-illegitimate usage?
+
+[22:38:02.0907] <rkirsling>
+ * so `class C { foo() { return 3; } constructor() { return [1]; } }` is an uninstantiable class then?
+(in the sense that you can call `new C()` but you can never get "a `C`")
+
+[22:39:04.0984] <rkirsling>
+ * so `class C { foo() { return 3; } constructor() { return [1]; } }` is an uninstantiable class then?
+(in the sense that you can call `new C()` but you can never get "a `C`" and you could only access `foo` via `C.prototype`)
+
+[22:40:02.0974] <rkirsling>
+ * so `class C { foo() { return 3; } constructor() { return [1]; } }` is an uninstantiable class then?
+(in the sense that you can call `new C()` but you can never get "a `C`", so `foo` could only be accessed via `C.prototype`)
+
+[08:15:26.0788] <Aapo Alasuutari>
+> <@rkirsling:matrix.org> so `class C { foo() { return 3; } constructor() { return [1]; } }` is an uninstantiable class then?
+> (in the sense that you can call `new C()` but you can never get "a `C`", so `foo` could only be accessed via `C.prototype`)
+
+Returning an object is valid.
+
+[08:16:47.0222] <rkirsling>
+it is valid code, yes, otherwise I wouldn't be talking about it lol
+
+[08:19:06.0972] <bakkot>
+depends on what you mean by "illegitimate". i believe the functionality is there so you could match es5-style "classes" which did the same thing. also lets you wrap the return value in a Proxy or whatever
+
+[08:20:31.0769] <bakkot>
+these days the only real use I see for it is to stamp private fields on existing objects (`class id { constructor(x){ return x } }; class stamp { #priv; constructor(o){ super(o) } }; new stamp(foo); // foo now has .#priv`
+
+[08:20:36.0076] <bakkot>
+the "return override trick"
+
+[08:20:40.0225] <bakkot>
+but this is hateful and you shouldn't do it
+
+[08:41:33.0407] <shu>
+loathsome return override
+
+[09:01:31.0331] <rkirsling>
+yeah by legitimate I meant not hateful/loathsome 😅 thanks for confirming
+
+[09:01:54.0232] <rkirsling>
+I learned this from Shu's Shared Structs deck
+
+[09:02:03.0112] <rkirsling>
+* (I learned this from Shu's Shared Structs deck)
+
+[09:17:11.0251] <Michael Ficarra>
+I think it was used for like "decorating" a constructor back in the day
+
+[09:17:30.0574] <Michael Ficarra>
+something like `C = doParameterValidation(C);`
+
+[09:20:10.0294] <Michael Ficarra>
+but while that is a use case for return override in functions, it is not a use case for return override in class constructors
+
+[09:20:20.0950] <Michael Ficarra>
+that feature probably should've been left on the ES2015 cutting room floor
+
+[12:03:39.0498] <Bradford Smith>
+A factory function is better, but I have seen the "return from constructor" feature used to allow `new Foo(x)` to always return the same object for a given `x` value.
+
+[12:04:26.0599] <shu>
+that's high-level hating
+
+[12:04:35.0728] <shu>
+why would you want `new` to not be actually new
+
+
+2024-10-05
+[21:49:11.0458] <Tushar Vaswani>
+
+Hey guys I was reading about environment records and lexical environment and I got a confusion. Don't know if this is the right channel to discuss about this. But basically my question is this:
+
+If we have this code:
+
+{
+    const x = 2;
+    var y = 3;
+}
+
+console.log(x); // will fail
+console.log(y); // will work fine
+
+Then here x was part of lexical environment(and ultimately environment record) of the block. That's why it will not be accessible outside the block.
+
+But var is accessible becasue it's not block scoped. So does that mean it's not stored in environment record of block and stored directly in global environment record (and global object basically?) or in both global environment record and environment record of block.
+
+[21:49:28.0654] <Tushar Vaswani>
+ * 
+Hey guys I was reading about environment records and lexical environment and I got a confusion. Don't know if this is the right channel to discuss about this. But basically my question is this:
+
+If we have this code:
+
+```js
+{
+    const x = 2;
+    var y = 3;
+}
+
+console.log(x); // will fail
+console.log(y); // will work fine
+```
+
+Then here x was part of lexical environment(and ultimately environment record) of the block. That's why it will not be accessible outside the block.
+
+But var is accessible becasue it's not block scoped. So does that mean it's not stored in environment record of block and stored directly in global environment record (and global object basically?) or in both global environment record and environment record of block.
+
+[21:51:33.0444] <rkirsling>
+yeah, `var` effectively "doesn't see" `{}`
+
+[21:53:04.0827] <Tushar Vaswani>
+> <@rkirsling:matrix.org> yeah, `var` effectively "doesn't see" `{}`
+
+Thanks for help, so that basically means it will be be stored in global environment record only?
+
+[21:54:00.0086] <Tushar Vaswani>
+I am mainly confused because its not clearly outlined in spec
+
+[21:54:05.0630] <Tushar Vaswani>
+ * I was mainly confused because its not clearly outlined in spec
+
+[21:55:23.0191] <rkirsling>
+yeah, "lexical" refers to the `{}`, `let`, `const` mechanism
+
+[21:55:45.0030] <rkirsling>
+`var` just knows about function scopes and global scope
+
+[21:55:51.0177] <Jessidhia>
+that depends on strict mode and on whether it’s inside or outside a function body
+
+[21:56:26.0859] <Jessidhia>
+it won’t be global on a strict mode script… IIRC
+
+[21:58:27.0791] <Tushar Vaswani>
+> <@rkirsling:matrix.org> `var` just knows about function scopes and global scope
+
+Thanks that makes a lot more sense now
+
+[22:01:10.0967] <Tushar Vaswani>
+> <@jessidhia:matrix.org> it won’t be global on a strict mode script… IIRC
+
+so does that mean we wont be able to access var variables outside block in strict mode?
+
+[22:02:24.0524] <Tushar Vaswani>
+Well actually maybe I misunderstood it because I just tried it and it seems to work still:
+
+```js
+"use strict";
+{
+    var a = 1;
+    console.log(a);
+}
+console.log(a);
+```
+
+[22:03:37.0861] <rkirsling>
+you'd want to check `globalThis.a` but I do think it works, yeah
+
+[22:03:49.0080] <rkirsling>
+ * you'd want to check `globalThis.a` but I do think it works, yeah
+
+[22:04:25.0768] <Tushar Vaswani>
+> <@rkirsling:matrix.org> you'd want to check `globalThis.a` but I do think it works, yeah
+
+yeah even that is printing the value
+
+
+2024-10-06
+[17:53:36.0425] <Mathieu Hofman>
+```js
+(function() {
+"use strict";
+{
+    var a = 1;
+    console.log(a); //1
+}
+console.log(a); // 1
+})();
+console.log(globalThis.a); // undefined
+```
+
+[18:40:22.0841] <rkirsling>
+that shouldn't require "use strict" though
+
+
+2024-10-08
+[19:37:33.0719] <sachag>
+I noticed TC39 is in Tokyo, feel free to ping me if any one of you come through Kyoto, or want info about the area!
+
+[11:55:42.0810] <sirisian>
+This is probably obvious, but in the decorator proposal if I have ```class A { @f a = 1; }``` it's not possible to access the initial value 1 without creating an instance? Is that more a reflection feature for later? Was mulling over how to turn a class with annotations into a JSON object (including their initial/default values) without creating an instance. I'm reminded of a Java project I saw before that extracted defaults to then create JSON structures that were fed to a UI. I could do class ```A { @f(1) a = 1; }```. addInitializer runs for the instance. Something like an addDefinitionInitializer would maybe be what I'd expect or is that too complex if it's like a function call?
+
+
+2024-10-09
+[18:06:00.0798] <littledan>
+> <@sirisian:matrix.org> This is probably obvious, but in the decorator proposal if I have ```class A { @f a = 1; }``` it's not possible to access the initial value 1 without creating an instance? Is that more a reflection feature for later? Was mulling over how to turn a class with annotations into a JSON object (including their initial/default values) without creating an instance. I'm reminded of a Java project I saw before that extracted defaults to then create JSON structures that were fed to a UI. I could do class ```A { @f(1) a = 1; }```. addInitializer runs for the instance. Something like an addDefinitionInitializer would maybe be what I'd expect or is that too complex if it's like a function call?
+
+The thing is, the initializer can refer to this, which (for a subclass) can be based on things like constructor params. So I think passing an argument to the constructor is the way to go.
+
+[18:24:03.0785] <sirisian>
+That is a really solid point. I was too focused on constants. Forgot you can use just do b = this.a * 2; and other things.
+
+[08:12:05.0910] <Jùnliàng Huáng>
+Is the behaviour of the regex `/\p{ASCII}/iv` supposed to be changed by https://github.com/tc39/proposal-regexp-v-flag/issues/30? Specifically, should `/\p{ASCII}/iv.test("\u017F")` returns `false` given that `/\p{ASCII}/iu.test("\u017F")` returns `true`? Reading the spec I figured the input `\u017F` should be folded to `s` by the Canonicalize in the character set matcher, and therefore should match `\p{ASCII}` . But both V8 and JSC reject it.
+
+
+2024-10-10
+[19:48:51.0420] <canadahonk>
+how does it work with author vs champion?
+
+[19:49:57.0413] <ljharb>
+often they're the same people, but sometimes the author isn't a delegate and can't champion
+
+[19:49:59.0635] <Chris de Almeida>
+they are often the same, but authors author it and champions argue it
+
+[19:50:12.0104] <ljharb>
+and sometimes a new champion takes over an old proposal and the old champion is still the author
+
+[19:50:31.0400] <canadahonk>
+so if someone authored a proposal and I want to champion and potentially edit, I would be champion and me and the other would both be authors, right
+
+[19:50:56.0821] <ljharb>
+yep
+
+[19:51:00.0287] <Chris de Almeida>
+maybe, depends how much you add to it
+
+[19:51:05.0383] <canadahonk>
+sure
+
+[19:51:09.0393] <Michael Ficarra>
+very likely
+
+[19:51:09.0599] <ljharb>
+no hard rubric tho, just a judgement call
+
+[19:51:15.0263] <canadahonk>
+ * sure, but generally
+
+[19:52:04.0804] <Chris de Almeida>
+champions must be on committee and authors needn't
+
+[19:56:57.0232] <canadahonk>
+also should only `spec.emu` be used today (not `spec.html`)?
+
+[19:57:34.0516] <shu>
+you can name it whatever you want
+
+[19:57:35.0883] <shu>
+i like html
+
+[19:57:43.0178] <shu>
+ain't nobody know what emu is
+
+[19:57:47.0637] <Richard Gibson>
+spec.sgml
+
+[19:58:01.0262] <keith_miller>
+Isn't it a bird?
+
+[19:58:05.0878] <Andreu Botella (at TC39, 🕐 JST)>
+spec.ostrich
+
+[19:58:24.0349] <canadahonk>
+spec.spec
+
+[20:01:41.0923] <Meghan Denny>
+emu comes from <https://github.com/tc39/ecmarkup>
+
+[20:02:37.0735] <Meghan Denny>
+i used to think it was a bikeshed fork but im not sure if thats true/when it happened if it did
+
+[20:03:32.0623] <linusg>
+file extensions are bloat: https://github.com/whatwg/html/blob/main/source
+
+[20:03:49.0634] <ljharb>
+name it whatever you want, but the template repo starts it out as `spec.emu`
+
+[21:07:48.0847] <Domenic>
+> <@meghanbun:matrix.org> i used to think it was a bikeshed fork but im not sure if thats true/when it happened if it did
+
+emu was from-scratch, built by Brian Terlson. IIRC, based on discussions between him and I at a Redmond TC39 shortly after ES6 publication. I had done Ecmarkdown, he did Ecmarkup.
+
+[21:08:05.0269] <canadahonk>
+random spec check: is "the extended mathematical value of" used in place of ℝ() only when the earlier spec does not handle +-Infinity?
+
+[21:08:14.0884] <canadahonk>
+ * random spec check: is "the extended mathematical value of" used in place of ℝ() only when the earlier steps do not handle +-Infinity?
+
+[21:57:15.0279] <canadahonk>
+intros in spec for proposals with only one clause, yay or nay
+
+[21:58:45.0764] <bakkot>
+I like to have a link to the github
+
+[21:58:48.0568] <bakkot>
+not everyone bothers
+
+[21:59:10.0504] <canadahonk>
+oh yeah that's nice
+
+[21:59:44.0015] <canadahonk>
+also is there an actual standard ;) / template for proposal's readme somewhere?
+
+[22:02:00.0135] <bakkot>
+nope
+
+[22:03:17.0950] <Michael Ficarra>
+@canadahonk:matrix.org I've developed this pattern over time: https://github.com/tc39/proposal-iterator-sequencing
+
+[22:03:40.0979] <Michael Ficarra>
+it changes a bit as the proposal goes through the stages
+
+[22:04:00.0239] <Michael Ficarra>
+earlier stages focus more on the open design space and later stages focus more on the design we ended up with
+
+[22:04:56.0436] <canadahonk>
+neat
+
+[22:11:36.0369] <ljharb>
+(fwiw the spec link will be on the right hand side, so it's arguably redundant to include it in the readme)
+
+[22:14:19.0518] <bakkot>
+the link on the RHS is not always to the spec; on proposals with a playground or docs it's usually those
+
+[22:14:29.0459] <bakkot>
+and the link on the RHS doesn't say what it is
+
+[22:15:30.0978] <ljharb>
+ah, that's fair. most proposals only have the spec link tho
+
+[22:15:55.0426] <Richard Gibson>
+what I really wish were more common is links to GitHub from the rendered spec, as in https://tc39.es/proposal-json-parse-with-source/
+
+[22:16:14.0249] <ljharb>
+yeah true, that'd be a good addition to ecmarkup actually
+
+[22:17:35.0220] <Richard Gibson>
+what, you don't like this?
+```
+shortname: &lt;a href="https://github.com/tc39/proposal-json-parse-with-source"&gt;proposal-json-parse-with-source&lt;/a&gt;
+```
+
+[22:18:37.0808] <ljharb>
+oh interesting, that's workable i guess. i was thinking more of like the upper right dog-ear corner with a github logo
+
+[22:19:14.0462] <Michael Ficarra>
+> <@bakkot:matrix.org> the link on the RHS is not always to the spec; on proposals with a playground or docs it's usually those
+
+yeah like https://github.com/tc39/proposal-joint-iteration#joint-iteration
+
+[22:20:51.0681] <Michael Ficarra>
+> <@ljharb:matrix.org> oh interesting, that's workable i guess. i was thinking more of like the upper right dog-ear corner with a github logo
+
+yeah I have that on my demo pages https://tc39.es/proposal-joint-iteration/demo/
+
+[22:23:29.0384] <ljharb>
+i like https://github.com/tholman/github-corners a bit better
+
+[22:23:55.0346] <Richard Gibson>
+there's also the dead-simple approach taken by ecma262 itself
+```
+<div id="metadata-block">
+  <h1>About this Specification</h1>
+  …
+  <ul>
+    <li>GitHub Repository: <a href="https://github.com/tc39/ecma262">https://github.com/tc39/ecma262</a></li>
+```
+
+[22:24:08.0685] <ljharb>
+not fancy enough :-p
+
+[22:30:21.0239] <Richard Gibson>
+https://i.giphy.com/media/v1.Y2lkPTc5MGI3NjExOG15N2NncXc5eWYzd2NhaGF4eXA5dm1pM2doZGk0aTJmYW5wNTFzNyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9cw/WcYnTzdrjQphdu33xs/giphy.gif
+
+[22:31:39.0444] <Michael Ficarra>
+get github to update their official recommendations and I'll change it https://github.blog/news-insights/the-library/github-ribbons/
+
+[23:31:26.0389] <Aapo Alasuutari>
+> <@canadahonk:matrix.org> spec.spec
+
+spec.lgtm
+
+
+2024-10-15
+[12:03:42.0287] <Michael Ficarra>
+does anyone know what JS engine MySQL embeds? https://dev.mysql.com/doc/refman/9.0/en/srjs-limitations.html
+
+[12:06:52.0915] <Chris de Almeida>
+> <@michaelficarra:matrix.org> does anyone know what JS engine MySQL embeds? https://dev.mysql.com/doc/refman/9.0/en/srjs-limitations.html
+
+GraalVM
+
+[12:07:14.0385] <Michael Ficarra>
+okay that makes sense
+
+
+2024-10-18
+[18:36:46.0763] <Aapo Alasuutari>
+DataView constructor without an explicit byte length parameter calculates the byte length of a fixed length buffer -backed DataView and stores it in the ByteLength internal slot. For a resizable AB it stores the "AUTO" value instead.
+
+Is there actually any observable effect or safety concern if an engine chooses to not precalculate the byte length, and instead calculates it on the fly from the AB data during access, ie. does the same as "AUTO" does. I at least cannot see any issue since the fixed length AB's length cannot change, and the DataView's byte offset cannot change so the resulting byte length should be fully static, right?
+
+[20:27:53.0071] <Aapo Alasuutari>
+And a related question, I don't suppose V8 or SM has any usage statistics on different constructor parameters? :)
+
+[11:21:56.0704] <shu>
+> <@aapo.alasuutari:matrix.org> And a related question, I don't suppose V8 or SM has any usage statistics on different constructor parameters? :)
+
+V8 doesn't
+
+
+2024-10-20
+[19:05:17.0630] <Mathieu Hofman>
+So has anyone else ever needed a `String.codePointCompare` function (a la `Intl.Collator.prototype.compare`) to use with `sort` for comparing strings by Unicode code points instead of the default code units (when the comparator is missing). It seems that there is no Intl locale / collation that will do a dumb code point compare.
+
+[19:06:51.0823] <Mathieu Hofman>
+Bonus is that implementing this natively would allow engines using an internal utf8 representation for strings to just compare them by bytes!
+
+[19:14:42.0674] <bakkot>
+I have never needed to sort strings by code point, no
+
+[19:15:28.0343] <bakkot>
+I don't think any major engines use internal utf8 representations but I could be mistaken
+
+[19:16:05.0829] <bakkot>
+how did you find yourself needing this?
+
+[19:18:16.0201] <bakkot>
+speaking of sorting, though, I do want to have a `Array<T>.sortBy(fn)` method where the function is a map from `T` to `Comparable: string | number | bigint | Array<Comparable>`, and which sorts the inputs by comparing their outputs from `fn` (throwing if the outputs are of unlike types, and sorting arrays lexicographically)
+
+[19:18:39.0820] <bakkot>
+and given such a thing you could do `array.sortBy(s => [...s])`
+
+[19:19:11.0634] <bakkot>
+of course are extremely unlikely to get any new array prototype methods with reasonable names, so I guess it would have to be a static `Array.sortBy(arr, fn)`, which... ugh. but I'd still take it.
+
+[19:19:15.0609] <bakkot>
+ * of course we are extremely unlikely to get any new array prototype methods with reasonable names, so I guess it would have to be a static `Array.sortBy(arr, fn)`, which... ugh. but I'd still take it.
+
+[19:19:47.0180] <bakkot>
+ * speaking of sorting, though, I do want to have a `Array<T>.sortBy(fn)` method where the function is a map from `T` to `Comparable: string | number | bigint | Array<Comparable>`, and which sorts the inputs by comparing their outputs from `fn` (throwing if the outputs are of unlike types, and comparing arrays lexicographically)
+
+[19:24:18.0583] <Mathieu Hofman>
+We need a portable way of sorting strings for Ocapn, and settled on unicode codepoint comparison. This is basically an interop question.
+
+[21:14:44.0465] <Aapo Alasuutari>
+Side quest: Is there actually ~any engines that use UTF-8 as their string representation? Mine does, but I'm wondering if there are others and if they simply accept string methods being non-standard, or if they take measures to hide the backing representation.
+
+[22:04:20.0164] <Mathieu Hofman>
+Moddable's XS can be built to use either utf-8 or cesu-8
+
+[22:05:02.0191] <Mathieu Hofman>
+I thought that v8 supported utf-8 strings, especially when interacting with the DOM
+
+[22:46:08.0939] <Domenic>
+DOM uses WTF-16, sometimes (but rarely) censoring lone surrogates on the boundaries
+
+[22:49:45.0427] <Justin Ridgewell>
+> <@mhofman:matrix.org> Moddable's XS can be built to use either utf-8 or cesu-8
+
+Why cesu-8?
+
+[22:50:30.0780] <Mathieu Hofman>
+compactness of strings while keeping compatibility with utf-16
+
+[22:51:35.0443] <Mathieu Hofman>
+it makes some operations a little costly however (like random access to string index)
+
+[06:02:12.0234] <Mathieu Hofman>
+> <@mhofman:matrix.org> We need a portable way of sorting strings for Ocapn, and settled on unicode codepoint comparison. This is basically an interop question.
+
+Also for interop with SQLite which by default encodes strings in utf-8 and sorts them with no collation.
+
+
+2024-10-21
+[21:14:32.0341] <sachag>
+I've duplicated the 2023 State of JS survey as a starting point to discuss the contents of the 2024 edition. More info here: https://github.com/Devographics/surveys/issues/252
+
+[05:02:55.0034] <Jack Works>
+https://github.com/nodejs/node/issues/55468
+
+[06:43:04.0729] <Mathieu Hofman>
+Allowing TLA in non-entrypoint modules was a mistake.
+
+[06:44:52.0352] <littledan>
+we added this feature on purpose. Sometimes you have to load something in a non-entrypoint module before that module can be used. Better to use asynchronous I/O than blocking sync I/O (or, background thread computation instead of foreground, for the Wasm case we were discussing) when that happens.
+
+[06:45:20.0598] <littledan>
+it doesn't work well in cycles; we knew that. cycles have to be broken. This is also a problem for classes.
+
+
+2024-10-22
+[08:53:15.0595] <Jan Olaf Martin>
+Is there a spot right now where “bundler conventions” could be documented or specified? A lot of this is tied to module resolution and import.meta but in ways that’s not 100% HTML spec, either.
+
+[08:54:59.0324] <Jan Olaf Martin>
+IMO this is a bit of a blindspot, standards wise, and leads to a confusing situation with “correct behavior” spread between node.js docs and various bundler’s own docs. And it’s very hard to determine which parts are interoperable or to what extent.
+
+[08:57:51.0672] <Jan Olaf Martin>
+Concretely this came up in a discussion with webpack maintainers about process.env.NODE_ENV vs import.meta.env.DEV vs some other API. (For context: https://github.com/webpack/webpack/pull/18876)
+
+[09:10:20.0783] <Michael Ficarra>
+@jkrems:matrix.org For module resolution, that's all intentionally left up to the implementations and we probably won't be adding new constraints there. But for `import.meta` properties, any of a number of standards venues could choose to standardise the name and meaning of a new property. The HTML spec defines `url` and `resolve` for instance. For something really generic like `debug`, TC39 seems an appropriate venue.
+
+[09:14:00.0946] <Jan Olaf Martin>
+> <@michaelficarra:matrix.org> @jkrems:matrix.org For module resolution, that's all intentionally left up to the implementations and we probably won't be adding new constraints there. But for `import.meta` properties, any of a number of standards venues could choose to standardise the name and meaning of a new property. The HTML spec defines `url` and `resolve` for instance. For something really generic like `debug`, TC39 seems an appropriate venue.
+
+I think the fact that it *is* left up to implementers is what creates the “void” I’m talking about here. IIRC the best spec for module resolution across bundlers is a gist a webpack maintainer wrote that may or may not be up-to-date. Because tools usually implement a superset of browser resolution (citation needed), it’s hard to know which superset would work across tools, e.g. when writing a library.
+
+[09:15:18.0293] <Jan Olaf Martin>
+I’m not sure TC39 could specify .debug because (at least imo), the semantics should be closely tied to module resolution semantics. And the semantics that are interesting in this context don’t exist anywhere but in tools.
+
+[09:23:36.0839] <Michael Ficarra>
+> <@jkrems:matrix.org> I think the fact that it *is* left up to implementers is what creates the “void” I’m talking about here. IIRC the best spec for module resolution across bundlers is a gist a webpack maintainer wrote that may or may not be up-to-date. Because tools usually implement a superset of browser resolution (citation needed), it’s hard to know which superset would work across tools, e.g. when writing a library.
+
+maybe something worth talking to WinterCG about
+
+[09:24:02.0532] <Michael Ficarra>
+> <@jkrems:matrix.org> I’m not sure TC39 could specify .debug because (at least imo), the semantics should be closely tied to module resolution semantics. And the semantics that are interesting in this context don’t exist anywhere but in tools.
+
+oh I hadn't read into what you wanted `debug` to do, so that's possible, yeah
+
+[09:29:24.0142] <Jan Olaf Martin>
+> <@michaelficarra:matrix.org> maybe something worth talking to WinterCG about
+
+I tried WinterCG first but from initial interactions, it seemed like their bias was (understandable) towards runtimes, not [build] tools. I'm not sure how much engagement there would be from tooling authors. But I just created I "found" one in that I created https://matrix.to/#/#tc39-tools:matrix.org and I'll see if I can get this into the tools ecosystem outreach group scope, maybe.
+
+[09:29:44.0623] <Jan Olaf Martin>
+> <@michaelficarra:matrix.org> maybe something worth talking to WinterCG about
+
+ * I tried WinterCG first but from initial interactions, it seemed like their bias was (understandable) towards runtimes, not \[build\] tools. I'm not sure how much engagement there would be from tooling authors. But I just created https://matrix.to/#/#tc39-tools:matrix.org and I'll see if I can get this into the tools ecosystem outreach group scope, maybe.
+
+[10:28:11.0174] <bakkot>
+oh hey someone's doing a new coffeescript https://civet.dev/
+
+[10:47:11.0820] <Chris de Almeida>
+kopi luwak is not for everyone
+
+[12:42:22.0987] <Michael Ficarra>
+cool! there were so many of them back in the day and then people just kinda stopped
+
+[12:50:52.0007] <Michael Ficarra>
+oh my, I even see a familiar face in the contributors list! ❤️
+
+[13:00:31.0402] <ljharb>
+civet's been around for years i thought
+
+[14:15:28.0654] <Chris de Almeida>
+> <@jkrems:matrix.org> I tried WinterCG first but from initial interactions, it seemed like their bias was (understandable) towards runtimes, not \[build\] tools. I'm not sure how much engagement there would be from tooling authors. But I just created https://matrix.to/#/#tc39-tools:matrix.org and I'll see if I can get this into the tools ecosystem outreach group scope, maybe.
+
+sorry -- the link is: #tc39-tools-:matrix.org
+
+
+2024-10-23
+[17:17:06.0364] <bakkot>
+why aren't generator functions iterable?
+
+[17:17:16.0668] <bakkot>
+you have to manually call it
+
+[17:17:25.0573] <bakkot>
+ * you have to manually call a generator
+
+[17:17:42.0768] <bakkot>
+the result is iterable, but... `[Symbol.iterator]` is already a call
+
+[17:18:01.0028] <bakkot>
+I don't see any reason why `function* f(){}; for (a of f) { /* ... */ }` couldn't work
+
+[17:19:44.0037] <bakkot>
+```
+(function* (){}).__proto__[Symbol.iterator] = function(){ return this(); };
+function* f(){ yield 0; yield 1; }
+for (let x of f) console.log(x);
+```
+
+[18:56:24.0785] <Mathieu Hofman>
+My generators often take arguments. Curious what your use case is where it doesn't
+
+[19:05:28.0034] <Meghan Denny>
+the call makes it usable more than once
+
+[19:06:12.0435] <Meghan Denny>
+`x[Symbol.iterator]()` or `for (const a of f())` makes a usable Iterator
+
+[19:08:34.0427] <Meghan Denny>
+Mathieu Hofman: `document.querySelectorAll()[Symbol.iterator]().toArray()` vs `[...document.querySelectorAll()]` is the main one i can think of, i wonder how comparable the perf is of these variations
+
+[19:24:47.0234] <Mathieu Hofman>
+> <@meghanbun:matrix.org> the call makes it usable more than once
+
+I'm confused. A generator call result is an iterable iterator. It's not usable more than once.
+
+[19:25:55.0167] <Mathieu Hofman>
+I think it would be equivalent of saying `[...document.querySelectorAll]` should work, which I'd find confusing.
+
+[19:27:17.0853] <Mathieu Hofman>
+Now what I don't know is if the Iterable iterator result returned by generator calls contain all the iterator helpers. Aka if you can do `document.querySelectorAll().toArray()`. You likely should be able to.
+
+[19:28:38.0517] <Mathieu Hofman>
+ * I think it would be equivalent of saying `[...someGenerator]` should work, which I'd find confusing.
+
+[19:28:47.0296] <Mathieu Hofman>
+ * Now what I don't know is if the Iterable iterator result returned by generator calls contain all the iterator helpers. Aka if you can do `someGenerator().toArray()`. You likely should be able to.
+
+[19:30:22.0306] <Mathieu Hofman>
+I just checked, iterator helpers are available on generator results
+
+[19:31:13.0260] <Mathieu Hofman>
+It's just that `document.querySelectorAll()` returns a NodeList, which is an iterable, not an iterator
+
+[19:38:05.0998] <Mathieu Hofman>
+Ok I think I see what the ask is. Is it to be able to have a value that is iterable multiple times and backed by a generator? In which case I suppose you can do `{[Symbol.iterator]: function *() { yield 1; yield 2; }` ? I just don't really want to encourage a value that's both a callable and an iterable, that feels confusing.
+
+[19:39:41.0496] <bakkot>
+I just sometimes have 0-arity generators, and am annoyed that I need two calls to use them when one call would do just fine
+
+[19:40:41.0640] <bakkot>
+the main reason that this actually matters is that if some API takes an iterable, I have to pass it the opened generator, and the API might not close it
+
+[19:41:03.0546] <bakkot>
+it would be better if the API opened it itself, so that it would be responsible for closing it
+
+[19:42:10.0823] <bakkot>
+but we only have a built-in notion of opening iterables, not generators, and generators are not iterables so it doesn't apply
+
+[19:43:55.0934] <bakkot>
+I would also accept a `Generator.prototype.bindGenerator` which gave you a bound generator object which had `[Symbol.iterator]`, I guess
+
+[19:47:55.0135] <bakkot>
+concretely: how do you correctly pass a generator to (e.g.)
+
+```js
+function take(n, iterable) {
+  if (typeof n !== 'number' || n < 0) throw new TypeError;
+  let result = [];
+  for (let item of iterable) {
+    if (result.length >= n) break;
+    result.push(item);
+  }
+  return result;  
+}
+```
+?
+
+Just doing `take(n, gen())` is wrong: if you do that the generator will never get closed if `n` is invalid. So... `take(n, { [Symbol.iterator]: () => gen() })`, I guess? that's dumb. 
+
+[20:20:04.0856] <Mathieu Hofman>
+Afaik a generator starts suspended so really there isn't any harm in dropping it before the first `.next()` call, right (well except for the weird sync arguments processing)
+
+[20:21:25.0391] <Mathieu Hofman>
+That said I do see the use case now. A "bind to use once iterable" might be a solution.
+
+[20:24:54.0566] <Mathieu Hofman>
+It's not obvious that such an iterable should support multiple iterations unless explicitly allowed.
+
+[23:28:10.0139] <Ashley Claymore>
+how many things do we think could break if the spec changed it so generator argument processing was also deferred?
+
+[02:46:17.0043] <nicolo-ribaudo>
+I notice a mention of a JavaScriptCore bug at https://github.com/lydell/js-tokens?tab=readme-ov-file#safari-warning, and I wonder if it's even possible to test it in test262.
+
+When running `let res = /(#)(?:a|b)+/.exec("#" + "a".repeat(1e7)); print(res?.length)`,
+- V8 and SM throw a RangeError (maximum call stack exceeded)
+- XS correctly prints 2
+- JSC incorrectly prints `null`
+
+It is possible to test something in test262 that in practice in half of the engines throws due to the call stack size?
+
+[02:46:21.0927] <nicolo-ribaudo>
+ * I notice a mention of a JavaScriptCore bug at https://github.com/lydell/js-tokens?tab=readme-ov-file#safari-warning, and I wonder if it's even possible to test it in test262.
+
+When running `let res = /(#)(?:a|b)+/.exec("#" + "a".repeat(1e7)); print(res?.length)`,
+
+- V8 and SM throw a RangeError (maximum call stack exceeded)
+- XS correctly prints 2
+- JSC incorrectly prints undefined
+
+It is possible to test something in test262 that in practice in half of the engines throws due to the call stack size?
+
+[02:56:11.0845] <nicolo-ribaudo>
+ * I notice a mention of a JavaScriptCore bug at https://github.com/lydell/js-tokens?tab=readme-ov-file#safari-warning, and I wonder if it's even possible to test it in test262.
+
+When running `let res = /(#)(?:a|b)+/.exec("#" + "a".repeat(1e7)); print(res?.length)`,
+
+- V8 and SM throw an error (maximum call stack exceeded)
+- XS correctly prints 2
+- JSC incorrectly prints undefined
+
+It is possible to test something in test262 that in practice in half of the engines throws due to the call stack size?
+
+[07:17:57.0141] <Richard Gibson>
+I would say that it's practical with try..catch that admits only success or RangeError, but also unnecessary here if the scale is reduced a bit:
+```
+$ eshost -sx '
+  let res = /(#)(?:a|b)+/.exec("#" + "a".repeat(1e6)); 
+  if (Array.isArray(res)) {
+    print(JSON.stringify(res.map(s => s.length > 9 ? s.slice(0, 3) + "…" + s.slice(-3) : s)));
+  } else {
+    print(res);
+  }
+'
+#### engine262
+
+RangeError: Maximum call stack size exceeded
+
+#### GraalJS, Hermes, Moddable XS, QuickJS, SpiderMonkey, V8
+["#aa…aaa","#"]
+
+#### JavaScriptCore
+null
+```
+
+[07:26:22.0590] <nicolo-ribaudo>
+Oh thanks, I'll open a PR with that 
+
+
+2024-10-24
+[11:38:23.0267] <akaster>
+Is HostPromiseRejectionTracker supposed to be handling Promises, or PromiseCapabilties? https://tc39.es/ecma262/#sec-host-promise-rejection-tracker
+
+HTML expects to use the passed-in promise argument to index sets of `Promise`, which in HTML is actually WebIDL's Promise, which is actually a PromiseCapability. https://html.spec.whatwg.org/multipage/webappapis.html#the-hostpromiserejectiontracker-implementation
+
+HTML also wants to insert the promise into a PromiseRejectionEventInit, which holds a WebIDL Promise explicitly. Alternatively I suppose I could start my impl of HostPromiseRejectionTracker by creating "a Promise resolved with promise" and doge the entire disconnect...
+
+[11:43:53.0080] <akaster>
+wait maybe I'm supposed to do that Promise resolved with promise dance anyway per "converting a javascript value to an IDL promise type" https://webidl.spec.whatwg.org/#js-promise 🤔. 🦆
+
+[11:44:25.0484] <nicolo-ribaudo>
+HTML expects Promise objects too. It links to https://webidl.spec.whatwg.org/#idl-promise, which is not the webidl promise capability 
+
+[11:46:31.0163] <akaster>
+wait what? but `3.2.23. Promise types — Promise<T>` says "IDL promise type values are represented by JavaScript PromiseCapability records."
+which links to your link there in 2.13.30 https://webidl.spec.whatwg.org/#dfn-promise-type
+
+[11:47:04.0695] <akaster>
+I'm interpreting that to mean that HTML doesn't ever want to see a PromiseCapabiltiy's [[Promise]] Slot, and only wants to traffic in PromiseCapabilities
+
+[11:48:11.0649] <akaster>
+... probably should have asked this in whatwg matrix pinging domenic come to think of it 😅
+
+[11:55:31.0335] <Mathieu Hofman>
+> <@akaster:serenityos.org> wait maybe I'm supposed to do that Promise resolved with promise dance anyway per "converting a javascript value to an IDL promise type" https://webidl.spec.whatwg.org/#js-promise 🤔. 🦆
+
+I don't think so as that would handle the promise, and just create another rejected promise?
+
+[11:59:04.0511] <akaster>
+hmm. and that would be 'observable' as a stack overflow constantly creating new rejected promises and passing them to the HostPromiseRejectionTracker? 🤔
+
+[12:04:56.0847] <Mathieu Hofman>
+the point of the unhandled and handled rejection events is to be able to associate them to the promise that is unhandled and possibly later becomes handled
+
+[12:06:09.0701] <Mathieu Hofman>
+Arguably you could "map" them to another promise value, but you'd have to make that mapping stable, and I'd say you shouldn't handle the original promise in the first place
+
+[12:06:48.0702] <Mathieu Hofman>
+There's actually an open question in HTML of how to report unhandled promise events from other realms (ShadowRealm or Worker)
+
+[12:07:16.0052] <akaster>
+hmm. so in that case, <https://html.spec.whatwg.org/multipage/webappapis.html#outstanding-rejected-promises-weak-set> telling me that they are Promises, and linking to both https://webidl.spec.whatwg.org/#idl-promise and https://webidl.spec.whatwg.org/#js-promise is misleading
+
+[12:07:56.0426] <akaster>
+it should say that they are ... "promises", or something, and make it clear that these are not WebIDL Promises represented by a PromiseCapability, but the actual JS value of the promise...
+
+[12:08:18.0464] <akaster>
+man. sideshowbarker told me to be careful with WebIDL issues. I see what he means now, there's a bunch of ambiguity here
+
+[12:11:11.0999] <Mathieu Hofman>
+I can't speak to the HTML spec, just about the intent of these features
+
+[12:11:39.0429] <akaster>
+yeah, I'll probably open an HTML issue so domenic et al can comment at their liesure
+
+
+2024-10-25
+[12:00:15.0467] <bakkot>
+fun use case for ShadowRealms: running code generated by an LLM https://simonwillison.net/2024/Oct/24/claude-analysis-tool/
+
+[12:00:29.0113] <bakkot>
+this didn't actually use ShadowRealms, presumably because they don't exist yet
+
+[12:00:45.0031] <bakkot>
+but same use case:
+
+> it executes that JavaScript directly in your browser—in a locked down Web Worker that communicates back to the main page by intercepting messages sent to console.log()
+
+[12:01:12.0705] <bakkot>
+though I guess you'd really also need the ability to kill long-running code, which means you'd need to use a realm in a worker, or something like that
+
+[12:07:28.0060] <shu>
+yeah the early termination use case is surprisingly common i think
+
+[12:07:35.0609] <shu>
+shadowrealms make that impossible because of the sync-ness
+
+[12:10:45.0823] <bakkot>
+wonder if we could have something in the language for that... like, it is already the case that you might OOM at any point, so it probably isn't that destructive to the semantics of the language if we had a function that was like "if, after this call, execution has not yet yielded, throw an exception wherever we currently are"
+
+[12:12:58.0149] <bakkot>
+I guess that would be bad for engines though, since they do keep track of which things might oom more carefully
+
+[12:19:29.0911] <shu>
+don't think i understand how that API works for something synchronous
+
+[12:19:36.0486] <shu>
+are you envisioning a timeout?
+
+[12:59:24.0887] <bakkot>
+yes, a timeout
+
+[12:59:44.0092] <bakkot>
+which when reached interrupts the currently executing thing
+
+[12:59:59.0023] <bakkot>
+and which gets automatically cleared whenever control is yielded to the event loop
+
+[13:00:02.0268] <shu>
+ah okay, yeah, i would not be against
+
+[13:00:17.0646] <shu>
+in practice engines already have to bake in interrupt checks for GC if nothing else
+
+[13:00:46.0066] <shu>
+the more intrusive change is to actually ensure there's such a thing a way to propagate termination
+
+[13:01:33.0470] <shu>
+every engine needs to propagate exceptions for throwing, but the default assumption is that such exceptions are catchable
+
+[13:01:55.0263] <shu>
+ * the more intrusive change is to actually ensure there's a way to propagate termination
+
+[13:06:02.0748] <littledan>
+Yeah I agree that this termination/timeout part is a common requirement; it came up when I was discussing ShadowRealm with Jason Miller of Shopify (I think they were working on a QuickJS-based thing because of ShadowRealms not existing + this termination requirement + a requirement to be synchronous)
+
+[13:08:25.0192] <littledan>
+* Yeah I agree that this termination/timeout part is a common requirement
+
+
+2024-10-26
+[05:58:25.0304] <Mathieu Hofman>
+Yeah there are no availability guarantees in ShadowRealm or Compartments. In general anything running in the same agent. Preempting a drain of the promise jobs queue is an interesting idea, but I feel very unsure about letting any code running in the same agent after that. It's like catching an OOM but worse, the program can't really make any assumption in what state it's in anymore.
+
+[06:02:40.0577] <Mathieu Hofman>
+I suppose if you could prove that only some of the shadow realms had any jobs on the queue, or calls on the stack when preempted you could just condemn those realms, but I'm not sure that's sufficient. At the very least you'd still need some way to trigger execution in that isolated realm without letting your own realm become collateral damage, and know when/if that realm becomes condemned.
+
+[06:05:02.0099] <Mathieu Hofman>
+* I suppose if you could prove that only some of the shadow realms had any jobs on the queue, or calls on the stack when preempted you could just condemn those realms, but I'm not sure that's sufficient. At the very least you'd need some way to trigger execution in that isolated realm without letting your own realm become collateral damage if it gets preempted, and know when/if that realm becomes condemned.
+
+[06:06:57.0962] <Mathieu Hofman>
+I think by definition that makes the trigger of execution asynchronous, and prevents you from having any of the triggering realm's functions interleaved on the stack. At which point you might as well run in a different agent.
+
+[06:11:15.0236] <Mathieu Hofman>
+FYI, Moddable implemented metering in XS for us. It does a deterministic measurement of work done in the agent, and can interrupt execution if it passes a given threshold. All this is on the embedder side however, and there are only minimal host APIs exposed to JS to temporarily suspend metering.
+
+
+2024-10-31
+[17:36:46.0067] <sachag>
+I've made some progress on the State of JS 2024 survey: https://github.com/Devographics/surveys/issues/252
+
+[17:37:28.0753] <sachag>
+I'm wondering if we could also ask what people think about the recent JS0/JSSugar proposal
+
+[17:37:45.0802] <sachag>
+and also more generally about implementing types in JavaScript
+
+[21:30:30.0113] <bakkot>
+based on what I've read of the discourse, I doubt you'll be able to get people to understand the JS0/JSSugar proposal well enough for people to meaningfully have opinions on it as opposed to some other thing they made up in their heads
+
+[22:00:17.0207] <Sacha Greif>
+I don't think it's within the survey's scope to explain the proposal, it's more about polling people who already have an opinion about it
+
+[22:10:22.0782] <rkirsling>
+why would it be anything but harmful to collect people's opinions on their imagined interpretation of a thing
+
+[22:17:09.0883] <ljharb>
+since virtually nobody outside the committee has a correct understanding of it, i'm not sure what value their opinions would have
+
+[22:27:16.0124] <Sacha Greif>
+I guess now is not a great time to defend people's right to vote for things even when they're misinformed huh…
+
+[22:28:20.0603] <Sacha Greif>
+changing gears, what about this?
+
+
+[22:28:45.0332] <Sacha Greif>
+I tried to come up with a list based on the latest Stage 3 proposals, but I'm happy to tweak it
+
+[22:28:55.0990] <Sacha Greif>
+this question's role is to make people aware of what's coming down the pike
+
+[22:32:09.0506] <ljharb>
+(surveys aren't voting for things :-p )
+
+[22:32:31.0314] <ljharb>
+some of the items on that list aren't stage 3 tho
+
+[22:33:05.0200] <Sacha Greif>
+yes, it's not a 100% match
+
+[22:33:35.0753] <Sacha Greif>
+more of a grab bag of things people might potentially be excited about
+
+[22:34:00.0663] <Meghan Denny>
+what signal would u be hoping to achieve by having this question
+
+[22:34:37.0956] <Sacha Greif>
+help people get a feel for what features might be coming in the next couple years?
+
+[22:40:46.0226] <ljharb>
+that's part of the problem tho, whenever anyone implies that stage < 3 features might be coming at all, let alone in the next couple years, they might end up getting disappointed. for example, pipe has been stuck at its current stage for years and it's unclear what it would take to ever unstick it
+
+[22:41:39.0055] <ljharb>
+like, past surveys have had something like "static types", and then people look at the results and think "we should get types!" and then they look at the type annotation proposal and think they're getting types - but the proposal isn't static types, and the proposal's stuck at stage 1 without a clear path forward (imo)
+
+[22:42:12.0026] <ljharb>
+but also "help people get a feel" kind of conflicts with `I don't think it's within the survey's scope to explain the proposal`, no?
+
+[22:44:00.0338] <ljharb>
+is the survey teaching people things, or just gathering their opinion about things? if the latter, then it seems like you'd want to list every proposal, not just a sampling
+
+[22:44:25.0027] <Sacha Greif>
+it's both
+
+[22:45:00.0811] <ljharb>
+then why isn't in the survey's scope to explain proposals, so that survey takers have appropriate context?
+
+[22:45:10.0535] <ljharb>
+ * then why isn't in the survey's scope to somewhat explain proposals, so that survey takers have appropriate context?
+
+[22:45:56.0520] <ljharb>
+(i don't actually have a mental model of what it "should" be, just that it's a bummer when people get misled into thinking stalled or unlikely proposals are imminent, or when they get a misunderstanding of what a proposal is)
+
+[22:46:24.0776] <Sacha Greif>
+well, it's a two-phase process. when people are *taking* the survey I usually try to keep it light because I don't want extra explanations to slow people down and potentially lead them to abandon the survey altogether
+
+[22:46:46.0671] <Sacha Greif>
+when people are viewing the *results* though I can definitely add more details and explanations
+
+[22:46:53.0462] <Sacha Greif>
+and links
+
+[22:47:44.0140] <Sacha Greif>
+for example the recent State of CSS 2024 survey results had these little cards which even included Baseline info
+
+[22:48:21.0642] <Sacha Greif>
+> if the latter, then it seems like you'd want to list every proposal, not just a sampling
+
+I think just listing every Stage 3 proposal in that question could totally work
+
+[22:49:21.0584] <Sacha Greif>
+> it's a bummer when people get misled into thinking stalled or unlikely proposals are imminent
+
+and I can also filter out any proposals/features that fit this criteria
+
+[22:54:34.0776] <ljharb>
+basically anything < 2.7. things that are 2.7 are pretty safe to rely on generally
+
+[00:30:43.0387] <Sacha Greif>
+would you be able to suggest a good list in https://github.com/Devographics/surveys/issues/252 ?
+
+[08:17:25.0311] <littledan>
+> <@ljharb:matrix.org> basically anything < 2.7. things that are 2.7 are pretty safe to rely on generally
+
+I thought the idea of naming it Stage 2.7 was that Stage 3 is still the signal of "pretty safe/stable"
+
+[08:25:41.0256] <littledan>
+so I like the idea of listing Stage 3 proposals
+
+[08:25:56.0913] <littledan>
+when someone writes tests, that adds to the stability and ensures that everything is well thought through.
+
+[08:28:34.0268] <littledan>
+ * so Stage 3 is a sense of the stable proposals. However, those are already the things we decided to do, so I'm not sure what we need the input for.
+
+[08:28:59.0391] <littledan>
+I think input on earlier stage proposals would be a good idea. The idea is to get direction from the JS community, not just confirmation on decisions that we already made
+
+[08:29:17.0432] <littledan>
+However, asking about JSSugar/JS0 is probably a bit premature, since we don't really know what that will look like
+
+[08:30:02.0898] <littledan>
+How long do we have to give feedback on the state of JS? It'd be nice if TC39 can somehow consider this collectively, rather than one-off people like me just asserting my feelings about what should be done.
+
+[08:53:14.0700] <Michael Ficarra>
+@sachag:matrix.org if you want help preparing a survey/study, that's what TG5 is for, you should reach out to them https://github.com/tc39/tg5
+
+[09:14:49.0138] <bakkot>
+> <@littledan:matrix.org> I thought the idea of naming it Stage 2.7 was that Stage 3 is still the signal of "pretty safe/stable"
+
+personally the way I would put it is, stage 2.7 you can mostly rely on anything except edge cases, stage 3 you can mostly rely even the details
+
+[09:15:16.0403] <bakkot>
+we often find things in 2.7 along the lines of "this should do these operations in a different order" or "this needs to handle some input differently" or whatever
+
+[09:15:21.0565] <bakkot>
+ * we expect to find things in 2.7 along the lines of "this should do these operations in a different order" or "this needs to handle some input differently" or whatever
+
+[10:44:36.0416] <Ashley Claymore>
+I would presume the most likely breaking change in stage 3 are the names, due to web compat issue discovery.
+Maybe second most likely would be changing a property to be a getter/setter to avoid the override mistake.
+
+[10:45:10.0543] <ljharb>
+what i meant with my comment was, users can generally expect 2.7+ features to be a thing in the language in the short to medium term
+
+[10:46:02.0677] <ljharb>
+stage < 2 features, especially, might not be a thing in the language *ever*, let alone in the short to medium term, and it's helpful to avoid mis-setting people's expectations 
+
+[11:05:03.0692] <sirisian>
+/me looks at do expressions. "He's talking about other proposals. You're fine."
+
+[11:21:22.0241] <TabAtkins>
+Yeah, agreed, 2.7 is "stable" in the sense of "very likely to show up", tho I agree with littledan on the other notion of stability.
+

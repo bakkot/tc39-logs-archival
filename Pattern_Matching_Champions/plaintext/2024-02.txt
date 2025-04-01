@@ -1,0 +1,166 @@
+2024-02-05
+[06:41:24.0201] <rbuckton>
+Are we meeting today, or canceling for this week? 
+
+[08:11:37.0927] <rbuckton>
+I expect some folks may be traveling today.
+
+[08:19:34.0917] <rbuckton>
+After 20 minutes, only Richard and Jack showed up and we don't seem to have an agenda, so we're assuming this is canceled.
+
+[09:10:19.0035] <ljharb>
+i totally spaced that we had it; i had to get the kids ready this morning. without a full complement tho there's not much we could get done.
+
+
+2024-02-13
+[11:34:53.0536] <ljharb>
+the next meeting happens to fall on President's Day. who all is available to meet? i'd like to have the meeting if enough of us can do it - otherwise the next one's not til march 4th, and i'd really like to be able to present in april
+
+
+2024-02-14
+[12:50:37.0795] <mpcsh>
+> <@ljharb:matrix.org> the next meeting happens to fall on President's Day. who all is available to meet? i'd like to have the meeting if enough of us can do it - otherwise the next one's not til march 4th, and i'd really like to be able to present in april
+
+I'll be there!
+
+
+2024-02-15
+[09:37:44.0890] <rbuckton>
+During the last plenary session, Shu expressed some concern about the perf cost of iterator destructuring for extractors. I know this is a known concern we've discussed before, which is why we've potentially considered using index/length instead.
+danielrosenwasser pointed out to me that in https://peps.python.org/pep-0622/#custom-matching-protocol, Python decided against full-blown custom matchers in favor of a far more limited approach using `__match_args__`, where something like `case Point(1, 2)` only tests whether the subject is an instance of `Point`, and then reads `Point.__match_args__` which returns an array containing ordered keys like `["x", "y"]`, which in turn is used to extract the named properties of the subject to match for those positions.
+I admit, I'm not a fan of adopting that approach as it severely limits the value proposition for extractors, but there is something to be said for the possible performance implications. I'm curious what everyone else's thoughts are on this, though.
+
+[09:51:02.0157] <rbuckton>
+The other approach discussed was C#'s `Deconstruct`, which allows for some custom evaluation logic but leverages C#'s `out` parameters for ordered destructuring:
+```cs
+void Deconstruct(out int x, out int y) {
+  x = this.x;
+  y = this.y;
+}
+```
+I have been toying with a [`ref` proposal](https://github.com/rbuckton/proposal-ref) for a few years that is similar to `out` (C# also has `ref`, and the only real difference between `ref` and `out` in C# is that an `out` must be assigned to before a normal return from the function body).
+
+[09:51:19.0039] <rbuckton>
+ * The other approach discussed briefly in plenary was C#'s `Deconstruct`, which allows for some custom evaluation logic but leverages C#'s `out` parameters for ordered destructuring:
+
+```cs
+void Deconstruct(out int x, out int y) {
+  x = this.x;
+  y = this.y;
+}
+```
+
+I have been toying with a [`ref` proposal](https://github.com/rbuckton/proposal-ref) for a few years that is similar to `out` (C# also has `ref`, and the only real difference between `ref` and `out` in C# is that an `out` must be assigned to before a normal return from the function body).
+
+[09:51:47.0208] <rbuckton>
+ * The other approach discussed briefly in plenary was C#'s `Deconstruct`, which allows for some custom logic but leverages C#'s `out` parameters for ordered destructuring:
+
+```cs
+void Deconstruct(out int x, out int y) {
+  x = this.x;
+  y = this.y;
+}
+```
+
+I have been toying with a [`ref` proposal](https://github.com/rbuckton/proposal-ref) for a few years that is similar to `out` (C# also has `ref`, and the only real difference between `ref` and `out` in C# is that an `out` must be assigned to before a normal return from the function body).
+
+[09:54:20.0521] <Jack Works>
+I don't like the python approach 
+
+[09:55:05.0803] <Jack Works>
+C# approach requires a static type system so don't work for JavaScript
+
+[09:56:02.0485] <Jack Works>
+I don't think using iterator is a problem, because react is using it a lot, the engine has to optimize it anyway.
+
+[09:58:46.0001] <rbuckton>
+> <@jackworks:matrix.org> I don't think using iterator is a problem, because react is using it a lot, the engine has to optimize it anyway.
+
+React is not fast, and the engine does not currently optimize it away. In a very limited benchmark, we found `const { 0: foo, 1: setFoo } = useState();` is about 20% faster than `const [foo, setFoo] = useState()` in V8.
+
+[10:00:16.0008] <Jack Works>
+yes, I understand. they should do that optimization. not because pattern matching, but react.
+
+[10:04:40.0291] <Jack Works>
+but btw if we use index + length, I'm ok for that
+
+[10:05:16.0375] <Jack Works>
+It's just a little bit classic, not fit es6 style, but the functionality is good.
+
+[10:06:08.0875] <rbuckton>
+ideally, V8 could find ways to improve array->array destructuring, but I don't know how likely that is.
+
+[10:08:19.0676] <Jack Works>
+> <@rbuckton:matrix.org> ideally, V8 could find ways to improve array->array destructuring, but I don't know how likely that is.
+
+if Array@iterator, ArrayIterator.next and some other stuff is unmodified and the subject is a real array imo 
+
+[10:50:27.0660] <ljharb>
+How often is pattern matching going to be in a hot path anyways, and when will it make use of the iterator protocol *more* likely?
+
+[10:54:28.0913] <mgaudet>
+> <@jackworks:matrix.org> I don't think using iterator is a problem, because react is using it a lot, the engine has to optimize it anyway.
+
+Just going to chime in here and say: No. We will work on react like patterns, but I would very much not like to see this form of argumentation used. 
+
+[10:56:42.0011] <mgaudet>
+A huge challenge with the iterator protocol is how much of it is observable-if-you-care-to-look, which means engine complexity when trying to boil this away. I would strongly encourage the growth of pattern matching proposal to consider the cost of things without resorting to "engines are magic and can make this go away". 
+
+[10:58:06.0319] <mgaudet>
+I do worry that pattern matching ends upon the hot path a lot if people think of `is` as `===`-but-better. 
+
+[10:59:23.0489] <ljharb>
+that's fair
+
+[11:00:08.0001] <ljharb>
+i'm not a fan of the iterator protocol, but sometimes it's unavoidable. could we do something like the inverse of array.from? iow, if it's an array, arraylike it, otherwise if iterable, iterate it? that would optimize the most common case
+
+[12:00:10.0568] <rbuckton>
+> <@jackworks:matrix.org> if Array@iterator, ArrayIterator.next and some other stuff is unmodified and the subject is a real array imo
+
+I didn't mean whether it was feasible, just that I cannot make a statement about any implementation's likelihood to implement such an optimization in the near term since they haven't already optimized this given the prevalence of React.
+
+[12:09:10.0228] <mgaudet>
+> <@ljharb:matrix.org> i'm not a fan of the iterator protocol, but sometimes it's unavoidable. could we do something like the inverse of array.from? iow, if it's an array, arraylike it, otherwise if iterable, iterate it? that would optimize the most common case
+
+Possibly! 
+
+[12:54:01.0875] <TabAtkins>
+I'm definitely okay with the simple "just depend on Array-like" if that's a blocker. Allowing iterators in the way ljharb described would be nice, because any place that takes an Array *should* take an iterator or else it's a weird wart, tho.
+
+[12:54:35.0225] <TabAtkins>
+We definitely expect the pattern to be `return [foo, bar, baz]` in custom matchers, so preferring Arrays, or even mandating them, would be okay in my book.
+
+[13:04:42.0237] <rbuckton>
+Would we expect to expand that to tuples as well? 
+
+[13:44:13.0770] <ljharb>
+i mean those aren't ever likely to happen at this point, but yes, ofc
+
+[13:59:24.0574] <TabAtkins>
+yup
+
+[14:27:19.0898] <TabAtkins>
+> <@ljharb:matrix.org> the next meeting happens to fall on President's Day. who all is available to meet? i'd like to have the meeting if enough of us can do it - otherwise the next one's not til march 4th, and i'd really like to be able to present in april
+
+Unfortunately I'm on vacation next week. :(((((  (I leave tomorrow, and am not back until next Friday.) But I'm available on the 26th, and the next several Mondays after that. (March 25th is the first Monday I'm unavailable, as I'll be on vacation again.)
+
+[14:28:08.0167] <TabAtkins>
+But please, if next week is all that's workable in the near future, go for it. I'm pretty comfortable with the possible routes we've discussed on the open issues, and trust y'all to decide well.
+
+[14:28:48.0727] <ljharb>
+ok, then so far it's myself and mark who've explicitly said they can make it; if there's more then we can still meet, otherwise we can cancel
+
+
+2024-02-18
+[14:09:11.0955] <ljharb>
+my plans have changed and i can't make it tomorrow.
+
+
+2024-02-19
+[07:58:29.0429] <mpcsh>
+rats. should we cancel?
+
+[08:16:32.0751] <rbuckton>
+I'm out today as well
+

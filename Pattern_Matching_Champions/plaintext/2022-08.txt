@@ -1,0 +1,1334 @@
+2022-08-01
+[06:50:58.0951] <yulia>
+why is this potentially a bad path? I am not sure I understand your example with `f.toString` ? Is it an issue if we do something custom here? It can include multiple definitions. That is the case for other languages such as idris iirc
+
+[06:51:49.0431] <yulia>
+I am also not sure that this will be a problem with decorators on parameters. This is the same as having internal functions
+
+[06:52:31.0937] <yulia>
+ * why is this potentially a bad path? I am not sure I understand your example with `f.toString` ? Is it an issue if we do something custom here? It can include multiple definitions
+
+[06:52:43.0089] <yulia>
+ * why is this potentially a bad path? I am not sure I understand your example with `f.toString` ? Is it an issue if we do something custom here? It can include multiple definitions. That is the case for other languages such as idris iirc
+
+[08:46:14.0608] <rbuckton>
+I am concerned we could be jumping the gun introducing overloads purely for pattern matching purposes, with Type Annotations on the table. True static typing may not be on the table now, but designing overloads purely for pattern matching could put us in a poor position in the future. There are a number of questions we could ask now whose answers could change dramatically in 3-5 years:
+
+- Would each overload be an independent function reference, or are they somehow nested inside the function?
+- How would this apply to `F.p.bind`? Do we match during `.bind` or when the final function is invoked?
+- How would this apply to `Proxy`?
+- How would this affect `new F()` and the resulting `new.target`, prototypes, etc.
+- If a function decorator is applied to only one overload, what function does it get? If they're all the same function, how would we differentiate overloads in the decorator?
+- If a parameter decorator is applied to only one overload, what function does it get? If they're all the same function, how would we differentiate overloads in the decorator?
+- How would this be impacted by a potential future including type annotations, metadata, reflection, binary AST, etc?
+
+Given that its easy enough to write `(x) => match(x) { ... }` or `function f(x) { return match(x) { ... } }`, I don't think introducing overloads this early in the game would be advisable. At the very least, it shouldn't be tied to a v1 of pattern matching as I believe that would result in the feature sitting in limbo for a decade while we try to sort out cross-cutting concerns.
+
+[08:46:53.0113] <rbuckton>
+ * I am concerned we could be jumping the gun introducing overloads purely for pattern matching purposes, with Type Annotations on the table. True static typing may not be on the table now, but designing overloads purely for pattern matching could put us in a poor position in the future. There are a number of questions we could ask now whose answers could change dramatically in 3-5 years:
+
+- Would each overload be an independent function reference, or are they somehow nested inside the function?
+- How would this apply to `F.p.bind`? Do we match during `.bind` or when the final function is invoked?
+- How would this apply to `Proxy`?
+- How would this affect `new F()` and the resulting `new.target`, prototypes, etc.
+- If a function decorator is applied to only one overload, what function does it get? If they're all the same function, how would we differentiate overloads in the decorator?
+- If a parameter decorator is applied to only one overload, what function does it get? If they're all the same function, how would we differentiate overloads in the decorator?
+- How would this be impacted by a potential future including type annotations, metadata, reflection, binary AST, etc?
+
+Given that its easy enough to write `(x) => match(x) { ... }` or `function f(x) { return match(x) { ... } }`, I don't think introducing overloads this early in the game would be advisable. At the very least, it shouldn't be tied to a v1 of pattern matching as I believe that would result in the feature sitting in limbo for a decade while we try to sort out cross-cutting concerns.
+
+[08:49:10.0448] <rbuckton>
+> <@yulia:mozilla.org> I am also not sure that this will be a problem with decorators on parameters. This is the same as having internal functions
+
+In my list above I reference function and parameter decorators as needing to have *some* knowledge of overloads, which is a further complication especially in regards to proposals such as Decorator Metadata.
+
+[08:50:51.0068] <rbuckton>
+Method decorators are already stage 3 and have no concept of overloads. Introducing overloads that point to the same function reference would cause issues if decorator libraries aren't written to handle that case, and most won't be. 
+
+[08:56:31.0202] <rbuckton>
+Consider a class built to handle server-side HTTP routes:
+
+```js
+class HttpRoutes {
+  @route("GET", "/products")
+  getProducts(req) { ... }
+
+  @route("GET", "/products/{id}")
+  getProduct(req) { ... }
+}
+```
+
+The route might attach metadata to the method that would be used to pick the method to execute when a request is handled. Then we introduce overloads for pattern matching and someone else decides to write:
+
+```js
+class HttpRoutes {
+  @route("GET", "/products")
+  get(req when { url: "/products" }) { ...}
+
+  @route("GET", "/products/{id}")
+  get(req when { url: /\/products\/\d+/ }) { ... }
+}
+```
+Without updating the decorator library, the metadata for `get` might be overwritten, or might be potentially unreachable if each method is nested internally.
+
+[08:56:52.0498] <rbuckton>
+So you then run into a versioning and/or documentation problem.
+
+[09:02:05.0799] <rbuckton>
+Also, let me know if there's a better way to handle this discussion given the issues with your wrist. I had a comminuted fracture in my left wrist about 15 years ago, and daily pain ever since (worse on some days than others), so I can at least partially relate to how difficult typing can be at times.
+
+[09:04:45.0117] <rbuckton>
+ * Also, let me know if there's a better way to handle this discussion given the issues with your wrist. I had a comminuted fracture in my left wrist about 15 years ago, and daily pain ever since (worse on some days than others), so I can at least partially relate to how difficult typing can be at times.
+
+[09:09:47.0980] <yulia>
+ahaha yeah it would be better to have a call
+
+[09:09:56.0152] <yulia>
+but, i already typed this up so
+
+[09:13:23.0909] <yulia>
+> with Type Annotations on the table
+
+(you also mentioned bin ast, and other things here so ill try to answer everything... but i lost it) I believe this is an _very interesting_ companion to type annotations. In fact, I was thinking that it may be interesting to have matchers written via the interface keyword. This may allow us to share both runtime behavior (that, due to being able to throw, can have interesting implications for both safety and optimization) and static information. I don't see this as in opposition and have been chatting with the typescript folks. They don't hate it so far. These may work very well together in fact.
+
+bin-ast doesn't have much support at the moment. I am not sure why this would be in opposition to metadata or reflection. Maybe you have an example i can consider.
+
+> True static typing may not be on the table now, but designing overloads purely for pattern matching could put us in a poor position in the future
+
+I rather strongly disagree. In fact i think the opposite. This has been described to me as one of the weaknesses of typescript -- that they have no impact at run time. What guards and typed objects were proposed to be were runtime checks that can also be used as static information.
+
+> Would each overload be an independent function reference, or are they somehow nested inside the function?
+
+This is open for discussion. A reasonable implementation would to have a match inside of an intermediate function. Effectively pointing to a table that then routes you to the correct functionality.
+
+> How would this apply to F.p.bind? Do we match during .bind or when the final function is invoked?
+
+yes, if we take the table approach, then
+
+```js
+function foo(x when a) { /*...*/} 
+
+function foo( x when b) { /*...*/}
+
+function foo( x) { /*...*/ }
+
+
+// under the hood, so to speak
+
+function foo (x) {
+  match(x) {
+    when a: _internal_shapedFoo_1(x)
+    when b: _internal_shapedFoo_2(x)
+    default : _internal_Foo_default(x)
+  }
+}
+```
+
+(but really, the interesting thing is when you _dont_ have the default case.)
+
+From the engine perspective, if we see that everything is shaped, we might be able to remove the intermediary function. This can possibly result in more assumptions being made (similar to what was being attempted by the guard proposal). This shares a lot of features with guards. 
+
+> How would this apply to Proxy?
+
+what precisely do you mean? can you give an example? Proxies is kind of a big region for me so I am not immediately grasping the issue you are pointing out.
+
+> How would this affect new F() and the resulting new.target, prototypes, etc.
+
+One way to answer this might be: What happens when you have a match statement in the constructor of F? another way to answer it (though I am still absorbing it) is your comment here: https://github.com/tc39/proposal-pattern-matching/issues/281#issuecomment-1199706022 for the new Book example.
+
+> If a function decorator is applied to only one overload, what function does it get? If they're all the same function, how would we differentiate overloads in the decorator?
+
+An decorator would apply to its direct shaped function. So, for example:
+
+```js
+class HttpRoutes {
+
+  @route("GET", "/products")
+  get(req when { url: "/products" }) { ...}
+
+  @route("GET", "/products/{id}")
+  get(req when { url: /\/products\/\d+/ }) { ... }
+
+  // internal engine functions
+  @route("GET", "/products")
+  _internal_shapedget_1(req when { url: "/products" }) { ...}
+
+    @route("GET", "/products/{id}")
+  _internal_shapedget_2(req when { url: /\/products\/\d+/ }) { ... }
+
+  implementation_get(req) { 
+    match(req) {
+       when { url: "/products" }: // ...
+       when { url: /\/products\/\d+/ }: // ... 
+       default : // throw no such function
+    }
+  }
+}
+
+```
+
+and, you can likely imagine what would happen if the default behavior had a decorator
+
+> If a parameter decorator is applied to only one overload, what function does it get? If they're all the same function, how would we differentiate overloads in the decorator?
+
+Hopefully the above answers this question?
+
+[09:13:46.0675] <yulia>
+ * > with Type Annotations on the table
+
+(you also mentioned bin ast, and other things here so ill try to answer everything... but i lost it) I believe this is an _very interesting_ companion to type annotations. In fact, I was thinking that it may be interesting to have matchers written via the interface keyword. This may allow us to share both runtime behavior (that, due to being able to throw, can have interesting implications for both safety and optimization) and static information. I don't see this as in opposition and have been chatting with the typescript folks. They don't hate it so far. These may work very well together in fact.
+
+bin-ast doesn't have much support at the moment. I am not sure why this would be in opposition to metadata or reflection. Maybe you have an example i can consider.
+
+> True static typing may not be on the table now, but designing overloads purely for pattern matching could put us in a poor position in the future
+
+I rather strongly disagree. In fact i think the opposite. This has been described to me as one of the weaknesses of typescript -- that they have no impact at run time. What guards and typed objects were proposed to be were runtime checks that can also be used as static information.
+
+> Would each overload be an independent function reference, or are they somehow nested inside the function?
+
+This is open for discussion. A reasonable implementation would to have a match inside of an intermediate function. Effectively pointing to a table that then routes you to the correct functionality.
+
+> How would this apply to F.p.bind? Do we match during .bind or when the final function is invoked?
+
+yes, if we take the table approach, then
+
+```js
+function foo(x when a) { /*...*/} 
+
+function foo( x when b) { /*...*/}
+
+function foo( x) { /*...*/ }
+
+
+// under the hood, so to speak
+
+function foo (x) {
+  match(x) {
+    when a: _internal_shapedFoo_1(x)
+    when b: _internal_shapedFoo_2(x)
+    default : _internal_Foo_default(x)
+  }
+}
+```
+
+(but really, the interesting thing is when you _dont_ have the default case.)
+
+> How would this apply to Proxy?
+
+what precisely do you mean? can you give an example? Proxies is kind of a big region for me so I am not immediately grasping the issue you are pointing out.
+
+> How would this affect new F() and the resulting new.target, prototypes, etc.
+
+One way to answer this might be: What happens when you have a match statement in the constructor of F? another way to answer it (though I am still absorbing it) is your comment here: https://github.com/tc39/proposal-pattern-matching/issues/281#issuecomment-1199706022 for the new Book example.
+
+> If a function decorator is applied to only one overload, what function does it get? If they're all the same function, how would we differentiate overloads in the decorator?
+
+An decorator would apply to its direct shaped function. So, for example:
+
+```js
+class HttpRoutes {
+
+  @route("GET", "/products")
+  get(req when { url: "/products" }) { ...}
+
+  @route("GET", "/products/{id}")
+  get(req when { url: /\/products\/\d+/ }) { ... }
+
+  // internal engine functions
+  @route("GET", "/products")
+  _internal_shapedget_1(req when { url: "/products" }) { ...}
+
+    @route("GET", "/products/{id}")
+  _internal_shapedget_2(req when { url: /\/products\/\d+/ }) { ... }
+
+  implementation_get(req) { 
+    match(req) {
+       when { url: "/products" }: // ...
+       when { url: /\/products\/\d+/ }: // ... 
+       default : // throw no such function
+    }
+  }
+}
+
+```
+
+and, you can likely imagine what would happen if the default behavior had a decorator
+
+> If a parameter decorator is applied to only one overload, what function does it get? If they're all the same function, how would we differentiate overloads in the decorator?
+
+Hopefully the above answers this question?
+
+[09:15:00.0403] <yulia>
+ * > with Type Annotations on the table
+
+(you also mentioned bin ast, and other things here so ill try to answer everything... but i lost it) I believe this is an _very interesting_ companion to type annotations. In fact, I was thinking that it may be interesting to have matchers written via the interface keyword. This may allow us to share both runtime behavior (that, due to being able to throw, can have interesting implications for both safety and optimization) and static information. I don't see this as in opposition and have been chatting with the typescript folks. They don't hate it so far. These may work very well together in fact.
+
+bin-ast doesn't have much support at the moment. I am not sure why this would be in opposition to metadata or reflection. Maybe you have an example i can consider.
+
+> True static typing may not be on the table now, but designing overloads purely for pattern matching could put us in a poor position in the future
+
+I rather strongly disagree. In fact i think the opposite. This has been described to me as one of the weaknesses of typescript -- that they have no impact at run time. What guards and typed objects were proposed to be were runtime checks that can also be used as static information.
+
+> Would each overload be an independent function reference, or are they somehow nested inside the function?
+
+This is open for discussion. A reasonable implementation would to have a match inside of an intermediate function. Effectively pointing to a table that then routes you to the correct functionality.
+
+> How would this apply to F.p.bind? Do we match during .bind or when the final function is invoked?
+
+yes, if we take the table approach, then
+
+```js
+function foo(x when a) { /*...*/} 
+
+function foo( x when b) { /*...*/}
+
+function foo( x) { /*...*/ }
+
+
+// under the hood, so to speak
+
+function foo (x) {
+  match(x) {
+    when a: _internal_shapedFoo_1(x)
+    when b: _internal_shapedFoo_2(x)
+    default : _internal_Foo_default(x)
+  }
+}
+```
+
+(but really, the interesting thing is when you _dont_ have the default case.)
+
+From the engine perspective, if we see that everything is shaped, we might be able to remove the intermediary function. This can possibly result in more assumptions being made (similar to what was being attempted by the guard proposal). This shares a lot of features with guards. 
+
+> How would this apply to Proxy?
+
+what precisely do you mean? can you give an example? Proxies is kind of a big region for me so I am not immediately grasping the issue you are pointing out.
+
+> How would this affect new F() and the resulting new.target, prototypes, etc.
+
+One way to answer this might be: What happens when you have a match statement in the constructor of F? another way to answer it (though I am still absorbing it) is your comment here: https://github.com/tc39/proposal-pattern-matching/issues/281#issuecomment-1199706022 for the new Book example.
+
+> If a function decorator is applied to only one overload, what function does it get? If they're all the same function, how would we differentiate overloads in the decorator?
+
+An decorator would apply to its direct shaped function. So, for example:
+
+```js
+class HttpRoutes {
+
+  @route("GET", "/products")
+  get(req when { url: "/products" }) { ...}
+
+  @route("GET", "/products/{id}")
+  get(req when { url: /\/products\/\d+/ }) { ... }
+
+  // internal engine functions
+  @route("GET", "/products")
+  _internal_shapedget_1(req when { url: "/products" }) { ...}
+
+    @route("GET", "/products/{id}")
+  _internal_shapedget_2(req when { url: /\/products\/\d+/ }) { ... }
+
+  implementation_get(req) { 
+    match(req) {
+       when { url: "/products" }: // ...
+       when { url: /\/products\/\d+/ }: // ... 
+       default : // throw no such function
+    }
+  }
+}
+
+```
+
+and, you can likely imagine what would happen if the default behavior had a decorator
+
+> If a parameter decorator is applied to only one overload, what function does it get? If they're all the same function, how would we differentiate overloads in the decorator?
+
+Hopefully the above answers this question?
+
+[09:17:56.0535] <yulia>
+i joyfully have an inflamed tendon sheath and a popped ganglion cyst so its not bone, its tissue. Will take a long time to heal but i also can't stop myself from talking because i am so darn chatty. I had no idea i was this chatty until i couldn't type for 5 days at all
+
+[09:20:10.0065] <yulia>
+calling is... preferred, but then we lose the history here and people can't engage async
+
+[09:23:46.0927] <yulia>
+(this all said -- it doesn't have to happen before or as a part of pattern matching. I think it could be, and it could be really nice. I also think leaving the door open is important)
+
+[09:24:05.0692] <yulia>
+ * (this all said -- it doesn't have to happen before or as a part of pattern matching. I think leaving the door open is important)
+
+[09:24:28.0515] <yulia>
+ * (this all said -- it doesn't have to happen before or as a part of pattern matching. I think it could be, and it could be really nice. I also think leaving the door open is important)
+
+[09:31:40.0799] <rbuckton>
+>> How would this apply to Proxy?
+>
+> what precisely do you mean? can you give an example? Proxies is kind of a big region for me so I am not immediately grasping the issue you are pointing out.
+
+Specifically, function identities passed via the call and construct traps. Its essentially similar to the question around F.p.bind, but reframed to an overlapping problem space.
+
+I'm also concerned about evaluation order and side effects. Consider something like this:
+
+```js
+let counter = 0;
+function g() {
+  return counter++;
+}
+
+function f({ [g()]: a }, b when Number) { ... }
+function f({ [g()]: a }, b when String) { ... }
+
+f(["foo", "bar"], "baz");
+```
+What should we expect that `a` is in `f`? This is a contrived example, but showcases how side effects could introduce unintended or unexpected consequences in function evaluation. Whereas, with a non-overloaded function the caller doesn't have to be concerned about side effects in the call:
+
+```js
+function f({ [g()]: a }, b) {
+  match (b) {
+    when (Number): ...;
+    when (String): ...;
+  }
+}
+```
+
+[09:33:27.0891] <yulia>
+hm, interesting. Wouldn't this also be an issue in the current pattern matching proposal? Especially if you have a global counter like this
+
+[09:33:33.0611] <rbuckton>
+There's also the potential for side effects in the destructuring itself.
+
+[09:34:45.0676] <yulia>
+```js
+function f({ [g()]: a }, b) {
+  match (b) {
+    when (Number): ...;
+    when (String): ...;
+  }
+}
+```
+
+this is currently not legal js syntax yes? I guess you mean
+```js
+function f({ [${g()}]: a }, b) {
+  match (b) {
+    when (Number): ...;
+    when (String): ...;
+  }
+}
+```
+
+[09:35:08.0899] <rbuckton>
+Side-effecting code like this is bad anyways, but the example tries to make it more obvious. A less obvious and potentially more likely case would be passing an object as the first argument whose getter can observe the attempt to bind each overload during destructuring
+
+[09:36:04.0156] <rbuckton>
+No, this is already legal syntax. Binding patterns can have computed property names.
+
+[09:36:14.0388] <yulia>
+Oh, right -- sorry i missed the `:`
+
+[09:36:47.0733] <yulia>
+so that is an alias to a, am i reading that right?
+
+[09:37:29.0612] <rbuckton>
+That's binding the property to `a`, just like you might do `({ foo: bar }) => bar`
+
+[09:37:35.0178] <yulia>
+yep
+
+[09:37:42.0623] <yulia>
+i really dislike that syntax, it is so hard to read
+
+[09:37:46.0848] <yulia>
+but anyway
+
+[09:38:17.0129] <yulia>
+it seems like an issue we already have to be honest
+
+[09:39:35.0546] <rbuckton>
+But we're introducing it in a new and unexpected place. Injecting something in between `f(x)` and the evaluation of the parameter list/function body.
+
+[09:41:45.0859] <yulia>
+so, `g` gets evaluated on every call
+
+[09:41:54.0019] <yulia>
+I am not sure... what the difference would really be here
+
+[09:42:23.0288] <yulia>
+yes, you would have the same counter for all matches, but that could be intentional
+
+[09:42:48.0819] <rbuckton>
+Consider this less-contrived example instead:
+
+```js
+class Lazy {
+  constructor(factoryfn) { ... }
+  get hasValue() { ... }
+  get value() { ... } // getting `value` invokes `factoryfn` and changes `hasValue` from `false` to `true`
+}
+
+function f({ hasValue, value }, b when String) { console.log(hasValue); }
+function f({ hasValue, value }, b when Number) { console.log(hasValue); }
+
+const obj = new Lazy(() => { ... });
+f(obj, 0);
+```
+
+This would print `true` when the author might have expected it to print `false`.
+
+[09:43:34.0949] <rbuckton>
+ * Consider this less-contrived example instead:
+
+```js
+class Lazy {
+  constructor(factoryfn) { ... }
+  get hasValue() { ... }
+  get value() { ... } // getting `value` invokes `factoryfn` and changes `hasValue` from `false` to `true`
+}
+
+function f({ hasValue, value }, b when String) { console.log(hasValue); }
+function f({ hasValue, value }, b when Number) { console.log(hasValue); }
+
+const obj = new Lazy(() => { ... });
+f(obj, 0);
+```
+
+This would print `true` when the author might have expected it to print `false`.
+
+[09:43:52.0097] <yulia>
+but, the same is true if you call f twice
+
+[09:43:56.0304] <yulia>
+and you are basically calling f twice
+
+[09:44:07.0375] <yulia>
+oh i see
+
+[09:44:19.0129] <rbuckton>
+With the same `obj`, sure, but that could be expected *without* the overload.
+
+[09:44:38.0925] <rbuckton>
+with the overload, you never get the right answer for the 2nd+ overloads
+
+[09:45:55.0953] <rbuckton>
+My overarching concern is that there are a lot of corner cases with overloads that make me very reticent to pursue them as part of a pattern matching proposal.
+
+[09:47:07.0692] <yulia>
+wait, no
+
+[09:47:10.0245] <yulia>
+thats not right
+
+[09:49:45.0300] <yulia>
+ok, i just tested -- hasValue is not triggered on definition
+
+[09:49:49.0699] <yulia>
+its called only on execution
+
+[09:50:06.0384] <yulia>
+so you would need to call f at least once, even in the overload case
+
+[09:50:11.0281] <yulia>
+so you would get the right answer
+
+[09:50:53.0070] <yulia>
+it is the same case as having two different functions with that same definition. 
+
+```js
+function f({ hasValue, value }, b) { console.log(hasValue); }
+function h({ hasValue, value }, b) { console.log(hasValue); }
+```
+
+[09:53:19.0598] <rbuckton>
+Except that calling an overloaded `f` *is* like calling it twice, but bailing early in the first call.
+
+[09:53:46.0634] <yulia>
+but we do the test first and then the assignment?
+
+[09:54:08.0620] <yulia>
+you could have side effects in the test though
+
+[09:54:11.0140] <rbuckton>
+Not if we want interpolation to work.
+
+[09:54:36.0323] <yulia>
+er
+
+[09:54:40.0303] <yulia>
+i don't know what you mean there exactly
+
+[09:54:48.0518] <rbuckton>
+```js
+function f({ hasValue, value }, b when Number and >= ${value}) { ... }
+function f({ hasValue, value }, b when String) { ... }
+```
+
+etc.
+
+[09:54:48.0789] <yulia>
+you mean, function calls for the test
+
+[09:54:58.0643] <rbuckton>
+ * ```js
+function f({ hasValue, value }, b when Number and >= ${value}) { ... }
+function f({ hasValue, value }, b when String) { ... }
+```
+
+etc.
+
+[09:55:48.0052] <rbuckton>
+If you call an overloaded `f`, you have to process each parameter in each overload (until you find a match) to properly bind it and choose the correct function body to execute.
+
+[09:56:10.0400] <rbuckton>
+ * If you call an overloaded `f`, you have to process each parameter in each overload (until you find a match) to properly bind it and choose the correct function body to execute.
+
+[09:56:45.0897] <yulia>
+but why is this different then writing it as a match statement?
+
+[09:57:32.0468] <rbuckton>
+Because if I write it as a match statement, I can handle the first argument on its own:
+
+```js
+function f({ hasValue, value }, b) {
+  match (b) {
+    when (String): ...;
+    when (Number and >= ${value}): ...;
+  }
+}
+```
+
+[09:57:58.0813] <rbuckton>
+ * Because if I write it as a match statement, I can handle the first argument on its own:
+
+```js
+function f({ hasValue, value }, b) {
+  match (b) {
+    when (Number and >= ${value}): ...;
+    when (String): ...;
+  }
+}
+```
+
+[09:58:14.0139] <rbuckton>
+Overloads would hide this potential side effect
+
+[09:58:38.0047] <yulia>
+this will still have the same side effect
+
+[09:58:40.0066] <yulia>
+that will be hidden
+
+[09:59:06.0138] <yulia>
+the problem is falling through to String
+
+[09:59:12.0447] <yulia>
+with value set
+
+[09:59:14.0804] <yulia>
+and that will happen here
+
+[09:59:29.0071] <rbuckton>
+ * Because if I write it as a match statement, I can handle the first argument on its own:
+
+```js
+function f({ hasValue, value }, b) {
+  match (b) {
+    when (String): ...;
+    when (Number and >= ${value}): ...;
+  }
+}
+```
+
+[09:59:41.0669] <yulia>
+ok, but when you edit it like that, the same can be done for function ordering
+
+[09:59:45.0372] <rbuckton>
+Except that calling `f(obj, 0)` would have the intended result and wouldn't evaluate `obj.value` twice.
+
+[10:00:03.0668] <yulia>
+ok, but you have to consistently edit both cases
+
+[10:00:05.0667] <rbuckton>
+Sorry, trying to align the order with the original order I mentioned further up.
+
+[10:00:15.0830] <rbuckton>
+ * ```js
+function f({ hasValue, value }, b when String) { ... }
+function f({ hasValue, value }, b when Number and >= ${value}) { ... }
+```
+
+etc.
+
+[10:00:29.0175] <yulia>
+the behavior between those two, in the case that `b` is a string, will be the same
+
+[10:00:29.0901] <rbuckton>
+> <@yulia:mozilla.org> ok, but you have to consistently edit both cases
+
+done
+
+[10:00:50.0528] <rbuckton>
+Yes, but my point is that calling when `b` is a Number would be inconsistent.
+
+[10:01:09.0542] <yulia>
+yes, and my argument here is its the same for the match statement ;)
+
+[10:01:21.0773] <yulia>
+it isn't part of the nature of it being in the function definition
+
+[10:02:06.0372] <rbuckton>
+It is if we make it part of the function definition via overloads. Developer's aren't used to overloads in JS, so it just becomes a new hazard to trip over.
+
+[10:02:06.0847] <yulia>
+this is generally true of matches with side effects.
+
+[10:02:42.0345] <rbuckton>
+In a `match` its at least a statement context, so its expected. 
+
+[10:03:47.0350] <rbuckton>
+Sure, this is a small concern, but I have a *lot* of small concerns with overloads 
+
+[10:04:12.0229] <yulia>
+it will also be true of anything that has valueOf set -- including in current functions. this relies on implicit behavior that is already present and we cannot get rid of
+
+[10:04:23.0350] <yulia>
+otherwise, this should have been an argument against destructuring in function definitions
+
+[10:04:54.0694] <rbuckton>
+Except that "destructuring in function definitions" is "the JavaScript way of having named arguments", according to many in plenary.
+
+[10:05:36.0157] <yulia>
+its certainly one way. the example you gave explictly relies on hiding an implicit function execution
+
+[10:05:48.0789] <yulia>
+there are many ways to do weird behavior with that
+
+[10:06:00.0303] <yulia>
+ * its certainly one way. the example you gave explictly relies on hiding an implicit function execution
+
+[10:06:23.0723] <yulia>
+(like implementing scheme in js)
+
+[10:06:32.0098] <yulia>
+(with the js parser)
+
+[10:06:37.0507] <rbuckton>
+I'd just rather not add yet another weird behavior, especially one that could be a significant stumbling block for advancing pattern matching.
+
+[10:06:56.0137] <yulia>
+i would say that this isn't "another weird behavior". it is "existing weird behavior"
+
+[10:07:05.0207] <yulia>
+I am not proposing to introduce valueOf
+
+[10:07:42.0698] <rbuckton>
+It extends an existing weird behavior to a new location, namely the space between `f(x)` and evaluation of the function body
+
+[10:08:06.0453] <yulia>
+no. it does not. that already exists, as we discussed
+
+[10:08:29.0265] <rbuckton>
+Today, that weird behavior can happen at most once when calling `f(x)`, now it can potentially happen `n-1` number of times based on `n` overloads
+
+[10:09:05.0495] <yulia>
+ok, so we agree that the weird behavior exists
+
+[10:09:34.0140] <yulia>
+we agree that this has the exact same behavior as the `match` statement
+
+[10:10:45.0626] <rbuckton>
+Yes and no, parameter lists have some other weird behaviors tied in as well (such as scoping) that don't precisely apply to `match`.
+
+[10:11:00.0678] <yulia>
+I can construct a case, where the evaluation will happen a number of times between function evaluation and function body
+
+[10:11:43.0850] <yulia>
+via `{ [value]: { [value]: {[value]: ....}}}`
+
+[10:11:57.0311] <yulia>
+in a single function
+
+[10:12:26.0028] <rbuckton>
+And there *is* a difference between:
+```js
+function f({ x }, b when C1) { ... }
+function f({ x }, b when C2) { ... }
+```
+and
+```js
+function f({ x }, b) {
+  match (b) {
+    when C1: ...;
+    when C2: ...;
+  }
+}
+```
+
+
+[10:12:49.0524] <yulia>
+sure, and for that you wouldn't use the overloading
+
+[10:13:32.0880] <yulia>
+hm, but i am curious to hear what you have to say, sorry for interrupting
+
+[10:14:46.0814] <rbuckton>
+It may not be obvious at first glance to a developer when you *shouldn't* use overloads, as it requires more knowledge about what the expected inputs are and how they're used than a linter or even a type checker can generally provide.
+
+[10:15:15.0571] <yulia>
+im curious about the example
+
+[10:15:17.0241] <rbuckton>
+Most statically typed languages don't evaluate user code when choosing an overload, as it happens at compile time.
+
+[10:16:17.0920] <yulia>
+riiight but we don't have a compile step, and we are not statically typed
+
+[10:16:39.0680] <yulia>
+so i don't think that this argument applies. we have a dynamically _checked_ (not typed) language
+
+[10:16:55.0678] <rbuckton>
+> <@yulia:mozilla.org> im curious about the example
+
+There's nothing immediately wrong about a definition like this:
+```js
+function f({ x }, b when C1) { ... }
+function f({ x }, b when C2) { ... }
+```
+But how do you convey developer intent that `{ x }` shouldn't be side-effecting, how does the author of `f` know that side-effects could be problematic.
+
+[10:16:55.0951] <yulia>
+and in fact, for jits, this kind of type check is happening in the background
+
+[10:17:21.0285] <yulia>
+oh, in this case its not an issue, as the whens will select only one
+
+[10:17:24.0458] <yulia>
+and the x is a binding
+
+[10:17:29.0661] <yulia>
+they are treated separately
+
+[10:17:38.0819] <yulia>
+there is a potential difference in my view
+
+[10:17:42.0655] <yulia>
+specifically:
+
+[10:17:59.0052] <yulia>
+```js 
+function f({ x } when C3, b when C1) { ... }
+function f({ x } when C4, b when C2) { ... }
+```
+
+[10:18:17.0337] <yulia>
+this can be written in many different ways from a developer perspective
+
+[10:18:19.0786] <rbuckton>
+> <@yulia:mozilla.org> they are treated separately
+
+That would preclude interpolation from existing, or preclude interpolation from leveraging bindings on the left, which I think introduces even more confusion.
+
+[10:19:11.0835] <yulia>
+> <@rbuckton:matrix.org> That would preclude interpolation from existing, or preclude interpolation from leveraging bindings on the left, which I think introduces even more confusion.
+
+bindings should happen on the left, tests should happen on the right (or a similar situation_). As you mentioned -- we are a dynamically checked language. We need to always be aware of that, if we try to pretend otherwise it will be difficult to read
+
+[10:19:22.0988] <yulia>
+in either case -- binding will happen after test
+
+[10:19:56.0698] <rbuckton>
+I mean the case of `function f({ x }, b when C1 and >= ${x})` or `function f({ x }, b when ${x})`, etc.
+
+[10:24:39.0750] <rbuckton>
+If those examples don't work, then we're essentially introducing another TDZ
+
+[10:24:51.0225] <yulia>
+Actually, i wrote it out and its not as big of an issue as i thought. 
+
+```js
+function f({ x } when >2, b when C1) { ... }
+function f({ x } when >3, b when C1) { ... }
+function f({ x } when >3, b when C2) { ... }
+
+// what do we do in f
+function f({x}, b) {
+// x is already bound
+match (x) {
+  when c3: match(b) 
+      when c1: ...
+  when c4: match(b) 
+      when c1: ...
+      when c2: ...
+```
+
+here, we can potentially move through both legs of the when statement
+
+In this case, for what you described above (  >= ${x}) this would be difficult to understand. But it is likewise difficult to understand in the match statement, and it would likewise be difficult to understand if `x` was in a computed property, where it can already be
+
+[10:25:24.0075] <yulia>
+introducing another tdz... what do you mean exactly?
+
+[10:27:01.0774] <rbuckton>
+If you cannot reference a prior parameter binding in an interpolation in a pattern in a later parameter binding, then we've essentially introduced a new temporal dead zone for parameter bindings. Currently you can do `function f(a, b = a)`, but we would be forbidding `function f(a, b when ${a})`
+
+[10:29:02.0689] <yulia>
+right but that makes a lot of sense -- you _should_ forbid default assignment when you are expecting a value of a specific shape
+
+[10:29:27.0382] <yulia>
+i cannot imagine a case when you would want to go down that leg _and_ do a default assignment
+
+[10:30:41.0172] <yulia>
+i feel a bit bad taking the air out of this room -- this doesn't have all that much to do with pattern matching, and is more about function overloading
+
+[10:30:50.0398] <rbuckton>
+Lets say that I'm not completely opposed to overloads, but I have very strong concerns and believe such a mechanism not be part of a V1 for pattern matching, though we should consider the ramifications of destructuring and pattern matching in light of potential support for overloads in a V2 or later add-on proposal.
+
+[10:31:00.0859] <yulia>
+which for me is an area of interest but is not really related to this proposal (beyond reusing patterns)
+
+[10:31:12.0016] <rbuckton>
+ * Lets say that I'm not completely opposed to overloads, but I have very strong concerns and believe such a mechanism not be part of a V1 for pattern matching, though we should consider the ramifications of destructuring and pattern matching in light of potential support for overloads in a V2 or later add-on proposal.
+
+[10:31:54.0685] <yulia>
+yeah, thats fine. my main thing is getting us to think of what other places patterns could be used because i see them as really powerful. I think the function case is an interesting one, as well as other left hand side locations
+
+[10:32:48.0247] <yulia>
+for example the for loops and what not. None of those are critical, just want us to think about it
+
+[10:33:49.0983] <yulia>
+what i don't want, is for -- in 10 years time -- we discover that we really do need something like this, but pattern matching has been written in such a way that it cannot be used there. resulting in more unique syntax. that would be bad
+
+[10:37:02.0492] <yulia>
+ * what i don't want, is for -- in 2-10 years time -- we discover that we really do need something like this, but pattern matching has been written in such a way that it cannot be used there. resulting in more unique syntax. that would be bad. And there is evidence that might happen. We've had multiple run-time type-check proposals.
+
+[10:37:15.0063] <yulia>
+ * what i don't want, is for -- in 2-10 years time -- we discover that we really do need something like this, but pattern matching has been written in such a way that it cannot be used there. resulting in more unique syntax. that would be bad. And there is evidence that might happen. We've had multiple run-time checks proposals.
+
+[11:42:31.0889] <rbuckton>
+I definitely agree that we should be considering the long term ramifications for these decisions, but overloading is a double-edged sword. We could just as easily paint ourselves into a corner by introducing too early as well. In any case, I'd be wary of advocating for pattern matching as a means of performing dynamic type checking for function arguments and overloads due to the possible performance implications that would bring. Just as shu has concerns about the performance implications of partial function application were it to become heavily adopted, I see overloads as having even more of a significant impact both in uptake and proliferation, as well as performance penalties.
+
+
+2022-08-09
+[05:20:04.0561] <yulia>
+should we set a meeting?
+
+[11:56:21.0982] <ljharb>
+i'll be sending out a doodle later today
+
+[13:37:46.0162] <rbuckton>
+I'd like to participate if possible
+
+
+2022-08-10
+[07:55:30.0711] <Jack Works>
+I just want to point out that this is legal even in strict mode.
+
+[09:59:50.0309] <ljharb>
+(whoops, forgot to do the doodle yesterday; i'll send it out shortly)
+
+[10:28:05.0031] <ljharb>
+k, doodle invite sent - DM me your email address if you didn't get it. times are for next calendar week, so it'd be great to get all the replies in the next couple days
+
+[10:28:34.0032] <ljharb>
+ * k, doodle invite sent - DM me your email address if you didn't get it. times are for next calendar week, so it'd be great to get all the replies in the next couple days
+
+
+2022-08-11
+[23:19:27.0534] <yulia>
+I might need to take next week off, can we do a week after?
+
+[09:33:19.0768] <ljharb>
+sure, i'll add some dates
+
+[09:35:48.0266] <ljharb>
+done - mpcsh, Jack Works , TabAtkins , mind filling in the new dates on the doodle?
+
+[12:32:46.0840] <rbuckton>
+I still haven't received the invite
+
+
+2022-08-12
+[01:56:01.0689] <yulia>
+> <@ljharb:matrix.org> done - mpcsh, Jack Works , TabAtkins , mind filling in the new dates on the doodle?
+
+yes ditto -- i just filled in mine. Hopefully it works for people
+
+[07:49:05.0550] <ljharb>
+It was sent to your Microsoft email. Is there another email you use?
+
+[10:39:45.0225] <rbuckton>
+Just `rbuckton@microsoft.com` or `ron.buckton@microsoft.com`. You could try `rbuckton@gmail.com` if the others aren't working.
+
+[10:40:07.0562] <rbuckton>
+ * Just `rbuckton@microsoft.com` or `ron.buckton@microsoft.com`.
+
+[10:43:48.0196] <rbuckton>
+Ah, even though I didn't get a notification I was able to sign into Doodle and found it
+
+[12:15:02.0665] <TabAtkins>
+hm, i pulled up the doodle again and it's still next week's dates. should I have gotten a new invite for a different doodle, or should the original have been updated?
+
+[12:49:30.0061] <ljharb>
+i updated the original by adding the week after, but i didn't remove next week
+
+[12:57:01.0854] <TabAtkins>
+Oh! I didn't see the option in the UI, cool.
+
+[13:25:52.0811] <rkirsling>
+dug my doodle link out of the trash and updated mine now too :)
+
+
+2022-08-13
+[22:57:23.0626] <ljharb>
+mark still needs to update, but it doesn't look like there's many times where yulia as well as a majority of everyone else is available :-/
+
+[03:15:55.0729] <yulia>
+The time slots provided were not great for me either. The time slot on Thursday next week (which was 7 pm cest) would have worked. And it worked for you, tab, Ross and I believe one other person. The time slots available for the week that I am there were all several hours later 
+
+[03:16:28.0583] <yulia>
+So we can also look at Thursday at that time in another week.
+
+
+2022-08-18
+[18:34:03.0142] <mpcsh>
+I'm so sorry, my pinned matrix tab had died and wasn't sending me notifications!! I'm updating now.
+
+[22:13:35.0661] <ljharb>
+k, now that mark updated the doodle, i picked a time. sorry to those who can't make it, hopefully most people can - i'll hold a second meeting after that one's completed, giving priority to anyone who doesn't make the first one (8/23, it should be on your calendars)
+
+[22:13:59.0039] <ljharb>
+ * k, now that mark updated the doodle, i picked a time. sorry to those who can't make it, hopefully most people can - i'll hold a second meeting after that one's completed, giving priority to anyone who doesn't make the first one (8/23, it should be on your calendars0
+
+[22:14:00.0843] <ljharb>
+ * k, now that mark updated the doodle, i picked a time. sorry to those who can't make it, hopefully most people can - i'll hold a second meeting after that one's completed, giving priority to anyone who doesn't make the first one (8/23, it should be on your calendars)
+
+[23:55:14.0762] <ljharb>
+mpcsh: somehow you just deleted the entire calendar event
+
+[23:59:05.0742] <ljharb>
+I’ll try to make a new one.
+
+[00:01:29.0289] <ljharb>
+K i think it’s recreated - please don’t delete calendar events in general, just decline them :-)
+
+[08:41:45.0023] <ljharb>
+* K i think it’s recreated
+
+[10:36:05.0215] <rkirsling>
+I only see the deleted one 🤔
+
+[10:37:27.0090] <ljharb>
+the one i recreated should be identical, except for the now-broken doodle integration, so if you see one that's the new one i think
+
+[10:37:33.0902] <TabAtkins>
+rkirsling: you're on the invite list for the next Tuesday one
+
+[11:16:38.0330] <rkirsling>
+this is the only one I received :(
+
+[11:19:58.0898] <TabAtkins>
+Sorry to sound like t1 tech support, but have you checked your actual gcal?
+
+[11:34:13.0056] <rkirsling>
+guess it is there but it's weird that I got no notification of any form
+
+[11:34:25.0089] <rkirsling>
+I don't use gcal that much
+
+[11:34:46.0582] <TabAtkins>
+I got the second notif, so dunno what happened on your side. 🤷
+
+[12:06:39.0060] <rkirsling>
+so like, the screenshot shows that I got that 3 minutes _after_ Jordan said the invite was recreated and it was for the deleted one
+
+
+2022-08-19
+[18:34:01.0986] <mpcsh>
+> <@ljharb:matrix.org> mpcsh: somehow you just deleted the entire calendar event
+
+🤯
+
+
+2022-08-22
+[23:55:35.0275] <yulia (Back Aug. 22nd)>
+Oh, why do it this week if it isn’t good for people? There isn’t a rush, I wanted to get the conversation going. 
+
+[23:56:35.0872] <yulia (Back Aug. 22nd)>
+It’s also quite bad for me to be honest. As I said the week before: why not delay to Thursday next week at 7 or 8 pm cest? That time was quite popular
+
+[01:19:00.0896] <yulia>
+ * If it doesn't work for people we can also do next week. There isn’t a rush, I wanted to get the conversation going.
+
+
+2022-08-23
+[10:08:45.0618] <TabAtkins>
+Just because it sounds like there's some hesitation - the meeting's still at noon today, right?
+
+[10:08:52.0865] <TabAtkins>
+Sorry, 12pm pacific
+
+[10:35:51.0661] <yulia>
+Yes, no change
+
+[10:40:40.0315] <ljharb>
+yeah
+
+[12:00:57.0826] <ljharb>
+meeting's starting
+
+[14:01:38.0222] <rbuckton>
+The version of pattern matching I'd love to see in the language essentially looks like this:
+- `match` expressions with multiple branches: `match (expr) { when Pattern: ...; default: ...; }`
+- `is` expressions with no branching, returning true/false: `expr is Pattern`
+- a flexible pattern syntax:
+  - Inline constant patterns (`true`, `false`, `0`, `"foo"`, `null`, etc.)
+  - Identifier reference patterns (`x`, `NaN`, `Infinity`, `undefined`, etc.)
+  - Prefix unary patterns (`+0`, `+Infinity`, etc.)
+  - Object patterns (`{ x: Pattern, y: Pattern }`, etc.)
+  - Array/Iterator patterns (`[Pattern, Pattern]`, `[Pattern, ...]`, etc.)
+  - Parenthesized patterns (`(Pattern)`)
+  - Conjunctive patterns (`Pattern and Pattern`)
+  - Disjunctive patterns (`Pattern or Pattern`)
+  - Negation patterns (`not Pattern`)
+  - Relational patterns (`> 0`, `<= "Z"`, etc.)
+  - Lexical declaration patterns (`let x`, `const x`)
+  - Custom matchers
+  - Extractor patterns (`Option.Some(Pattern)`, `Message.Move{ x: Pattern, y: Pattern }`)
+
+This provides a fair amount of flexibility:
+
+```
+// simple pattern testing using `is`
+const { body } = request is Ok ? request : {};
+
+// using `is` with control flow statements:
+if (obj is Map) ...;
+if (obj is { x: Number }) ...;
+
+while (requests.pop() is not (null or undefined) and let request) ...;
+
+// using `match` for branching:
+const result = match (value) {
+  when Option.Some(let value): Option.Some(value + 1);
+  when Option.None: Option.Some(0);
+}
+```
+
+[14:04:51.0713] <rbuckton>
+With inline `let/const`, bindings are explicit and free identifiers can just be looked up in scope:
+```
+// identifiers are lookups
+obj is +Infinity // look up `Infinity` in scope, just as with the rest of JS
+obj is null or undefined // look up `undefined` in scope, just as with the rest of JS
+obj is Map // look up `Map`
+obj is { x: Number, y: Number } // look up `Number`
+
+// declarations are explicit
+if (obj is { x: Number and let x, y: Number and let y }) console.log(x, y);
+```
+
+[14:08:47.0577] <rbuckton>
+ * With inline `let/const`, bindings are explicit and free identifiers can just be looked up in scope:
+
+```
+// identifiers are lookups
+obj is +Infinity // look up `Infinity` in scope, just as with the rest of JS
+obj is null or undefined // look up `undefined` in scope, just as with the rest of JS
+obj is Map and { size: 0 } // look up `Map`
+obj is { x: Number, y: Number } // look up `Number`
+
+// declarations are explicit
+if (obj is { x: Number and let x, y: Number and let y }) console.log(x, y);
+```
+
+[14:13:34.0614] <rbuckton>
+ * The version of pattern matching I'd love to see in the language essentially looks like this:
+
+- `match` expressions with multiple branches: `match (expr) { when Pattern: ...; default: ...; }`
+- `is` expressions with no branching, returning true/false: `expr is Pattern`
+- a flexible pattern syntax:
+
+    - Inline constant patterns (`true`, `false`, `0`, `"foo"`, `null`, etc.)
+    - Identifier reference patterns (`x`, `NaN`, `Infinity`, `undefined`, etc.)
+    - Prefix unary patterns (`+0`, `+Infinity`, etc.)
+    - Object patterns (`{ x: Pattern, y: Pattern }`, etc.)
+    - Array/Iterator patterns (`[Pattern, Pattern]`, `[Pattern, ...]`, etc.)
+    - Parenthesized patterns (`(Pattern)`)
+    - Conjunctive patterns (`Pattern and Pattern`)
+    - Disjunctive patterns (`Pattern or Pattern`)
+    - Negation patterns (`not Pattern`)
+    - Relational patterns (`> 0`, `<= "Z"`, etc.)
+    - Lexical declaration patterns (`let x`, `const x`)
+    - Custom matchers
+    - Extractor patterns (`Option.Some(Pattern)`, `Message.Move{ x: Pattern, y: Pattern }`)
+    - RegExp patterns (`/\w+/`), and RegExp extractors (`/(\d{3})-(\d{4})/(, let a, let b)`, `/(?<a>\d{3})-(?<b>\d{4})/{ groups: { a: let a, b: let b } }`)
+
+This provides a fair amount of flexibility:
+
+```
+// simple pattern testing using `is`
+const { body } = request is Ok ? request : {};
+
+// using `is` with control flow statements:
+if (obj is Map) ...;
+if (obj is { x: Number }) ...;
+
+while (requests.pop() is not (null or undefined) and let request) ...;
+
+// using `match` for branching:
+const result = match (value) {
+  when Option.Some(let value): Option.Some(value + 1);
+  when Option.None: Option.Some(0);
+}
+```
+
+[14:17:01.0606] <rbuckton>
+Also, the extractor objects proposal I'm writing up could apply to regular expressions in destructuring patterns as well:
+
+```
+// if every RegExp has a [Symbol.matcher] method:
+const IsoDate = /(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})/;
+
+// match input, extract, and destructure (or throw if match fails)
+const IsoDate{ groups: { year, month, day } } = input;
+```
+
+[14:17:24.0972] <rbuckton>
+ * Also, the extractor objects proposal I'm writing up could apply to regular expressions in destructuring patterns as well:
+
+```
+// if every RegExp has a [Symbol.matcher] method:
+const IsoDate = /(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})/;
+
+// match input, extract, and destructure (or throw if match fails)
+const IsoDate{ groups: { year, month, day } } = input;
+```
+
+[14:26:09.0086] <rbuckton>
+ * Also, the extractor objects proposal I'm writing up could apply to regular expressions in destructuring patterns as well:
+
+```
+RegExp.prototype[Symbol.matcher] = function (value) {
+    const match = this.exec(value);
+    if (match === null) return { matched: false };
+    return {
+        matched: true,
+        value: {
+            ...match.groups,
+            [Symbol.iterator]() {
+                return match[Symbol.iterator]();
+            }
+        }
+    };
+};
+
+const IsoDateTime = /^(?<date>[^TZ]+)T(?<time>[^Z]+)Z/;
+const IsoDate = /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/;
+const IsoTime = /^(?<hours>\d{2}):(?<minutes>\d{2}):(?<seconds>\d{2})$/;
+
+// match input, extract, and destructure (or throw if match fails)
+const IsoDate{ year, month, day } = input;
+
+
+// nested extraction
+const IsoDateTime{
+    date: IsoDate{ year, month, day },
+    time: IsoTime{ hours, minutes, seconds }
+} = input;
+```
+
+[14:29:24.0787] <rbuckton>
+ * Also, the extractor objects proposal I'm writing up could apply to regular expressions in destructuring patterns as well:
+
+```
+RegExp.prototype[Symbol.matcher] = function (value) {
+    const match = this.exec(value);
+    if (match === null) return { matched: false };
+    return {
+        matched: true,
+        value: {
+            ...match.groups,
+            [Symbol.iterator]() {
+                return match[Symbol.iterator]();
+            }
+        }
+    };
+};
+
+const IsoDateTime = /^(?<date>[^TZ]+)T(?<time>[^Z]+)Z/;
+const IsoDate = /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/;
+const IsoTime = /^(?<hours>\d{2}):(?<minutes>\d{2}):(?<seconds>\d{2})$/;
+
+// match input, extract, and destructure (or throw if match fails)
+const IsoDate{ year, month, day } = input;
+
+
+// nested extraction
+const IsoDateTime{
+    date: IsoDate{ year, month, day },
+    time: IsoTime{ hours, minutes, seconds }
+} = input;
+
+
+// pattern matching
+match(input) {
+    when (IsoDateTime{ date: IsoDate, time: IsoTime }): console.log("valid datetime");
+}
+```
+
+[14:29:53.0040] <TabAtkins>
+Fun diversion: https://www.hillelwayne.com/post/python-abc/ for abusing the __subclasshook__ magic method in Python to give it full custom-matcher support.
+
+[14:30:03.0692] <TabAtkins>
+ * Fun diversion: https://www.hillelwayne.com/post/python-abc/ for abusing the `__subclasshook__` magic method in Python to give it full custom-matcher support.
+
+[14:33:33.0142] <TabAtkins>
+(Building on the existing `when Foo(): ...` matchers, which do a subclass check verifying the matchable is a Foo or subclass thereof.)
+
+
+2022-08-31
+[04:08:13.0832] <yulia>
+any thoughts on 
+
+```
+{ a :: 500, b: { c: { d: e }}} // you get e and a bound here
+```
+
+[04:09:43.0468] <yulia>
+with a potential expansion : `{ a :: 500, b: { c: { d: e :: someVal }}}` which is slightly less enjoyable, but may be addressed with syntax highlighting
+
+[04:10:51.0960] <yulia>
+or, replace `::` with is
+
+[04:15:15.0776] <yulia>
+the problem with the above it is unclear  until we finish parsing the full thing if it is an object or a pattern
+
+[04:15:28.0231] <yulia>
+this isn't an issue in the match statement though
+
+[04:15:59.0017] <yulia>
+maybe its not bad, if patterns are object-likes and the :: is implemented as a type of field
+
+[08:17:25.0771] <jschoi>
+(For what it’s worth, I’m fine with pattern matching using `::` and using another token for proposal-call-this.)
+
+[08:28:55.0094] <ljharb>
+that’s fine, but i don’t see how that’s any more clear than the current proposal, since you already have to know which bindings nested destructuring creates
+
+[11:22:25.0810] <TabAtkins>
+I still don't understand the syntax here, personally. You use `:: 500` to indicate that `a` needs to match `500`, but you use `: {...}` to indicate that `b` needs to match the object pattern.
+
+[11:23:30.0351] <TabAtkins>
+And then `a` creates a binding but `b` doesn't, which feels weird. Testing for a property's existence should consistently add a binding or not, I think.
+
+[11:24:54.0924] <TabAtkins>
+And then you still have a plain ident pattern producing an `e` binding in the end, so it feels like there's yet another syntax happening to cause that?
+
+[11:26:13.0820] <TabAtkins>
+In the current spec it's `{a: a and 500, b: {c: {d: e}}` to perform the same tests and establish the same bindings, which feels a lot more consistent to me. Keys in an object pattern just test; ident patterns always produce bindings.
+
+[13:39:50.0764] <TabAtkins>
+(I assume there's a consistent grammar pattern underlying your suggestion. I just can't, for the life of me, divine what it is.)
+
+[14:57:49.0484] <rbuckton>
+I'm not terribly keen on using `::`. I'm finding the examples confusing as to what the difference is between `:` and `::`, and it seems easy to miss in a code review.
+

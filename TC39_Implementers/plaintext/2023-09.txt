@@ -1,0 +1,132 @@
+2023-09-04
+[19:26:02.0885] <Jack Works>
+I have a performance question. if a and b are the same type (no type conversion will happen), then is a==b fast as a===b?
+
+[07:32:38.0670] <kai>
+I'm also curious, from a specification point of view, the conversion of IsLooselyEqual to IsStrictlyEqual does require additional operations, but both abstract operations have their own type judgments for the operands. For the case where the two operands are of the same type, whether it can be optimized it
+
+
+2023-09-05
+[14:51:15.0223] <ljharb>
+shu: i have a package that sets Symbol.isConcatSpreadable on a few objects, for the purpose of ensuring that array concat still works as expected even if someone does `Array.prototype[Symbol.isConcatSpreadable] = true`, or has an array with an own property set on it.
+
+a user is reporting that v8 becomes permanently slow if Symbol.isConcatSpreadable is ever set, even once, on any object - and deleting it later doesn't fix it. is there anything that could be done here to make it less pathological to set it on an arbitrary object?
+
+[14:53:34.0064] <ljharb>
+https://github.com/ljharb/safe-array-concat/pull/3#issuecomment-1707355732 for context
+
+[15:10:46.0912] <shu>
+this i can easily confirm: assigning a property on _any_ object with a name of `Symbol.isConcatSpreadable` triggers the protector
+
+[15:10:53.0874] <shu>
+protectors are 1-way, there's no way to un-trigger them
+
+[15:13:37.0799] <shu>
+the short answer is i don't know to make it less pathological, because the concat spreadable behavior is that we need to check it on arbitrary objects
+
+[15:13:42.0715] <bakkot>
+https://chromium.googlesource.com/v8/v8.git/+/HEAD/src/builtins/builtins-array.cc#1276
+
+[15:13:48.0178] <shu>
+there might be something possible here to carve out more fast paths
+
+[15:13:49.0034] <bakkot>
+"Slow path if @@isConcatSpreadable has been used"
+
+[15:15:00.0920] <shu>
+the current tradeoff is that Symbol.isConcatSpreadable is rare enough to just have a blanket slow path
+
+[15:28:24.0209] <shu>
+here's the data: https://chromestatus.com/metrics/feature/timeline/popularity/3261
+
+[15:28:29.0504] <shu>
+it's more than i thought actually
+
+[15:28:34.0885] <shu>
+but still not *that* much
+
+[15:29:48.0211] <shu>
+the main problem i see is that the slow path for Array.concat is *really* slow, like, it uses a hash table for the numbers for the resulting array
+
+[15:30:09.0272] <shu>
+there's probably something to do there for concat spreadable so the cliff isn't quite so big
+
+[15:30:36.0721] <shu>
+you could also, like, directly implement concat though?
+
+[15:30:50.0835] <shu>
+instead of setting @@isConcatSpreadable
+
+[15:37:06.0759] <bakkot>
+just for interest: JSC doesn't have a fast path at all, and Firefox has a per-object "can't have interesting symbol" fast path
+
+- https://github.com/WebKit/WebKit/blob/94ce519cd2eaba3a1f2f4cb9753f40c98e9d9472/Source/JavaScriptCore/builtins/ArrayPrototype.js#L555
+- https://searchfox.org/mozilla-central/source/js/src/builtin/Array.cpp#4553
+
+[16:09:05.0782] <ljharb>
+a per-object fast path makes sense to me
+
+[16:09:21.0057] <ljharb>
+and yeah i suppose i could reimplement concat, but i suspect my concat implementation would be slower than the fast concat?
+
+[16:10:14.0635] <ljharb>
+as for "rare", this package has 10.3M weekly downloads by transitive usage, so it's not all that rare, but i'm going to be shipping the "fix" soon which is that it will only assign isConcatSpreadable if someone else has already done so
+
+[16:18:59.0199] <shu>
+i gave you data quantifying what i mean by rare...
+
+[16:20:24.0314] <shu>
+i also wasn't talking about the popularity of your package, but all instances where someone mutated @@isConcatSpreadable
+
+
+2023-09-06
+[17:41:28.0482] <ljharb>
+oh. well then yeah fair, i'm sure that's super rare :-)
+
+[17:42:09.0555] <ljharb>
+it's just very unfortunate that you can basically slow down any large-enough codebase for the entire life of the program if you sneak a `[][Symbol.isConcatSpreadable] = false` in there
+
+[17:46:08.0045] <ljharb>
+ * it's just very unfortunate that you can basically slow down any large-enough codebase for the entire life of the program if you sneak a `;[][Symbol.isConcatSpreadable] = false;` in there
+
+[17:50:24.0099] <bakkot>
+there's lots of other things with similar effect
+
+[17:53:34.0982] <bakkot>
+https://chromium.googlesource.com/v8/v8.git/+/HEAD/src/execution/protectors.h
+
+[17:54:51.0289] <bakkot>
+not as many as I recalled actually
+
+[17:54:54.0162] <bakkot>
+but yeah still a handful
+
+[17:56:28.0994] <ljharb>
+do other engines have similar global, permanent perf cliffs?
+
+[17:59:43.0542] <bakkot>
+I know JSC has watchpoints, which amount to the same thing, yes
+
+[17:59:57.0754] <bakkot>
+I suspect SpiderMonkey also does but don't know offhand; shu might remember
+
+[18:00:57.0952] <bakkot>
+It's kind of inevitable if you want to make a performant engine - the language has lots of stupid dynamism and it's impossible to optimize in the face of full dynamism, so you have to know if certain things are intact
+
+[18:01:25.0902] <bakkot>
+and while I guess you could in principle check to see if something is mutated and then restored, that's expensive and rare so there's not that much reason to bother
+
+[18:04:39.0226] <bakkot>
+JSC also famously has the "have a bad time" watchpoint, which makes many things slow https://github.com/WebKit/WebKit/blob/eb65814e9baa483a2fb87b099ab1ba905b9389c9/Source/JavaScriptCore/runtime/JSGlobalObject.cpp#L2249
+
+
+2023-09-07
+[12:47:20.0776] <snek>
+> Firefox has a per-object "can't have interesting symbol" fast path
+weird i thought v8 had this too, maybe i'm misremembering...
+
+[12:47:27.0323] <snek>
+ * > Firefox has a per-object "can't have interesting symbol" fast path
+
+weird i thought v8 had this too, maybe i'm misremembering...
+

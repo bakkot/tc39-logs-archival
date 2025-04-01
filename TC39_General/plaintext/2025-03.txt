@@ -1,0 +1,105 @@
+2025-03-10
+[06:30:44.0121] <snek>
+i wish there was a promise method like finally except it didn't propagate the exception and didn't mark the promise as "handled"
+
+[06:30:46.0952] <snek>
+does anyone else wish this
+
+[09:57:46.0398] <Ashley Claymore>
+what would it return?
+
+[10:01:38.0638] <Ashley Claymore>
+(when the promise was rejected)
+
+[15:24:19.0330] <snek>
+> <@aclaymore:matrix.org> what would it return?
+
+undefined
+
+[15:25:34.0501] <snek>
+basically add the argument as a fulfill and reject handler, but don't create a new promise or update [[PromiseIsHandled]]
+
+[15:37:11.0883] <ljharb>
+why?
+
+[15:44:46.0073] <snek>
+idk this is a thing i find myself wanting to do a lot when writing apis
+
+[15:51:18.0249] <kriskowal>
+When it comes to unhandled rejections, there are two reasonable design families and everything has somehow chosen the third. Every unhandled rejection is potentially eventually handled until post mortem finalization. From a debugging point of view, you either want silence (so real errors are not lost in noise errors) or interactivity. An interactive promise debugger shows you both “currently unhandled rejections” and “currently pending promises”, because both of these are ephemeral but at a moment in time might suggest a defect, either a forever-pending promise or never-handled-rejection.
+
+[15:51:44.0153] <kriskowal>
+But lint rules for no-dangling-promises are good.
+
+[15:52:06.0509] <kriskowal>
+Returning promises in callbacks that dangle the promise is bad.
+
+[15:52:58.0323] <kriskowal>
+Like, the convenience of `addEventListener('click', async() => {})` is undeniable, but still wrong. The promise should get sunk, or verified to be unrejectable statically.
+
+[15:54:08.0864] <kriskowal>
+I did have a version of Q instrumented for a prototype Chrome extension that could give you the traces for all still-pending and still-unhandled promises. I do hope that idea makes its way to a nearby devtools.
+
+[15:55:41.0313] <kriskowal>
+In the case of a CLI with no devtools attached, it’s very reasonable to defer reporting unhandled rejections until collection.
+
+[15:59:00.0479] <kriskowal>
+On the other hand, I’m torn regarding “send-only” promise handlers. In Q, `then` was not the bottom of the protocol, it was implemented in terms of `done`, which would register optional callback and optional errback, but didn’t create and return a composite promise. The expectation was that the callback and errback returned void. And the thenable protocol doesn’t actually expect more than the behavior of `done`, so you can write less wasteful promise handling.
+
+[16:00:32.0189] <kriskowal>
+*But* having both the `then` tower and the `done` or “then-only” towers implies a lot more combinators.
+
+[16:00:46.0175] <kriskowal>
+* _But_ having both the `then` tower and the `done` or “then-only” tower implies a lot more combinators.
+
+[16:05:37.0466] <kriskowal>
+In a more static language, you could have your cake and eat it, generating runtime variants of the promise-returning function that do and do not actually bother creating or returning the promise, ad nauseam.
+
+[16:09:05.0530] <ljharb>
+can't you return the promise with `.then()` on it, and *that* promise will be unhandled?
+
+
+2025-03-11
+[23:25:10.0700] <snek>
+> <@ljharb:matrix.org> can't you return the promise with `.then()` on it, and *that* promise will be unhandled?
+
+yes but you can't always do that
+
+[23:25:50.0813] <snek>
+if you just have some promise 
+
+[23:26:00.0795] <snek>
+and not the original variable 
+
+[01:32:46.0891] <Ashley Claymore>
+I don't accept promises from strangers 
+
+
+2025-03-21
+[01:58:03.0771] <snek>
+finally found a reason to use HostFinalizeImportMeta... setting the prototype of all "internal" module import.meta objects in a runtime to introduce some contextual apis without having to define them individually on each import.meta object.
+
+[07:14:36.0820] <kriskowal>
+> <@devsnek:matrix.org> finally found a reason to use HostFinalizeImportMeta... setting the prototype of all "internal" module import.meta objects in a runtime to introduce some contextual apis without having to define them individually on each import.meta object.
+
+So that they can use contextual data from import.meta as a receiver?
+
+[07:18:14.0255] <kriskowal>
+(If not, I would admonish using import.meta as an auxiliary global, especially until that can be emulated in user code.)
+
+[07:29:21.0289] <snek>
+> <@kriskowal:aelf.land> So that they can use contextual data from import.meta as a receiver?
+
+yes
+
+[07:29:38.0164] <snek>
+specifically for contextual apis, not for random globals
+
+
+2025-03-31
+[16:58:53.0242] <shu>
+is there a node with *v8* nightly build somewhere?
+
+[16:59:00.0676] <shu>
+* is there a node with **v8** nightly build somewhere?
+

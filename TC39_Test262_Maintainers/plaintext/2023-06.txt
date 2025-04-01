@@ -1,0 +1,304 @@
+2023-06-02
+[11:30:52.0634] <linusg>
+Could anyone point me to recent test262 results for JSC/SM/V8? Ever since test262.report is dead those seem increasingly difficult to find (or my search skills are getting worse 😄)
+
+
+2023-06-04
+[14:02:25.0694] <linusg>
+Answering my own question: I brought this up elsewhere which led to canadahonk creating https://test262.fyi/ 🥳
+
+
+2023-06-05
+[03:56:21.0014] <canadahonk>
+very happy to answer questions and take requests :)
+
+[04:19:33.0620] <canadahonk>
+* very happy to answer questions and take in feedback :)
+
+[04:47:37.0841] <canadahonk>
+* very happy to answer questions and take in feedback/feature requests :)
+
+
+2023-06-06
+[16:18:41.0944] <shu>
+ptomato: every Temporal test fails on builds without i18n because of temporalHarness.js
+
+[16:19:06.0799] <shu>
+```
+/b/s/w/ir/test/test262/data/harness/temporalHelpers.js:10: SyntaxError: Invalid regular expression: /^[$_\p{ID_Start}][$\u200C\u200D\p{ID_Continue}]*$/u: Invalid property name in character class
+const IDENTIFIER = /^[$_\p{ID_Start}][$\u200C\u200D\p{ID_Continue}]*$/u;
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+SyntaxError: Invalid regular expression: /^[$_\p{ID_Start}][$\u200C\u200D\p{ID_Continue}]*$/u: Invalid property name in character class
+```
+
+[16:19:17.0204] <shu>
+err, temporalHelpers.js
+
+
+2023-06-07
+[00:05:50.0364] <ptomato>
+I'll take a look, thanks for the heads up!
+
+[01:53:50.0013] <ptomato>
+shu: no problem to change that since it's only used for formatting property names, but as far as I can tell from reading ECMA-262, even implementations without i18n are required to support those properties?
+
+[01:55:43.0030] <ptomato>
+(by "those properties" I mean `ID_Start` and `ID_Continue`)
+
+[01:58:39.0541] <canadahonk>
+yeah, wasn't that part of https://github.com/tc39/proposal-regexp-unicode-property-escapes ?
+
+[06:34:43.0047] <canadahonk>
+https://github.com/tc39/test262/pull/3842 for ref btw :)
+
+[07:39:36.0473] <shu>
+ptomato: huh, oh really? let's see
+
+[07:51:04.0662] <shu>
+so i think what's happening is, V8 depends on ICU for those property names, which is pretty reasonable, because that's where those property names are
+
+[07:51:21.0485] <shu>
+and the "no i18n" build is actually the "no ICU dependency" build
+
+[07:55:02.0286] <shu>
+in any case i think i agree with your reading of the spec, but in practice i don't know yet
+
+[07:57:36.0543] <canadahonk>
+it no longer uses those in main now btw
+
+[07:57:53.0789] <shu>
+thank you
+
+[08:40:33.0735] <Richard Gibson>
+I agree with ptomato, and it looks to me like not just `/…/u` regular expressions but also String.prototype.toLowerCase and toUpperCase depend upon the Unicode Character Database (e.g., `"İKÅΩↃΣ".toLowerCase() === "i̇kåωↄς"` and `"ßⅶςµﬀև".toUpperCase() === "SSⅦΣΜFFԵՒ"` must hold in every implementation). UAX #44 should probably move from Bibliography to Normative References. 🤔
+
+[09:47:10.0879] <shu>
+we should probably discuss if implementations that actually don't ship Intl (Moddable) still support these features, or if we need to redraw the optionality line for stuff along ICU lines
+
+[09:47:23.0437] <shu>
+the no-i18n build for V8 is mostly not that well supported
+
+[09:48:04.0965] <shu>
+that is, in an ideal world, we'd only have one configuration of V8 that always includes i18n
+
+[11:18:37.0321] <Richard Gibson>
+the version of Moddable XS fetched by esvu at least correctly supports both the above toUpperCase()/toLowerCase() behavior and `/…/u` regular expressions with `\p{<property name>}` contents
+
+
+2023-06-08
+[02:09:36.0398] <canadahonk>
+just wondering, are tests for some stage 2/3 proposals missing just because no one has created them yet or are there other reasons?
+
+[02:13:46.0748] <ptomato>
+just because no one has created them yet
+
+[02:17:47.0176] <canadahonk>
+also, docs (`CONTRIBUTING.md`) say "stage 3" but there's also stage 2 features so is that not really a restriction (now)?
+
+[02:21:14.0442] <ptomato>
+it's still a restriction; folks are welcome to write tests for stage 2 proposals but generally we keep them as open unmerged PRs
+
+[02:21:39.0584] <ptomato>
+there are some that are merged, but I believe those are proposals that were previously stage 3 and got reverted
+
+[02:21:58.0108] <canadahonk>
+makes sense, thanks!
+
+
+2023-06-09
+[09:07:05.0221] <canadahonk>
+related making harness depend less on modern features - I found that Rhino have issues just for these cases which might be helpful: https://github.com/mozilla/rhino/issues?q=is%3Aissue+is%3Aopen+label%3A%22test262+harness%22 (cc linusg)
+
+[09:07:21.0272] <canadahonk>
+ * related making harness depend less on modern features - I found that Rhino have issues tagged for these cases which might be helpful: https://github.com/mozilla/rhino/issues?q=is%3Aissue+is%3Aopen+label%3A%22test262+harness%22 (cc linusg)
+
+
+2023-06-11
+[14:03:09.0340] <bakkot>
+question for shu / other implementers: right now the TypedArray tests are almost all generic across all of the TypedArray types, including stuff like Atomics which are tested against every TA type. if I just add Float16Array to that list it's going to cause every one of those tests to fail. that seems undesirable for implementers. do you have thoughts?
+
+[14:04:16.0352] <bakkot>
+the list is just defined in code, so in principle I could conditionally add Float16Array based on whether it exists as a global, I guess, and then have other tests explicitly for Float16Array which would use a feature flag
+
+
+2023-06-12
+[20:56:39.0612] <ljharb>
+What was done when the bigint arrays were added?
+
+[21:10:47.0581] <bakkot>
+those tests basically were not updated
+
+[21:10:59.0437] <bakkot>
+that does make some sense because it's harder to be generic over those
+
+[21:11:43.0213] <bakkot>
+it's split into https://github.com/tc39/test262/blob/c4642dd714175b5d27939c920abc6059c9fddb06/harness/testTypedArray.js and https://github.com/tc39/test262/blob/c4642dd714175b5d27939c920abc6059c9fddb06/harness/testBigIntTypedArray.js
+
+[21:48:56.0783] <ljharb>
+ok
+
+[21:49:05.0813] <ljharb>
+should there be a testFloat16TypedArray.js, to follow the pattern?
+
+[21:49:14.0440] <ljharb>
+or should the bigint ones be conditionally merged into testTypedArray?
+
+[21:50:29.0233] <bakkot>
+if you look at how testFloat16TypedArray.js works, that can't really be a thing - everything consumer would need to be updated, which is strictly more work than just writing manual tests in the first place
+
+[21:50:56.0538] <bakkot>
+the bigint ones can't quite really go in testTypedArray because most of the consumers assume that TAs contain Numbers
+
+[02:42:36.0685] <ptomato>
+one idea might be to have a separate harness file that appends `Float16Array` into the `floatArrayConstructors` array that's defined by `testTypedArray.js`?
+
+[02:43:45.0281] <ptomato>
+that way you could do `includes: [testTypedArray.js, testFloat16TypedArray.js]` and `features: [Float16Array]` in your test, and it would Just Work; although it would run all the other typed array tests twice, I guess
+
+[02:44:09.0924] <ptomato>
+the "push if global is available" solution seems reasonable as well, though
+
+[02:44:39.0552] <ptomato>
+as long as we have tests that verify the global is actually there
+
+[09:22:28.0675] <bakkot>
+yeah I will write separate tests which use the feature flag and test Float16Array-specific stuff
+
+[09:22:33.0078] <bakkot>
+rounding behavior at the very least
+
+[10:21:32.0955] <canadahonk>
+is there an official like "test262 es2020"/etc? I see things like it thrown around a bit but can't find anything
+
+[10:24:40.0263] <ptomato>
+as in, run test262 on all the feature set of es2020? I don't think that exists, but there might be one I'm not aware of
+
+[10:43:22.0861] <canadahonk>
+yeah I saw some (niche-r) engines say like "passing 80% of test262 es2020"
+
+[10:43:32.0042] <canadahonk>
+ * yeah I saw some (niche-r) engines say like "passing 80% of test262 es2020". guessing they just select some dirs
+
+[10:46:48.0897] <bakkot>
+if I were them I would check out a commit at a particular point in time and use that
+
+[11:06:00.0833] <canadahonk>
+fwiw I checked their runner source, it looks like they tie each feature flag to a rough ES version
+
+[11:06:22.0998] <canadahonk>
+ * fwiw I checked their runner source, it looks like they tie each feature flag to a rough ES version (https://github.com/boa-dev/boa/blob/main/boa_tester/src/edition.rs)
+
+[11:10:12.0109] <bakkot>
+ah neat!
+
+
+2023-06-13
+[01:49:35.0701] <ptomato>
+maintainers, how do you feel about merging iterator helpers tests? https://github.com/tc39/test262/pull/2818
+
+[01:49:43.0019] <ptomato>
+I'm OK with it\
+
+[09:54:07.0300] <ljharb>
+i'm ok with it too - i can rerun them against my polyfill first, later today too
+
+[09:54:09.0030] <ljharb>
+ * i'm ok with it too - i can rerun them against my polyfill first, later today
+
+[10:22:09.0065] <shu>
+ptomato: i would prefer it to be merged
+
+[10:23:26.0753] <shu>
+> <@bakkot:matrix.org> question for shu / other implementers: right now the TypedArray tests are almost all generic across all of the TypedArray types, including stuff like Atomics which are tested against every TA type. if I just add Float16Array to that list it's going to cause every one of those tests to fail. that seems undesirable for implementers. do you have thoughts?
+
+causing every one of those tests to fail is undesirable because the granularity of V8's runner, and i suspect most engines' runners, isn't at that level. if we update expectations to `FAIL` then we're not going to detect regressions in other TAs until F16Arrays land
+
+[10:23:32.0075] <ptomato>
+oh yeah I didn't mean there's any question about it, but I meant more like have folks done all the reviews they wanted
+
+[10:23:37.0416] <shu>
+but it sounds like you settled on a more granular approach anyways?
+
+[10:23:41.0043] <shu>
+ptomato: oh yes, V8 has
+
+[10:25:04.0764] <shu>
+bakkot: ideally we keep test granularity at file level and avoid having polymorphic tests; i know test262 already has capability to generate tests from sources
+
+[10:27:20.0020] <bakkot>
+yeah the conditional push will at least prevent failures
+
+[10:27:30.0510] <bakkot>
+in theory
+
+[10:27:35.0151] <bakkot>
+you can run https://github.com/tc39/test262/pull/3849 if you want to be sure
+
+[10:27:48.0032] <bakkot>
+(which does not include any Float16Array-specific tests yet)
+
+[10:28:00.0942] <bakkot>
+agreed that generating these from templates would be better but that's a lot of work
+
+[10:28:25.0347] <bakkot>
+and gpt is not yet quite good enough to do that for me
+
+[10:28:29.0991] <bakkot>
+maybe next year
+
+[10:30:47.0187] <shu>
+yeah conditional push sgtm
+
+
+2023-06-14
+[19:59:35.0767] <ljharb>
+heads up for a review: https://github.com/tc39/test262/pull/3853
+
+[13:39:17.0040] <shu>
+oh i found another one, i'll put a PR up real quick
+
+[13:43:05.0078] <shu>
+https://github.com/tc39/test262/pull/3854
+
+[15:05:07.0088] <canadahonk>
+is https://github.com/tc39/test262/issues/3461 still an issue btw?
+
+
+2023-06-15
+[01:14:03.0406] <ptomato>
+I don't think anyone fixed it yet
+
+[07:46:39.0062] <shu>
+ptomato: would you like to do the honors of pressing the button on https://github.com/tc39/test262/pull/2818?
+
+[07:49:47.0703] <ptomato>
+sure, I think there's been ample opportunity for anyone to say "hold up, I still want to review this"
+
+[07:50:05.0680] <ptomato>
+I'm going to squash the commits, unless there are any in there that seem like they ought to be kept separate?
+
+[07:52:11.0865] <shu>
+🎉
+
+[11:16:01.0075] <shu>
+we missed a test that needed the iterator-helpers feature flag: https://github.com/tc39/test262/pull/3855
+
+[11:16:05.0100] <shu>
+can someone merge that rq?
+
+[11:18:42.0772] <shu>
+ty
+
+[13:43:58.0298] <ljharb>
+i split up that file in https://github.com/tc39/test262/pull/3856
+
+
+2023-06-20
+[09:04:44.0699] <ptomato>
+I won't be at tomorrow's maintainers meeting due to vacation. so someone else will need to take the notes 😄
+
+
+2023-06-21
+[08:01:24.0255] <ljharb>
+i'm in the meeting now but so far it's just me
+

@@ -1,0 +1,1049 @@
+2024-11-11
+[09:02:16.0042] <Chengzhong Wu>
+> <@legendecas:matrix.org> after the timezone change, the meeting time now is 4pm-5pm UTC. The proposed new time is 5pm-6pm UTC
+
+Reminder: the updated meeting time tomorrow will be 5pm-6pm UTC
+
+[09:02:47.0779] <Chengzhong Wu>
+Thank you Chris de Almeida for the help!
+
+
+2024-11-12
+[10:12:47.0129] <Chengzhong Wu>
+Given that meeting time conflicts were raised, and the next plenary in 3 weeks, how do people think about switching on/off weeks for meetings (other bi-weekly) starting next week?
+
+
+2024-11-13
+[20:40:48.0869] <Steve Hicks>
+In terms of events that we wanted to set to dispatch-context from the start, there was mention of same-window `postMessage` (I assume it's nonsense to talk about preserving context when messaging a different window?).  Would `MessageChannel` also be covered here?  (the reason I ask is that I'm working on a userland `aroundEach` for Jasmine - it mostly works, but only if I polyfill context propagation for `MessagePort.prototype.onmessage`)
+
+[03:58:14.0909] <Chengzhong Wu>
+agree, these tasks are pretty similar and I think we should apply the same policy on them. Contexts should not be preserved across agents. But if the async context variable is explicitly passed to a different window, I don't see it to be a problem to preserve the context?
+
+[03:58:28.0229] <Chengzhong Wu>
+ * agree, these tasks are pretty similar and I think we should apply the same policy on them. Contexts should not be preserved across agents. But if the async context variable is explicitly passed to a different window, I don't see it to be a problem to preserve the context.
+
+[03:58:36.0382] <nicolo-ribaudo>
+> <@stephenhicks:matrix.org> In terms of events that we wanted to set to dispatch-context from the start, there was mention of same-window `postMessage` (I assume it's nonsense to talk about preserving context when messaging a different window?).  Would `MessageChannel` also be covered here?  (the reason I ask is that I'm working on a userland `aroundEach` for Jasmine - it mostly works, but only if I polyfill context propagation for `MessagePort.prototype.onmessage`)
+
+Given that there is a use case we can surely include it in the list
+
+[03:59:14.0769] <nicolo-ribaudo>
+> <@legendecas:matrix.org> agree, these tasks are pretty similar and I think we should apply the same policy on them. Contexts should not be preserved across agents. But if the async context variable is explicitly passed to a different window, I don't see it to be a problem to preserve the context.
+
+Yeah I think context preservation should work across realms in the same agent: if they can pass (some) objects to each other, they should be able to preserve the context
+
+[04:00:44.0095] <Andreu Botella>
+Part of the reason why we focused on same-window `postMessage` is because that is sometimes used as a scheduler
+
+[04:01:30.0264] <Andreu Botella>
+but yeah, it makes sense to extend that to other windows in the same agent, or to `MessageChannel`
+
+[08:46:35.0695] <snek>
+i've been playing around with async context and disposables, and i realized they don't really work well together because we don't restore the context around suspend points (except in async generators?). curious if anyone else has thought about this at all.
+
+[08:48:14.0573] <Chengzhong Wu>
+async context variable disposable needs https://tc39.es/proposal-async-context/#sec-generatorresume to play well with generator/yield
+
+[08:54:31.0964] <snek>
+more specifically i was hoping these two examples would behave the same, but the second one doesn't work because you'd have to restore the context "inside" await, before it returns to the caller. https://gist.github.com/devsnek/2eee5001144f7e39513e3694ca6b3e8d
+
+[08:56:28.0520] <snek>
+ * more specifically i was hoping these two examples would behave the same, but the second one doesn't work because you'd have to restore the context "inside" await, after it sets the adds the promise reaction and before it returns to the caller. https://gist.github.com/devsnek/2eee5001144f7e39513e3694ca6b3e8d
+
+[10:40:59.0746] <Steve Hicks>
+I'm not sure I quite understand your example.  You've written `[[AsyncContext]] = 'FOO'` but (syntax aside) the current proposal doesn't allow just setting the context.  Are you assuming something like
+```javascript
+{
+  using _ = asyncVar.with('FOO');
+  foo();
+}
+```
+or are you thinking of something else entirely?
+
+[10:41:32.0906] <Steve Hicks>
+ * I'm not sure I quite understand your example.  You've written `[[AsyncContext]] = 'FOO'` but (syntax aside) the current proposal doesn't allow just setting the context.  Are you assuming something like
+
+```javascript
+{
+  using _ = asyncVar.setWithDisposable('FOO');
+  foo();
+}
+```
+
+or are you thinking of something else entirely?
+
+[10:49:55.0649] <Steve Hicks>
+That said, we're currently thinking about the impact of whether `yield` preserves context (i.e. the initialization context from the initial generator call), or whether it brings in the context from the surrounding `next()` caller (i.e. the dispatch context).  If it uses initialization context then context is sensibly block-scoped, and `using` makes a lot more sense.  If context might change across a `yield` then it's a lot less clear that `using` is at all viable, since the state to clean up at the end of the block scope may have changed out from under it.  So if `yield` exposes the dispatch context, then we're back to reconsidering what an `enterWith` or `set` semantics might look like.  In particular is the question of whether `set` in an inner/outer function body should change the value out from under an outer/inner function.  I.e.
+```javascript
+async function f() {
+  g();  // n.b. not awaited
+  x.set(2);
+  await 1;
+  console.log(y.get()); // 3 ?
+}
+async function g() {
+  await 1;
+  console.log(x.get()); // 2 ?
+  y.set(3);
+}
+```
+
+[10:51:40.0257] <Steve Hicks>
+and how exactly one sets the boundaries on where mutations _do_ affect
+
+[11:01:42.0265] <nicolo-ribaudo>
+snek I'm also not fully understanding your question, but it _seems_ similar to a discussion we had in the past:
+
+```js
+runWithContext(1, async () => {
+  console.log(getContext()) // 1
+  await new Promise(resolve => runWithContext(2, resolve));
+  console.log(getContext()) // ?
+});
+```
+
+Is answering what the second `getContext()` call logs the same as answering your question?
+
+[11:03:47.0393] <snek>
+> <@stephenhicks:matrix.org> I'm not sure I quite understand your example.  You've written `[[AsyncContext]] = 'FOO'` but (syntax aside) the current proposal doesn't allow just setting the context.  Are you assuming something like
+> 
+> ```javascript
+> {
+>   using _ = asyncVar.setWithDisposable('FOO');
+>   foo();
+> }
+> ```
+> 
+> or are you thinking of something else entirely?
+
+yes i am thinking about a disposable like that
+
+[11:04:40.0555] <snek>
+except this doesn't work with async functions because they don't restore the scope on awaits, you're forced to wrap the function.
+
+[11:13:50.0465] <nicolo-ribaudo>
+Async functions capture the scope right before pausing and restore them when resuming:
+
+- right before pausing, step 7 of await (https://tc39.es/ecma262/#await) calls PerformPromiseThen
+- step 7 of PerformPromiseThen (https://tc39.es/proposal-async-context/#sec-performpromisethen) takes a snapshot of the async context
+
+- when the promise is resolved, step 1.d of the reaction job created in NewPromiseReactionJob (https://tc39.es/proposal-async-context/#sec-newpromisereactionjob) restores the context before running the code after the await
+
+[11:14:50.0926] <snek>
+that's not exactly what i'm talking about
+
+[11:16:06.0426] <snek>
+its about code that effectively uses `enterWith`
+
+[11:18:03.0415] <snek>
+i'm referring to specifically when the async function is suspended, it does not restore the context. additionally, the promise reactions capture and restore their context. i'm basically suggesting that async function body evaluation should do the same.
+
+[11:18:34.0347] <snek>
+ * i'm referring to specifically when the async function is suspended, it does not restore the context. additionally, as you noted, the promise reactions capture and restore their context. i'm basically suggesting that async function body evaluation should do the same.
+
+[11:18:59.0285] <nicolo-ribaudo>
+Oh you mean that before pausing they restore the context that was active before that the code in the async function run?
+
+[11:19:17.0517] <snek>
+ye
+
+[11:19:18.0594] <snek>
+ * yes
+
+[11:19:43.0197] <snek>
+this is only relevant if you can "mutate" async variables though, which the proposal currently does not allow
+
+[11:19:58.0063] <nicolo-ribaudo>
+Ok -- just within the current AsyncContext itself this seems to be only editorial right? It's not observable, and it only becomes observable if somebody builds a new API that behaves like async context and uses the same propagation mechanism
+
+[11:20:49.0859] <snek>
+idk if i'd call it editorial but yes the functionality would be something the host builds on top, not something the js api currently exposes
+
+[11:22:02.0433] <snek>
+ * idk if i'd call it editorial but yes the functionality would be something the host could build on top of, not something the js api currently exposes
+
+[11:22:21.0859] <Justin Ridgewell>
+There are various changes to the spec we’ll need to make if we ever add `using` support. Right now they’re not necessary to make.
+
+[12:54:11.0067] <Steve Hicks>
+But if we're contemplating either (1) making `yield` bring in the dispatch-context, or (2) exposing `enterWith`, then it's possible that we're already painting ourselves into a corner where `using` is a non-starter.
+
+[12:54:49.0538] <Steve Hicks>
+To be clear, this I'm not convinced that this is a problem, but I do think it's worth at least some thought
+
+[12:56:00.0594] <Steve Hicks>
+In particular, if you have `enterWith` then presumably you can implement `using` semi-reasonably in userland.
+
+[12:56:37.0828] <snek>
+using can be done in terms of enterWith, but you will get behavior that is probably not what you want unless the context is restored properly at suspend points
+
+[12:56:55.0210] <nicolo-ribaudo>
+I'd really prefer that, if we do one of those two in the language, we do `using`. It's much harder to make mistakes with it
+
+[12:57:47.0619] <snek>
+i am generally a fan of what `using` can enable with this, for example `using span = tracer.createSpan()`. all i'd ask for at this point is that we don't prevent that from happening in the future.
+
+[13:00:07.0295] <Steve Hicks>
+IIRC, The concern with `using` today was that it wasn't sufficiently hermetic.
+
+[13:00:45.0755] <Steve Hicks>
+i.e. what happens if you write `tracer.createSpan()[Symbol.enter()]` and then never dispose it?
+
+[13:00:55.0723] <Steve Hicks>
+ * i.e. what happens if you write `tracer.createSpan()[Symbol.enter]()` and then never dispose it?
+
+[13:01:20.0628] <Steve Hicks>
+Of course, that's less concerning if `enterWith` is already a possibility
+
+[13:01:43.0778] <Steve Hicks>
+(effectively the above _is_ `enterWith` IIUC)
+
+[13:02:10.0533] <snek>
+yes i would say this is equiv to providing enterWith
+
+[13:02:53.0027] <snek>
+though if we start to seal up some of the things like context leaking out of suspends, the "never dispose" problem becomes less and less of a danger to callers
+
+[13:02:57.0532] <nicolo-ribaudo>
+I did have concerns with `using` because the proposal makes it trivial to just forget `using`. However, `using` with some check that you actually get Symbol.dispose would be much better than enterWith, since it makes it hard to *accidentally* forget to close the context
+
+[13:03:25.0656] <Steve Hicks>
+but it still leaves the question of what happens if you write
+```
+const d1 = v.enter(1);
+d1[Symbol.enter]();
+const d2 = v.enter(2);
+d2[Symbol.enter]();
+d1[Symbol.dispose]();
+d2[Symbol.dispose]();
+```
+?
+
+[13:04:37.0456] <Steve Hicks>
+> <@devsnek:matrix.org> though if we start to seal up some of the things like context leaking out of suspends, the "never dispose" problem becomes less and less of a danger to callers
+
+Not sure what you mean about context leaking out of suspends - IIUC this is already sealed up, though `enterWith` _could_ (depending on spec) cause a problem
+
+[13:05:04.0720] <snek>
+yes i mean if this functionality exists
+
+[13:05:34.0962] <ljharb>
+as a separate topic, i don't really grok the details of the proposal personally, but it seems like a number of node core collaborators are unhappy with the design of the proposal (in ways i also don't understand). i don't think it would be appropriate to advance an implementation that isn't also useful in node, so before seeking advancement, can yall please ensure their concerns are explained and hopefully addressed?
+
+[13:06:39.0045] <nicolo-ribaudo>
+As far as I understand, the "problem with Node.js" is that they have to APIs for setting the context, and this proposal is only defining one leaving the second one as a follow-up proposal
+
+[13:06:45.0270] <Steve Hicks>
+> <@nicolo-ribaudo:matrix.org> I did have concerns with `using` because the proposal makes it trivial to just forget `using`. However, `using` with some check that you actually get Symbol.dispose would be much better than enterWith, since it makes it hard to *accidentally* forget to close the context
+
+At the time we were talking about forcing the use of `using` so that it was syntactically guaranteed to be correct - but Ron Buckton had an issue with composability.  snek's example of `tracer.createSpan()` exactly demonstrates the composability problem, since `createSpan` would need to call `[Symbol.enter]` and `[Symbol.dispose]` directly rather than syntactically.
+
+[13:06:53.0714] <nicolo-ribaudo>
+* As far as I understand, the "problem with Node.js" is that they have two APIs for setting the context, and this proposal is only defining one leaving the second one as a follow-up proposal
+
+[13:07:52.0249] <nicolo-ribaudo>
+> <@stephenhicks:matrix.org> but it still leaves the question of what happens if you write
+> ```
+> const d1 = v.enter(1);
+> d1[Symbol.enter]();
+> const d2 = v.enter(2);
+> d2[Symbol.enter]();
+> d1[Symbol.dispose]();
+> d2[Symbol.dispose]();
+> ```
+> ?
+
+In this example, I'm hoping we can make it throw at the second call somehow 
+
+[13:08:05.0072] <nicolo-ribaudo>
+* In this example, I'm hoping we can make it throw at the second dispose call somehow
+
+[13:08:33.0762] <nicolo-ribaudo>
+I haven't thought about it enough to say how
+
+[13:13:47.0634] <Steve Hicks>
+Independently, I think snek's original question was how do the following two snippets work?
+```
+function f() {
+  await 1;
+  console.log(v.get());
+}
+{
+  using _ = v.enter(2);
+  f();
+}
+```
+```
+function f() {
+  using _ = v.enter(2);
+  await 1;
+}
+f();
+console.log(v.get());
+```
+
+[13:14:03.0799] <Steve Hicks>
+ * Independently, I think snek's original question was how do the following two snippets work?
+
+```javascript
+function f() {
+  await 1;
+  console.log(v.get());
+}
+{
+  using _ = v.enter(2);
+  f();
+}
+```
+and
+```javascript
+function f() {
+  using _ = v.enter(2);
+  await 1;
+}
+f();
+console.log(v.get());
+```
+
+[13:14:23.0528] <Steve Hicks>
+ * Independently, I think snek's original question was how do the following two snippets work?
+
+```javascript
+async function f() {
+  await 1;
+  console.log(v.get());
+}
+{
+  using _ = v.enter(2);
+  f();
+}
+```
+
+and
+
+```javascript
+async function f() {
+  using _ = v.enter(2);
+  await 1;
+}
+f();
+console.log(v.get());
+```
+
+[13:14:52.0764] <snek>
+well i know how they work given the current spec text
+
+[13:15:15.0685] <Steve Hicks>
+they don't work at all under the current spec text
+
+[13:15:21.0773] <Steve Hicks>
+because `enter` isn't a thing
+
+[13:15:44.0406] <snek>
+yes i mean assuming that such a thing existed
+
+[13:16:14.0643] <Steve Hicks>
+gotcha - I think introducing `enter` would absolutely require substantial changes to account for it
+
+[13:17:15.0418] <Steve Hicks>
+and there's a few different options for what those changes look like
+
+[13:19:10.0247] <snek>
+i think its pretty simple in terms of the spec, store context on the asyncfn/generator object when started and swap back to it whenever a suspend happens.
+
+[13:20:33.0434] <snek>
+but we don't need to deal with it right now, i was just more curious about previous thoughts in this space and ensuring that we don't prevent this from happening in the future
+
+[13:22:23.0517] <Steve Hicks>
+I don't quite understand what you mean by "whenever a suspend happens" - I would have expected to swap back to it when it _resumes_?  But the conversation yesterday was motivated by iterator helpers - if we decide that they should behave like synchronous events then it would be more consistent for generators to _not_ swap back to the initiating context on resume - for one thing, that would make it impossible to write `Iterator.prototype.map` as a generator, which seems surprising.
+
+[13:23:15.0279] <Steve Hicks>
+There was a side benefit that removing the context swap on `yield` makes the spec simpler and is also probably easier and more performant for implementations
+
+[13:24:17.0304] <snek>
+when resuming, the context is already handled by promise reaction jobs.
+
+[13:24:29.0374] <Steve Hicks>
+not for generators
+
+[13:24:55.0119] <nicolo-ribaudo>
+It would probably be clearer snek if you remove the top-level await from your example 
+
+[13:24:58.0146] <nicolo-ribaudo>
+That's what confused me
+
+[13:25:10.0101] <nicolo-ribaudo>
+Just delete the await keyword
+
+[13:25:24.0205] <Steve Hicks>
+but then I'm also that much more confused because you're concerned with what the context will be outside the asyncfn body?
+
+[13:25:34.0467] <snek>
+well its interesting both with and without the await keyword, i guess
+
+[13:25:43.0994] <snek>
+ * well its interesting both with and without the await keyword, i guess. but those are different things.
+
+[13:27:02.0234] <Steve Hicks>
+(my understanding is that it gets restored to whatever it was immediately before the body was entered - which is either the same thing if it's the first entry, or else it's the empty/top context from the microtask queue)
+
+[13:27:36.0097] <snek>
+the current semantics are this https://gc.gy/befe86ba-f5ed-4cc2-a425-115740e65bdd.png
+
+[13:27:38.0557] <Steve Hicks>
+but maybe that's what you're getting at - the first entry wouldn't restore anything?
+
+[13:28:19.0789] <snek>
+get/setAsyncContext being exactly equiv to agent.[[AsyncContext]]=whatever
+
+[13:29:06.0732] <Steve Hicks>
+and you're saying you want it to be `undefined`?
+
+[13:30:08.0185] <snek>
+i think that's what i would expect it to be, yes
+
+[13:31:26.0713] <snek>
+ * the current semantics are this https://gc.gy/f5b45fb1-6bd7-4357-ba4f-95ee1e20c464.png
+
+[13:31:38.0508] <snek>
+(updated above to a slightly more rigorous example)
+
+[13:32:09.0376] <Justin Ridgewell>
+Updated what?
+
+[13:32:11.0449] <Steve Hicks>
+I agree, I think that makes the most sense, but I wonder if that would require an unacceptable amount of function call overhead?
+
+[13:32:45.0340] <snek>
+i can't speak for all engines but in v8 at least its a single cpu instruction
+
+[13:32:59.0185] <snek>
+> <@jridgewell:matrix.org> Updated what?
+
+sorry, i meant the above screenshot
+
+[13:33:11.0760] <Justin Ridgewell>
+There is a change to `await` that needs to happen to prevent the using scope from leaking out in:
+```
+async function f() {
+  using _ = v.enter(2);
+  await 1;
+}
+f();
+console.log(v.get());
+```
+`f()` synchronous execution ends at the `await`, and we need to cleanup any using mutations before resuming past the `f()` call.
+
+[13:33:37.0035] <Justin Ridgewell>
+> <@devsnek:matrix.org> sorry, i meant the above screenshot
+
+There’s a screenshot?
+
+[13:34:14.0404] <snek>
+~13 messages up. i also posted a gist much further above 
+
+[13:34:24.0574] <snek>
+ * ~13 messages up. i also posted a more abstract gist much further above 
+
+[13:35:30.0996] <Chengzhong Wu>
+For disposable in an async function, only mutations before the first `await` need to be restored when exiting the function frame. Not all `await` tho.
+
+[13:36:16.0063] <snek>
+oh yeah i was thinking about that before. all subsequent mutations happen within microtasks so they're already restored right?
+
+[13:36:38.0149] <Chengzhong Wu>
+they will be override in the next task anyway
+
+[13:36:44.0752] <Chengzhong Wu>
+ * they will be overridden in the next task anyway
+
+[13:37:13.0868] <Justin Ridgewell>
+Wow, Cinny is missing a huge part of the conversation
+
+[13:37:19.0326] <snek>
+i was also playing with this, not that i intend to merge it but if anyone is curious https://chromium-review.googlesource.com/c/v8/v8/+/6020635
+
+[13:37:38.0038] <snek>
+> <@jridgewell:matrix.org> sent an image.
+
+yikes
+
+[13:38:45.0908] <shu>
+haha love2matrix
+
+[13:40:31.0157] <snek>
+at the very least, it seems we're all on the same page that changes would be needed for this. and that there are some concerns around those changes.
+
+[13:42:25.0112] <Chengzhong Wu>
+yes, more changes additional to the current spec are needed
+
+[13:42:45.0485] <Chengzhong Wu>
+it should be a follow-up proposal
+
+[14:51:22.0121] <Steve Hicks>
+My concern with a follow-up proposal is that it would send polyfills back to square 1 - i.e. you couldn't leverage the working earlier-spec'd AsyncContext and get the new behavior.  And worse, the polyfill would be impossible without instrumenting _every_ function in the entire program, rather than just async/generators.  I know we don't want to block on polyfill feasibility, but that's potentially a pretty big problem for me at least.
+
+[14:51:57.0819] <Steve Hicks>
+(As it is, I'm already at a bit of a loss w.r.t. how I'm going to polyfill MessageChannel...)
+
+[14:52:12.0903] <Steve Hicks>
+ * (As it is, I'm already at a bit of a loss w.r.t. how I'm going to polyfill the context-propagation in MessageChannel...)
+
+
+2024-11-14
+[16:48:09.0380] <Justin Ridgewell>
+If it's limited to scoped `using` and not general mutability, I think you can polyfill on top of `AsyncContext` and only instrument `await` and `yield` statements.
+
+[16:49:33.0024] <Justin Ridgewell>
+I know we talked about this before and I said otherwise, but I can't remember why I said it wasn't possible before.
+
+[20:18:11.0411] <Steve Hicks>
+But I think that's the problem - it can't be limited to scoped `using` because of composability: you need to be able to write
+```javascript
+function enterSpan(id) {
+  const span = new Span({id, parent: currentSpan.get()});
+  span[Symbol.dispose] = currentSpan.enter(span)[Symbol.dispose];
+  log('new span', currentSpan.get());
+  return span;
+}
+```
+That function gives no syntactic indication that it needs any extra transpilation... in fact, thinking about it further, it violates the principle that functions you call shouldn't be able to change your context.
+
+[20:23:43.0628] <Justin Ridgewell>
+That example wouldn't be possible, but using `using span = enterSpan(…)` could be
+
+[20:24:04.0462] <Steve Hicks>
+how would you define `enterSpan` in that case?
+
+[20:35:00.0339] <Justin Ridgewell>
+The same?
+
+[20:35:56.0630] <Justin Ridgewell>
+The difference is you expected `enterSpan` to cause the mutation, and I'm expecting the `using span …` to do it
+
+[09:06:08.0737] <Steve Hicks>
+This is the `disposable[Symbol.enter]()` idea, but AIUI, it's a non-starter if it only works syntactically - i.e. you still need to be able to call it reflectively for composability.
+
+[09:07:12.0223] <Steve Hicks>
+Case in point: `Span[Symbol.enter]` would need to call `AsyncContext.Mutation[Symbol.enter]` transitively.
+
+[09:07:20.0482] <Steve Hicks>
+and it couldn't use `using` syntax for that.
+
+[09:07:46.0146] <Steve Hicks>
+ * Case in point: `Span.prototype[Symbol.enter]` would need to call `AsyncContext.Mutation.prototype[Symbol.enter]` transitively.
+
+[09:27:56.0589] <nicolo-ribaudo>
+For `using` with `Symbol.enter`/`Symbol.dispose`, I don't think we need to enforce it syntactically. Does this provide enough guarantees, or are there still ways to mess up the context and not get an explicit error about it?
+
+```js
+function enterWith(variable, value) {
+  let oldContext;
+
+  return {
+    [Symbol.enter]() {
+      if (oldContext) throw new Error("Cannot enter twice");
+      oldContext = AsyncContextSnapshot();
+
+      AsyncContextSwap({ ...oldContext, [variable]: value });
+    },
+    [Symbol.dispose]() {
+      if (!oldContext) throw new Error("Cannot dispose before entering");
+
+      const current = AsyncContextSnapshot();
+      if (current !== oldContext) {
+        throw new Error("Cannot dispose, as it's not the current context");
+      }
+
+      AsyncContextSwap(oldContext);
+    }
+  }
+}
+
+AsyncContext.Variable.prototype.run = function (value, callback) {
+  const oldContext = AsyncContextSnapshot();
+
+  AsyncContextSwap({ ...oldContext, [this]: value });
+  try {
+    return callback();
+  } finally {
+    const current = AsyncContextSnapshot();
+    AsyncContextSwap(oldContext);
+
+    if (current !== oldContext) {
+      throw new Error(".run ended before that its context was restored");
+    }
+  }
+}
+
+{
+  // context: root
+
+  x1[Symbol.enter]();
+  // context: x1
+
+  x2[Symbol.enter]();
+  // context: x2
+
+  x1[Symbol.dispose](); // error: "Cannot dispose, as it's not the current context"
+}
+
+
+{
+  // context: root
+
+  x1[Symbol.enter]();
+  // context: x1
+
+  myVar.run("foo", () => {
+    // context: foo
+
+    x1[Symbol.dispose](); // error: "Cannot dispose, as it's not the current context"
+  })
+}
+
+{
+  // context: root
+
+  x1[Symbol.enter]();
+  // context: x1
+
+  myVar.run("foo", () => {
+    // context: foo
+
+    x1[Symbol.enter]();
+    // context: x1
+  }); // closes the foo context, then error: ".run ended before that its context was restored"
+}
+```
+
+[09:32:22.0352] <nicolo-ribaudo>
+ * For `using` with `Symbol.enter`/`Symbol.dispose`, I don't think we need to enforce it syntactically. Does this provide enough guarantees, or are there still ways to mess up the context and not get an explicit error about it?
+
+```js
+function enterWith(variable, value) {
+  let oldContext;
+
+  return {
+    [Symbol.enter]() {
+      if (oldContext) throw new Error("Cannot enter twice");
+      oldContext = AsyncContextSnapshot();
+
+      AsyncContextSwap({ ...oldContext, [variable]: value });
+    },
+    [Symbol.dispose]() {
+      if (!oldContext) throw new Error("Cannot dispose before entering");
+
+      const current = AsyncContextSnapshot();
+      if (current !== oldContext) {
+        throw new Error("Cannot dispose, as it's not the current context");
+      }
+
+      AsyncContextSwap(oldContext);
+    }
+  }
+}
+
+AsyncContext.Variable.prototype.run = function (value, callback) {
+  const oldContext = AsyncContextSnapshot();
+
+  AsyncContextSwap({ ...oldContext, [this]: value });
+  try {
+    return callback();
+  } finally {
+    const current = AsyncContextSnapshot();
+    AsyncContextSwap(oldContext);
+
+    if (current !== oldContext) {
+      throw new Error(".run ended before that its context was restored");
+    }
+  }
+}
+
+{
+  // context: root
+
+  x1[Symbol.enter]();
+  // context: x1
+
+  x2[Symbol.enter]();
+  // context: x2
+
+  x1[Symbol.dispose](); // error: "Cannot dispose, as it's not the current context"
+}
+
+
+{
+  // context: root
+
+  x1[Symbol.enter]();
+  // context: x1
+
+  myVar.run("foo", () => {
+    // context: foo
+
+    x1[Symbol.dispose](); // error: "Cannot dispose, as it's not the current context"
+  })
+}
+
+{
+  // context: root
+
+  myVar.run("foo", () => {
+    // context: foo
+
+    x1[Symbol.enter]();
+    // context: x1
+  }); // closes the foo context, then error: ".run ended before that its context was restored"
+}
+```
+
+[09:33:10.0763] <nicolo-ribaudo>
+And you can still leak _a little bit_, but:
+- `.run` is a hard boundary you cannot leak accross
+- if you leak, basically as soon as some other context ends you'll get an error
+
+[09:33:39.0991] <nicolo-ribaudo>
+And the error could point to the stack trace of where you did `enter` without then disposing it
+
+[09:34:17.0835] <Steve Hicks>
+I think you need to store two locals - one for `oldContext` and one for `updatedContext` and then line 15 wants to compare `current !== updatedContext`
+
+[09:34:40.0577] <nicolo-ribaudo>
+True, right
+
+[09:35:16.0663] <nicolo-ribaudo>
+ * For `using` with `Symbol.enter`/`Symbol.dispose`, I don't think we need to enforce it syntactically. Does this provide enough guarantees, or are there still ways to mess up the context and not get an explicit error about it?
+
+```js
+function enterWith(variable, value) {
+  let oldContext, updatedContext
+
+  return {
+    [Symbol.enter]() {
+      if (oldContext) throw new Error("Cannot enter twice");
+      oldContext = AsyncContextSnapshot();
+      updatedContext = { ...oldContext, [variable]: value };
+
+      AsyncContextSwap(updatedContext);
+    },
+    [Symbol.dispose]() {
+      if (!oldContext) throw new Error("Cannot dispose before entering");
+
+      const current = AsyncContextSnapshot();
+      if (current !== updatedContext) {
+        throw new Error("Cannot dispose, as it's not the current context");
+      }
+
+      AsyncContextSwap(oldContext);
+    }
+  }
+}
+
+AsyncContext.Variable.prototype.run = function (value, callback) {
+  const oldContext = AsyncContextSnapshot();
+
+  AsyncContextSwap({ ...oldContext, [this]: value });
+  try {
+    return callback();
+  } finally {
+    const current = AsyncContextSnapshot();
+    AsyncContextSwap(oldContext);
+
+    if (current !== oldContext) {
+      throw new Error(".run ended before that its context was restored");
+    }
+  }
+}
+
+{
+  // context: root
+
+  x1[Symbol.enter]();
+  // context: x1
+
+  x2[Symbol.enter]();
+  // context: x2
+
+  x1[Symbol.dispose](); // error: "Cannot dispose, as it's not the current context"
+}
+
+
+{
+  // context: root
+
+  x1[Symbol.enter]();
+  // context: x1
+
+  myVar.run("foo", () => {
+    // context: foo
+
+    x1[Symbol.dispose](); // error: "Cannot dispose, as it's not the current context"
+  })
+}
+
+{
+  // context: root
+
+  myVar.run("foo", () => {
+    // context: foo
+
+    x1[Symbol.enter]();
+    // context: x1
+  }); // closes the foo context, then error: ".run ended before that its context was restored"
+}
+```
+
+[09:37:00.0175] <nicolo-ribaudo>
+ * True, right (updated)
+
+[09:37:38.0040] <nicolo-ribaudo>
+ * For `using` with `Symbol.enter`/`Symbol.dispose`, I don't think we need to enforce it syntactically. Does this provide enough guarantees, or are there still ways to mess up the context and not get an explicit error about it?
+
+```js
+function enterWith(variable, value) {
+  let oldContext, updatedContext
+
+  return {
+    [Symbol.enter]() {
+      if (oldContext) throw new Error("Cannot enter twice");
+      oldContext = AsyncContextSnapshot();
+      updatedContext = { ...oldContext, [variable]: value };
+
+      AsyncContextSwap(updatedContext);
+    },
+    [Symbol.dispose]() {
+      if (!oldContext) throw new Error("Cannot dispose before entering");
+
+      const current = AsyncContextSnapshot();
+      if (current !== updatedContext) {
+        throw new Error("Cannot dispose, as it's not the current context");
+      }
+
+      AsyncContextSwap(oldContext);
+    }
+  }
+}
+
+AsyncContext.Variable.prototype.run = function (value, callback) {
+  const oldContext = AsyncContextSnapshot();
+  const updatedContext = { ...oldContext, [this]: value };
+
+  AsyncContextSwap(updatedContext);
+  try {
+    return callback();
+  } finally {
+    const current = AsyncContextSnapshot();
+    AsyncContextSwap(oldContext);
+
+    if (current !== updatedContext) {
+      throw new Error(".run ended before that its context was restored");
+    }
+  }
+}
+
+{
+  // context: root
+
+  x1[Symbol.enter]();
+  // context: x1
+
+  x2[Symbol.enter]();
+  // context: x2
+
+  x1[Symbol.dispose](); // error: "Cannot dispose, as it's not the current context"
+}
+
+
+{
+  // context: root
+
+  x1[Symbol.enter]();
+  // context: x1
+
+  myVar.run("foo", () => {
+    // context: foo
+
+    x1[Symbol.dispose](); // error: "Cannot dispose, as it's not the current context"
+  })
+}
+
+{
+  // context: root
+
+  myVar.run("foo", () => {
+    // context: foo
+
+    x1[Symbol.enter]();
+    // context: x1
+  }); // closes the foo context, then error: ".run ended before that its context was restored"
+}
+```
+
+[09:37:57.0551] <Steve Hicks>
+And then the idea is that
+```javascript
+async function f() {
+  using _ = enterWith(v, 2);
+  await 1;
+}
+{
+  using _ = enterWith(v, 1);
+  f();
+}
+```
+would work because the suspension would restore the entry context?  But if `f` were an ordinary function that leaked then the dispose after `f()` would fail.
+
+[09:38:43.0663] <nicolo-ribaudo>
+Yes and yes
+
+[09:38:50.0631] <Steve Hicks>
+And any non-syntactic access to the protocol _should_ still at least be sound
+
+[09:39:14.0439] <nicolo-ribaudo>
+And the whole program should also have a check at the end that checks you didn't forget to close anything
+
+[09:39:16.0891] <Steve Hicks>
+I don't think you strictly need `Symbol.enter` for these checks.
+
+[09:39:29.0648] <nicolo-ribaudo>
+So that even a program that just does `x1[Symbol.enter]()` throws when it ends
+
+[09:39:49.0027] <Steve Hicks>
+though it would certainly be nicer to have
+
+[09:39:52.0019] <nicolo-ribaudo>
+> <@stephenhicks:matrix.org> I don't think you strictly need `Symbol.enter` for these checks.
+
+Yeah, you can also just have two functions that you call to activate and deactivate the context
+
+[09:43:39.0105] <Steve Hicks>
+So does `run` also verify that the "outgoing" context hasn't changed?
+
+[09:44:30.0690] <Steve Hicks>
+And is there any precedent for this sort of behavior where we allow the unsound thing to happen, but only throw an error later after it becomes more obvious?
+
+[09:45:14.0096] <nicolo-ribaudo>
+> <@stephenhicks:matrix.org> So does `run` also verify that the "outgoing" context hasn't changed?
+
+Yes, but still restores the correct one before throwing, so that try/catch+run always guarantees that a bad function can be run properly without it messing anything up
+
+[09:49:52.0680] <Steve Hicks>
+This would work fine with generators if `yield` had the same behavior as `await`; otherwise, it would effectively make a `yield` within an `enterWith` block be an error.
+
+[09:50:26.0234] <Steve Hicks>
+unless the generator was fully iterated in a single outer context
+
+[09:52:50.0552] <Steve Hicks>
+one could imagine a weird mode where the `yield` would somehow capture the mutations and replay them on top of the new re-entered context, but that doesn't seem reasonable
+
+[09:53:02.0804] <Steve Hicks>
+ * one could imagine a weird solution where the `yield` would somehow capture the mutations and replay them on top of the new re-entered context, but that doesn't seem reasonable
+
+[09:55:11.0845] <nicolo-ribaudo>
+Agree — I think we need to make yield capture/restore if we don't want to prevent enterWith from happening in the future 
+
+[09:55:44.0104] <Steve Hicks>
+This makes it impossible to implement dispatch-context iterator helpers as generators
+
+[09:56:39.0332] <Steve Hicks>
+ * This makes it impossible to implement dispatch-context iterator helpers (in userland) as generators
+
+[09:56:48.0813] <nicolo-ribaudo>
+In a world with enterWith, could we do something like this with a metaproperty?
+
+```
+let x = yield foo;
+using _ = yield.nextCallerContext
+```
+
+[09:57:14.0078] <nicolo-ribaudo>
+Where yield.nextCallerContext gives you the context of the .next call
+
+[09:57:19.0623] <nicolo-ribaudo>
+And you can "enter a snapshot"
+
+[09:58:55.0680] <Steve Hicks>
+that seems feasible
+
+[10:12:11.0702] <Steve Hicks>
+> <@stephenhicks:matrix.org> And is there any precedent for this sort of behavior where we allow the unsound thing to happen, but only throw an error later after it becomes more obvious?
+
+So I guess that leaves ^ as my main concern?
+
+[10:12:37.0581] <Steve Hicks>
+> <@stephenhicks:matrix.org> And is there any precedent for this sort of behavior where we allow the unsound thing to happen, but only throw an error later after it becomes more obvious?
+
+ * So I guess that leaves ^ as my main concern - do we think this sort of thing could actually land?
+
+[10:13:07.0984] <nicolo-ribaudo>
+I don't know, nothing comes immediately to my mind 
+
+[10:13:12.0382] <nicolo-ribaudo>
+I'll look around 
+
+[10:13:37.0777] <Steve Hicks>
+(and aside, I'm a little sad that I won't be able to rip out the over-complicated transpilation for generators)
+
+[10:18:24.0423] <nicolo-ribaudo>
+Instead of transpiling the generator, could you wrap it in a function that calls .next setting the original generator  context first?
+
+[11:49:28.0906] <Steve Hicks>
+That's an interesting idea, I'll need to look into that.
+
+[11:51:20.0524] <Steve Hicks>
+it's a little awkward for class methods, but I think we do something similar when downleveling async methods
+
+[14:19:51.0275] <Steve Hicks>
+I prototyped a quick proof-of-concept that it's possible to leverage most of an existing implementation and add a disposable `enterWith` by just replacing `AsyncContext.Variable` with a new implementation that indirects through a single "real" variable: https://gist.github.com/shicks/0cd7e9b06535793c137934cc52ed12ce
+
+[14:20:50.0323] <Steve Hicks>
+I don't think an analogous approach would work for `yield.nextCallerContext` - you'd be forced to at least go back to transpiling all generators.
+
+[14:22:08.0344] <Steve Hicks>
+ * I don't think an analogous approach would work for `yield.nextCallerContext` - you'd be forced to at least go back to transpiling all generators (to wrap with a function that set the nextCallerContext in some reasonable way)
+
+[14:26:07.0238] <Steve Hicks>
+ * ~~I don't think an analogous approach would work for `yield.nextCallerContext` - you'd be forced to at least go back to transpiling all generators (to wrap with a function that set the nextCallerContext in some reasonable way)~~
+
+[14:26:12.0605] <Steve Hicks>
+ * ~I don't think an analogous approach would work for `yield.nextCallerContext` - you'd be forced to at least go back to transpiling all generators (to wrap with a function that set the nextCallerContext in some reasonable way)~
+
+[14:26:35.0523] <Steve Hicks>
+ * I don't think an analogous approach would work for `yield.nextCallerContext` - you'd be forced to at least go back to transpiling all generators (to wrap with a function that set the nextCallerContext in some reasonable way)
+
+Scratch that - you need to transpile the keyword anyway, and if you do so, you only need to wrap that particular generator.
+
+
+2024-11-18
+[08:54:39.0065] <Steve Hicks>
+Are we still planning on moving the biweekly meeting to tomorrow?
+
+[08:55:49.0399] <Steve Hicks>
+Justin Ridgewell: 
+
+[08:55:59.0506] <Steve Hicks>
+ * Justin Ridgewell
+
+[08:58:38.0310] <Andreu Botella>
+I think Chengzhong Wu is OOO this week, and he hadn't realized that when talking about moving the meeting last week
+
+[09:17:28.0864] <Steve Hicks>
+gotcha, so tldr is we're keeping next week?
+
+[09:17:48.0750] <Andreu Botella>
+if no one opposes
+
+[09:18:09.0073] <Steve Hicks>
+I'm fine with that, though I'm still hoping to swap weeks at some point
+
+[13:39:14.0126] <Justin Ridgewell>
+Let’s keep tomorrow’s and we’ll change next week?
+
+[13:45:21.0043] <Steve Hicks>
+Tomorrow would be changing, next week is status quo.  If we don't meet tomorrow then we need to meet next week so that we can get a meeting in before plenary in 2 weeks.  We can bring it up again after that.
+
+[13:46:05.0579] <Justin Ridgewell>
+Sorry, let’s keep next weeks and then switch after that
+

@@ -1,0 +1,498 @@
+2024-08-01
+[20:24:52.0465] <ljharb>
+> <@jridgewell:matrix.org> I’m not sure they’re different from the user’s point of view.
+
+of course there are; `import type` vs `import`, "what gets stripped" vs "what doesn't", etc
+
+[20:24:55.0420] <ljharb>
+> <@jridgewell:matrix.org> I’m not sure they’re different from the user’s point of view.
+
+ * of course they are; `import type` vs `import`, "what gets stripped" vs "what doesn't", etc
+
+[20:25:21.0311] <ljharb>
+i would be surprised if any user actually didn't understand that typescript wasn't what runs in the actual application
+
+[22:47:23.0604] <sffc>
+About Decimal and primitives, littledan's logic makes a lot of sense to me. If we were to have decimals as a primitive, they would need to be normalized (no quantum). However, the champions have presented rationale for why decimals should retain their quantum. Therefore, Decimals should be objects, not primitives.
+
+This logic flows completely independently from any argument about whether or not engines may eventually change their position on decimals being a new primitive.
+
+[00:55:36.0635] <Luca Casonato>
+> <@ljharb:matrix.org> i would be surprised if any user actually didn't understand that typescript wasn't what runs in the actual application
+
+You’d be surprised 😃
+
+[01:14:31.0235] <Rob Palmer>
+In the old days, folk learned JS before they learned TS, so had a strong mental model of the difference.
+
+Nowadays many people learn TS first (or at least, it's not sequenced).
+
+And we have runtimes with built-in support, further hiding the difference.
+
+[10:42:04.0754] <ljharb>
+are most of those newcomers using those alternative runtimes tho?
+
+[10:53:17.0347] <Anthony Bullard>
+Definitely not. Most still use the browser - though through transpilers - or node(same).
+
+[10:59:09.0824] <ljharb>
+that matches my intuition - anyone who's using "not browsers or unflagged node" is not a newcomer and knows the difference.
+
+[11:25:57.0387] <Justin Ridgewell>
+> <@ljharb:matrix.org> of course they are; `import type` vs `import`, "what gets stripped" vs "what doesn't", etc
+
+I don’t understand your point. To users writing functions, `deferred`/`immediate` seems very similar to `readonly` in `readonly number[]` which tells the user they can’t don `foo[0] = 1`. `derred () => void` means they can’t call that function within their function body, only pass it off to another deferring function or store it for later.
+
+[12:40:06.0296] <ljharb>
+`: readonly number[]` tho. it's part of the type.
+
+[13:47:04.0378] <Justin Ridgewell>
+Yes, and `: deferred () => void` is part of the type, too.
+
+[13:48:20.0219] <Justin Ridgewell>
+The type system should error if you call a defferred callback sync, the same way it will if you mutate a readonly array.
+
+[15:56:04.0325] <shu>
+is the only way to observe number of ticks via user code `then` handlers?
+
+if i have some spec doing the following:
+
+```
+let p1 = new %Promise%;
+let p2 = new %Promise%;
+PerformPromiseThen(p2, () => p1, () => {});
+return p2;
+```
+
+where `p1` and `p2` are built-in promises, and `p1` never escapes to user code, are the two ticks unobservable? is that equivalent to returning `p1` directly?
+
+[16:06:42.0483] <bakkot>
+shu: do you meant to have `let p3 = PerformPromiseThen(p2, () => p1, () => {}); return p3`? Or are you really intending to return the original `p2`?
+
+[16:08:46.0701] <shu>
+i am intending to return original `p2`, that's a PerformPromiseThen as in our AO, not p2.then
+
+[16:08:59.0641] <shu>
+like p2 does nothing except inherit p1's eventual state
+
+[16:09:41.0950] <shu>
+wait i think that pseudocode is just borked
+
+[16:10:26.0341] <shu>
+it's like `PerformPromiseThen(p1, () => Resolve(p2))`
+
+[16:16:52.0203] <bakkot>
+in this example p1 never resolves so it is perforce not observable
+
+[16:16:58.0542] <bakkot>
+perhaps you intend p1 to start out resolved?
+
+[16:18:13.0695] <shu>
+yes, i think starting out resolved is equivalent to what's actually happening
+
+[16:20:08.0057] <bakkot>
+in which case, the difference is observable iff someone is keeping track of ticks while this all is going on, I believe? which they could be
+
+[16:20:27.0168] <bakkot>
+```
+(async () => {
+  for (let i = 0; i < 20; ++i) {
+    console.log(i);
+    await 0;
+  }
+})();
+
+// compare:
+(async () => {
+  let p1 = Promise.resolve();
+  
+  p1.then(() => { console.log('done 1'); });
+})();
+
+// vs:
+(async () => {
+  let p1 = Promise.resolve();
+  
+  let resolveP2;
+  let p2 = new Promise(res => { resolveP2 = res; });
+  
+  p1.then(resolveP2);
+  
+  p2.then(() => { console.log('done 2'); });
+})();
+```
+
+[16:21:03.0396] <bakkot>
+ * ```
+(async () => {
+  for (let i = 0; i < 4; ++i) {
+    console.log(i);
+    await 0;
+  }
+})();
+
+// compare:
+(async () => {
+  let p1 = Promise.resolve();
+  
+  p1.then(() => { console.log('done 1'); });
+})();
+
+// vs:
+(async () => {
+  let p1 = Promise.resolve();
+  
+  let resolveP2;
+  let p2 = new Promise(res => { resolveP2 = res; });
+  
+  p1.then(resolveP2);
+  
+  p2.then(() => { console.log('done 2'); });
+})();
+```
+
+[16:24:21.0776] <shu>
+ah, of course, thanks for the example
+
+[16:24:28.0087] <shu>
+cursed global queue
+
+[16:56:37.0366] <ljharb>
+> <@jridgewell:matrix.org> Yes, and `: deferred () => void` is part of the type, too.
+
+ok i think we're violently in agreement :-) i just don't want the keyword appearing where an ES keyword could, but after a colon is where i'd expect it
+
+
+2024-08-02
+[23:38:43.0216] <Ashley Claymore>
+If the keyword only works in some places and not others might be confusing. e.g if can't change:
+
+```
+function f(cb: immediate Fn) { cb() }
+```
+
+to
+
+```
+type T = immediate Fn;
+function f(cb: T) { cb() }
+```
+
+[05:03:29.0921] <rbuckton>
+> <@aclaymore:matrix.org> If the keyword only works in some places and not others might be confusing. e.g if can't change:
+> 
+> ```
+> function f(cb: immediate Fn) { cb() }
+> ```
+> 
+> to
+> 
+> ```
+> type T = immediate Fn;
+> function f(cb: T) { cb() }
+> ```
+
+`unique symbol` is similarly restricted
+
+[07:19:39.0166] <Ashley Claymore>
+True. It's like the reverse. And its not `const s: symbol = unique new Symbol()`
+good point 
+
+[12:24:43.0442] <bakkot>
+Michael Ficarra: why does https://github.com/michaelficarra/proposal-concurrency-control include concurrent `reduce`? does that make sense in some way I'm not immediately seeing?
+
+[12:26:07.0560] <bakkot>
+I guess the idea is that a lot of operations are associative? but the types only work out if your reducer function is `(T, T) -> T` and not `(A, T) -> A`
+
+[12:29:27.0019] <Michael Ficarra>
+yep, don't do concurrent reduce if your operation isn't associative
+
+
+2024-08-03
+[15:54:07.0335] <snek>
+this is good advice for synchronous code too
+
+
+2024-08-06
+[18:48:15.0558] <Michael Ficarra>
+@devsnek:matrix.org nah, non-associative reducers are fine when you're iterating in-order
+
+[18:50:55.0452] <Michael Ficarra>
+see https://en.wikipedia.org/wiki/Catamorphism
+
+[19:38:47.0778] <rkirsling>
+you know it's a good day when we're busting out the article on catamorphism
+
+[23:43:30.0259] <snek>
+> <@michaelficarra:matrix.org> see https://en.wikipedia.org/wiki/Catamorphism
+
+> an initial algebra is an initial object in the category of F-algebras
+
+[23:43:41.0038] <snek>
+cannot escape this sentence 
+
+[23:43:54.0050] <snek>
+> <@michaelficarra:matrix.org> see https://en.wikipedia.org/wiki/Catamorphism
+
+ * > an initial algebra is an initial object in the category of F-algebras for a given endofunctor F
+
+[00:29:04.0460] <rkirsling>
+technically it's straightforward to break down 😆
+
+[00:29:40.0669] <rkirsling>
+effectively "initial algebra = initial object of type algebra"
+
+[00:31:51.0854] <rkirsling>
+ * effectively "initial algebra = initial object of type Algebra<F>"
+
+[00:32:45.0975] <rkirsling>
+i.e. "if you have learned what an initial object and an algebra are, then you're ready to understand what an initial algebra is"
+
+[06:42:05.0728] <Michael Ficarra>
+don't make me tap the recursion schemes diagram
+
+[13:36:18.0042] <shu>
+haha absolutely deranged
+
+[13:40:51.0781] <shu>
+the only morphism i need is monomorphism 🙏🙏🙏
+
+[15:19:15.0565] <Michael Ficarra>
+> <@shuyuguo:matrix.org> the only morphism i need is monomorphism 🙏🙏🙏
+
+I was so confused by this at first because a monomorphism is an injective homomorphism. But you mean like, as opposed to polymorphic/megamorphic.
+
+[15:23:14.0733] <shu>
+hell yeah i do brother
+
+
+2024-08-07
+[18:40:06.0246] <rkirsling>
+I have definitely been confused by that before (in the reverse direction of shu)
+
+[23:36:11.0745] <rkirsling>
+ * I have definitely been confused by that before
+
+
+2024-08-11
+[10:35:25.0545] <bakkot>
+I've written up some stuff about how iterators / generators / etc work https://github.com/tc39/how-we-work/blob/iterator-protocol/iterator-protocol.md
+
+[10:35:46.0101] <bakkot>
+does anyone have opinions where it should live? by default I would shove it in how-we-work but that's not necessarily the best place
+
+
+2024-08-12
+[06:54:56.0237] <Michael Ficarra>
+honestly, MDN
+
+[09:56:05.0333] <shu>
+i agree how-we-work doesn't feel appropriate
+
+[09:57:00.0852] <shu>
+it also doesn't appropriate for MDN as general web developer-facing documentation. are there MDN articles that are tagged like "internals, intended for implementers, tooling authors, polyfill authors, etc"?
+
+[10:02:41.0668] <Rob Palmer>
+Shall we create `tc39/docs` repo?
+
+[10:05:30.0967] <shu>
+i feel like no, actually, i agree that MDN is a better fit than our spinning up a new repo. i'd just like it to not muddle with the general developer-facing docs on there
+
+[10:26:27.0265] <Michael Ficarra>
+@shuyuguo:matrix.org developers implement (both consume and produce) these protocols, there's nothing inappropriate about it living on MDN IMO
+
+[10:28:53.0764] <bakkot>
+I think this is too much detail for MDN personally; very few developers should be thinking about this stuff
+
+[10:29:28.0233] <shu>
+> <@michaelficarra:matrix.org> @shuyuguo:matrix.org developers implement (both consume and produce) these protocols, there's nothing inappropriate about it living on MDN IMO
+
+that is not true, most developers do not produce these protocols at that level of detail
+
+[10:29:51.0049] <shu>
+like the only way they would produce this protocol is if they are writing a VM, or a downlevel transform, right?
+
+[10:30:20.0892] <shu>
+but i think we're splitting hairs: i think MDN is fine. i don't want it to be misconstrued as "general knowledge"
+
+[10:31:27.0906] <bakkot>
+here's MDN's page currently (which josh-cena has done a fair bit of work on recently) https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Iteration_protocols
+
+[10:32:01.0920] <bakkot>
+which I think covers everything developers should know
+
+[10:32:23.0495] <bakkot>
+(and I guess is partially based on my doc)
+
+[10:32:52.0424] <bakkot>
+I guess I mostly feel weird about MDN being a place to live because I don't treat MDN as authoritative about the language, and I don't expect other implementers to do so either
+
+[10:33:20.0708] <bakkot>
+it's describing things at the level of detail you need to know as a developer, which can elide certain things which are important only to implementers
+
+[10:34:13.0657] <Michael Ficarra>
+> <@shuyuguo:matrix.org> like the only way they would produce this protocol is if they are writing a VM, or a downlevel transform, right?
+
+no, all sorts of developers will manually implement the iterator/generator protocols, doing something as commonplace as creating a data structure
+
+[10:34:30.0359] <shu>
+that is really not true for this case
+
+[10:36:23.0110] <shu>
+kevin's document would be inappropriate level of detail for someone implementing an object that satisfies the protocol
+
+[10:42:30.0920] <Michael Ficarra>
+¯\\_(ツ)_/¯ it's the level of detail I'd want, but maybe that's just me
+
+[10:42:47.0785] <Michael Ficarra>
+* ¯\_(ツ)\_/¯ it's the level of detail I'd want, but maybe that's just me
+
+[10:43:08.0086] <Michael Ficarra>
+* 🤷‍♂️ it's the level of detail I'd want, but maybe that's just me
+
+[10:43:20.0072] <shu>
+i can say with some certainty you are gross miscalibrated if the calibration we're going for is "all sorts of developers"
+
+[10:43:27.0513] <Michael Ficarra>
+lmao kaomoji are impossible on matrix
+
+[10:43:43.0038] <shu>
+ * i can say with some certainty you are grossly miscalibrated if the calibration we're going for is "all sorts of developers"
+
+[13:06:39.0463] <ljharb>
+¯\\\_(ツ)_\/¯
+
+
+2024-08-13
+[17:17:09.0987] <Chris de Almeida>
+FWIW, I recall seeing some docs along the lines of "internals, intended for implementers..." in MDN
+
+
+2024-08-14
+[09:52:06.0795] <dminor>
+At the last plenary we discussed https://github.com/tc39/proposal-upsert a bit, in particular, that it's planned as an implementation project for students at Bergen, but the current champion is no longer active in committee. Since I'm planning to mentor an implementation in SpiderMonkey, I'd like to put my name forward to take over as a champion for the proposal. If there's no objections, I can put an update on the agenda for the next plenary and we can discuss it further then.
+
+[09:56:32.0786] <mgaudet>
+That sounds pretty cool! 
+
+
+2024-08-16
+[18:54:55.0438] <Aki>
+Based on the notes from last plenary, it seems like Decimal for Stage 2 was supposed to be continued but never was. is that accurate?
+
+[19:17:07.0406] <Chris de Almeida>
+> <@akirose:matrix.org> Based on the notes from last plenary, it seems like Decimal for Stage 2 was supposed to be continued but never was. is that accurate?
+
+no.  we went over the timebox more than 30 minutes and that was that
+
+[19:17:36.0036] <Aki>
+Cool, just making sure i didn't lose track of the note somehow. Thank you!
+
+[19:20:22.0007] <Chris de Almeida>
+> <@akirose:matrix.org> Cool, just making sure i didn't lose track of the note somehow. Thank you!
+
+ah, looking at the notes we did want a continuation but we didn't have time as another topic ended up going over as well
+
+[19:46:05.0742] <Aki>
+Notes PR is open!
+
+
+2024-08-19
+[09:00:29.0856] <Michael Ficarra>
+so I just noticed that the parameter to Iterator.prototype.{take,drop} is coerced to a number since it predates our decision to stop coercing parameters
+
+[09:01:15.0013] <Michael Ficarra>
+is there any appetite from implementations to change that to stop coercing before anybody ends up using it? @shuyuguo:matrix.org @dminor:mozilla.org @linusgroh:matrix.org
+
+[09:02:04.0715] <shu>
+not at this time from me
+
+[09:05:59.0551] <Michael Ficarra>
+k
+
+[09:19:31.0994] <linusg>
+I'm open to any last minute changes if they align proposals with new rules (including temporal) but I'm an outlier in that regard 😄
+
+
+2024-08-20
+[08:05:03.0909] <littledan>
+Can we link to the TC39 public calendar from the website?
+
+[08:05:11.0093] <littledan>
+I think it's pretty difficult for people to find right now
+
+[10:03:56.0451] <Michael Ficarra>
+Agreed. The whole point of making the public/private separation was so we can better publicise our open access calls. We should make the calendar easy to find and browse.
+
+[13:47:55.0777] <Chris de Almeida>
+gentle reminder to review the meeting notes PR:  https://github.com/tc39/notes/pull/337
+
+
+2024-08-22
+[04:25:00.0999] <Rob Palmer>
+We have a matrix room for in-person attendee coordination for the Tokyo meeting in October:  https://matrix.to/#/!esMMWWzCSbZuzkptYP:matrix.org?via=matrix.org
+
+Please say if you would like an invite.
+
+[09:26:30.0711] <Justin Ridgewell>
+Me
+
+
+2024-08-23
+[09:08:28.0421] <Chris de Almeida>
+gentle reminder -- please complete the `in-person registration form` for Tokyo if you plan on attending: https://github.com/tc39/Reflector/issues/537
+
+
+2024-08-25
+[16:18:23.0512] <bakkot>
+possibly of interest, especially to people working on the signals proposal: https://github.com/WICG/webcomponents/issues/1069
+
+[16:33:15.0693] <snek>
+seems like a nice shorthand for going through the DOMParser api
+
+
+2024-08-26
+[09:30:59.0661] <nicolo-ribaudo>
+Michael Ficarra / ljharbSorry 😅
+
+[09:31:25.0491] <nicolo-ribaudo>
+* @michaelficarra:matrix.org / @ljharb:matrix.orgSorry 😅
+
+[09:31:56.0849] <nicolo-ribaudo>
+* @michaelficarra:matrix.org / @ljharb:matrix.orgSorry 😅
+
+(edit: Idk why that sorry is auto-linked)
+
+[09:32:22.0379] <Michael Ficarra>
+we should have an Action that unmarks as ready to merge when a PR gets pushed or something
+
+[09:35:48.0508] <snek>
+i think github has a setting to dismiss reviews on push
+
+[10:29:44.0761] <Chris de Almeida>
+automatically dismiss stale reviews is more annoying than the good it (sometimes) provides
+
+[10:30:04.0330] <Chris de Almeida>
+small typo? rebase? boom, all reviews dismissed
+
+
+2024-08-28
+[10:15:16.0107] <Chris de Almeida>
+> <@softwarechris:matrix.org> small typo? rebase? boom, all reviews dismissed
+
+part of this problem is an unfortunate GH behavior that really should get fixed -- there is no record that the review result was an approval
+
+[10:38:55.0560] <ljharb>
+also, even a rebase, with the diff remaining identical, will clear reviews - and shouldn't imo. iow i think that the only thing that should maybe require rereview is changes in the diff, and even then it's probably too annoying
+
+[10:45:14.0384] <Mathieu Hofman>
+Some bots exist to carry forward the approval when they judge the content of the PR has not "significantly changed", which is intrinsically a  language and repository specific concept
+
+[10:54:34.0759] <ljharb>
+true. with github tho and CODEOWNERS, they could certainly determine when a diff has changed and only invalidate reviews on those files
+
+
+2024-08-30
+[16:13:50.0250] <canadahonk>
+👋 hi folks! as a small intro, I'm Oliver (or `@canadahonk`). you may have seen me around as I actively contribute to WinterCG and make an ahead-of-time JS engine/compiler/etc, [Porffor](https://porffor.dev) (now full-time!). excited to get more into standards and hope to see some of you in Tokyo! (but also happy to chat in dms anytime)
+

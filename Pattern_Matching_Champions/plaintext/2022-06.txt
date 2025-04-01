@@ -1,0 +1,123 @@
+2022-06-15
+[02:43:18.0023] <Jack Works>
+working on RS, having a problem
+
+[02:43:55.0495] <Jack Works>
+for array/object patterns, should we check the length/key first, or check them one by one?
+
+[02:44:02.0444] <Jack Works>
+```js
+match ([ 0, { get a() { } }, 1]) {
+    when ([a, b, ""]): void 0
+    // 3rd item check failed
+    
+    when ([, { a }]): void 0
+    // will a triggered?
+    // There're already 3 items cached for the iterator.
+}
+```
+
+[02:44:29.0800] <Jack Works>
+https://github.com/tc39/proposal-pattern-matching/pull/258
+
+[05:20:48.0528] <Jack Works>
+For object patterns, it is currently one-by-one because it is easier to specify
+
+```js
+match ({ get a() {} }) {
+    when ({ a, b }): void 0
+    // getter a _will_ be triggered, even "b" is missing.
+    // because I access them by order
+}
+```
+
+[06:03:54.0912] <ljharb>
+It’s iterable not Array, so you can’t check the length first
+
+[06:19:42.0873] <Jack Works>
+> <@ljharb:matrix.org> It’s iterable not Array, so you can’t check the length first
+
+You can. If the pattern has 4 items in it, you can try to take 4 items from the iterator and one more call to check if it is done. 
+
+[06:22:09.0503] <Jack Works>
+The problem is in which order we should use.
+
+A: Take the 1st element, check if the 1st element matches (if not, go to the next match clause), then do this to the 2nd element, ....
+
+B: Take the 1st element, take the 2nd element, ...
+If it has less/more elements than expected, go to the next match clause.
+If length matches, check if the 1st element matches, check if the 2nd element matches...... 
+
+[06:22:22.0609] <Jack Works>
+There are two approaches. 
+
+[06:24:39.0163] <Jack Works>
+Same question for objects. Check all required keys first, or one-by-one.
+
+[07:50:20.0306] <ljharb>
+ah. You check each element at a time
+
+[07:50:42.0519] <ljharb>
+So that we consume as little of an iterator as possible, and also need to cache as little as possible
+
+[07:53:29.0778] <ljharb>
+For objects, I’d say the same - just check each property in pattern order
+
+[08:17:23.0523] <Jack Works>
+Now all runtime semantics except ArrayMatchPattern is specified
+
+[08:17:56.0095] <Jack Works>
+Iterator caching stuff is too complicated and I need some days to clean up my mind
+
+
+2022-06-16
+[13:51:15.0351] <TabAtkins>
+Agree with what ljharb has said on all counts.
+
+[13:51:57.0767] <TabAtkins>
+btw, JackWorks, I've tried several times and I can't wrap my head around a diff of the ecmarkup stuff. Just go ahead and commit it yourself when you're ready, we can review it live.
+
+[13:52:07.0787] <TabAtkins>
+Jack Works, rather
+
+[13:52:40.0192] <TabAtkins>
+Hm tho the question wasn't answered about ordering, not quite.
+
+[13:54:00.0631] <TabAtkins>
+Given `{a: {b}, c}`, are the keys fetched a-b-c or a-c-b? That is, all the top-level keys fetched, then we descend into the nested patterns, or first key fetched, nested pattern handled, then return to the top level and fetch the next key?
+
+[13:54:12.0670] <TabAtkins>
+And same question for array patterns
+
+[13:54:58.0703] <TabAtkins>
+I'm inclined to say the order is a-b-c, but I think the right answer is just "whatever order destructuring uses"; lemme check real quick what that is.
+
+[13:57:26.0600] <TabAtkins>
+yes, it's a-b-c http://software.hixie.ch/utilities/js/live-dom-viewer/saved/10405
+
+
+2022-06-17
+[19:10:26.0998] <Jack Works>
+> <@tabatkins:matrix.org> Given `{a: {b}, c}`, are the keys fetched a-b-c or a-c-b? That is, all the top-level keys fetched, then we descend into the nested patterns, or first key fetched, nested pattern handled, then return to the top level and fetch the next key?
+
+a b c
+
+
+2022-06-18
+[09:20:55.0526] <Jack Works>
+> <@tabatkins:matrix.org> btw, JackWorks, I've tried several times and I can't wrap my head around a diff of the ecmarkup stuff. Just go ahead and commit it yourself when you're ready, we can review it live.
+
+It's now live!
+
+[09:20:57.0089] <Jack Works>
+https://tc39.es/proposal-pattern-matching/
+
+[09:21:53.0189] <Jack Works>
+Missing parts:
+Static Semantics (including early errors, BoundName stuff)
+@@matcher
+Builtin matchers
+
+[09:22:34.0075] <Jack Works>
+The iterator part is very messy, I don't have confidence with it
+

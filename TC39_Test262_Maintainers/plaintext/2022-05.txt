@@ -1,0 +1,146 @@
+2022-05-03
+[14:20:49.0080] <ljharb>
+Richard Gibson: published npmjs.com/parseint and added some fixes to a few others, and now i'm down to 54 failures. (attached, if you're curious)
+
+[14:21:14.0142] <ljharb>
+ * Richard Gibson: published npmjs.com/parseint and added some fixes to a few others, and now i'm down to 54 failures. (attached, if you're curious)
+
+[14:22:16.0143] <ljharb>
+the vast majority are Date ones; one pair is "parseInt.prototype isn't undefined" because that's not shimmable; another pair is unavoidable AggregateError constructor hijinx; and then a few scattered others
+
+[14:32:00.0702] <Richard Gibson>
+Awesome! I haven't looked at the other failures, but for parseInt, the `asNonConstructible` of https://matrix.to/#/!dGIsaFIukRWLdpurvh:matrix.org/$fvGRXxCTo23zwsh5a2s7KyK_ZHFuYv0msf3o2YmKEDE?via=matrix.org also takes care of making the prototype undefined in environments supporting Function.prototype.bind.
+
+[14:35:38.0926] <ljharb>
+oh right, i haven't tried that one yet
+
+[14:38:17.0187] <ljharb>
+hm, that doesn't seem to be working for me
+
+[14:39:32.0059] <ljharb>
+```
+function p() {}
+Object.prototype.hasOwnProperty.call(p, 'prototype') // true
+Object.prototype.hasOwnProperty.call(Function.bind.call(Function.call, p), 'prototype') // still true in node 0.4
+
+[14:43:11.0360] <Richard Gibson>
+hmm, I wonder at what Node version that changed
+
+[14:45:37.0954] <Richard Gibson>
+how do you handle observable behavior that _becomes_ shimmable in general?
+
+
+2022-05-05
+[09:08:15.0967] <ljharb>
+feature-detect it, and shim it whenever possible
+
+[09:08:38.0648] <ljharb>
+i only tried in node 18, maybe it works in older engines? i'll check
+
+[09:08:53.0073] <ljharb>
+psa: i'm making an executive decision to cancel the maintainers meeting during TC39 in june
+
+
+2022-05-06
+[07:19:57.0937] <Richard Gibson>
+> <@ljharb:matrix.org> i only tried in node 18, maybe it works in older engines? i'll check
+
+I see bound `call`s having no own "prototype" property for any version of Node.js on RunKit (0.10.48 through 17.9.0): https://runkit.com/rstpflkbkgqetqlavy/bound-call-own-prototype
+
+[08:37:27.0369] <ljharb>
+hmm, maybe my testing was wrong, i'll look thanks
+
+[08:41:10.0654] <ljharb>
+ok interesting. however that means that the result has the name "bound call" unless function names are configurable, and also `new` of the result doesn't throw
+
+[08:41:28.0796] <ljharb>
+so it seems like it'd maybe pass the letter of the test but not the spirit
+
+[10:38:06.0530] <Richard Gibson>
+that's why I asked about observable behavior that becomes shimmable... but `bind(nativeCall, fn)` _does_ cover both non-constructibility (i.e., exceptions from `new`) and absence of an own "prototype" property, and does not preclude name preservation: https://runkit.com/rstpflkbkgqetqlavy/bound-call-constructibility
+
+it really seems to be the best option in environments that lack Proxy and arrow functions.
+
+
+2022-05-08
+[13:54:12.0598] <ljharb>
+> <@gibson042:matrix.org> that's why I asked about observable behavior that becomes shimmable... but `bind(nativeCall, fn)` _does_ cover both non-constructibility (i.e., exceptions from `new`) and absence of an own "prototype" property, and does not preclude name preservation: https://runkit.com/rstpflkbkgqetqlavy/bound-call-constructibility
+> 
+> it really seems to be the best option in environments that lack Proxy and arrow functions.
+
+ok so thanks, this does work as expected in any env where function names are configurable. that precludes IE and node < 3, for example. there's also a few engines where _bound_ functions, specifically, don't have names. so in any of these i'd probably have to just skip the attempt at not having a prototype
+
+
+2022-05-09
+[09:59:53.0288] <Richard Gibson>
+FWIW, https://runkit.com/rstpflkbkgqetqlavy/bound-call-constructibility shows [bound] function name configurability in node v0.10 and v0.12. There are almost certainly _other_ environments where even this approach will fail, but that is itself detectable so "shim it whenever possible" per https://matrix.to/#/!dGIsaFIukRWLdpurvh:matrix.org/$pxkgqqJrnk2SUTxQ2xugHyqrzjOlDXaQFC7dTuyIrCQ?via=matrix.org remains available.
+
+[16:52:38.0844] <ljharb>
+still having some trouble; see the "wip" commit on https://github.com/es-shims/parseInt/actions
+
+
+2022-05-10
+[09:42:39.0532] <Richard Gibson>
+I'm not sure how to investigate those tests... can you reproduce the failure locally?
+
+
+2022-05-11
+[17:32:48.0322] <ljharb>
+yes, it reproduces locally. You check it out, run npm install, and npm run tests-only
+
+
+2022-05-12
+[11:36:55.0921] <sarahghp>
+Hi everyone! At this week's meeting, we came up with a plan to try to get through the last two big chunks of in-person discussion (priority of constituencies and values-based decision making) over the next two weeks, so that we can have the new frameworks ready for June plenary.
+
+[11:37:45.0157] <sarahghp>
+However, we need everyone to be able to be around for those calls, so we'd like to confirm we can come or reschedule. ptomato has mentioned he cannot make the 26th, so I will send a doodle for earlier that week.
+
+[11:38:23.0393] <sarahghp>
+**In the meantime, can you please mark here if you can or cannot make the usual time on May 19.**
+
+[11:39:03.0361] <sarahghp>
+(I can make it, I just wanted to set up the emoji vote.)
+
+
+2022-05-16
+[10:03:50.0889] <sarahghp>
+@room Doodle for times this week: https://doodle.com/meeting/participate/id/dwp3Vpze
+
+[10:10:07.0159] <sarahghp>
+Doodle times for next week: https://doodle.com/meeting/participate/id/e1wyWERb
+
+
+2022-05-17
+[03:57:43.0880] <sarahghp>
+Rick Waldron, jugglinmike, ljharb please fill out the doodles.
+
+
+2022-05-18
+[09:00:39.0126] <ljharb>
+done, sorry for the delay
+
+
+2022-05-19
+[10:44:17.0872] <Rick Waldron>
+Hi everyone, I'm not going to be able to make it to today's meeting.
+
+
+2022-05-26
+[05:16:24.0554] <ptomato>
+regrets for today from me! (I think I mentioned it last week already)
+
+[11:04:21.0964] <ljharb>
+so far i'm the only one in the jitsi
+
+[11:05:14.0629] <ljharb>
+seems like today might be cancelled?
+
+[11:08:28.0252] <ljharb>
+k, richard, mike, and i were there, we had no agenda, and bailed early. see yall next week
+
+
+2022-05-27
+[00:59:40.0421] <legendecas>
+Unfortunately, the meeting time is too late for me. If I could make it, I would like to know people's thoughts on https://github.com/tc39/test262/issues/3524, suggested by Rick Waldron 
+

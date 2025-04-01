@@ -1,0 +1,56 @@
+<!DOCTYPE html><html><head>
+  <title>TC39 General on 2023-04-18</title>
+  <link rel="stylesheet" href="../style.css">
+  <script>window.room = "TC39 General";</script><script src="../render-roomlist.js"></script>
+  <script src="../logs.js"></script>
+</head>
+<body><div class="wrapper">
+<div class="sidebar">
+<div class="title">TC39 General<br>2023-04-18<br><a href="plaintext/">plaintext logs</a></div>
+<div class="nav">
+<a href="2023-04-17" class="nav-link"><span>prev</span></a>
+<a href="2023-04-20" class="nav-link"><span style="float:right">next</span></a>
+</div>
+    <div class="all-rooms"><noscript>JavaScript is required to load the channel index, but you can go to <a href="../..">the static index</a> directly.</noscript></div>
+<div class="footer"><a href="https://github.com/bakkot/matrix-archive-bot">source on github</a></div>
+</div>
+<div class="rhs">
+<div class="rhs-header">
+<span id="error" style="color: red; display:none">error</span>
+
+<input type="text" id="query" size="25" placeholder="Search TC39 General">
+<a id="search-submit" class="button icon-link" title="Search">
+  <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M505 442.7L405.3 343c-4.5-4.5-10.6-7-17-7H372c27.6-35.3 44-79.7 44-128C416 93.1 322.9 0 208 0S0 93.1 0 208s93.1 208 208 208c48.3 0 92.7-16.4 128-44v16.3c0 6.4 2.5 12.5 7 17l99.7 99.7c9.4 9.4 24.6 9.4 33.9 0l28.3-28.3c9.4-9.4 9.4-24.6.1-34zM208 336c-70.7 0-128-57.2-128-128 0-70.7 57.2-128 128-128 70.7 0 128 57.2 128 128 0 70.7-57.2 128-128 128z"></path></svg>
+</a>
+</div>
+
+<div class="log"><table id="log-table"><tbody id="log-tbody">
+
+  <tr class="msg" id="L0"><td class="ts-cell"><a class="ts" href="#L0" alt="Mon Apr 17 2023 17:12:36 GMT-0700 (Pacific Daylight Time)">00:12</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-14" title="@michaelficarra:matrix.org">Michael Ficarra</span>&gt;</div></td><td class="msg-cell">is there any way to represent an "anywhere on earth" (AoE) time in Temporal, or am I just expected to know what the timezone with the biggest negative offset is at all times?</td></tr>
+  <tr class="msg" id="L1"><td class="ts-cell"><a class="ts" href="#L1" alt="Mon Apr 17 2023 17:18:23 GMT-0700 (Pacific Daylight Time)">00:18</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-13" title="@pchimento:igalia.com">ptomato</span>&gt;</div></td><td class="msg-cell">it would be up to the TZDB to add such a time zone, I guess. if there was a mechanism to find the time zone with the biggest negative offset, it would not work on hosts that ship no TZDB. it would also leak fingerprinting information without obviously doing so</td></tr>
+  <tr class="msg" id="L2"><td class="ts-cell"><a class="ts" href="#L2" alt="Mon Apr 17 2023 17:18:54 GMT-0700 (Pacific Daylight Time)">00:18</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-14" title="@michaelficarra:matrix.org">Michael Ficarra</span>&gt;</div></td><td class="msg-cell">I guess both "everywhere on earth" (highest magnitude negative offset) and "somewhere on earth" (highest magnitude positive offset) are useful, though I have only seen a use for the former</td></tr>
+  <tr class="msg" id="L3"><td class="ts-cell"><a class="ts" href="#L3" alt="Mon Apr 17 2023 17:19:19 GMT-0700 (Pacific Daylight Time)">00:19</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-14" title="@michaelficarra:matrix.org">Michael Ficarra</span>&gt;</div></td><td class="msg-cell"><span class="nick-13">ptomato</span>: it's not a unique timezone, but it could be an alias I guess?</td></tr>
+  <tr class="msg" id="L4"><td class="ts-cell"><a class="ts" href="#L4" alt="Mon Apr 17 2023 17:31:46 GMT-0700 (Pacific Daylight Time)">00:31</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-13" title="@pchimento:igalia.com">ptomato</span>&gt;</div></td><td class="msg-cell"><p>here's an off-the-cuff code snippet that will give you the last possible local time when it is still 2023-04-20 anywhere on earth:</p>
+<pre><code class="language-js">const aoeWallTime = Temporal.PlainDateTime.from('2023-04-20T23:59:59.999999999');
+const aoeExactTime = Intl.supportedValuesOf('timeZone').reduce((last, id) =&gt; {
+  const candidate = aoeWallTime.toZonedDateTime(id);
+  if (!last || Temporal.ZonedDateTime.compare(candidate, last) &gt; 0) return candidate;
+  return last;
+}, null);
+const localTime = aoeExactTime.withTimeZone(Temporal.Now.timeZoneId());
+console.log(localTime.toString());
+</code></pre>
+</td></tr>
+  <tr class="msg" id="L5"><td class="ts-cell"><a class="ts" href="#L5" alt="Mon Apr 17 2023 17:39:54 GMT-0700 (Pacific Daylight Time)">00:39</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-14" title="@michaelficarra:matrix.org">Michael Ficarra</span>&gt;</div></td><td class="msg-cell">eh, that works well enough for me</td></tr>
+  <tr class="msg" id="L6"><td class="ts-cell"><a class="ts" href="#L6" alt="Mon Apr 17 2023 17:42:49 GMT-0700 (Pacific Daylight Time)">00:42</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-14" title="@michaelficarra:matrix.org">Michael Ficarra</span>&gt;</div></td><td class="msg-cell">might still be nice to be able to actually represent that time in a way that you can pass around to other APIs or store for later</td></tr>
+  <tr class="msg" id="L7"><td class="ts-cell"><a class="ts" href="#L7" alt="Mon Apr 17 2023 17:45:10 GMT-0700 (Pacific Daylight Time)">00:45</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-13" title="@pchimento:igalia.com">ptomato</span>&gt;</div></td><td class="msg-cell">what you store for later depends on whether you want the stored time to change if the host updates its TZDB</td></tr>
+  <tr class="msg" id="L8"><td class="ts-cell"><a class="ts" href="#L8" alt="Mon Apr 17 2023 17:45:19 GMT-0700 (Pacific Daylight Time)">00:45</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-14" title="@michaelficarra:matrix.org">Michael Ficarra</span>&gt;</div></td><td class="msg-cell">I do</td></tr>
+  <tr class="msg" id="L9"><td class="ts-cell"><a class="ts" href="#L9" alt="Mon Apr 17 2023 17:46:08 GMT-0700 (Pacific Daylight Time)">00:46</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-13" title="@pchimento:igalia.com">ptomato</span>&gt;</div></td><td class="msg-cell">if you don't, storing <code>aoeExactTime.toInstant()</code> is enough. if you do, you have to store <code>aoeWallTime</code> and run this snippet again</td></tr>
+  <tr class="msg" id="L10"><td class="ts-cell"><a class="ts" href="#L10" alt="Mon Apr 17 2023 17:47:06 GMT-0700 (Pacific Daylight Time)">00:47</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-14" title="@michaelficarra:matrix.org">Michael Ficarra</span>&gt;</div></td><td class="msg-cell">yes, exactly, that's the thing I am asking for</td></tr>
+  <tr class="msg" id="L11"><td class="ts-cell"><a class="ts" href="#L11" alt="Mon Apr 17 2023 17:47:15 GMT-0700 (Pacific Daylight Time)">00:47</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-14" title="@michaelficarra:matrix.org">Michael Ficarra</span>&gt;</div></td><td class="msg-cell">it sounds like it will require a timezone alias be added to tzdb</td></tr>
+  <tr class="msg" id="L12"><td class="ts-cell"><a class="ts" href="#L12" alt="Mon Apr 17 2023 17:48:34 GMT-0700 (Pacific Daylight Time)">00:48</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-13" title="@pchimento:igalia.com">ptomato</span>&gt;</div></td><td class="msg-cell">I mean ... this <em>could</em> be a TC39 thing - but that seems like the wrong domain to solve the problem in</td></tr>
+  <tr class="msg" id="L13"><td class="ts-cell"><a class="ts" href="#L13" alt="Tue Apr 18 2023 04:49:45 GMT-0700 (Pacific Daylight Time)">11:49</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-3" title="@usharma:igalia.com">ryzokuken</span>&gt;</div></td><td class="msg-cell">Could this be achieved through custom timezones?</td></tr>
+  <tr class="msg" id="L14"><td class="ts-cell"><a class="ts" href="#L14" alt="Tue Apr 18 2023 04:50:42 GMT-0700 (Pacific Daylight Time)">11:50</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-3" title="@usharma:igalia.com">ryzokuken</span>&gt;</div></td><td class="msg-cell">Although I guess all the rest of Temporal would need to know how to handle that... We do need an <code>Etc/AoE</code> or something of the sort</td></tr>
+
+</tbody></table></div></div></div>
+</body></html>

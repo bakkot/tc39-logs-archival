@@ -1,0 +1,505 @@
+2021-11-15
+[07:50:51.0211] <shu>
+our next working session is coming up on Nov 18, 10-11 PT. any conflicts?
+
+[13:55:41.0834] <Mathieu Hofman>
+It's not optimal for me but I can make it work
+
+
+2021-11-16
+[13:12:12.0137] <rbuckton>
+I've been talking with Jack Works about his enum proposal and how it relates to mine. One of the things that came up was a sketch I made for supporting ADT-style enumerations that was based on my struct proposal: https://gist.github.com/rbuckton/4a5108fab40ac90551bf82d9884711b5. I've been revisiting that, as I'd like to make sure whatever solution we end up for enums will be consistent with structs/shared structs so that we might be able to have a "shared enum" (whose value could be stored in a field on a "shared struct").
+
+[13:13:34.0385] <shu>
+hm, a bit future looking at first blush, but happy to discuss
+
+[15:24:15.0708] <Jack Works>
+> <@rbuckton:matrix.org> I've been talking with Jack Works about his enum proposal and how it relates to mine. One of the things that came up was a sketch I made for supporting ADT-style enumerations that was based on my struct proposal: https://gist.github.com/rbuckton/4a5108fab40ac90551bf82d9884711b5. I've been revisiting that, as I'd like to make sure whatever solution we end up for enums will be consistent with structs/shared structs so that we might be able to have a "shared enum" (whose value could be stored in a field on a "shared struct").
+
+So we're going to have 3 different styles of object. Normal object, Records and Structs. I think support all of them in ADT enum is important.
+
+
+2021-11-18
+[10:02:42.0521] <shu>
+rbuckton: working session call happening now if you can make it
+
+[11:17:23.0183] <shu>
+Mathieu Hofman: so if we do allow them in weak collections, it's probably not the case that they become eternal the minute they get put in there, but that they become eternal if there is a cycle
+
+[11:17:45.0535] <shu>
+which is an implementation problem that i can live with, i guess
+
+[11:17:52.0062] <shu>
+the spec can say, they are allowed in weak collections
+
+[11:17:59.0157] <Mathieu Hofman>
+correct, engines could always figure out directed graph through internal weakrefs
+
+[11:18:09.0299] <shu>
+but until XX years from now when massive rearchitecting has been undertaken, know that in practice cycles will leak
+
+[11:18:16.0934] <shu>
+which is still compliant, but unfortunate
+
+[11:18:30.0939] <shu>
+there's no good language reason to disallow them
+
+[11:18:52.0442] <Mathieu Hofman>
+I just wanted to point out you were opening pandora's box
+
+[11:18:54.0333] <shu>
+there is a safety aspect of disallowing shared -> unshared edges, since obviously multiple threads accessing an unshared thing can't work
+
+[11:19:10.0615] <Mathieu Hofman>
+I've been trying to keep it closed in a few places where these things came up
+
+[11:19:12.0759] <shu>
+this is not a problem for weak collections, since there's a per-thread view of the weak collection
+
+[11:19:23.0472] <shu>
+what's the pandora's box? cycles between shared and unshared?
+
+[11:19:42.0145] <Mathieu Hofman>
+the requirement for a distributed garbage collection
+
+[11:19:51.0024] <shu>
+ah, i see
+
+[11:20:06.0268] <shu>
+yes, indeed, it is inherent in a shared memory proposal to open that pandora's box
+
+[11:20:25.0698] <shu>
+much of the work internally i've been doing before proposing this in public is to get a roadmap worked out for GC evolution to support a shared memory future
+
+[11:20:33.0458] <shu>
+and it sounds like at least V8 and JSC are converging on what to do
+
+[11:20:35.0075] <Mathieu Hofman>
+well SharedArrayBuffer avoided that bullet with unstable identities between agents
+
+[11:20:40.0801] <shu>
+correct
+
+[11:20:54.0568] <shu>
+but it's also a "solved" problem in the literature, at least
+
+[11:21:02.0921] <shu>
+there are plenty of GCed languages with shared memory
+
+[11:21:39.0604] <Mathieu Hofman>
+it's solved if you have a single GC, nothing is published for cooperative distributed gc
+
+[11:21:55.0710] <shu>
+i guess i don't know what you mean by distributed
+
+[11:22:04.0184] <shu>
+independently collected heaps that point to each other?
+
+[11:22:28.0793] <Mathieu Hofman>
+multiple local GCs coordinating to identify and prune distributed cycles
+
+[11:22:37.0738] <shu>
+ah i see
+
+[11:22:49.0652] <shu>
+but that implementation is not a requirement
+
+[11:23:22.0610] <shu>
+the prevailing wisdom seems to be to do a single marking phase across all threads
+
+[11:23:32.0718] <Mathieu Hofman>
+I do have a proposal to solve that, but as you mentioned, the motivation is probably not going to be Web user agents
+
+[11:25:09.0559] <Mathieu Hofman>
+I am skeptical however that all engines will be on board with a requirement for a single gc per agent cluster. As you mentioned, afaik it requires a stop the world that is proportional to the amount of threads
+
+[11:25:28.0330] <shu>
+only if you want to handle cycles
+
+[11:25:57.0214] <Mathieu Hofman>
+of course
+
+[11:27:32.0752] <shu>
+even with a naive STW, if you remember all ephemeron edges, can't you still collect the cycles without having to mark all local threads?
+
+[11:29:07.0537] <shu>
+remember all ephemeron edges in which a shared struct participates, that is
+
+[11:29:32.0980] <shu>
+local GCs defer sweeping local objects in an ephemeron edge with a shared object until the shared GC happens
+
+[11:29:48.0470] <shu>
+when the shared GC happens, process shared ephemeron edges
+
+[11:30:59.0509] <Mathieu Hofman>
+right, you're basically getting into collaborative gc territory ;) Being able to trace exits to other gc from a local ephemeron is basically the crux of my idea
+
+[11:31:08.0638] <shu>
+ah okay, cool
+
+[11:31:21.0075] <shu>
+i'm just thinking out loud that there might be a "good enough" implementation strategy that we can implement in the meantime
+
+[11:31:22.0169] <Mathieu Hofman>
+as a 3rd phase style
+
+[11:31:23.0997] <shu>
+without a huge performance cliff
+
+[11:31:33.0572] <shu>
+until we get a shared heap architecture
+
+[11:32:24.0199] <Mathieu Hofman>
+And introducing a reification of that mechanism is what my proposal hoped to accomplish. I just haven't had time to work on it in the past couple years
+
+[11:32:38.0156] <shu>
+so i'm cautiously optimistically now changing my position to: we'll allow these in WeakCollections, and we can probably implement it, but it'll likely be not as fast as you'd like and you'll incur some GC pause penalty if you heavily use shared structs in WeakMaps
+
+[11:32:56.0712] <shu>
+but the GC pause penalty won't be catastrophic
+
+[11:33:21.0070] <shu>
+(i'm cautiously optimistic because the ephemeron collection is already a separate phase and already complicated, so why not tack on more? :P)
+
+[11:33:41.0781] <Mathieu Hofman>
+yeah the drawback is that it might take a much longer time to figure out distributed cycles, but the pause can be made so that it's not worse than a regular local gc
+
+[11:34:01.0773] <shu>
+right, it'll definitely take longer for shared structs to get collected from weak collections
+
+[11:34:15.0615] <shu>
+because shared structs will be collected at a lower frequency, period, until rearchitected to a single heap
+
+[11:34:58.0109] <shu>
+but this matches well with my intuition that JS is still staunchly "single-threaded first", and we're carving out multithreading here as explicit opt-ins with its own caveats
+
+[11:35:17.0512] <shu>
+i want it to be possible, but i recognize that to have it be _good_ from a PL perspective is not realistically attainable IMO
+
+[11:35:31.0492] <shu>
+the use case pressure is just too great to not solve it, however
+
+[11:37:25.0321] <shu>
+gotta run, but fascinating chat
+
+[11:42:24.0818] <Mathieu Hofman>
+btw, here is a thought. The identity of the shared struct is not directly observable by programs between agents, the only thing that is observable is that when sending a shared struct back and forth between agents, you get the same local identity. The same object wrappers could be an implementation optimization.
+
+Once you've done that, you could design it so that a shared struct have their methods declared in a module block, which is automatically loaded once per realm where the shared struct is used. Those methods from the module instance define the "prototype" object of the shared struct in that realm. Now the optimization is that in practice you don't have a different wrapper object per realm, and you have a dynamic prototype look up that takes into consideration the calling realm.
+
+[11:44:13.0355] <Mathieu Hofman>
+Btw, since JS doesn't specify the mechanism how these wrappers are shared between agents, the only thing ecam262 needs to say nothing, aka these objects don't need any more mechanisms than e.g. SharedArrayBuffer
+
+[11:44:33.0942] <Mathieu Hofman>
+ * Btw, since JS doesn't specify the mechanism how these wrappers are shared between agents, the only thing ecam262 needs to say nothing, aka these objects don't need any more mechanisms than e.g. SharedArrayBuffer
+
+[11:46:36.0094] <Mathieu Hofman>
+The modulo here is legacy realms (as always). ShadowRealms can have the same dynamic dispatch mechanism since object graphs are not entangled
+
+[12:19:07.0137] <shu>
+it is a nonstarter to implement it with wrappers
+
+[12:19:16.0484] <shu>
+i'm not sure what that spec fiction buys us
+
+[12:20:04.0718] <shu>
+the automatic loading thing worries me -- i'd rather there be no magic with module blocks, but that they be a pure workaround without extra mechanism
+
+[12:21:01.0951] <Mathieu Hofman>
+sure pure functions would be great. You might want to chat with the Moddable folks about their idea on that
+
+[12:21:13.0386] <shu>
+i didn't mean "pure" in that sense
+
+[12:21:27.0610] <shu>
+i meant pure as in module blocks do not have extra mechanism to interact with shared structs
+
+[12:23:03.0259] <shu>
+i suppose i object more to a dynamic per-realm prototype lookup than the automatic loading
+
+[12:23:05.0275] <Mathieu Hofman>
+So the loading could be part of the out of scope mechanism that introduces the shared struct to the realm. And the spec fiction allows you to pretend there is no realm sensitive resolution of the prototype object
+
+[12:24:07.0331] <shu>
+ah i see what you're getting at for introducing the definition
+
+[12:25:23.0239] <shu>
+how does that idea work if i send a struct instance to a realm that didn't load the module block that defines it?
+
+[12:26:01.0595] <shu>
+(implementation wise i'm not sure how the dynamic prototype lookup can be efficient implemented either)
+
+[12:26:42.0255] <Mathieu Hofman>
+To be honest that would be in scope of the channel that does the sharing, which would be host defined. I assume it would grab the module associated to the struct, and send it along, and load the module when receiving it.
+
+[12:28:00.0455] <Mathieu Hofman>
+With some logic to avoid trying to reload modules that were already loaded.
+
+[12:28:55.0617] <Mathieu Hofman>
+Don't we effectively have dynamic prototype lookup in primitives today? I assume implementation optimize that away?
+
+[12:29:42.0974] <shu>
+well, they get boxed
+
+[12:29:46.0259] <shu>
+i don't think it's some magic
+
+[12:29:51.0268] <shu>
+i don't want extra allocations here
+
+[12:30:32.0299] <Mathieu Hofman>
+right but you dynamically figure out the box to use depending on the realm
+
+[12:33:45.0669] <Mathieu Hofman>
+Anyway, I believe you, I am clueless when it comes to implementation. I was hoping this could be way to make it more ergonomic without introducing weird spec
+
+[12:44:51.0125] <shu>
+yeah, per-realm (thread?) prototypes is something dan ehrenberg has brought up as well before
+
+[12:44:59.0209] <shu>
+but i think if we're holding out hope for eventually actually sharing prototypes
+
+[12:45:11.0496] <shu>
+we can't really do that then, right?
+
+[12:48:44.0437] <Mathieu Hofman>
+I just don't see how actually sharing prototypes would work, it'd require you to have a shared version of the intrinsics, which would have to be deeply frozen at least, and would still create identity discontinuity issues that plague legacy realms today. Unless they're specced like the callable boundary that only primitives and other shared structs can be exchanged through them, but that seems like a worse restriction.
+
+[12:49:59.0325] <shu>
+what intrinsics?
+
+[12:50:27.0572] <shu>
+i'm not saying all prototypes become shareable. shared struct prototypes are new things we design
+
+[12:50:35.0559] <shu>
+i agree having shared versions of intrinsics is not tractable
+
+[12:51:02.0701] <shu>
+the prototypes would at least be sealed like shared structs themselves
+
+[12:51:11.0375] <shu>
+i don't think deeply frozen is necessary
+
+[12:51:12.0816] <Mathieu Hofman>
+function prototype is one, but then if you return an object from your shared method, what prototype does it have ?
+
+[12:51:28.0074] <shu>
+you cannot return plain objects from shared functions
+
+[12:52:02.0548] <Mathieu Hofman>
+ok so you do have a restriction at the boundary to only accept or return primitives or other shared structs
+
+[12:52:19.0169] <shu>
+yeah, i was imagining extending the restriction we have today to the shared functions
+
+[12:52:22.0122] <shu>
+i don't see how it works otherwise
+
+[12:52:23.0267] <Mathieu Hofman>
+then yes it is like the ShadowRealm callable boundary
+
+[12:52:37.0943] <shu>
+i suppose? there's no wrapping
+
+[12:52:42.0195] <shu>
+it's a selective boundary, yes
+
+[12:52:45.0147] <Mathieu Hofman>
+well if you have instances of methods per realm, they're free to do whatever they want
+
+[12:53:04.0331] <shu>
+right, and that's a different model, where the functions are not actually shared
+
+[12:53:05.0603] <shu>
+just duplicated
+
+[12:53:09.0999] <Mathieu Hofman>
+and return objects of their instantiated realm
+
+[12:53:13.0142] <shu>
+and maybe that's fine, but i'm not sure we have agreement on that
+
+[12:53:52.0072] <Mathieu Hofman>
+I'm just not aware of the design goals or motivation
+
+[12:54:06.0826] <shu>
+well, this part isn't in scope of the mvp structs :)
+
+[12:54:13.0901] <shu>
+which is probably why it's so nebulous
+
+[12:55:13.0755] <shu>
+personally i don't think i'm really *against* the duplicate model. functions are much fewer than instances, so duplicating them doesn't concern me as much for performance
+
+[12:55:48.0292] <Mathieu Hofman>
+so basically we either have per realm instantiated methods that are free to do whatever they want, or shared functions that internally would be able to do whatever they want, and be defined in a sandbox frozen shared realm, but couldn't return any regular objects through their interface
+
+[12:56:10.0760] <shu>
+no, there're more options
+
+[12:56:46.0569] <shu>
+we could have shared functions that always have a very threadbare [[Realm]] that don't have _anything_ in it, and must take everything as arguments
+
+[12:57:16.0942] <shu>
+e.g. `shared function({Math, Atomics } = globalArg, arg2, arg3) {...}`
+
+[12:57:54.0190] <shu>
+that's probably a nonstarter because syntax to create builtins would stop working
+
+[12:58:00.0686] <Mathieu Hofman>
+ok but it'd have to have all the undeniable intrinsics?
+
+[12:58:15.0812] <shu>
+not sure i follow
+
+[12:58:43.0782] <Mathieu Hofman>
+and by that I mean anything that can be accessed by syntax, eg. function, object, string prototypes etc
+
+[12:59:03.0160] <shu>
+ah right. don't know! maybe the syntax just stops working, so probably nonstarter
+
+[12:59:25.0244] <shu>
+one reason i don't find the "caller Realm" semantics i proposed so bad is i don't see how we get around it for allocation
+
+[13:00:01.0998] <shu>
+if a function is truly shared, and we agree that it's too unergonomic to disallow non-shared object allocation, e.g. `{}` or `[]`, where does that allocation happen?
+
+[13:00:18.0080] <shu>
+i don't see a choice other than for to allocate it in the caller's thread-local Realm
+
+[13:01:10.0874] <Mathieu Hofman>
+well I suppose you could have some shared memory that is used when in scope of a shared function, and has it's own object graph and gc ?
+
+[13:01:56.0624] <shu>
+also open question. it's easier to start with saying shared functions cannot be closures
+
+[13:02:12.0715] <shu>
+but yes, one possible extension is to make them able to close over shared things
+
+[13:02:29.0262] <shu>
+but that is a huge can of worms to open in terms of design, and i don't think we should
+
+[13:02:56.0277] <shu>
+duplicates may very well be good enough
+
+[13:03:59.0977] <Mathieu Hofman>
+right so anything allocated during the shared function execution can be collected at exit (outside of shared structs that made it through the boundary)
+
+[13:04:47.0875] <shu>
+yeah, with a non-duplicate model you can be eager about collecting per-activation allocations if you want to but probably don't need to be
+
+[13:04:49.0006] <Mathieu Hofman>
+you'd probably need new syntax to define those shared functions in a way that doesn't close over anything and can't keep state. 
+
+[13:05:08.0217] <shu>
+yeah, i think there are just way too many hurdles and unknowns and impedance mismatches to make realistic progress on actually shared functions right now
+
+[13:05:12.0903] <Mathieu Hofman>
+sounds like pure functions to me, no side effects outside of the arguments and return value
+
+[13:05:32.0002] <shu>
+depends on what you consider a side effect
+
+[13:05:56.0180] <shu>
+allocations must be an allowable side effect, as are causing side effects caused by passed in objects
+
+[13:06:09.0849] <shu>
+i think this convo has convinced me that we really should start with a duplicate model for now
+
+[13:06:10.0749] <Mathieu Hofman>
+the only things that are impacted are either passed in or returned
+
+[13:06:37.0676] <shu>
+well, allocation must be an allowed side effect
+
+[13:06:56.0230] <shu>
+you can't meaningfully limit that to "either passed in or returned"
+
+[13:07:20.0888] <Mathieu Hofman>
+but the only observable impact of that is the return value or a mutation to the argument. Those make up the whole state that is allowed to be mutated
+
+[13:08:46.0354] <Mathieu Hofman>
+I know that moddable has done a lot of work on tracing the purity of functions (they have a model where multiple agents can share the same realm). I honestly don't fully understand all of it. You might be interested in syncing up with them.
+
+[13:09:41.0802] <shu>
+zooming out, so i'm thinking the plan is:
+
+1) in the MVP, lean on module blocks to get the guarantee that you are actually loading the exact same code across all workers
+2) observe how far this gets us and the DX pain points with early adopter partners (there are interested parties in Google, Microsoft, and Adobe so far)
+3a) if duplicates gets us pretty far with transparent code sharing optimizations in the engines, just DX is lacking, we explore avenues like dynamic proto lookup you suggested
+3b) if duplicates doesn't get us far enough, think harder about actually sharing functions
+
+[13:10:04.0098] <shu>
+dunno how matrix messed up that list
+
+[13:10:09.0335] <shu>
+ * zooming out, so i'm thinking the plan is:
+1) in the MVP, lean on module blocks to get the guarantee that you are actually loading the exact same code across all workers
+2) observe how far this gets us and the DX pain points with early adopter partners (there are interested parties in Google, Microsoft, and Adobe so far)
+3a) if duplicates gets us pretty far with transparent code sharing optimizations in the engines, just DX is lacking, we explore avenues like dynamic proto lookup you suggested
+3b) if duplicates doesn't get us far enough, think harder about actually sharing functions
+
+[13:10:14.0633] <shu>
+wtf it's changing 1) -> 1.
+
+[13:10:29.0492] <shu>
+ * zooming out, so i'm thinking the plan is:
+`1)` in the MVP, lean on module blocks to get the guarantee that you are actually loading the exact same code across all workers
+`2)` observe how far this gets us and the DX pain points with early adopter partners (there are interested parties in Google, Microsoft, and Adobe so far)
+`3a)` if duplicates gets us pretty far with transparent code sharing optimizations in the engines, just DX is lacking, we explore avenues like dynamic proto lookup you suggested
+`3b)` if duplicates doesn't get us far enough, think harder about actually sharing functions
+
+[13:11:04.0979] <shu>
+i know a little of what moddable does
+
+[13:11:15.0877] <shu>
+it's cool but not applicable outside of a specialize implementation like that has been my feeling
+
+[13:12:19.0849] <Mathieu Hofman>
+Yeah mark is very interested in the purity predicate, but I have my personal doubts that it would ever work for other implementations
+
+[13:13:07.0359] <Mathieu Hofman>
+would be neat to come up with something that is, probably through explicit syntax
+
+[13:15:25.0641] <shu>
+that sounds super difficult
+
+[13:19:18.0225] <shu>
+rbuckton: asumu: see the "i'm thinking the plan is" above for code sharing. thoughts?
+
+[13:19:39.0373] <asumu>
+(1) sounds reasonable to me for JS. I do wonder how it will work out with Wasm GC once it gets sharing, as module blocks don't apply for it. Maybe wasm exported functions will be easier/possible to share, and those can be called from other threads? (Wasm exported functions rely on the instance being shared, but don't rely on the realm I think)
+
+[13:20:11.0021] <asumu>
+ * (1) sounds reasonable to me for JS. I do wonder how it will work out with Wasm GC once it gets sharing, as module blocks don't apply for it. Maybe wasm exported functions will be easier/possible to share, and those can be called from other threads? (Wasm exported functions rely on the wasm module instance being shared, but don't rely on the realm I think)
+
+[13:20:37.0296] <shu>
+let me unpack into two questions: 1) can we call shared wasmgc exported functions without problem and 2) where do we put them
+
+[13:21:38.0142] <shu>
+1) seems like "yes" to me -- wasm is in charge of making sure there's a single copy if it wants the actual code to be shared. the wasm part is threadsafe by definition, so a duplicate model means we need to create per-thread wrappers. which isn't great but probably isn't too bad either
+
+[13:21:50.0780] <shu>
+lol getting real tired of matrix changing what i type
+
+[13:23:56.0968] <shu>
+2) i have no idea about. i imagine e.g. Java compiling down to wasmgc aren't putting code pointers into each instance's field. how do you reflect a particular compiled object model's vtable into JS in a portable way anyway?
+
+[13:35:14.0966] <asumu>
+Yeah I imagine it will not make sense to be able to reflect the vtables into JS, given diverse surface languages doing very different things (with interface dispatch, etc). I think there could be some way for wasm producers to be able to specify methods just for the JS API and have it associated with a prototype, but I guess this won't work for this first iteration with module blocks.
+
+[13:35:40.0077] <shu>
+agreed, yeah
+
+[13:35:55.0165] <asumu>
+In any case, as long as wasm functions are shareable I guess it will be sufficient to express JS interactions even if it's not very convenient at first.
+
+[13:35:57.0610] <shu>
+but it doesn't need to work with module blocks, which is just a means to an end to guarantee that workers load the same copy of the code
+
+[13:36:10.0858] <shu>
+the wasm/JS API can be the one to provide the guarantee that the same code is being reflected in different realms
+
+[13:36:25.0823] <asumu>
+Right, that makes sense.
+

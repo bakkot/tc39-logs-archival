@@ -1,0 +1,103 @@
+<!DOCTYPE html><html><head>
+  <title>Pattern Matching Champions on 2021-11-18</title>
+  <link rel="stylesheet" href="../style.css">
+  <script>window.room = "Pattern Matching Champions";</script><script src="../render-roomlist.js"></script>
+  <script src="../logs.js"></script>
+</head>
+<body><div class="wrapper">
+<div class="sidebar">
+<div class="title">Pattern Matching Champions<br>2021-11-18<br><a href="plaintext/">plaintext logs</a></div>
+<div class="nav">
+<a href="2021-11-17" class="nav-link"><span>prev</span></a>
+<a href="2021-11-19" class="nav-link"><span style="float:right">next</span></a>
+</div>
+    <div class="all-rooms"><noscript>JavaScript is required to load the channel index, but you can go to <a href="../..">the static index</a> directly.</noscript></div>
+<div class="footer"><a href="https://github.com/bakkot/matrix-archive-bot">source on github</a></div>
+</div>
+<div class="rhs">
+<div class="rhs-header">
+<span id="error" style="color: red; display:none">error</span>
+<input type="text" id="query" size="25" placeholder="Search Pattern Matching Champions">
+<a id="search-submit" class="button icon-link" title="Search">
+  <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M505 442.7L405.3 343c-4.5-4.5-10.6-7-17-7H372c27.6-35.3 44-79.7 44-128C416 93.1 322.9 0 208 0S0 93.1 0 208s93.1 208 208 208c48.3 0 92.7-16.4 128-44v16.3c0 6.4 2.5 12.5 7 17l99.7 99.7c9.4 9.4 24.6 9.4 33.9 0l28.3-28.3c9.4-9.4 9.4-24.6.1-34zM208 336c-70.7 0-128-57.2-128-128 0-70.7 57.2-128 128-128 70.7 0 128 57.2 128 128 0 70.7-57.2 128-128 128z"></path></svg>
+</a>
+</div>
+
+<div class="log"><table id="log-table"><tbody id="log-tbody">
+
+  <tr class="msg" id="L0"><td class="ts-cell"><a class="ts" href="#L0" alt="Wed Nov 17 2021 17:40:23 GMT-0800 (Pacific Standard Time)">01:40</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-4" title="@jackworks:matrix.org">Jack Works</span>&gt;</div></td><td class="msg-cell"><mx-reply><blockquote> <p>I've amended the proposal to align more with scala extractor objects (i.e., no built-in instanceof check, renamed <code>@@destructure</code> to <code>@@unapply</code> and moved it off the instance and onto the <em>QualifiedName</em>, dropped <code>QualifiedName{x,y}</code> and only have <code>QualifiedName(x)</code>). There's plenty of places I could see this being useful as it allows you to apply custom logic during destructuring:</p>
+<pre><code class="language-js">const MapExtractor = {
+  [Symbol.unapply](value) { 
+    const obj = {};
+    for (const [key, value] of map) {
+      obj[typeof key === "symbol" ? key : `${key}`] = value;
+    }
+    return [obj];
+  }
+}
+
+const obj = {
+  map: new Map().set("a", 1).set("b", 2)
+};
+
+const { map: MapExtractor({ a, b }) } = obj;
+</code></pre>
+<p>The ability to evaluate custom logic in the middle of a destructuring is something I've often wanted.</p>
+</blockquote></mx-reply>If you dropped the {} form, how it works with ADT objects? Match on the 1st argument? That creates a syntax irsymmetry</td></tr>
+  <tr class="msg" id="L1"><td class="ts-cell"><a class="ts" href="#L1" alt="Wed Nov 17 2021 17:42:44 GMT-0800 (Pacific Standard Time)">01:42</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-4" title="@jackworks:matrix.org">Jack Works</span>&gt;</div></td><td class="msg-cell"><mx-reply><blockquote> Also, <code>@@unapply</code> isn't too different from <code>@@matcher</code>. An <code>@@unapply</code> method could just return null/undefined in place of a <code>matched</code> property, and instead of <code>^Expr as { x, y }</code> you would use <code>Expr({ x, y})</code></blockquote></mx-reply>So why not merging them? </td></tr>
+  <tr class="msg" id="L2"><td class="ts-cell"><a class="ts" href="#L2" alt="Wed Nov 17 2021 17:42:48 GMT-0800 (Pacific Standard Time)">01:42</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell"><p>There's no syntax asymmetry for usage/extraction:</p>
+<pre><code class="language-js">enum Message of ADT {
+   Move{x, y},
+}
+
+const msg = Message.Move({ x: 1, y: 1 });
+const Message.Move({ x, y }) = msg;
+</code></pre>
+</td></tr>
+  <tr class="msg" id="L3"><td class="ts-cell"><a class="ts" href="#L3" alt="Wed Nov 17 2021 17:44:03 GMT-0800 (Pacific Standard Time)">01:44</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell">It might even make sense to drop <code>PropertyName{x, y}</code> from ADT enums in favor of <code>PropertyName({x, y})</code> for declaration symmetry</td></tr>
+  <tr class="msg" id="L4"><td class="ts-cell"><a class="ts" href="#L4" alt="Wed Nov 17 2021 17:44:32 GMT-0800 (Pacific Standard Time)">01:44</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell"><pre><code class="language-js">enum Message of ADT {
+  Write(message),
+  Move({ x, y })
+}
+</code></pre>
+</td></tr>
+  <tr class="msg" id="L5"><td class="ts-cell"><a class="ts" href="#L5" alt="Wed Nov 17 2021 17:44:33 GMT-0800 (Pacific Standard Time)">01:44</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-4" title="@jackworks:matrix.org">Jack Works</span>&gt;</div></td><td class="msg-cell"><mx-reply><blockquote> <p>There's no syntax asymmetry for usage/extraction:</p>
+<pre><code class="language-js">enum Message of ADT {
+   Move{x, y},
+}
+
+const msg = Message.Move({ x: 1, y: 1 });
+const Message.Move({ x, y }) = msg;
+</code></pre>
+</blockquote></mx-reply>Hmm this is interesting. I was thinking of the definition body in the Enum and deconstruction syntax is asymmerty</td></tr>
+  <tr class="msg" id="L6"><td class="ts-cell"><a class="ts" href="#L6" alt="Wed Nov 17 2021 17:45:14 GMT-0800 (Pacific Standard Time)">01:45</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell">In your proposal, ADT enum value construction uses <code><a href="http://Foo.Bar">Foo.Bar</a>({ x, y })</code> as well</td></tr>
+  <tr class="msg" id="L7"><td class="ts-cell"><a class="ts" href="#L7" alt="Wed Nov 17 2021 17:45:39 GMT-0800 (Pacific Standard Time)">01:45</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-4" title="@jackworks:matrix.org">Jack Works</span>&gt;</div></td><td class="msg-cell"><mx-reply><blockquote> It might even make sense to drop <code>PropertyName{x, y}</code> from ADT enums in favor of <code>PropertyName({x, y})</code> for declaration symmetry</blockquote></mx-reply>But if that's the case, will you allow Prop({ a: { b }})?</td></tr>
+  <tr class="msg" id="L8"><td class="ts-cell"><a class="ts" href="#L8" alt="Wed Nov 17 2021 17:47:09 GMT-0800 (Pacific Standard Time)">01:47</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell">That might be a bridge too far, to be honest. </td></tr>
+  <tr class="msg" id="L9"><td class="ts-cell"><a class="ts" href="#L9" alt="Wed Nov 17 2021 19:40:10 GMT-0800 (Pacific Standard Time)">03:40</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-4" title="@jackworks:matrix.org">Jack Works</span>&gt;</div></td><td class="msg-cell">I don't think that would be allowed either but developers might think it can</td></tr>
+  <tr class="msg" id="L10"><td class="ts-cell"><a class="ts" href="#L10" alt="Thu Nov 18 2021 09:48:15 GMT-0800 (Pacific Standard Time)">17:48</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell">It wouldn't be allowed for the declaration, but would be allowed for construction and deconstruction. I don't think its so bad to disallow it at declaration, since enums would be a new feature and thus require learning the syntax to be able to use it.</td></tr>
+  <tr class="msg" id="L11"><td class="ts-cell"><a class="ts" href="#L11" alt="Thu Nov 18 2021 11:50:02 GMT-0800 (Pacific Standard Time)">19:50</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-6" title="@ljharb:matrix.org">ljharb</span>&gt;</div></td><td class="msg-cell">… what is an "ADT enum" and why is this concept important for enums and/or pattern matching?</td></tr>
+  <tr class="msg" id="L12"><td class="ts-cell"><a class="ts" href="#L12" alt="Thu Nov 18 2021 11:52:48 GMT-0800 (Pacific Standard Time)">19:52</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-6" title="@ljharb:matrix.org">ljharb</span>&gt;</div></td><td class="msg-cell">to me an enum is just a closed set of explicitly named values (any distinct values) that conceptually enumerates some domain</td></tr>
+  <tr class="msg" id="L13"><td class="ts-cell"><a class="ts" href="#L13" alt="Thu Nov 18 2021 13:02:54 GMT-0800 (Pacific Standard Time)">21:02</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@jschoi:matrix.org">jschoi</span>&gt;</div></td><td class="msg-cell"><mx-reply><blockquote> … what is an "ADT enum" and why is this concept important for enums and/or pattern matching?</blockquote></mx-reply>ADT = <a href="https://en.wikipedia.org/wiki/Generalized_algebraic_data_type">https://en.wikipedia.org/wiki/Generalized_algebraic_data_type</a> in this case, I believe.</td></tr>
+  <tr class="msg" id="L14"><td class="ts-cell"><a class="ts" href="#L14" alt="Thu Nov 18 2021 13:02:58 GMT-0800 (Pacific Standard Time)">21:02</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@jschoi:matrix.org">jschoi</span>&gt;</div></td><td class="msg-cell">See also <a href="https://github.com/rbuckton/proposal-enum/issues/6">https://github.com/rbuckton/proposal-enum/issues/6</a></td></tr>
+  <tr class="msg" id="L15"><td class="ts-cell"><a class="ts" href="#L15" alt="Thu Nov 18 2021 13:03:51 GMT-0800 (Pacific Standard Time)">21:03</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@jschoi:matrix.org">jschoi</span>&gt;</div></td><td class="msg-cell">They’re essentially structs with predefined categories. Or enums with additional payloads. Haskell, Rust, and Swift have them. They can use pattern matching on them.</td></tr>
+  <tr class="msg" id="L16"><td class="ts-cell"><a class="ts" href="#L16" alt="Thu Nov 18 2021 13:08:35 GMT-0800 (Pacific Standard Time)">21:08</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@jschoi:matrix.org">jschoi</span>&gt;</div></td><td class="msg-cell">Like a Result type being made of the union of a Failure() singleton and a Success(value) type, after which Result values could be pattern matched between Failure() and Success(value) values, with value automatically being extracted in the Success branch. That’s probably what they’re talking about.</td></tr>
+  <tr class="msg" id="L17"><td class="ts-cell"><a class="ts" href="#L17" alt="Thu Nov 18 2021 13:14:10 GMT-0800 (Pacific Standard Time)">21:14</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-6" title="@ljharb:matrix.org">ljharb</span>&gt;</div></td><td class="msg-cell">ok, but you can already do that with pattern matching wiht objects</td></tr>
+  <tr class="msg" id="L18"><td class="ts-cell"><a class="ts" href="#L18" alt="Thu Nov 18 2021 13:14:30 GMT-0800 (Pacific Standard Time)">21:14</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-6" title="@ljharb:matrix.org">ljharb</span>&gt;</div></td><td class="msg-cell">so sure, that should work, but that just means enums would need a very obvious and intuitive matcher protocol, right?</td></tr>
+  <tr class="msg" id="L19"><td class="ts-cell"><a class="ts" href="#L19" alt="Thu Nov 18 2021 13:15:32 GMT-0800 (Pacific Standard Time)">21:15</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@jschoi:matrix.org">jschoi</span>&gt;</div></td><td class="msg-cell">Yes, as far as I can tell, but perhaps I’m missing something.</td></tr>
+  <tr class="msg" id="L20"><td class="ts-cell"><a class="ts" href="#L20" alt="Thu Nov 18 2021 15:25:13 GMT-0800 (Pacific Standard Time)">23:25</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell"><mx-reply><blockquote> so sure, that should work, but that just means enums would need a very obvious and intuitive matcher protocol, right?</blockquote></mx-reply>ADT enums would, yes. That's what <code>@@unapply</code> or (<code>@@matcher</code>) would give you.</td></tr>
+  <tr class="msg" id="L21"><td class="ts-cell"><a class="ts" href="#L21" alt="Thu Nov 18 2021 15:27:56 GMT-0800 (Pacific Standard Time)">23:27</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell">From what I've seen, languages that have ADT enums make heavy use of them alongside pattern matching as almost the majority use case.</td></tr>
+  <tr class="msg" id="L22"><td class="ts-cell"><a class="ts" href="#L22" alt="Thu Nov 18 2021 15:54:36 GMT-0800 (Pacific Standard Time)">23:54</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-6" title="@ljharb:matrix.org">ljharb</span>&gt;</div></td><td class="msg-cell">oh hm - we'd have to special-case enums in pattern matching tho somehow, because you'd want <code>when (<a href="http://enum.FOO">enum.FOO</a>)</code> to match, but the matcher protocol couldn't exist on, say, <code>1</code></td></tr>
+  <tr class="msg" id="L23"><td class="ts-cell"><a class="ts" href="#L23" alt="Thu Nov 18 2021 15:55:03 GMT-0800 (Pacific Standard Time)">23:55</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-6" title="@ljharb:matrix.org">ljharb</span>&gt;</div></td><td class="msg-cell">or actually <code><a href="http://enum.FOO">enum.FOO</a></code> would just be the runtime value, so there's not even a matcher protocol needed?</td></tr>
+  <tr class="msg" id="L24"><td class="ts-cell"><a class="ts" href="#L24" alt="Thu Nov 18 2021 15:55:11 GMT-0800 (Pacific Standard Time)">23:55</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-6" title="@ljharb:matrix.org">ljharb</span>&gt;</div></td><td class="msg-cell">so yeah i'm still confused about the unapply stuff.</td></tr>
+  <tr class="msg" id="L25"><td class="ts-cell"><a class="ts" href="#L25" alt="Thu Nov 18 2021 15:56:05 GMT-0800 (Pacific Standard Time)">23:56</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-6" title="@ljharb:matrix.org">ljharb</span>&gt;</div></td><td class="msg-cell"><pre><code>match (x) {
+  when (enum.foo) { … }
+  when (enum.bar) { … }
+  when (enum.baz) { … }
+  else { … }
+}
+</code></pre>
+<p>this would work just fine as-is, since each enum property is just a value, with no special affordance</p>
+</td></tr>
+
+</tbody></table></div></div></div>
+</body></html>

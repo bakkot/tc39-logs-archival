@@ -1,0 +1,1570 @@
+2024-04-02
+[17:10:49.0615] <Steve Hicks>
+I'm a bit wary of overlooking the expressiveness argument.  It's really easy to miss important cases and then those use cases end up high and dry with a non-solution.  As an example, I'm working on a use case right now where registration context would be a huge problem - it's (again) a tracing use case: our data service allows registering interceptors for incoming data and the interceptors are what actually trigger the UI update (possibly via a signal reaction, which is another callback registration that would need to preserve call-time semantics instead of registration semantics for this all to work).  If _either_ the RPC interceptors _or_ the signal reactions use registration context, we're sunk and there's no way to trace an interaction from the initiating event all the way to the UI update, given how loosely-coupled all the reactions in the framework are.
+
+[18:57:49.0223] <Justin Ridgewell>
+> <@stephenhicks:matrix.org> I'm a bit wary of overlooking the expressiveness argument.  It's really easy to miss important cases and then those use cases end up high and dry with a non-solution.  As an example, I'm working on a use case right now where registration context would be a huge problem - it's (again) a tracing use case: our data service allows registering interceptors for incoming data and the interceptors are what actually trigger the UI update (possibly via a signal reaction, which is another callback registration that would need to preserve call-time semantics instead of registration semantics for this all to work).  If _either_ the RPC interceptors _or_ the signal reactions use registration context, we're sunk and there's no way to trace an interaction from the initiating event all the way to the UI update, given how loosely-coupled all the reactions in the framework are.
+
+Can you make an example case in code?
+
+[19:17:07.0405] <littledan>
+Yeah sorry I don’t mean that I disagree with the expressiveness argument everywhere, just more like I would want to hear about concrete applications like what you are raising, rather than just the abstract form. Thanks for bringing this up.
+
+[00:49:55.0633] <Chengzhong Wu>
+What is the context of the call-time of `MessagePort.p.onmessage`? Is it an empty context?
+
+[00:50:28.0614] <Andreu Botella>
+yeah
+
+[00:51:25.0053] <Chengzhong Wu>
+Hmm, how is it useful if it is an empty context? Or, this is a case of inconsistency in zone.js, I assume
+
+[00:52:31.0925] <Andreu Botella>
+I'm not sure why they do this, but I think zone.js does give you a way to make `onmessage` be registration-time, it's just not enabled by default
+
+[00:52:42.0221] <Andreu Botella>
+I'm not sure why that is though
+
+[07:31:00.0601] <Chengzhong Wu>
+I am on the trip and will not be able to join the call today
+
+[09:05:12.0675] <Justin Ridgewell>
+Ping!
+
+[10:27:25.0799] <Justin Ridgewell>
+Interesting discussion about retrieving the call-time context today. Will post a GH issue later today.
+
+[16:43:01.0757] <littledan>
+I had a nice chat with Qard here in London about the generator concerns. Ultimately this relates to Koa’s use of generators, but that makes me think that our save-and-restore-across-yield semantics would actually be *better*. We were unable to come to a concrete case which is made worse by the semantics, though there will be some differences vs today’s Node AsyncLocalStorage. IMO, until I hear further evidence, I think this is a good tradeoff and we should stick with the current generator design.
+
+
+2024-04-03
+[06:57:35.0840] <littledan>
+I'm very skeptical of the callingContext direction. I'm sorry that I missed the last AsyncContext call, but I think we should discuss this further among ourselves before making it the focus of the presentation next week. Let's focus on the things that are settled. We can briefly mention that we're working on the HTML integration, and this is one idea that's been floated, but it's still very early and we're just beginning to consider it.
+
+[06:58:44.0562] <littledan>
+One piece of complexity is that there are actually more than two plausibly relevant snapshots, as this comment alluded to: https://github.com/tc39/proposal-async-context/pull/77#issuecomment-2034251830
+
+[06:59:27.0044] <littledan>
+another issue is that it doesn't remove the need for us to develop opinions about how HTML integration works--we still need to figure out the default semantics, which is what most people will be using most of the time.
+
+[07:00:02.0526] <littledan>
+If this is presented in committee, we'll end up spending a bunch of time arguing among ourselves. But that would be a disservice to the proposal--we've made so much progress, and we should be focusing on explaining that.
+
+[07:03:30.0911] <littledan>
+ * If this the focus of the presentation in committee, we'll end up spending a bunch of time arguing among ourselves. But that would be a disservice to the proposal--we've made so much progress, and we should be focusing on explaining that.
+
+[07:04:01.0515] <littledan>
+fine to mention it a bit (I wouldn't if I were presenting, but it's fine for us to disagree), but it would be premature to focus on it IMO
+
+[07:20:22.0879] <littledan>
+Events dispatched from JS seem to be a very special case. What if we ran almost all events in registration snapshot, but for events dispatched from JS, sent the snapshot from that point in JS as a property on the event?
+
+[08:40:04.0939] <littledan>
+I chatted with Matteo Collina about the feature and he shared my skepticism of the multiple-context approach
+
+[08:40:24.0615] <littledan>
+he suggested focusing on thinking through concrete examples
+
+[10:57:11.0241] <Steve Hicks>
+As an example of where a third context may be relevant: XHR's `send()` context is neither the registration context nor the (null) calling context, and I don't see a good way to push that into the listener.  I think it only matters in cases where the XHR is being reused - one listener with multiple `send()`s.  Between that condition and XHR being somewhat obsolete, this ay not be a very big deal.  Can someone lay out other examples where it's relevant?
+
+[10:57:23.0151] <Steve Hicks>
+ * As an example of where a third context may be relevant: XHR's `send()` context is neither the registration context nor the (null) calling context, and I don't see a good way to push that into the listener.  I think it only matters in cases where the XHR is being reused - one listener with multiple `send()`s.  Between that condition and XHR being somewhat obsolete, this ay not be a very big deal.  Can someone lay out other examples where there's a third relevant context?
+
+[10:58:24.0053] <Andreu Botella>
+As far as I'm aware, every time that a third context is relevant, it's because the (synchronous) call-time context would be empty
+
+[10:59:30.0862] <Andreu Botella>
+So it could still be (call-time or async relevant context) vs registration-time
+
+[11:00:13.0382] <Steve Hicks>
+Thinking a little more about `callingContext`, I'm not sure it actually addresses the generator issue all that much better than the hacky wrapper I suggested in https://github.com/tc39/proposal-async-context/issues/18#issuecomment-2015669860
+
+[11:01:09.0241] <Steve Hicks>
+I.e. I don't think it's actually possible to write a wrapper that would "just work" without having to bend over backwards within the generator body to access the calling context instead
+
+[11:06:13.0954] <Steve Hicks>
+That said, my main motivating use case for calling context is tracing with multi-use callbacks.  Any time you're registering a multi-use callback, it's very likely that you care more about the calling context than the registration context.  I don't have much in the way of builtin API examples, though if https://github.com/proposal-signals/proposal-signals were to move forward and ended up using registration context for effects, then that would certainly end up being an adoption blocker if we couldn't access the calling context.
+
+[11:06:43.0028] <Steve Hicks>
+ * That said, my main motivating use case for calling context is tracing with multi-use callbacks (i.e. expected to be run multiple times).  Any time you're registering a multi-use callback, it's very likely that you care more about the calling context than the registration context.  I don't have much in the way of builtin API examples, though if https://github.com/proposal-signals/proposal-signals were to move forward and ended up using registration context for effects, then that would certainly end up being an adoption blocker if we couldn't access the calling context.
+
+[11:10:00.0420] <Steve Hicks>
+I'm a little dubious about exposing the calling context as an event property - it seems like a more "invasive" change and it only handles one (though, admittedly, the biggest) API rather than providing something that could be used more generally.
+
+[11:14:15.0759] <Justin Ridgewell>
+> <@littledan:matrix.org> another issue is that it doesn't remove the need for us to develop opinions about how HTML integration works--we still need to figure out the default semantics, which is what most people will be using most of the time.
+
+No, but it  means that HTML is free to choose registration as the default choice even where there are 2 possible choices
+
+[11:16:59.0024] <Justin Ridgewell>
+> <@stephenhicks:matrix.org> Thinking a little more about `callingContext`, I'm not sure it actually addresses the generator issue all that much better than the hacky wrapper I suggested in https://github.com/tc39/proposal-async-context/issues/18#issuecomment-2015669860
+
+It doesn’t improve the ergonomics, generators are still favoring init-time, but it _allows_ access in case it’s necessary. The same way snapshot’s ergonomics aren’t great. Maybe `using` declarations with the new enter proposal will help here.
+
+[11:18:25.0967] <Justin Ridgewell>
+> <@stephenhicks:matrix.org> As an example of where a third context may be relevant: XHR's `send()` context is neither the registration context nor the (null) calling context, and I don't see a good way to push that into the listener.  I think it only matters in cases where the XHR is being reused - one listener with multiple `send()`s.  Between that condition and XHR being somewhat obsolete, this ay not be a very big deal.  Can someone lay out other examples where there's a third relevant context?
+
+As it stands today, it’d be the empty context. But we could spec it so that the `send()` context is used as the calling by propagating that forward.
+
+[11:18:50.0906] <Justin Ridgewell>
+* As it stands today, it’d be the empty context. But we could spec it so that the `send()` context is used as the call-time context by propagating that forward.
+
+[11:21:04.0676] <Justin Ridgewell>
+> <@stephenhicks:matrix.org> I'm a little dubious about exposing the calling context as an event property - it seems like a more "invasive" change and it only handles one (though, admittedly, the biggest) API rather than providing something that could be used more generally.
+
+Agreed. This requires any API that might be ambiguous to update, and we don’t control 3rd party library code. `callingContext()` allows us to support some of these cases without the library code changing.
+
+[13:15:12.0704] <bakkot>
+not sure if this thread was prompted by the discussion here, but if not it's a funny coincidence https://github.com/nodejs/node/issues/52317
+
+[13:18:48.0497] <Justin Ridgewell>
+No,
+
+[13:19:01.0452] <Justin Ridgewell>
+* No, looks like that was posted before us
+
+[16:20:23.0976] <littledan>
+> <@stephenhicks:matrix.org> That said, my main motivating use case for calling context is tracing with multi-use callbacks.  Any time you're registering a multi-use callback, it's very likely that you care more about the calling context than the registration context.  I don't have much in the way of builtin API examples, though if https://github.com/proposal-signals/proposal-signals were to move forward and ended up using registration context for effects, then that would certainly end up being an adoption blocker if we couldn't access the calling context.
+
+Huh, could you elaborate on this? I thought computeds would store their registration context. If you want to traverse the dependency graph to determine causation, there is an introspection API for that
+
+[16:20:55.0187] <littledan>
+> <@bakkot:matrix.org> not sure if this thread was prompted by the discussion here, but if not it's a funny coincidence https://github.com/nodejs/node/issues/52317
+
+Seems like a good endorsement of our current semantics, which Matteo and Qard seem to agree with
+
+[16:21:33.0287] <littledan>
+> <@jridgewell:matrix.org> Agreed. This requires any API that might be ambiguous to update, and we don’t control 3rd party library code. `callingContext()` allows us to support some of these cases without the library code changing.
+
+Yeah my suggestion here was not very well thought through. I still don’t understand how callingContext would work though.
+
+
+2024-04-04
+[00:56:12.0641] <Steve Hicks>
+> <@littledan:matrix.org> Huh, could you elaborate on this? I thought computeds would store their registration context. If you want to traverse the dependency graph to determine causation, there is an introspection API for that
+
+A computed signal running in the registration context is problematic. Our UI framework registers the computed signals and effects at app initialization time - so the context would be disconnected from any user-initiated event. Then the event handlers typically set a signal and rely on the signal graph to propagate through to an effect. To add teaching to this, the plan is to start the trace in the event handler, storing it in an async var, and then pick it up from the effect when the UI is eventually updated to finish the trace as completed. If the computeds/effects run in the registration context then there is no way to propagate the trace through this graph (even explicitly, since there's no parameter that can be passed through it like an old-fashioned function-based approach would allow).
+
+[00:56:53.0809] <Steve Hicks>
+* A computed signal running in the registration context is problematic. Our UI framework registers the computed signals and effects at app initialization time - so the context would be disconnected from any user-initiated event. Then the event handlers typically set a signal and rely on the signal graph to propagate through to an effect. To add tracing to this, the plan is to start the trace in the event handler, storing it in an async var, and then pick it up from the effect when the UI is eventually updated to finish the trace as completed. If the computeds/effects run in the registration context then there is no way to propagate the trace through this graph (even explicitly, since there's no parameter that can be passed through it like an old-fashioned function-based approach would allow).
+
+[00:57:18.0641] <Steve Hicks>
+* A computed signal running in the registration context is problematic. Our UI framework registers the computed signals and effects at app initialization time - so the context would be disconnected from any user-initiated event. Then the event handlers typically set a signal and rely on the signal graph to propagate through to an effect. To add tracing to this, the plan is to start the trace in the event handler, storing it in an async var, and then pick it up in the effect where the UI is eventually updated to finish the trace as completed. If the computeds/effects run in the registration context then there is no way to propagate the trace through this graph (even explicitly, since there's no parameter that can be passed through it like an old-fashioned function-based approach would allow).
+
+[04:40:28.0136] <littledan>
+Thanks for the context, Steve. This is really interesting. Would you be interested in joining the signals discord to discuss this further with others in the area? (Or if not, mind if I copy-paste this comment to trigger discussion there?)
+
+[04:41:29.0540] <littledan>
+If we wanted AsyncContext to be suitable for something like React Context, then registration time would be really helpful… so I want to think through all sides of this case to understand whether there is a unified answer.
+
+[04:45:05.0229] <Andreu Botella>
+Hey, we still haven't added the updates to AsyncContext to the agenda for next week
+
+[04:45:30.0425] <Andreu Botella>
+should I open a PR?
+
+[06:25:42.0811] <Andreu Botella>
+how much time do we expect the updates to take?
+
+[06:28:52.0963] <Andreu Botella>
+Justin Ridgewell: 
+
+[08:29:06.0687] <Justin Ridgewell>
+Yes please.
+
+[08:29:34.0572] <Justin Ridgewell>
+Maybe 15 min if we don’t discus calling context at all?
+
+[08:32:49.0369] <Andreu Botella>
+that sounds good
+
+[08:33:23.0376] <Andreu Botella>
+Justin Ridgewell: Since I'm opening the PR, I'll add constraints as well. You were unavailable on the 8th, right?
+
+[08:33:35.0722] <Justin Ridgewell>
+Yes
+
+[08:34:45.0635] <Andreu Botella>
+https://github.com/tc39/agendas/pull/1586
+
+[08:35:20.0424] <Andreu Botella>
+whoops, I added it at the end with stage 0 proposals
+
+[08:35:46.0952] <Andreu Botella>
+fixed
+
+[08:36:08.0776] <Steve Hicks>
+> <@littledan:matrix.org> Thanks for the context, Steve. This is really interesting. Would you be interested in joining the signals discord to discuss this further with others in the area? (Or if not, mind if I copy-paste this comment to trigger discussion there?)
+
+Sure, I'd be happy to join the discord, but also feel free to copy-paste the comment.
+
+
+2024-04-08
+[06:03:51.0052] <littledan>
+@room Hey, do we have the slides for the presentation tomorrow? It would be good to be able to review them and give feedback before the actual presentation happens
+
+[07:15:21.0066] <Justin Ridgewell>
+I haven’t written them yet
+
+[07:23:26.0879] <littledan>
+> <@jridgewell:matrix.org> I haven’t written them yet
+
+thanks for letting us know; enjoy your eclipse day
+
+[09:47:53.0356] <Justin Ridgewell>
+https://docs.google.com/presentation/d/1ok6fX9PN3XEv9ZwffrDzJX24uuiNrkGDZN-KgGwGkc0/edit?usp=sharing
+
+[09:48:05.0142] <Justin Ridgewell>
+You all have edit access, feel free to update
+
+[09:48:12.0762] <Justin Ridgewell>
+I’m going to walk around before the eclipse
+
+[09:48:37.0323] <Justin Ridgewell>
+Feel free to add them to the plenary agenda whenever
+
+[10:16:00.0375] <littledan>
+wait did we end up with AsyncContext.wrap or AsyncContext.Snapshot.wrap?
+
+[10:16:50.0025] <littledan>
+for slide 7, should we link to the i2i?
+
+[10:17:31.0448] <littledan>
+Should we make it clear that the issue described on slide 3 is the main thing we need to get to stage 2.7, that we see zero other open issues?
+
+[10:17:40.0063] <littledan>
+also maybe mentioning our plan for sync iterator helpers?
+
+[10:25:05.0287] <Andreu Botella>
+> <@littledan:matrix.org> wait did we end up with AsyncContext.wrap or AsyncContext.Snapshot.wrap?
+
+AsyncContext.Snapshot.wrap indeed
+
+[10:29:56.0576] <Andreu Botella>
+> The integration spec will be opened before we ask for Stage 2.7
+
+There might be a lot of work needed to update all the specs. I think we should definitely have a document describing when an API or event should use which context, and have at least the basic PRs for DOM, HTML and WebIDL if needed.
+
+[10:30:37.0562] <Andreu Botella>
+but not necessarily PRs for every single spec
+
+[10:30:59.0903] <Andreu Botella>
+although a list of *which* APIs and events should be updated would probably be in scope
+
+[10:33:16.0013] <Andreu Botella>
+or maybe all non-experimental specs?
+
+[10:33:25.0413] <Andreu Botella>
+not sure
+
+[10:41:19.0698] <littledan>
+> Makes it much easier for users to pass callbacks to libraries
+> Snapshot was introduced to make it easier for libraries to accept multiple callbacks
+
+I'm not sure if I agree with this... I think AsyncContext.Shapshot.wrap will be frequently used by libraries, just like AsyncResource.wrap is in Node-land
+
+[10:41:49.0333] <littledan>
+> <@abotella:igalia.com> or maybe all non-experimental specs?
+
+definitely experimental specs are out of scope, yes
+
+[10:42:38.0801] <Andreu Botella>
+in the analysis of non-event web APIs that I'm currently doing, I'm considering everything implemented by at least one major browser, including things in WICG specs
+
+[10:42:49.0542] <littledan>
+> <@abotella:igalia.com> > The integration spec will be opened before we ask for Stage 2.7
+> 
+> There might be a lot of work needed to update all the specs. I think we should definitely have a document describing when an API or event should use which context, and have at least the basic PRs for DOM, HTML and WebIDL if needed.
+
+Yeah I agree, the goal should be to define things and have some rough consensus around it, not get all the editorial work perfectly lined up and almost landed
+
+[10:43:13.0292] <littledan>
+> <@abotella:igalia.com> in the analysis of non-event web APIs that I'm currently doing, I'm considering everything implemented by at least one major browser, including things in WICG specs
+
+IMO it's enough to stick to things that are implemented by multiple browsers
+
+[14:26:29.0777] <littledan>
+BTW I added a "Next Steps" slide, would be great to have reviews to make sure I'm not misrepresenting things
+
+[14:29:41.0493] <littledan>
+Do we agree on "Plan: Propose for Stage 2.7 some time soon in 2024" ?
+
+
+2024-04-09
+[20:08:55.0690] <Justin Ridgewell>
+Ok, finally home
+
+[20:09:34.0233] <Justin Ridgewell>
+Reviewing, I think Slide 4 (Generators) slides needs to mention that we removed snapshotting behavior for spec generators
+
+[20:15:00.0444] <Justin Ridgewell>
+Oh, we should also mention that test262 is already done?
+
+[22:26:31.0968] <Andreu Botella>
+I would not say already done, I'd say it has comprehensive coverage or something like that
+
+[04:54:48.0828] <littledan>
+What is the difference? Comprehensive sounds great to me
+
+[04:56:17.0216] <Andreu Botella>
+I'd want more tests for actual context propagation, interaction between various language features that propagate the context, etc.
+
+[07:09:03.0211] <Justin Ridgewell>
+Updated to “comphrehensive”
+
+[07:20:33.0509] <littledan>
+> <@abotella:igalia.com> I'd want more tests for actual context propagation, interaction between various language features that propagate the context, etc.
+
+sounds like it's not yet comprehensive?
+
+[07:21:23.0460] <Andreu Botella>
+> <@littledan:matrix.org> sounds like it's not yet comprehensive?
+
+there's a lot that is covered, I'm not sure if it yet meets a bar where I'd be happy with merging
+
+[07:23:49.0426] <littledan>
+right, I understand the word "comprehensive" to mean that it's complete
+
+[07:24:01.0551] <littledan>
+so if you are trying to make a weaker claim, this isn't really the best word
+
+[07:24:17.0236] <Andreu Botella>
+you might be right
+
+[07:24:38.0127] <littledan>
+maybe we could say "test262 coverage for core paths"
+
+[07:31:27.0919] <Justin Ridgewell>
+> Some investigation into interaction with other TC39 proposals
+WHat
+
+[07:31:34.0053] <Justin Ridgewell>
+* > Some investigation into interaction with other TC39 proposals
+What other proposal?
+
+[07:31:59.0039] <Justin Ridgewell>
+(Sorry about the unedited text, I’m still getting use to a new keyboard layout)
+
+[07:35:45.0457] <Andreu Botella>
+> <@jridgewell:matrix.org> > Some investigation into interaction with other TC39 proposals
+> What other proposal?
+
+I assume that means iterator helpers
+
+[07:35:58.0946] <Justin Ridgewell>
+Ahh
+
+[07:36:04.0733] <littledan>
+also signals
+
+[07:41:19.0036] <bakkot>
+incidentally it looks like Observables are going to be in Chrome regardless of what happens elsewhere; not sure if there has been discussion of integration there https://github.com/WICG/observable
+
+[07:41:54.0455] <littledan>
+My understanding is that Chrome has them behind a flag; they haven't done an i2s so no decision has been made
+
+[07:41:54.0847] <Andreu Botella>
+we were considering existing observers, like IntersectionObserver, which are already an established part of the web platform
+
+[07:41:59.0970] <Andreu Botella>
+I haven't looked into observables though
+
+[07:42:25.0549] <littledan>
+> <@bakkot:matrix.org> incidentally it looks like Observables are going to be in Chrome regardless of what happens elsewhere; not sure if there has been discussion of integration there https://github.com/WICG/observable
+
+I've expressed my concerns with Observables in issues on the repo and I haven't heard back, so I'm not really sure how any integration work would proceed...
+
+[07:43:31.0603] <littledan>
+I suspect that explicit positions from WebKit and Chrome will be pretty influential as to whether Chrome ships this
+
+[07:43:37.0524] <littledan>
+also the TAG review which hasn't come back
+
+[07:43:41.0645] <littledan>
+ * I suspect that explicit positions from WebKit and Mozilla will be pretty influential as to whether Chrome ships this
+
+[07:45:30.0053] <bakkot>
+I... do not share that expectation
+
+[07:48:33.0181] <littledan>
+My main concern with observables is that people will reach for them for reactivity--and get broken push-based reactivity as a result. They should use lazy, pull-based reactivity instead, as proposed in Signals
+
+[07:49:14.0850] <littledan>
+Here's what I wrote previously (but this was back when I didn't understand reactivity as well): https://github.com/WICG/observable/issues/56
+
+
+2024-04-11
+[09:08:42.0048] <Justin Ridgewell>
+https://github.com/tc39/proposal-async-context/pull/77 seems to have everyone saying call-time context is the better choice by default.
+
+[09:15:56.0454] <littledan>
+> <@jridgewell:matrix.org> https://github.com/tc39/proposal-async-context/pull/77 seems to have everyone saying call-time context is the better choice by default.
+
+the people in that thread acknowledge that often there isn't a meaningful call-time context, and so you fall back to registration time
+
+[09:32:47.0267] <Justin Ridgewell>
+For system scheduled events, yes. But for event listeners triggered in code, call time seems to be the consensus.
+
+[09:37:57.0378] <littledan>
+I'm happy with this as a starting point, but I still think we will have to consider around 10 of these semi-manually to make sure it works out in practice for the web
+
+[09:38:15.0087] <littledan>
+note that all of those people were coming from a Node.js perspective...
+
+[09:39:40.0406] <Justin Ridgewell>
+Steve works on libraries across Web and Node, and he’s advocating for it too
+
+[09:40:02.0017] <littledan>
+ * note that <del>all</del>many of those people were coming from a Node.js perspective...
+
+[09:40:02.0614] <Justin Ridgewell>
+Though I don’t know how generators will work in this system.
+
+[09:40:06.0539] <littledan>
+oh I did not mean Steve
+
+[09:40:18.0827] <littledan>
+> <@jridgewell:matrix.org> Though I don’t know how generators will work in this system.
+
+why would this affect generators?
+
+[09:40:41.0182] <Justin Ridgewell>
+I think we’re still agreeing on init-time, but how do you get the call-time context in one?
+
+[09:41:03.0760] <littledan>
+> <@jridgewell:matrix.org> I think we’re still agreeing on init-time, but how do you get the call-time context in one?
+
+you don't? you only use call-time context sometimes. For example, promises still don't use call-time context
+
+[09:41:35.0518] <littledan>
+and onload doesn't have any sort of call-time context so it uses registration-time context
+
+[09:41:47.0772] <Justin Ridgewell>
+Steve and Stephen have given examples where generators need to access the call-time data
+
+[09:42:06.0039] <littledan>
+OK I'll have to catch up on those threads
+
+[09:42:38.0678] <littledan>
+we have to have this conversation with Steven and Signals people about Computed's context -- there's a concern that call-time context there would constitute "Zalgo": a computed signal could be forced in many different ways, and it should be giving the same answer regardless of context (of course we need some debugging/perf analysis tools to be possible)
+
+[11:12:14.0250] <Chengzhong Wu>
+> <@jridgewell:matrix.org> For system scheduled events, yes. But for event listeners triggered in code, call time seems to be the consensus.
+
+it would mean the same if it is the one who emits the event determines which context the the event listeners should be.
+
+
+2024-04-12
+[20:36:40.0862] <Steve Hicks>
+> <@littledan:matrix.org> we have to have this conversation with Steven and Signals people about Computed's context -- there's a concern that call-time context there would constitute "Zalgo": a computed signal could be forced in many different ways, and it should be giving the same answer regardless of context (of course we need some debugging/perf analysis tools to be possible)
+
+I agree that there's definite problems with computed signals - it's possible that two setters feed into the same computed signal and could have been set in different contexts, plus the fact that they're computed lazily might point to the reader's context as the correct call-time context (i.e. coming from the other direction). So there's potentially three or more different options and not necessarily a good way to disambiguate all of them.
+
+That said, if there's no way to access the context(s) that set the signal(s) that caused the recompute, then tracing in many UI frameworks is essentially sunk. In my experience, it's a _very_ common pattern to have an event handler do nothing but update a signal. If the tracing framework initiates a trace in the event handler then the trace would simply die then and there, whereas we'd like to be able to link that trace to any downstream reactions/effects, all the way to the re-render.
+
+[06:18:50.0479] <littledan>
+I see... so in this case, it's like application state should be registration-based, but tracing state should be call-based... :(
+
+[07:07:22.0429] <Steve Hicks>
+What's an example of application state that you'd want to be registration-based? My general (but somewhat uninformed) rule-of-thumb is that if a callback is intended to be called multiple times, it's more likely to want call-time context.
+
+[07:11:25.0433] <littledan>
+an example is if we wanted to use AsyncContext for tracking the owner in tree-based rendering, or generally, React Context-style information
+
+[07:11:47.0156] <littledan>
+we could use AsyncContext.Snapshot.wrap for these cases but then it'd defeat tracing, sounds like...
+
+[07:12:30.0073] <littledan>
+also for the style of React Hooks using global variables under the hood
+
+[07:13:17.0483] <littledan>
+restoring the context after await is an example of registration-time behavior I think
+
+[07:13:34.0319] <littledan>
+(especially obvious if you consider what explicit calls of .then() should do)
+
+[10:21:50.0924] <Steve Hicks>
+That's a good point about `await`.  I brought it up in the context of async generators in https://github.com/tc39/proposal-async-context/pull/77#issuecomment-2048897179 - I think my general expectation is that context needs to be _preserved_ across an `await`, rather than _restored_ to some particular snapshot.
+
+[10:29:18.0120] <Steve Hicks>
+ * That's a good point about `await`.  I brought it up in the context of async generators in https://github.com/tc39/proposal-async-context/pull/77#issuecomment-2048897179 - I think my general expectation is that context needs to be _preserved_ across an `await`, rather than _restored_ to some particular snapshot on reentry
+
+[10:50:55.0096] <littledan>
+> <@stephenhicks:matrix.org> That's a good point about `await`.  I brought it up in the context of async generators in https://github.com/tc39/proposal-async-context/pull/77#issuecomment-2048897179 - I think my general expectation is that context needs to be _preserved_ across an `await`, rather than _restored_ to some particular snapshot on reentry
+
+Justin keeps talking about "restoring to the initial snapshot" but I've always been thinking about the semantics as "preserving the one that was right before the await" (that's my mental model for AsyncContext in general). In the end, there isn't an observable difference between them, though.
+
+[10:51:29.0086] <littledan>
+> <@stephenhicks:matrix.org> That's a good point about `await`.  I brought it up in the context of async generators in https://github.com/tc39/proposal-async-context/pull/77#issuecomment-2048897179 - I think my general expectation is that context needs to be _preserved_ across an `await`, rather than _restored_ to some particular snapshot on reentry
+
+ * Justin keeps talking about "restoring to the initial snapshot" but I've always been thinking about the semantics as "preserving the one that was right before the await or yield" (that's my mental model for AsyncContext in general). In the end, there isn't an observable difference between them, though.
+
+[10:51:30.0272] <Andreu Botella>
+well, with a disposable there would be
+
+[10:51:44.0533] <Andreu Botella>
+ * well, with a disposable there would be a difference
+
+[10:52:22.0666] <littledan>
+right, if we had some flat way of doing `run` within a function, I'd *definitely* want the semantics to be, preserve what was before the await/yield; I don't see any argument for "restore the one at function entry"
+
+[10:52:58.0945] <Steve Hicks>
+I think await and yield are maybe separate questions, but otherwise I agree.
+
+[10:53:25.0697] <Steve Hicks>
+ * I think await and yield are _maybe_ separate questions, but otherwise I agree.
+
+[10:53:29.0334] <littledan>
+is there any post which captures your thoughts on yield? it's been a little hard for me to follow the threads given their length
+
+[10:55:33.0279] <Steve Hicks>
+I don't really use generators, so I don't have particularly strong feelings on yield, beyond recognizing that that's at least a small handful of people who seem to want to be able to observe the calling context somehow or other.  My bigger concern is repeated callbacks, which I think are a little easier to reason about.
+
+[10:56:11.0613] <littledan>
+on yield, it seems like the biggest users in frameworks would actually *benefit* from these semantics because they end up using yield as a replacement for await
+
+[10:56:45.0714] <littledan>
+but I like focusing on the concrete and want to understand more about your thoughts on callbacks
+
+[10:56:49.0925] <Steve Hicks>
+I _think_ yield-as-await already gets the right behavior automatically based on how promises work.
+
+[10:57:15.0008] <littledan>
+> <@stephenhicks:matrix.org> I _think_ yield-as-await already gets the right behavior automatically based on how promises work.
+
+there's a tiny leak when it comes to thenables... but I think if you want the other behavior you're doing it wrong
+
+[10:57:15.0771] <Steve Hicks>
+(but I haven't thought through the details)
+
+[10:57:54.0546] <littledan>
+What I've heard is, Koa doesn't force a Promise.resolve the way native await does, and that's where the difference comes from
+
+[10:59:21.0818] <Steve Hicks>
+For repeated callbacks, it's common to register handlers or data producer graphs at application start time.  These callbacks run every time a particular interaction or data flow happens.  There's no meaningful context when they're registered, so it's much more relevant to propagate the call-time context for _each_ iniating circumstance, rather than the (empty) app-init context.
+
+[10:59:38.0743] <Steve Hicks>
+ * For repeated callbacks, it's common to register handlers or data pipelines at application start time.  These callbacks run every time a particular interaction or data flow happens.  There's no meaningful context when they're registered, so it's much more relevant to propagate the call-time context for _each_ iniating circumstance, rather than the (empty) app-init context.
+
+[11:00:37.0431] <Andreu Botella>
+> <@stephenhicks:matrix.org> For repeated callbacks, it's common to register handlers or data pipelines at application start time.  These callbacks run every time a particular interaction or data flow happens.  There's no meaningful context when they're registered, so it's much more relevant to propagate the call-time context for _each_ iniating circumstance, rather than the (empty) app-init context.
+
+do you think that events should have registration-time semantics for things that are expected to be one-use, i.e. `loadend` on XHR?
+
+[11:01:16.0937] <Andreu Botella>
+you can use a single `XMLHttpRequest` object for multiple fetches, but I don't think most uses do that
+
+[11:09:17.0800] <Steve Hicks>
+More concretely, we have an internal framework that writes code like this:
+
+```
+class UpvoteButtonComponent {
+  constructor(private readonly rpcService: RpcService, private readonly id: string) {}
+  render(item: ItemDetail) {
+    return <button on:click={this.onClick}>{item.getVotes()}</button>;
+  }
+  onClick() {
+    this.rpcService.sendUpvote(new UpvoteRequest().setId(this.id));
+  }
+}
+RpcService.registerMiddleware(UpvoteResponse.typeId, ItemDetail.typeId,
+    (response: UpvoteResponse) => response.getId(),
+    (item: ItemDetail) => item.getId(),
+    (response: UpvoteResponse, item: ItemDetail) => {
+      return item.clone().setVotes(response.getNewVoteCount());
+    });
+```
+
+In this example, there's a lot of loose coupling: the click handler just fires-and-forgets an RPC.  The RPC service has some middleware registered that gets a response of a certain type and then indexes all the cached ItemDetail models by their ID, retrieves the matching detail, and updates its votes.  The UI data binding then picks up this change and rerenders the component.  What I need to be able to do is thread a trace through that sequence of loosely coupled triggers.  The callbacks are all registered once, when the module is loaded, but they need to carry along the call-time context in order to preserve the trace.
+
+[11:10:04.0268] <littledan>
+(is this the same internal framework that Jatin works on?)
+
+[11:10:26.0067] <Steve Hicks>
+My understanding is that this sort of loosely-coupled data binding is common in external frameworks as well.  Yes, it's the same.
+
+[11:10:58.0047] <littledan>
+hey how do people feel about getting a logo for AsyncContext like we have for Signals? https://github.com/tc39/proposal-signals/blob/main/signals-logo.png
+
+[11:11:16.0363] <littledan>
+I can ask my friend who did the other one if he could do this too
+
+[11:11:39.0171] <littledan>
+somehow logos make it easier to talk about things, sometimes
+
+[11:20:06.0854] <Steve Hicks>
+ * More concretely, we have an internal framework that writes code like this:
+
+```
+class UpvoteButtonComponent {
+  constructor(private readonly rpcService: RpcService, private readonly id: string) {}
+  render(item: ItemDetail) {
+    return <button on:click={this.onClick}>{item.getVotes()}</button>;
+  }
+  onClick() {
+    this.rpcService.sendUpvote(new UpvoteRequest().setId(this.id));
+  }
+}
+RpcService.registerMiddleware(UpvoteResponse.typeId, ItemDetail.typeId,
+    (response: UpvoteResponse) => response.getId(),
+    (item: ItemDetail) => item.getId(),
+    (response: UpvoteResponse, item: ItemDetail) => {
+      item.setVotes(response.getNewVoteCount());
+    });
+```
+
+In this example, there's a lot of loose coupling: the click handler just fires-and-forgets an RPC.  The RPC service has some middleware registered that gets a response of a certain type and then indexes all the cached ItemDetail models by their ID, retrieves the matching detail, and updates its votes.  The UI data binding then picks up this change and rerenders the component.  What I need to be able to do is thread a trace through that sequence of loosely coupled triggers.  The callbacks are all registered once, when the module is loaded, but they need to carry along the call-time context in order to preserve the trace.
+
+[11:20:45.0725] <Steve Hicks>
+ * More concretely, we have an internal framework that writes code (very roughly) like this:
+
+```
+class UpvoteButtonComponent {
+  constructor(private readonly rpcService: RpcService, private readonly id: string) {}
+  render(item: ItemDetail) {
+    return <button on:click={this.onClick}>{item.getVotes()}</button>;
+  }
+  onClick() {
+    this.rpcService.sendUpvote(new UpvoteRequest().setId(this.id));
+  }
+}
+RpcService.registerMiddleware(UpvoteResponse.typeId, ItemDetail.typeId,
+    (response: UpvoteResponse) => response.getId(),
+    (item: ItemDetail) => item.getId(),
+    (response: UpvoteResponse, item: ItemDetail) => {
+      item.setVotes(response.getNewVoteCount());
+    });
+```
+
+In this example, there's a lot of loose coupling: the click handler just fires-and-forgets an RPC.  The RPC service has some middleware registered that gets a response of a certain type and then indexes all the cached ItemDetail models by their ID, retrieves the matching detail, and updates its votes.  The UI data binding then picks up this change and rerenders the component.  What I need to be able to do is thread a trace through that sequence of loosely coupled triggers.  The callbacks are all registered once, when the module is loaded, but they need to carry along the call-time context in order to preserve the trace.
+
+[11:21:10.0081] <Steve Hicks>
+ * More concretely, we have an internal framework that writes code (very roughly) like this:
+
+```
+class UpvoteButtonComponent {
+  constructor(private readonly rpcService: RpcService, private readonly id: string) {}
+  render(item: ItemDetail) {
+    return <button on:click={this.onClick}>{item.getVotes()}</button>;
+  }
+  onClick() {
+    this.rpcService.sendUpvote(new UpvoteRequest().setId(this.id));
+  }
+}
+// in a totally different file:
+RpcService.registerMiddleware(UpvoteResponse.typeId, ItemDetail.typeId,
+    (response: UpvoteResponse) => response.getId(),
+    (item: ItemDetail) => item.getId(),
+    (response: UpvoteResponse, item: ItemDetail) => {
+      item.setVotes(response.getNewVoteCount());
+    });
+```
+
+In this example, there's a lot of loose coupling: the click handler just fires-and-forgets an RPC.  The RPC service has some middleware registered that gets a response of a certain type and then indexes all the cached ItemDetail models by their ID, retrieves the matching detail, and updates its votes.  The UI data binding then picks up this change and rerenders the component.  What I need to be able to do is thread a trace through that sequence of loosely coupled triggers.  The callbacks are all registered once, when the module is loaded, but they need to carry along the call-time context in order to preserve the trace.
+
+[11:41:53.0971] <rbuckton>
+I need to better understand the concern about `using` and an async context scope. As I understand it, even with `[Symbol.enter]` you're concerned it's possible exit the function without exiting the scope?
+
+[11:46:32.0131] <Andreu Botella>
+> <@rbuckton:matrix.org> I need to better understand the concern about `using` and an async context scope. As I understand it, even with `[Symbol.enter]` you're concerned it's possible exit the function without exiting the scope?
+
+the concern is that buggy (or malicious) code that calls `[Symbol.enter]` but not `[Symbol.dispose]` would change the context available when the function returns
+
+[11:46:53.0482] <Andreu Botella>
+currently in the AsyncContext proposal there's no way to change the context in the middle of a function execution
+
+[11:47:22.0293] <Andreu Botella>
+and I think this was a design goal, which is why we didn't adopt `AsyncLocalStorage`'s `enterWith`
+
+[11:47:58.0043] <rbuckton>
+How does this:
+
+```js
+function f() {
+  const scopeEnterable = new AsyncContext.Scope();
+  scopeEnterable[Symbol.enter]();
+  // do work
+  // forget to exit scope
+}
+```
+
+differ from this:
+
+```js
+function f() {
+  let result;
+  function* g(cb) {
+    using scope = new AsyncContext.Scope();
+    result = cb();
+    yield;
+  }
+  g().next();
+  return result;
+}
+```
+
+[11:48:52.0543] <rbuckton>
+That would also result in a dangling scope, even with some kind of more comprehensive enforcement of `using`
+
+[11:50:18.0246] <rbuckton>
+ * How does this:
+
+```js
+function f() {
+  const scopeEnterable = new AsyncContext.Scope();
+  scopeEnterable[Symbol.enter]();
+  // do work
+  // forget to exit scope
+}
+```
+
+differ from this:
+
+```js
+function f() {
+  function* g() {
+    using scope = new AsyncContext.Scope();
+    // do work
+    yield;
+  }
+  g().next();
+}
+```
+
+[11:50:26.0977] <Andreu Botella>
+the current scope text switches the context when generators are paused and restored – there's still discussion about whether this is the right behavior, but that would take care of that
+
+[11:50:31.0093] <littledan>
+yeah, neither of those is acceptable, that's the thing
+
+[11:50:42.0752] <littledan>
+the current API is based on `.run(cb)` instead
+
+[11:51:23.0490] <rbuckton>
+If failing to exit the scope is unacceptable, then there's no way to achieve that kind of enforcement with `using`
+
+[11:52:18.0517] <Andreu Botella>
+I guess the fact that AsyncContext *can* switch the scope for generators is a thing that no other use cases could do, so maybe that doesn't apply more generally
+
+[11:52:53.0045] <rbuckton>
+Async functions would also result in a dangling scope
+```js
+async function f(p) {
+  using scope = new AsyncContext.Scope();
+  // do work
+  await p;
+}
+
+const { promise, resolve } = Promise.withResolves();
+f(p);
+// never call resolve()
+```
+
+[11:52:54.0325] <Andreu Botella>
+ * I guess the fact that AsyncContext _can_ switch the scope for generators is a thing that no userland use cases could do, so maybe that doesn't apply more generally
+
+[11:54:52.0527] <rbuckton>
+This leads me to believe that `AsyncContext.Scope` isn't viable.
+
+[11:55:21.0142] <littledan>
+a different thing in the space of `using` could hypothetically solve this problem--maybe more along the lines of what you described Python can do in `with`.
+
+[11:55:45.0977] <littledan>
+not that we need that, but the name of the proposal kinda feels like a tease, *almost* getting us there
+
+[11:55:55.0928] <rbuckton>
+Python's `with` would have the exact same issues. 
+
+[11:55:58.0225] <Andreu Botella>
+> <@rbuckton:matrix.org> This leads me to believe that `AsyncContext.Scope` isn't viable.
+
+I think it would be viable, because AsyncContext needs to integrate with generator resuming and promise continuations. But maybe similar use cases implemented in userland could not.
+
+[11:56:38.0727] <Andreu Botella>
+And I'm not necessarily willing to ask for the strict `using` enforcement proposal to change to fit use cases which are limited to spec proposals
+
+[11:56:43.0511] <littledan>
+in the extreme case: if `using` was passed the delimited continuation as an argument...
+
+[11:56:46.0887] <Andreu Botella>
+ * And I'm not willing to ask for the strict `using` enforcement proposal to change to fit use cases which are limited to spec proposals
+
+[11:58:17.0150] <Steve Hicks>
+> <@rbuckton:matrix.org> This leads me to believe that `AsyncContext.Scope` isn't viable.
+
+I think you're missing something here.  The issue is only in any shared contexts.  The context outside the async function isn't affected by the Scope.  I assume the point of Scope is that it effectively makes a child context "in place" - so it wouldn't impact any other function bodies that were sharing the same context as _before_ the Scope is entered.
+
+[11:58:20.0383] <rbuckton>
+> <@littledan:matrix.org> in the extreme case: if `using` was passed the delimited continuation as an argument...
+
+I don't see how this wouldn't be significantly worse.
+
+[11:58:49.0194] <littledan>
+> <@rbuckton:matrix.org> I don't see how this wouldn't be significantly worse.
+
+it would solve the problem that Andreu is talking about, while also, yes, being a crazy thing that we definitely shouldn't do
+
+[11:59:08.0845] <littledan>
+the design of `.run(cb)` forces you to extract the delimited continuation manually
+
+[11:59:12.0297] <Steve Hicks>
+> <@rbuckton:matrix.org> This leads me to believe that `AsyncContext.Scope` isn't viable.
+
+ * I think you're missing something here.  The issue is only in any shared contexts.  The context outside the async function isn't affected by the Scope.  I assume the point of Scope is that it effectively makes a child context "in place" - so it wouldn't impact any other function bodies that were sharing the same context as _before_ the Scope is entered.  Specifically, it would _not_ mutate the current context.
+
+[12:01:19.0675] <Steve Hicks>
+Where I see a problem is
+```
+{
+  using scope = new AsyncContext.Scope();
+  // ...
+  const innerScope =  new AsyncContext.Scope();
+  innerScope[Symbol.enter]();
+  // ...
+}
+// what happens to vars set on innerScope?
+innerScope[Symbol.dispose]();
+// what happens now?
+
+[12:02:50.0273] <rbuckton>
+if you were to treat this like a stack, as `run(cb)` would do, I would expect `innerScope` to be on top of the stack, and when `scope` is disposed it should throw if it's not on the top of the stack.
+
+[12:03:08.0687] <Andreu Botella>
+> <@stephenhicks:matrix.org> Where I see a problem is
+> ```
+> {
+>   using scope = new AsyncContext.Scope();
+>   // ...
+>   const innerScope =  new AsyncContext.Scope();
+>   innerScope[Symbol.enter]();
+>   // ...
+> }
+> // what happens to vars set on innerScope?
+> innerScope[Symbol.dispose]();
+> // what happens now?
+
+I think this could be worked around by keeping the scope depth and invalidating `innerScope` if `scope` has been disposed. But I'm not sure at this point if this would work for async functions and generators
+
+[12:04:23.0758] <rbuckton>
+Do you have to keep track of when you enter or exit a function with `run()`?
+
+[12:04:52.0755] <Justin Ridgewell>
+No
+
+[12:05:23.0690] <Justin Ridgewell>
+Run enters, invokes the cb, then exits. It can’t leave a dirty stack.
+
+[12:11:50.0346] <rbuckton>
+One way I could envision this behavior would be something like this very naive implementation:
+
+```js
+AsyncContext.run = function (ctx, cb) {
+  using scope = new AsyncContext.Scope(ctx);
+  return cb();
+}
+AsyncContext.Scope = class Scope {
+  static #top;
+  #prev;
+  #ctx;
+  constructor(ctx) {
+    this.#ctx = ctx;
+    this.#prev = Scope.#top;
+    Scope.#top = this;
+    // other scope setup work
+  }
+  [Symbol.dispose]() {
+    if (this !== Scope.#top) throw new Error();
+    Scope.#top = this.#prev;
+    // other scope teardown work
+  }
+}
+```
+Each time you create a new `Scope`, you're pushing it into a stack. When you fail to pop a scope, you get an error. 
+
+[12:12:08.0585] <Steve Hicks>
+(I'll also point out that this is effectively impossible to polyfill, for whatever it's worth - you'd need to instrument every function with a local variable to store the current context in, rather than relying on a global.)
+
+[12:16:14.0211] <rbuckton>
+This doesn't require strict enforcement and it throws when used incorrectly. Theoretically, before you throw you could also walk the stack from `#top` to `this` and exit those contexts as well, but it's still better to error than to exit silently.
+
+[12:18:21.0095] <Justin Ridgewell>
+I think that still leaves a dirty stack, just with an error telling you that something went wrong. It doesn’t prevent the misuse from happening.
+
+[12:19:10.0483] <Justin Ridgewell>
+> <@stephenhicks:matrix.org> (I'll also point out that this is effectively impossible to polyfill, for whatever it's worth - you'd need to instrument every function with a local variable to store the current context in, rather than relying on a global.)
+
+Is this in reply to Ron, or the scoped feature in general? I think it’s easily polyfillable.
+
+[12:19:15.0394] <rbuckton>
+> <@jridgewell:matrix.org> I think that still leaves a dirty stack, just with an error telling you that something went wrong. It doesn’t prevent the misuse from happening.
+
+`using` doesn't prevent a dirty stack, as I illustrated with the generator and async function example. And as I mentioned, you can clean up the stack before you error.
+
+[12:20:02.0203] <Justin Ridgewell>
+I disagree, it defintely does
+
+[12:20:17.0559] <rbuckton>
+not within the context of `run`.
+
+[12:21:00.0269] <rbuckton>
+ * ~~not within the context of `run`.~~ sorry, misread the comment
+
+[12:21:13.0409] <rbuckton>
+How does `using` prevent a dirty stack, given the examples I just posted?
+
+[12:24:00.0547] <rbuckton>
+I assume a generator has a magic behavior that does context capturing when started and resumed? Is there any reason you wouldn't do the same for normal function execution? Or is that just too expensive?
+
+[12:24:30.0175] <Justin Ridgewell>
+It requires a modification in the internal pausing behavior for `await` and `yield`
+
+[12:25:19.0856] <Andreu Botella>
+> <@rbuckton:matrix.org> I assume a generator has a magic behavior that does context capturing when started and resumed? Is there any reason you wouldn't do the same for normal function execution? Or is that just too expensive?
+
+I guess we could do that, but I expect that would break a lot of optimizations in engines
+
+[12:25:56.0794] <rbuckton>
+I expect that's true.
+
+[12:29:10.0015] <rbuckton>
+Assuming some magical enforcement of syntactic `using` does support your case, how would you expect it to work? Any alternative I've considered so far breaks some other different feature of resource management.
+
+[12:29:18.0696] <rbuckton>
+ * Assuming some magical enforcement of syntactic `using` does support your case, how would you expect it to work? Any alternative I've considered so far breaks some other important feature of resource management.
+
+[12:29:45.0057] <Steve Hicks>
+> <@jridgewell:matrix.org> Is this in reply to Ron, or the scoped feature in general? I think it’s easily polyfillable.
+
+I was referring to `Scope` in general - I may just not be seeing it, but short of instrumenting _every_ function to have its own separate mutable context, I don't see how two function bodies sharing the same `run` context could have `Scope` mutations from one be isolated from being observed in the other.
+
+[12:30:56.0084] <rbuckton>
+For example, lets say you could check a `function.using` meta property from inside the constructor that is only set when you write `using x = new Scope(ctx)`. That breaks composability, which is another core capability of resource management.
+
+[12:31:42.0754] <Justin Ridgewell>
+That’s fine, `AsyncContext` is not composable
+
+[12:31:48.0643] <rbuckton>
+It prevents a user from wrapping `Scope` in another function to make decisions. It prevents a user from entering a `Scope` conditionally. It prevents instrumentation.
+
+[12:32:33.0342] <rbuckton>
+That would be a huge footgun. 
+
+[12:32:33.0569] <Justin Ridgewell>
+* That’s fine, `Scope` is not composable
+
+[12:33:46.0603] <Justin Ridgewell>
+How? We’re jsut trying to allow unnested use of `Variable`. We don’t need to do anything else.
+
+[12:35:35.0354] <Justin Ridgewell>
+> <@stephenhicks:matrix.org> I was referring to `Scope` in general - I may just not be seeing it, but short of instrumenting _every_ function to have its own separate mutable context, I don't see how two function bodies sharing the same `run` context could have `Scope` mutations from one be isolated from being observed in the other.
+
+Wouldn’t the `dispose` take care of that? And for the dangling async/generator’s mentioned above, it requires a small modification to the pausing behavior.
+
+[12:35:49.0320] <rbuckton>
+It's a footgun because it's confusing to users. If I had `using x = new Scope(ctx)`, and wanted to refactor to `const createScope = ctx => new Scope(ctx); using x = createScope(ctx);`, it suddenly breaks. Nothing else does that in the language, as far as I'm aware.
+
+[12:36:50.0327] <rbuckton>
+It's a TCP violation, made worse because that specific change did not involve new syntax. the "new syntax" part didn't move.
+
+[12:37:18.0070] <Justin Ridgewell>
+Perfect, The normal case now is `v.run(1, () => …)`, which also wouldn’t work that way.
+
+[12:38:27.0602] <rbuckton>
+take any valid expression in `v.run(...)` and turn it into an arrow and it would still work.
+
+[12:39:29.0091] <rbuckton>
+with perhaps the only distinction being `this` receiver handling, which is a known quantity.
+
+[12:40:45.0912] <Justin Ridgewell>
+```
+// Doesn't keep 1 on the context stack
+const createScope = ctx => new Scope(ctx, 1);
+using x = createScope(ctx);
+doStuff();
+
+// Doesn't keep 1 on the context stack
+const run = () => v.run(1, () => {})
+run();
+doStuff();
+```
+
+[12:40:50.0411] <Justin Ridgewell>
+These are the same programs
+
+[12:41:03.0887] <rbuckton>
+So, I stand corrected. _One_ thing in the language has that oddity, and that's how `this` receivers work. The complexity of `this` receivers is not something I want to repeat.
+
+[12:42:10.0618] <rbuckton>
+Where was `doStuff` before? If your original code was
+```js
+v.run(1, () => {})
+doStuff();
+```
+then it has the same behavior.
+
+[12:43:17.0429] <rbuckton>
+If your code was `v.run(1, () => { doStuff(); });`, then you didn't refactor it you changed it to a different behavior.
+
+[12:44:17.0840] <rbuckton>
+I'm talking about changing this
+
+```js
+v.run(1, () => doStuff());
+```
+
+into this
+```js
+const f = () => doStuff();
+v.run(1, () => f());
+```
+or this
+```js
+const f = () => 1;
+v.run(f(), () => doStuff());
+```
+
+[12:45:07.0342] <rbuckton>
+the average JS developer would expect both of those refactorings to be valid.
+
+[12:45:34.0168] <Justin Ridgewell>
+Ah, I missed `const createScope = ctx => new Scope(ctx);`, I thought you were doing `using new Scope(…)` inside the arrow.
+
+[12:45:40.0595] <Justin Ridgewell>
+* Ah, I misread `const createScope = ctx => new Scope(ctx);`, I thought you were doing `using new Scope(…)` inside the arrow.
+
+[12:45:44.0654] <rbuckton>
+No.
+
+[12:46:51.0481] <Justin Ridgewell>
+```
+const createScope = ctx => new Scope(ctx, 1);
+using _ = createScope(ctx);
+ctx.get() === 1
+```
+
+That works in my head? `using` is syntactic, it invokes `scope[Symbol.enter]()`, `function.using` check passes, you get a scope
+
+[12:47:23.0040] <Justin Ridgewell>
+* ```
+const createScope = ctx => new Scope(ctx, 1);
+using _ = createScope(ctx);
+ctx.get() === 1
+```
+
+That works in my head? `using` is syntactic, it invokes `scope[Symbol.enter]()`, `function.using` check passes, you get a scoped update
+
+[12:47:28.0851] <rbuckton>
+How is `new Scope` supposed to know its part of a `using`.
+
+[12:47:33.0553] <rbuckton>
+ * How is `new Scope` supposed to know its part of a `using`?
+
+[12:47:42.0435] <Justin Ridgewell>
+`function.using`?
+
+[12:47:49.0444] <rbuckton>
+That doesn't work here.
+
+[12:48:19.0649] <rbuckton>
+Consider this:
+```js
+const createScope = ctx => {
+  new Scope(otherCtx);
+  return new Scope(ctx);
+}
+using _ = createScope(ctx);
+```
+
+[12:48:27.0426] <rbuckton>
+brb
+
+[12:49:37.0812] <Justin Ridgewell>
+What’s `new Scope(otherCtx)` supposed to do there? You only enter the returned `new Scope(ctx)`?
+
+[12:50:34.0247] <rbuckton>
+I'm saying that if `function.using` works when I extract `new Scope` out into another function, then it works for every `new Scope` created inside that expression.
+
+[12:50:40.0181] <Justin Ridgewell>
+```
+class Scope {
+  // ...
+  [Symbol.enter]() {
+    if (!function.using) throw new Error();
+    // Update Agent.[[AsyncContextMapping]]
+  }
+  [Symbol.dispose]() {
+    // Restore Agent.[[AsyncContextMapping]] 
+  }
+}
+```
+
+[12:50:58.0060] <Justin Ridgewell>
+It’s only checked when entering?
+
+[12:51:12.0216] <rbuckton>
+```js
+using _ = (() => {
+  runMyEntireProgramWithFunctionUsingEqualsTrue();
+})();
+
+[12:51:53.0272] <rbuckton>
+Does it matter?
+
+[12:52:20.0695] <rbuckton>
+```js
+using _ = {
+  [Symbol.enter]() {
+    runMyEntireProgramWithFunctionUsingEqualsTrue();
+  }
+};
+```
+
+[12:53:54.0076] <rbuckton>
+Either way, that's not what `Symbol.enter` is for. 
+
+[12:54:45.0868] <rbuckton>
+If we only set `function.using` when calling `[Symbol.enter]()`, that means you're going to want to delay resource setup until `[Symbol.enter]()` is called, which I called out as something we expressly do not want.
+
+[12:55:35.0010] <Justin Ridgewell>
+> <@rbuckton:matrix.org> ```js
+> using _ = (() => {
+>   runMyEntireProgramWithFunctionUsingEqualsTrue();
+> })();
+
+I need to think about this more.
+
+[12:56:23.0971] <Justin Ridgewell>
+> <@rbuckton:matrix.org> If we only set `function.using` when calling `[Symbol.enter]()`, that means you're going to want to delay resource setup until `[Symbol.enter]()` is called, which I called out as something we expressly do not want.
+
+Yah, it returns a new object with a `Symbol.dispose` method. Exactly what’ll happen here.
+
+[12:56:25.0584] <rbuckton>
+And it still breaks composability. An advanced JS dev might want to subclass or wrap `Scope` with their own class, and now you've broken them.
+
+[12:57:43.0912] <rbuckton>
+> <@jridgewell:matrix.org> Yah, it returns a new object with a `Symbol.dispose` method. Exactly what’ll happen here.
+
+That is an abuse of the mechanism, and is one of the reasons I don't actually want `[Symbol.enter]`.
+
+[12:58:08.0821] <rbuckton>
+IMO, it might be better to have `[Symbol.enter]` be a property and not a method.
+
+[12:59:18.0620] <Justin Ridgewell>
+> <@rbuckton:matrix.org> And it still breaks composability. An advanced JS dev might want to subclass or wrap `Scope` with their own class, and now you've broken them.
+
+I’m looking to replace nesting of `v.run(…, () => {…})` with inline code. Desiging for subclassing or any other power features isn’t the goal.
+
+[13:00:46.0990] <rbuckton>
+Lets say you have an api like `openFile(path)` that you want to produce a resource. If you want enforcement, you want to write
+```js
+function openFile(path) {
+  const handle = new FileHandle(...);
+  return { [Symbol.enter]() { return handle; } };
+}
+```
+not
+```js
+function openFile(path) {
+  return { [Symbol.enter]() { return new FileHndle(path); } };
+}
+```
+Otherwise people could just call `[Symbol.enter]()` repeatedly on the result of the same `openFile` call.
+
+
+[13:04:21.0825] <rbuckton>
+> <@jridgewell:matrix.org> I’m looking to replace nesting of `v.run(…, () => {…})` with inline code. Desiging for subclassing or any other power features isn’t the goal.
+
+`AsyncContext` is itself a power feature. The Venn diagram of class of developers that will write code using it, and the class of developers that might have reasons to compose it with other code it is nearly a circle.
+
+[13:06:09.0895] <Justin Ridgewell>
+> Otherwise people could just call [Symbol.enter]() repeatedly on the result of the same openFile call.
+I don’t see how this example differs from the `Scope` class above?
+
+[13:07:15.0807] <rbuckton>
+Because there are thousands of reasons to use a file handle via composition.
+
+[13:09:32.0874] <Justin Ridgewell>
+That was specfically about the “abuse of the mechanism”, right? I don’t see how your single-prepared `FileHandle` that can be entered multiple times differs from the `Scope` class that can be entered multile times? We already hold the `ctx` and `value`, we don’t need to initlize it.
+
+[13:09:34.0542] <rbuckton>
+This discussion has done more to convince me that `Symbol.enter` _shouldn't_ be a method than it might have convinced me to give it any kind of special privilege like `function.using`
+
+[13:10:20.0978] <rbuckton>
+You need to change contexts, which is the actual "resource" you're guarding
+
+[13:11:43.0301] <rbuckton>
+I assume the essence of what you want is to ensure that developers ship correct programs?
+
+[13:11:56.0045] <rbuckton>
+(using this feature)
+
+[13:12:49.0583] <rbuckton>
+And what you want is for the runtime to be able to inform the user when they are using the feature incorrectly.
+
+[13:15:32.0752] <rbuckton>
+The purpose of `[Symbol.enter]` is to guide JS users to proper use of the `using` keyword, while giving sophisticated developers an opt-out mechanism to allow for composability and extend these mechanisms in userland.
+
+[13:16:17.0856] <Justin Ridgewell>
+I think you’re purposefully containing the feature, which prevents us from using it.
+
+[13:16:40.0470] <rbuckton>
+If it is absolutely imperative that a context cannot be used in this way, then I would argue that it should only be accessible via `run`. 
+
+[13:17:04.0518] <rbuckton>
+I'm purposefully *not* constraining the feature.
+
+[13:17:37.0709] <Justin Ridgewell>
+We have a valid use case, and you’re telling me we’re abusing the mechanism!
+
+[13:18:48.0225] <Justin Ridgewell>
+I think you’re going to be sorely disapoointed with userland `Symbol.enter` functions, and if we land on `get [Symbol.dispose]()` then that’ll be abused too.
+
+[13:19:22.0806] <rbuckton>
+Yes, I think its a potential use case, but I'm not sure I'm comfortable with the complexity it adds as it will make composition impossible.
+
+[13:21:41.0827] <Justin Ridgewell>
+* I think you’re going to be sorely disapoointed with userland `Symbol.enter` functions, and if the proposal doesn’t move forward, `get [Symbol.dispose]()` will be abused too.
+
+[13:22:19.0021] <rbuckton>
+Adding a feature like `function.using` would cause significant problems with adoption. Users would be confused why some resources work with `using` and `DisposableStack`, while others don't. It would turn the feature into a minefield.
+
+[13:23:03.0163] <rbuckton>
+`[Symbol.enter]` is, at most, compromise. It still allows `using` and `DisposableStack` to be used interchangably.
+
+[13:26:59.0004] <shu>
+i was wondering this during plenary: can TS build [[nodiscard]]?
+
+[13:27:17.0298] <rbuckton>
+`[Symbol.enter]` is supposed to be the "staff entry only" mechanism to opt-out. `Scope` could use that, and maybe even `get [Symbol.dispose]()` for good measure, and perform implicit cleanup and then throw when the stack of `context` switches doesn't match what's expected, and that's likely to catch the majority of user errors.
+
+[13:27:33.0229] <rbuckton>
+> <@shuyuguo:matrix.org> i was wondering this during plenary: can TS build [[nodiscard]]?
+
+If that's type information that would affect runtime emit, then no.
+
+[13:28:19.0920] <rbuckton>
+If we have to emit a suboptimal wrapper around every single operation to ensure that it's doing the right thing, then no.
+
+[13:28:43.0418] <Andreu Botella>
+what about nodiscard as a type error/warning?
+
+[13:28:52.0108] <nicolo-ribaudo>
+I proposed it to typescript-eslint for `using`: https://github.com/typescript-eslint/typescript-eslint/issues/8255
+
+[13:29:50.0955] <rbuckton>
+> <@abotella:igalia.com> what about nodiscard as a type error/warning?
+
+We've considered that. It becomes complicated when you have to mark use sites such as parameters as well. It's not out of the question, but we haven't implemented it yet.
+
+[13:31:18.0257] <rbuckton>
+You want both `using` and `DisposableStack.prototype.use()` to be considered valid use sites.
+
+[13:31:47.0489] <rbuckton>
+And you want users to be able to build their own `DisposableStack` subclasses or wrappers that can also declare a parameter as a valid use site.
+
+[13:32:05.0532] <rbuckton>
+e.g., for polyfills and shims, if nothing else.
+
+[13:33:05.0225] <Justin Ridgewell>
+> <@rbuckton:matrix.org> `[Symbol.enter]` is supposed to be the "staff entry only" mechanism to opt-out. `Scope` could use that, and maybe even `get [Symbol.dispose]()` for good measure, and perform implicit cleanup and then throw when the stack of `context` switches doesn't match what's expected, and that's likely to catch the majority of user errors.
+
+This allows mallicous dynamic scoping of a caller’s variable, and it’ll get shot down if we propose it.
+
+[13:33:13.0677] <rbuckton>
+I've given it quite a bit of thought.
+
+[13:34:25.0915] <Andreu Botella>
+I don't think we need `AsyncContext.Scope`. For me it's a nice to have, and changing strict enforcement to allow it seems to raise more problems than it solves.
+
+[13:34:38.0716] <rbuckton>
+I'm not sure you can get the guarantees you want from `using` without introducing confusion and poisoning adoption.
+
+[13:38:07.0939] <rbuckton>
+.NET has `ExecutionContext`, which is essentially the same as `AsyncContext`. It supports `Run`, as well as `Capture` and `Restore`, flow control, and `Dispose`, and has for decades. It's unfortunate that `AsyncContext` has far stricter requirements.
+
+[13:38:24.0489] <Justin Ridgewell>
+This steps all over the explicit-resource-management proposal, but what if we modify the runtime evaluation of `using` to handle this internally? Don’t expose a `dispose` or `enter` method.
+
+[13:39:00.0156] <Justin Ridgewell>
+It still breaks symetry, you can’t wrap it, but it solves the nesting.
+
+[13:39:02.0377] <rbuckton>
+How? That sounds like breaking composability.
+
+[13:39:08.0781] <Justin Ridgewell>
+* It still breaks symetry with `DisposableStack`, you can’t wrap it, but it solves the nesting.
+
+[13:39:43.0743] <rbuckton>
+If I can't store a disposable in a field on my class so that I can clean it up when my class is disposed, then resource management is useless.
+
+[13:40:05.0407] <Justin Ridgewell>
+Again, I’m not trying to solve composibility. Your choice is `v.run(…)` or `using _ = Scope(…)`
+
+[13:41:50.0984] <rbuckton>
+Any solution to `using _ = Scope(...)` _must not_ break composability in general, and should not poison adoption.
+
+[13:42:29.0459] <rbuckton>
+"in general" meaning, anything else that isn't `new Scope`
+
+[13:42:30.0850] <Justin Ridgewell>
+But the altenative isn’t composable either.
+
+[13:42:34.0753] <rbuckton>
+ * Any solution to `using _ = new Scope(...)` _must not_ break composability in general, and should not poison adoption.
+
+[13:44:18.0939] <Justin Ridgewell>
+Your class field hypothetical would only be able to expose the new context within the the scope of its methods with `this.v.run(…)`, same as with `using _ = this.scope;`
+
+[13:44:20.0611] <rbuckton>
+are you planning to freeze `[Symbol.dispose]` and `[Symbol.enter]` on `Scope`?
+
+[13:44:35.0822] <Justin Ridgewell>
+Neither exist
+
+[13:45:20.0277] <Justin Ridgewell>
+It’s not a traditional disposable, can’t be use with `*Stacks`
+
+[13:45:32.0561] <Justin Ridgewell>
+Can’t manually call the methods to enter or exit.
+
+[13:45:43.0096] <Justin Ridgewell>
+Can’t leak, only exists within `using`’s scope.
+
+[13:46:28.0813] <rbuckton>
+> <@jridgewell:matrix.org> Your class field hypothetical would only be able to expose the new context within the the scope of its methods with `this.v.run(…)`, same as with `using _ = this.scope;`
+
+My hypothetical might be something like:
+
+```js
+class NamedScope {
+  name;
+  #scope;
+  constructor(ctx, name) {
+    this.name = name;
+    this.#scope = new AsyncContext.Scope(ctx);
+  }
+  [Symbol.dispose]() {
+    using _ = this.#scope;
+    this.#scope = undefined;
+  }
+}
+
+using scope = new NamedScope(ctx, "foo");
+...
+```
+
+
+
+[13:47:31.0132] <Justin Ridgewell>
+What would that be with the current AsyncContext’s `run()`?
+
+[13:48:16.0438] <rbuckton>
+> <@jridgewell:matrix.org> Neither exist
+
+I'm talking about before a hypothetical discussion about alternatives. If `Scope` was never going to have them to begin with, then `using` definitely doesn't seem like the right fit.
+
+[13:48:25.0789] <Justin Ridgewell>
+`class NamedScope extends Scope {}` might work, `Scope` could hold a `[[Dispose]]` slot.
+
+[13:50:41.0160] <rbuckton>
+There is no `[[Dispose]]` slot in resource management. If what you're proposing requires dramatic changes to resource management for one specific case, it seems more like you need an independent syntax.
+
+[13:51:37.0596] <rbuckton>
+```
+with scope (ctx) {
+}
+```
+or something. What you want to dispose is not a resource, and it doesn't fit within the semantics of `using`.
+
+[13:52:21.0900] <rbuckton>
+or even `using scope (ctx) {}`, maybe.
+
+[13:52:36.0050] <Justin Ridgewell>
+It would require an additional branch in `AddDisposableResource` and 2 additional `hint`s to differentiate sync/async syntax from sync/async `stack.use()`
+
+[13:54:07.0147] <rbuckton>
+You're asking to carve out a narrow corner case for a single type that can't be used the way any other resource could be used. 
+
+[13:54:39.0144] <Justin Ridgewell>
+> <@rbuckton:matrix.org> or even `using scope (ctx) {}`, maybe.
+
+That at least gets rid of the TCP issues with `run()`, but still requires a nesting layer. Maybe that’s ok.
+
+[13:55:05.0422] <Justin Ridgewell>
+Yes, I’m willing to privelege language features above userland implemenations.
+
+[13:55:36.0986] <Justin Ridgewell>
+We do that all the time.
+
+[13:56:04.0779] <rbuckton>
+If there is to be a special purpose carve-out, i'd much rather there be a syntactic opt-in so users could differentiate between what's safe to refactor to a `DisposableStack` and what isn't.
+
+[13:57:11.0307] <rbuckton>
+> <@jridgewell:matrix.org> Yes, I’m willing to privelege language features above userland implemenations.
+
+There is a line though. `AbortSignal` does the same thing and it's one of the worst parts of the design. 
+
+[13:58:15.0378] <Justin Ridgewell>
+I was thinking more `Promsie` fast paths
+
+[13:58:22.0962] <Justin Ridgewell>
+* I was thinking more `Promise` fast paths
+
+[13:59:02.0901] <rbuckton>
+I can understand special cases like skipping an Await for a native `Promise` but not a thenable. You're already async at that point. But not for a corner case that might cause users to see an entire feature as suspect.
+
+[13:59:16.0877] <rbuckton>
+I was too. This is not a Promise fast path.
+
+[14:01:39.0959] <rbuckton>
+Promise fast paths require you to practically go out of your way to observe them and people have been preaching against Zalgo for a decade so people don't take a dependency on ordering. 
+
+[14:03:50.0764] <rbuckton>
+What I don't understand is that if `AsyncContext.Scope` wasn't going to have a `[Symbol.enter]` or `[Symbol.dispose]` to begin with, and planned to special case `AddDisposableResource`, why would a dangling `[Symbol.enter]` have even been a concern to begin with?
+
+[14:04:40.0006] <Justin Ridgewell>
+Yah, this would need to throw if you used it incorrectly. It’s a bit different from fast-path, but I think it’s still a priveleging language features thing.
+
+[14:04:55.0865] <Justin Ridgewell>
+This is a different approach.
+
+[14:05:53.0848] <Justin Ridgewell>
+If we can’t get a `function.using` to detect a public `Scope[Symbol.enter]` is being invoked with syntatic `using`, then we can’t expose that functionality.
+
+[14:06:00.0606] <Justin Ridgewell>
+So what if we didn’t expose anything?
+
+[14:06:11.0571] <Justin Ridgewell>
+Move it all internal to the language.
+
+[14:08:21.0454] <rbuckton>
+That still wouldn't address my concern about poisoning adoption. If users expect that `using x = res()` and `stack.use(res())` can be used interchangeably, or that you can use the fairly common "extract to new function" refactoring, then having a single thing that breaks those expectations makes the feature untrustworthy. The only way to address that would be a syntactic opt-in.
+
+[14:09:55.0015] <rbuckton>
+And with my TypeScript hat on, there's no way we could type `Scope` in the type system if it depends on a private slot.
+
+[14:10:12.0478] <rbuckton>
+Well, maybe not no way. No good way.
+
+[14:10:34.0323] <Justin Ridgewell>
+What would you type?
+
+[14:10:45.0073] <Justin Ridgewell>
+The syntatic `using`?
+
+[14:11:08.0521] <rbuckton>
+We'd have to have a declaration of `class Scope { #_ }` and the checker would have to not only verify such a type was reachable, but that it was nominally checked as a result of the private field.
+
+[14:11:11.0833] <rbuckton>
+Yes
+
+[14:11:38.0759] <rbuckton>
+It is a type error if the RHS of a `using` is neither `null`, `undefined`, nor `Disposable`.
+
+[14:11:59.0239] <Justin Ridgewell>
+Wouldn’t it just be `DisposableInterface | Scope`?
+
+[14:12:34.0363] <Justin Ridgewell>
+And `stack.use()` would only accept `DisposableInterface`
+
+[14:12:36.0295] <rbuckton>
+You need a `Scope` that isn't comparable via a structural comparison.
+
+[14:12:49.0103] <Justin Ridgewell>
+Oh, ok.
+
+[14:13:46.0348] <rbuckton>
+Like, if the definition of `Scope` was just 
+```ts
+declare class Scope {
+  constructor(ctx: AsyncContext);
+}
+```
+That's essentially just `{}`, meaning everything is assignable to it.
+
+[14:14:14.0395] <Justin Ridgewell>
+I understand now
+
+[14:15:54.0105] <rbuckton>
+We generally don't make such narrow distinctions when it depends on spec internal features. For example, we don't differentiate `Symbol.iterator` vs `Symbol()` vs `Symbol.for()` when used as a `WeakMap` key as that depends on spec internal information that isn't available via structural comparisons.
+
+[14:18:03.0395] <rbuckton>
+> <@rbuckton:matrix.org> Like, if the definition of `Scope` was just 
+> ```ts
+> declare class Scope {
+>   constructor(ctx: AsyncContext);
+> }
+> ```
+> That's essentially just `{}`, meaning everything is assignable to it.
+
+If `using` required `Disposable | Scope | null | undefined` on the RHS and we did the structural comparison to the above, that is reduced to `unknown` (i.e., `unknown` and `null | undefined | {}` are essentially the same)
+
+
+2024-04-15
+[12:18:36.0695] <Justin Ridgewell>
+I loaded up our agenda tomorrow, trying to get though minor topic quickly so that we can get to the meaty `using` and call-time topics.
+
+[12:18:52.0377] <Justin Ridgewell>
+We could remove the minor topics and just decide those through GH instead.
+
+
+2024-04-16
+[08:51:17.0915] <Andreu Botella>
+Sorry for dropping this wall of text literally 10 minutes before the meeting 😅: https://github.com/tc39/proposal-async-context/issues/82
+
+[08:59:24.0768] <dminor>
+Thanks for the effort in putting that together, I'll miss the meeting today, but having that list will be very helpful in getting feedback from people at Mozilla.
+
+
+2024-04-23
+[13:52:57.0101] <littledan>
+I got together with Adam Rackis and explained the AsyncContext proposal. He is very interested and will be reading up on it, from the explainer. I think our current README is a good start, but we should still consider what possible improvements we could make on the explanation. It is always hard to explain what variables represent, and what snapshots are for, and how all of this relates to layering with frameworks and libraries.
+
+[14:44:08.0903] <Justin Ridgewell>
+I continue to use my [original slide deck](https://docs.google.com/presentation/d/1yw4d0ca6v2Z2Vmrnac9E9XJFlC872LDQ4GFR17QdRzk/edit#slide=id.p) when trying to explain it
+
+[14:44:19.0420] <Justin Ridgewell>
+I hate prose without example code
+
+[15:11:59.0740] <littledan>
+yes! more example code in the README!
+
+[15:12:52.0462] <littledan>
+> <@jridgewell:matrix.org> I continue to use my [original slide deck](https://docs.google.com/presentation/d/1yw4d0ca6v2Z2Vmrnac9E9XJFlC872LDQ4GFR17QdRzk/edit#slide=id.p) when trying to explain it
+
+thanks for the reference; forwarded to Adam
+
+
+2024-04-30
+[09:59:07.0462] <littledan>
+shaylew: Hey do you have any sort of sketch about your "delimited continuation" ideas around AsyncContext?
+
+[10:13:09.0683] <shaylew>
+haven't gotten to write it down, but the very quick sketch is
+- following the "Delimited Dynamic Binding" paper for combining delimited continuations (which give a natural semantics to async/await and generators among other things) with dynamically bound variables https://okmij.org/ftp/Computation/dynamic-binding.html#DDBinding
+- in this light the main missing primitives in the current proposal seems to be "capture a snapshot _up to a particular marker_ without going all the way to the top scope" and "restore a partial snapshot _on top of the current stack_ without replacing it"
+- Oleg gives an extension for looking back at "shadowed" values of a variable that amounts to `variable.withOuterContext(fn)` which runs `fn` in a prefix of the current scope up to just before the innermost binding of the variable. this is strictly more powerful than just being able to read the next-outer value of the variable 
+
+[10:15:26.0989] <shaylew>
+I want to come up with concrete motivating examples for the distinctions here, because the answers to "why do you want this and what trouble do you get into if you try to fake it" are kind of subtle
+
+[10:18:48.0906] <shaylew>
+("implicit functions" from https://www.microsoft.com/en-us/research/publication/programming-with-implicit-values-functions-and-control-or-implicit-functions-dynamic-binding-with-lexical-scoping/ are one of the test cases for whether you've got things sufficiently expressive so I was thinking of trying to borrow some of their examples)
+
+[10:23:11.0485] <shaylew>
+the other line of inquiry is to figure out if this "capture stack segments rather than complete stacks" paradigm gets things right for the thorny real world APM situations, where it sounds like there's currently a bit of a quagmire of "oh, I want to exempt or include these specific variables from being captured/restored, but how do I know which of other people's variables should be in which category". I have less direct intuition for those situations
+
+[15:45:51.0272] <Justin Ridgewell>
+> in this light the main missing primitives in the current proposal seems to be "capture a snapshot _up to a particular marker_ without going all the way to the top scope" and "restore a partial snapshot _on top of the current stack_ without replacing it"
+
+It sounds like the `Variable.wrap(fn)` [propposal](https://github.com/tc39/proposal-async-context/issues/25) to catpure the current value of a variable and restore that later, possibly with the ability to snapshot multiple variables at once `Snapshot.wrap(fn, var1, var2, var3)`
+
+> Oleg gives an extension for looking back at "shadowed" values of a variable that amounts to `variable.withOuterContext(fn)` which runs `fn` in a prefix of the current scope up to just before the innermost binding of the variable. this is strictly more powerful than just being able to read the next-outer value of the variable 
+
+This seems like the `callingContext()` [propopsal](https://github.com/tc39/proposal-async-context/pull/77), which we need to discuss further. Figuring out what use cases need call-time or registration-time context is difficult, and there’s also the possibility of merge-points in `Promsie.all(…)` that we discussed today.
+
+[16:34:09.0753] <shaylew>
+right, yeah, I think this set of ideas is most directly applicable to `callingContext`, and in that case it suggests strongly that it should be using a specific variable as a stack marker, escaping up to that mark, rather than always escaping one context upwards
+

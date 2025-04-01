@@ -1,0 +1,100 @@
+2022-07-03
+[07:19:46.0357] <Jack Works>
+> <@littledan:matrix.org> I don't think it's relaxed in practice. HTML may do two fetches but definitely not evaluate the same JS code twice
+
+Do you mean, the first import without assertion, and the second import with assertion so the browser needs to fetch the source again to check if  assertion succeed? 
+
+[07:30:19.0879] <Jack Works>
+> <@lucacasonato:matrix.org> I know for a fact that Chrome only fetched each specifier once per realm.
+
+👀 What if import("/a") then import("/b") but /b redirects to /a? does "/a" execute twice?
+
+[07:33:02.0168] <Luca Casonato>
+> <@jackworks:matrix.org> 👀 What if import("/a") then import("/b") but /b redirects to /a? does "/a" execute twice?
+
+No
+
+[14:28:42.0994] <guybedford>
+That case very much does execute twice in browsers, even if it only fetches /a once
+
+[15:37:38.0846] <Luca Casonato>
+Huh, I am confused now... I remember this working differently
+
+[15:38:12.0148] <Luca Casonato>
+I dug through this all a year or two ago for the Deno module loader.
+
+[15:42:02.0519] <Luca Casonato>
+Deno definitely does something else here. I'll go dig through this again this week, before the Tuesday meeting
+
+[15:48:09.0364] <Luca Casonato>
+This means you can have two module instances with identical source text, and an identical `import.meta.url` (that is referencing a real JS file) in the same realm in browsers right now... I was not aware of this.
+
+
+2022-07-04
+[17:08:18.0758] <nicolo-ribaudo>
+> <@lucacasonato:matrix.org> Deno definitely does something else here. I'll go dig through this again this week, before the Tuesday meeting
+
+Heads up: this week's meeting has been moved to Wednesday 
+
+[17:43:53.0347] <guybedford>
+Luca Casonato: on the web, the response URL and request URL are different things
+
+[17:43:59.0409] <guybedford>
+`import.meta.url` corresponds to the response URL
+
+[17:44:04.0959] <guybedford>
+while the module map corresponds to the request URL
+
+[17:44:21.0115] <guybedford>
+for all intensive purposes redirects on the web are largely useless due to the double execution hazard
+
+[17:47:32.0294] <guybedford>
+from the perspective of ECMA-262, there is no inconsistency - there are two separate modules in the registry, that have the same source text
+
+[17:47:46.0588] <guybedford>
+and the same `import.meta.url` - `import.meta.url` has no correspondence to the cache key
+
+[08:24:05.0507] <Kris Kowal>
+And we’re obliged to make it possible to faithfully emulate both behaviors (single execution, multi execution) with loaders. ☠️
+
+
+2022-07-05
+[14:07:07.0108] <guybedford>
+nicolo-ribaudo: incredible find with https://github.com/nodejs/node/issues/43681, fascinating read
+
+[14:07:13.0965] <guybedford>
+what's your takeaway on that
+
+[14:08:55.0249] <nicolo-ribaudo>
+I was actually trying to understand if Deno was non-compliant with ecma262 and it instead chooses to behave like browsers, and I tried to compare it with Node.js. Node.js segfaulted, so I stopped trying to understand what Deno does and focused on Node.js 😂
+
+[14:10:35.0197] <nicolo-ribaudo>
+Also, I don't understand yet how that ECMA-262 hook works, but I'm surprised/disappointed that non-browsers are forbidden from behaving like browsers.
+
+[14:11:26.0997] <guybedford>
+Yes that seems an odd specification rule to make to me
+
+[14:11:39.0655] <guybedford>
+When was that first introduced, might be interesting to dig into the original motivation?
+
+[14:12:00.0354] <nicolo-ribaudo>
+If I had to pick a random person that could ask for that rule, it would be someone working on SES (maybe MM?)
+
+[14:12:08.0164] <nicolo-ribaudo>
+But I haven't read the notes for the original story
+
+[14:13:04.0261] <nicolo-ribaudo>
+But I see how that host hook could cause problems, because it "magically" passes the execution context
+
+[14:18:14.0665] <guybedford>
+I'm not sure the spec is explicitly forbidding the code from working though is it?
+
+[14:18:36.0670] <guybedford>
+Since Node.js maintains its execution context script from the initialization script right
+
+[14:19:05.0621] <guybedford>
+so could it just be a bug in the REPL context handling?
+
+[14:20:04.0697] <nicolo-ribaudo>
+Maybe yes, I still don't understand exactly how to observe the behavior of that hook
+

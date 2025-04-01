@@ -1,0 +1,403 @@
+2024-01-18
+[09:59:49.0092] <rbuckton>
+My apologies, I will be about 2 minutes late to the working session today
+
+[11:01:18.0733] <rbuckton>
+shu: At one point you had discussed having one shared struct inherit from another shared struct. If we ignore TLS prototypes and behavior for a moment, is there any specific benefit to modeling an actual inheritance model here, or would just having the inherited struct just maintain the initial field layout of the base struct be sufficient?
+
+[11:01:32.0434] <rbuckton>
+ * shu: At one point you had discussed having one shared struct inherit from another shared struct. If we ignore TLS prototypes and behavior for a moment, is there any specific benefit to modeling an actual inheritance model here, or would having the inherited struct just maintain the initial field layout of the base struct be sufficient?
+
+[11:03:04.0001] <shu>
+i think the benefit is more like "full composability with rest of the language", mainly
+
+[11:03:24.0790] <shu>
+i know the field has kind of soured on inheritance hierarchies vs inline storage of stuff
+
+[11:03:59.0833] <shu>
+but for e.g. AST nodes, you probably do want an inheritance hierarchy in the "layout prefix" sense that i was imagining
+
+[11:04:11.0726] <shu>
+`AstNodeBase` has `loc` or whatever
+
+[11:04:46.0753] <rbuckton>
+I'm more asking if there is any reason that `struct B extends A {}` needs to care about `A` other than its field layout (if you ignore TLS prototypes and constructor initialization logic)
+
+[11:05:12.0670] <rbuckton>
+(aside from internal AST reasons)
+
+[11:05:39.0337] <shu>
+ooh
+
+[11:05:39.0973] <rbuckton>
+It goes to simplifying the syntax I've been considering.
+
+[11:05:50.0320] <shu>
+i feel like no?
+
+[11:05:55.0197] <shu>
+my intention was literally for layout
+
+[11:06:43.0099] <rbuckton>
+In classes, field order is determined by calling `super()`, where each `super` constructor installs its fields and returns the thing to be the used as the `this` in the subclass constructor.
+
+[11:06:53.0437] <rbuckton>
+That helps
+
+[11:08:35.0352] <shu>
+what i want for struct inheritance semantics:
+
+- one shot initialization. even if we allow field initializers or user-programmable constructors, they get a fully initialized instance with all fields initialized to a sentinel (`undefined`, i guess)
+- superclass's fields precede your own fields
+
+[11:08:57.0744] <shu>
+the invariant is that a half-constructed, out-of-declared-order instance is not observable if you use structs
+
+[11:14:10.0604] <rbuckton>
+That syntax sketch I wrote up a few months back has a lot of corner cases to handle future complexity, like:
+- declaring whether a struct has a `null` prototype, or a "shared" prototype, or a TLS prototype.
+- declaring whether a struct field is "non-shared" on a shared struct (i.e., a TLS-backed field).
+- indicating whether a method is shared or non-shared, for a potential future that might somehow include shared functions.
+
+I'd like to cut a lot of that for simplicity's sake. For example, every `struct` declaration has a non-shared prototype (a TLS prototype for shared structs). You can use `extends null` if you don't need the prototype, and we can just make that work as opposed to how `class extends null` doesn't work today.
+
+[11:14:53.0668] <rbuckton>
+So `shared struct A extends B {}` gives `A` a TLS prototype that inherits from `B`'s TLS prototype.
+
+[11:15:37.0614] <rbuckton>
+If you do `shared struct A extends B {]` and `B` isn't shared, it doesn't matter. You just get `A` with the same layout as `B`, except it's shared, and the prototypes are non-shared anyways.
+
+[11:15:43.0626] <rbuckton>
+ * If you do `shared struct A extends B {}` and `B` isn't shared, it doesn't matter. You just get `A` with the same layout as `B`, except it's shared, and the prototypes are non-shared anyways.
+
+[11:17:48.0969] <rbuckton>
+In a `struct` constructor, `super()` could be designed such that it doesn't support return override tricks, since the layout is already wired up. 
+
+[11:19:02.0492] <rbuckton>
+And we could just assume methods are non-shared by default, and if shared functions ever becomes a thing you have to opt-in on a method-by-method basis. That seems like a good idea anyways, since you'd want to explicitly indicate that you'd thought about thread safety for a given "shared" method anyways.
+
+[11:19:11.0764] <rbuckton>
+All of that makes the syntax fairly simple.
+
+[11:25:25.0873] <rbuckton>
+Basically: 
+
+```
+// non-shared struct
+struct S1 {
+  foo; // fixed-layout, non-shared field
+
+  constructor() { } // realm-local constructor
+
+  bar() { } // attached to realm-local prototype
+  get baz() { } // attached to realm-local prototype
+  set baz(value) { } // attached to realm-local prototype
+}
+
+// shared struct
+shared struct S2 {
+  foo; // fixed-layout, shared field
+
+  constructor() { } // realm-local constructor
+
+  bar() { } // attached to realm-local prototype
+  get baz() { } // attached to realm-local prototype
+  set baz(value) { } // attached to realm-local prototype
+}
+
+// null prototypes
+struct S3 extends null {
+  foo; // fixed-layout, non-shared field
+
+  constructor() { } // realm-local constructor
+
+  // cannot have methods/getters/setters
+}
+
+shared struct S4 extends null {
+  foo; // fixed-layout, shared field
+
+  constructor() { } // realm-local constructor
+
+  // cannot have methods/getters/setters
+}
+
+// subclassing
+struct S5 extends S1 {} // ok
+struct S6 extends S2 {} // ok? S6 would be non-shared, even though S2 is declared as shared
+shared struct S7 extends S1 {} // ok? S7 would be shared, even though S1 is declared as non-shared
+shared struct S8 extends S2 {} // ok
+```
+
+[11:27:20.0289] <rbuckton>
+Ideally, we could find some way of supporting private names and `accessor`, as I'd also like to support decorators long term. The private names bit is tricky for shared structs, though, as you wouldn't be able to guarantee "hard privacy" if it were supported, but private names are necessary to support `accessor` for decorators.
+
+[11:30:59.0864] <Mathieu Hofman>
+> The private names bit is tricky for shared structs, though, as you wouldn't be able to guarantee "hard privacy" if it were supported
+Couldn't private declarations help?
+
+[11:31:02.0994] <rbuckton>
+IMO, private names should be viable and are just part of the field layout. Wiring up identical `struct` definitions between two workers would verify they have identical layouts. It might not be true "hard privacy" though, if you are able to create a new worker with an altered `struct` definition that can still be correlated, but has a prototype method that exposes the private field. Maybe its not actually an issue, though, if we are planning to have `struct` layout identity based on file path/line number/etc.
+
+[11:31:07.0848] <Mathieu Hofman>
+ * > The private names bit is tricky for shared structs, though, as you wouldn't be able to guarantee "hard privacy" if it were supported
+
+Couldn't private declarations help?
+
+[11:31:22.0024] <rbuckton>
+Not unless private declarations are also shareable, and that seems even less safe.
+
+[11:32:32.0244] <Mathieu Hofman>
+> Wiring up identical struct definitions between two workers would verify they have identical layouts. 
+
+I suspect if you had to explicitly register your classes, you could guarantee true privacy for private fields ;)
+
+[11:32:47.0447] <Mathieu Hofman>
+ * > Wiring up identical struct definitions between two workers would verify they have identical layouts.
+
+I suspect if you had to explicitly register your structs, you could guarantee true privacy for private fields ;)
+
+[11:33:18.0681] <rbuckton>
+If the correlation mechanism is still file+position based, as we've discussed previously, then hard privacy isn't as much of an issue because the declarations have the same code.
+
+[11:33:29.0308] <Mathieu Hofman>
+Correct
+
+[11:33:39.0460] <rbuckton>
+If you had to use an API to explicitly register, you have even less privacy.
+
+[11:33:54.0022] <Mathieu Hofman>
+it's only a problem if you can forge the class definition
+
+[11:34:00.0305] <Mathieu Hofman>
+ * it's only a problem if you can forge the struct definition
+
+[11:34:17.0789] <rbuckton>
+Since I could spin up a Worker that registers its own version of the class that just replaces its methods with `return this.#whatever` and programmatically wire them up.
+
+[11:34:52.0986] <rbuckton>
+To prevent forging the `struct` definition, it would likely need to be path+position based
+
+[11:34:59.0603] <Mathieu Hofman>
+> <@rbuckton:matrix.org> If you had to use an API to explicitly register, you have even less privacy.
+
+Not if you have to use a type object that is itself sharable to hook the local behavior
+
+[11:35:23.0289] <rbuckton>
+If I have access to construct a `Worker` to do the right thing, then I have access to construct a `Worker` to do the wrong thing.
+
+[11:35:55.0348] <rbuckton>
+Unless that `Worker` has no control over how the correlation happens.
+
+[11:36:03.0813] <Mathieu Hofman>
+instead of using examplar
+
+[11:36:58.0996] <rbuckton>
+If I can send a trusted piece of information over to a `Worker` to establish the `struct`, then malfeasant code can do the same thing to forge the `struct` as well.
+
+[11:37:30.0913] <Mathieu Hofman>
+not if that piece of information is obtained when declaring the struct
+
+[11:37:37.0548] <Mathieu Hofman>
+ * not if that piece of information is only obtained when declaring the struct
+
+[11:38:23.0369] <rbuckton>
+How do you do that, and have it declared in two different threads with the same information?
+
+[11:39:39.0894] <Mathieu Hofman>
+that's the tricky bit, especially with syntax
+
+[11:39:41.0480] <rbuckton>
+file+position is essentially obtained when declaring the struct and is potentially unforgeable (especially if all workers pointing to the same file have to use the same cached source)
+
+[11:40:32.0347] <Mathieu Hofman>
+I can do it imperatively. I believe I actually did in some of my earlier attemps
+
+[11:40:50.0637] <Mathieu Hofman>
+ * I can do it imperatively. I believe I actually did in some of my earlier attempts at linking types
+
+[11:41:07.0378] <rbuckton>
+Also, my argument isn't that "if we can't do hard privacy we can't have this feature", it's "if we can't do hard privacy, users would need to accept that if they want to use this feature"
+
+[11:42:08.0251] <Mathieu Hofman>
+I agree that file + position is unforgeable (caveats when you start introducing a module loader). I was talking about an escape hatch to avoid that constraint
+
+[11:43:41.0695] <rbuckton>
+To be fair, the forgeability is only a concern if you hand untrusted code the ability to create a new `Worker` with the necessary correlation information. If the untrusted code doesn't have access to that, they can't forge it.
+
+[11:46:12.0339] <rbuckton>
+file+position is potentially easier for consumers as its less complex to set up, though its harder for bundlers since they need to isolate `struct` definitions to individual files. Defining some kind of private token that you need to attach to a declaration before the module graph is loaded seems extremely hard to do correctly, and if the token is just a string/URI/UUID then malfeasant code just needs to know what that string is to construct a new `Worker` that points to a different file with a struct that masquerades as the original one.
+
+[11:47:23.0059] <rbuckton>
+I'm a fan of being able to tag a `struct` with something like a UUID to correlate, but it does weaken private names in that context.
+
+[11:48:28.0383] <rbuckton>
+Of course, malfeasant code would have to be able to execute a custom tailored script, which could run afoul of CSP in a properly configured environment, so maybe that's not so much of a concern either.
+
+[12:38:33.0333] <rbuckton>
+shu: Could you make me a maintainer on https://github.com/tc39/proposal-structs? I don't seem to have enough access to add PR reviewers 
+
+[13:32:00.0354] <shu>
+rbuckton: done
+
+
+2024-01-19
+[09:14:27.0916] <rbuckton>
+Thanks. With the syntax sketch I boiled down https://gist.github.com/rbuckton/e1e8947da16f936edec1d269f00e2c53 to the things we actually need. In essence, it uses the same syntax as `class`, except with the keywords `struct` or `shared struct` to indicate how both definition evaluation and instantiation will fundamentally differ from regular classes. 
+
+[09:18:26.0084] <rbuckton>
+I'd also like to include support for Decorators in the actual final grammar as the same rationale for decorators on classes applies to structs. The caveat being that we would need to decide how we would solve for private fields to be able to support `accessor` as a construct. If structs are to have behavior, I feel it is important that the MVP for this proposal not ignore Decorators.
+
+[09:19:15.0016] <rbuckton>
+ * Thanks. Starting with the syntax sketch I boiled down https://gist.github.com/rbuckton/e1e8947da16f936edec1d269f00e2c53 to the things we actually need. In essence, it uses the same syntax as `class`, except with the keywords `struct` or `shared struct` to indicate how both definition evaluation and instantiation will fundamentally differ from regular classes.
+
+[09:29:03.0289] <rbuckton>
+As a result, the actual specified grammar for `struct` and `shared struct` will be fairly minimal as it will mostly borrow from _ClassDeclaration_. There are a few things we need a clear position on:
+- Will there be such a thing as a _StructExpression_, akin to _ClassExpression_? For non-shared structs, it could possibly be supported, but I don't think its viable for shared structs if we are to go the path+position route for cross-thread correlation.
+- Are we restricting _StructDeclaration_ to only be allowed at the top level of a _Script_ or _Module_? If they can be used inside of a function body, that also would break path+position for cross-thread correlation.
+- Would a _StructDeclaration_ be allowed inside of an `if` or `switch` at the top level? That would not break path+position correlation.
+- What about `for`, `while`, `do`? They could conceivably be run zero or one times, but evaluating them multiple times would break path+position correlation.
+- Would shared struct fields be allowed to have Symbol-named properties? If so, are there restrictions regarding whether those symbols are built-ins, from `Symbol()`, or from `Symbol.for()`?
+
+[09:33:24.0571] <rbuckton>
+Also, in the doc you shared you indicate non-shared structs might be out of scope? Can you clarify what you mean about non-compositionality? Do you mean if that we only had fixed-layout shared structs, the restriction that prohibits non-shareable values in its fields would be problematic? And if so, is that be problematic for JS, WASM-GC, or both?
+
+[09:40:12.0425] <rbuckton>
+Also, you indicate that Mutex/Condition are "Nice to have features immediately after MVP". Are you indicating this would be a follow-on proposal, or just that these are JS-specific needs that are over and above the shared needs of JS and WASM?
+
+[11:20:23.0735] <shu>
+> <@rbuckton:matrix.org> Also, you indicate that Mutex/Condition are "Nice to have features immediately after MVP". Are you indicating this would be a follow-on proposal, or just that these are JS-specific needs that are over and above the shared needs of JS and WASM?
+
+definitely the latter, but i'm undecided yet about the former
+
+[11:20:38.0945] <shu>
+i feel like it shouldn't be a follow-on proposal, but bundling means slower progress for now, which may in itself be okay
+
+[11:28:53.0564] <shu>
+> <@rbuckton:matrix.org> Also, in the doc you shared you indicate non-shared structs might be out of scope? Can you clarify what you mean about non-compositionality? Do you mean if that we only had fixed-layout shared structs, the restriction that prohibits non-shareable values in its fields would be problematic? And if so, is that be problematic for JS, WASM-GC, or both?
+
+no, not that targeted. i meant something like: if we're looking at the use cases and design constraints alone, there isn't anything too compelling at this time to motivate normal structs. but that feels pretty bad from a PL design perspective and is a sharp corner. it seems like the "fixed layout" part should compose (with additional constraints) with the sharing, and leaving it out seems like an arbitrary non-compositionality
+
+[11:33:22.0380] <littledan>
+The main thing that would motivate non-shared structs is if engines felt like they could encourage developers to adopt it in exchange for lower overhead vs classes. This is a thing that JS developers widely say they want, and the question is whether engines feel like non-shared structs might provide that. Historically, engines have been skeptical of making such a promise around performance--it's not clear whether that's the right thing to be optimizing, or whether this construct will always give it when ranging across all future optimizations, so it's not clear whether a performance tradeoff can be controlled this way. [There might be other "integrity"-related arguments for non-shared structs, but I'm not so interested in those; IMO just use private fields if you want integrity.]
+
+[11:33:37.0914] <rbuckton>
+I see, thanks. The impact regarding syntax is that if we only ever had shared structs, then I would just use `struct` to mean "the shared, fixed-layout thing". There would be no reason to disambiguate with a `shared` keyword.
+
+[11:34:42.0765] <littledan>
+I've pushed for non-shared structs for that PL design argument, and I accept that that's fairly weak.
+
+[11:36:07.0903] <shu>
+> <@littledan:matrix.org> The main thing that would motivate non-shared structs is if engines felt like they could encourage developers to adopt it in exchange for lower overhead vs classes. This is a thing that JS developers widely say they want, and the question is whether engines feel like non-shared structs might provide that. Historically, engines have been skeptical of making such a promise around performance--it's not clear whether that's the right thing to be optimizing, or whether this construct will always give it when ranging across all future optimizations, so it's not clear whether a performance tradeoff can be controlled this way. [There might be other "integrity"-related arguments for non-shared structs, but I'm not so interested in those; IMO just use private fields if you want integrity.]
+
+we have ideas there, but i kinda don't want them to lump those ideas into this proposal at the moment. namely, when i discussed with V8 staff, the sentiment was that explicit classes that don't change layout aren't necessarily more performant than hidden classes from a megamorphism POV, but we may have opportunities in layering additional restrictions on top to aid performance
+
+[11:37:25.0932] <shu>
+one idea that was raised was additional restrictions on methods declared within structs, like making them always throw on instances of different types, and making them unbindable (unrelated ideas)
+
+[11:37:59.0038] <shu>
+though those restriction just as well applies to shared structs
+
+[11:41:11.0893] <rbuckton>
+While I doubt that structs would solve it, my biggest wish for V8 would be some mechanism to avoid megamorphism on the discriminant property an ADT union, for example: `node.kind`. Pretty much every access to `.kind` in the TS compiler is megamorphic, though we often branch on kind and those branches are *usually* monomorphic, at least with respect to the `node` used in those branches.
+
+[11:42:11.0812] <shu>
+i have been thinking about this for like 10 years
+
+[11:42:14.0686] <rbuckton>
+If there's a chance that fixed layout, non-shared structs could solve that, it would be a strong indication for me that they have value beyond just shared structs.
+
+[11:42:17.0133] <shu>
+no idea how to solve it
+
+[11:42:51.0113] <shu>
+the levers i know for monomorphization like that depend on duplicating code and type systems
+
+[11:43:03.0740] <rbuckton>
+My hope is that a proposal like ADT enums would be a possible solution, since all branches of an ADT enum would be known at declaration time.
+
+[11:43:29.0209] <shu>
+but how do you know what's worth monomorphizing and what's not worth it?
+
+[11:43:57.0990] <shu>
+and what do you monomorphize? do you like, peel off a little chunk of code and duplicate that, parameterized around the "arms" of the union? do you do it at the whole function level? what if the function is really big?
+
+[11:44:14.0721] <shu>
+lots of art
+
+[11:45:05.0619] <rbuckton>
+i.e., an ADT enum declaration could encode into its type the internal discriminant used to differentiate between each constituent of the enum and the optimizer could leverage that when encoding the IC.
+
+[11:45:17.0270] <shu>
+oh i see, at the IC level
+
+[11:45:29.0355] <shu>
+shouldn't that already be the case?
+
+[11:45:56.0418] <shu>
+i guess you're saying that the cut-off for when an IC goes polymorphic -> megamorphic is too low for these ADT union cases
+
+[11:46:23.0323] <shu>
+and if we can tell the IC system "actually, the number of cases is bounded, so you should just do the polymorphic thing even in this case that looks like it'll grow new type cases forever"?
+
+[11:46:41.0149] <rbuckton>
+```
+enum Node {
+  Identifier(text),
+  BinaryExpression(left, op, right),
+  PrefixUnaryExpression(op, operand),
+  PostfixUnaryExpression(operand, op),
+  // ...
+}
+
+match (node) {
+  when Node.Identifier: ...;
+  when Node.BinaryExpression: ...;
+}
+```
+
+[11:47:59.0992] <rbuckton>
+So checking the internal discriminant for each constituent would be monomorphic, and thus the types collected within the match leg for that case would also be monomorphic as those ICs only ever see the `Node` constituent for that branch.
+
+[11:49:36.0968] <rbuckton>
+You could imagine a `Node` constituent is internally represented as something like a `TaggedNode { tag, data }`. A match leg would test against the `tag` (monomorphic), but the rest of the properties are in `data`, even though the runtime perceives it as a single object.
+
+[11:53:07.0834] <rbuckton>
+But that's orthogonal to the discussion. I don't have strong feelings one way or the other towards unshared structs. All of my use cases are for shared structs. If fixed layout could address the ADT union issue, it would maybe push me more in favor of non-shared, but otherwise I'm mostly ambivalent.
+
+[11:53:46.0885] <rbuckton>
+The other benefits I'd hoped to gain from non-shared structs have already been ruled out (i.e., value types and operator overloading)
+
+
+2024-01-20
+[19:33:13.0006] <Mathieu Hofman>
+The question of struct expression makes me think that file + position may not be right for behavior attachment unless you can only declare a shared struct as module top level, otherwise you could declare multiple variations of the shared struct closing over state. And even for module top level there are problems with module harmony.
+
+[19:44:40.0904] <Mathieu Hofman>
+Mostly around private field acces which should be per declaration
+
+
+2024-01-21
+[17:06:00.0673] <littledan>
+> <@shuyuguo:matrix.org> though those restriction just as well applies to shared structs
+
+Makes sense but do these things work with non-shared structs?
+
+[17:07:08.0607] <littledan>
+> <@shuyuguo:matrix.org> one idea that was raised was additional restrictions on methods declared within structs, like making them always throw on instances of different types, and making them unbindable (unrelated ideas)
+
+Why is the unbindable restriction an optimization?
+
+[17:10:38.0507] <littledan>
+> <@shuyuguo:matrix.org> we have ideas there, but i kinda don't want them to lump those ideas into this proposal at the moment. namely, when i discussed with V8 staff, the sentiment was that explicit classes that don't change layout aren't necessarily more performant than hidden classes from a megamorphism POV, but we may have opportunities in layering additional restrictions on top to aid performance
+
+The concern is often that some aspect of the restrictions “doesn’t necessarily” reduce hidden megamorphism; this seems true but I wonder how we could evaluate empirically the frequency of how much this helps (and maybe even compare vs, eg, type system features to encourage people to program a particular way)
+
+[17:25:18.0667] <rbuckton>
+Is `this` polymorphism so much more prevalent than argument polymorphism that it would even matter? 
+
+[19:11:03.0808] <littledan>
+> <@rbuckton:matrix.org> Is `this` polymorphism so much more prevalent than argument polymorphism that it would even matter? 
+
+I imagine that that is about being able to eliminate the map check in the first place, rather than polymorphism. Maybe this is what is meant by “binding” as well—calling with a different receiver?
+

@@ -1,0 +1,206 @@
+2024-05-08
+[22:41:29.0925] <snek>
+do threads show up in the matrix logs?
+
+[22:42:05.0018] <snek>
+hmm are they just merged into the parent channel
+
+[00:22:44.0652] <bakkot>
+yeah I have been meaning to update the logbot but haven't gotten around to it
+
+[00:22:52.0702] <bakkot>
+PRs welcome https://github.com/bakkot/matrix-archive-bot
+
+
+2024-05-09
+[19:24:53.0729] <sirisian>
+I noticed that in the spec that ExtendedPatternCharacter has the list of emu-t outside of the emu-gmod by mistake. Which project would I report such a typo to?
+
+[19:44:02.0680] <jmdyck>
+That's not a typo per se, but rather (the result of) what appears to be a bug in the program that converts the spec's source file into nice HTML. (In the source file, the corresponding production doesn't have that problem.) You could raise an issue in https://github.com/tc39/ecmarkup
+
+[19:45:46.0527] <jmdyck>
+Or actually, I wonder if that part of the conversion happens in grammarkdown. @bakkot would know.
+
+
+2024-05-14
+[16:15:19.0298] <sachag>
+hi all! I just wanted to say that the State of HTML 2023 survey results are now available: https://2023.stateofhtml.com/
+
+
+2024-05-15
+[17:36:26.0840] <sachag>
+also just in passing: I'm always open to feedback/suggestions/etc. so if you want to be involved in the design process for the 2024 edition of this survey (or any other one) definitely do let me know!
+
+
+2024-05-30
+[08:35:08.0179] <Timo Tijhof>
+I noticed an interoperability issue between Firefox and Chrome when it comes to Array sort(), in particular, the presence of an undefined/NaN can not only affect the positin of the NaN but the order of all other items which seems problematic?
+
+Minimal example at https://phabricator.wikimedia.org/P63711
+
+[08:35:25.0164] <Timo Tijhof>
+ * I noticed an interoperability issue between Firefox and Chrome when it comes to Array sort(), in particular, the presence of an undefined/NaN can not only affect the position of the NaN but the order of all other items which seems problematic?
+
+Minimal example at https://phabricator.wikimedia.org/P63711
+
+[08:36:04.0929] <Timo Tijhof>
+Firefox: `0, 1, undefined, -10, -9`
+Chrome: `-10, -9, 0, 1, undefined`
+
+[08:49:16.0940] <eemeli>
+Timo Tijhof: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/sort#sorting_with_non-well-formed_comparator
+
+[08:52:22.0023] <Timo Tijhof>
+eemeli: Is there no apetite for tightening the spec around this? I get the argument for purity and stability, but I don't see the benefit in allowing it to remain as unspecified/undefined behaviour. We've already crossed the bridge of stable sorting for identical values based on input. Standardising behaviour around NaN seems like a natural next step.
+
+
+
+[08:52:34.0441] <Timo Tijhof>
+ * eemeli: Is there no apetite for tightening the spec around this? I get the argument for mathematical purity, but I don't see the benefit in allowing it to remain as unspecified/undefined behaviour. We've already crossed the bridge of stable sorting for identical values based on input. Standardising behaviour around NaN seems like a natural next step.
+
+[09:00:14.0340] <bakkot>
+It's not the behavior around NaN, it's the behavior around inconsistent comparators
+
+[09:00:32.0287] <eemeli>
+My guess would be that it would be difficult to define the sorting behaviour more strictly without introducing performance penalties for some implementations.
+
+[09:01:47.0461] <bakkot>
+there might someday be appetite to fully specify behavior even in the presence of inconsistent comparators, but that would require a particular sorting algorithm (or at least more specific than currently), which would prevent implementations with experimenting with alternative sorting algorithms, which is a very nice thing for them to be able to do
+
+[09:13:20.0611] <whosy>
+Is there anything we can do to make it easier to write compliant comparators for the more frequent and trivial cases, such as the example above?
+
+[09:22:13.0637] <bakkot>
+we could provide a `sortBy` method that takes a function from list members to numbers and then sorts according to the result, and if we specified where `NaN` goes in such a list (or that getting `NaN` throws, my preference) that would address this case
+
+[09:22:26.0446] <bakkot>
+I have wanted this for a while but not had time to pursue it
+
+[09:22:34.0402] <bakkot>
+also we could provide a built-in comparator for the common case of sorting a list of numbers, though it wouldn't help in the given example
+
+[09:25:12.0729] <ljharb>
+`(a, b) => (a.index - b.index) || 0` seems like it'd make it consistent?
+
+[13:26:25.0521] <whosy>
+If I might ask a question to such experienced people, as someone working on their first proposal:
+
+How opinionated should a proposal be at stage 0? Should it try to be loose and open for many ideas and suggestions from others, or should it try to be more rigorous and concrete already at this stage?
+
+Or am I thinking too much of the solution when I should really focus more effort on the initial problem at this point?
+
+[13:33:11.0983] <Timo Tijhof>
+> <@ljharb:matrix.org> `(a, b) => (a.index - b.index) || 0` seems like it'd make it consistent?
+
+Hm..  no, result remains different in Chrome/Firefox in the same way with this change applied.
+
+I also thought at first it was the NaN messing it up. It does seem to play a role, but it's not strictly the presence of NaN. From what I can tell, NaN is for all intends and purposes already treated by all implementations as 0. I haven't checked engine sources, but observationally, this appears to be true.
+
+If it was that simple, I would imagine a spec change would be less controversial as well to make it so, but from what I can tell , that has effectively been done already (not sure how recent, if recent).
+
+[13:33:54.0445] <Timo Tijhof>
+> <@ljharb:matrix.org> `(a, b) => (a.index - b.index) || 0` seems like it'd make it consistent?
+
+ * Hm..  no, result remains different in Chrome/Firefox in the same way with this change applied.
+
+I also thought at first it was the NaN messing it up. It does seem to play a role, but it's not strictly the presence of NaN. From what I can tell, NaN is for all intends and purposes already treated by all implementations as 0. I haven't checked engine sources, but observationally, this appears to be true.
+
+If it was that simple, I would imagine a spec change would be less controversial as well to make it so, but from what I can tell, that has effectively been done already (not sure how recent, if recent).
+
+[13:36:24.0336] <ljharb>
+> <@whosy:matrix.org> If I might ask a question to such experienced people, as someone working on their first proposal:
+> 
+> How opinionated should a proposal be at stage 0? Should it try to be loose and open for many ideas and suggestions from others, or should it try to be more rigorous and concrete already at this stage?
+> 
+> Or am I thinking too much of the solution when I should really focus more effort on the initial problem at this point?
+
+at stage 0 and 1, a proposal is really just a _problem_ (altho it's nice to have a suggested solution). it's tough to be too opinionated about a problem, besides "i actively don't want this part of the problem solved"
+
+[13:36:48.0531] <ljharb>
+ * at stage 0 and 1, a proposal is really just a _problem_ (altho it's nice to have a suggested solution). it's tough to be too opinionated about a problem, besides "i actively don't want this part of the problem solved". so if you're that deep into a solution i'd say it might be too early to do so :-)
+
+[13:38:34.0060] <Chris de Almeida>
+> <@whosy:matrix.org> If I might ask a question to such experienced people, as someone working on their first proposal:
+> 
+> How opinionated should a proposal be at stage 0? Should it try to be loose and open for many ideas and suggestions from others, or should it try to be more rigorous and concrete already at this stage?
+> 
+> Or am I thinking too much of the solution when I should really focus more effort on the initial problem at this point?
+
+it really depends.  sometimes, especially on very small proposals, it can make sense that a solution has already taken shape.  but stage 0/1 is just about defining the problem and seeing if the committee agrees that exploring solutions to the problem is worthwhile
+
+[13:41:55.0617] <whosy>
+I appreciate the feedback. The proposal is not exactly complex or controversial and exists in pretty much every other language (methods for generating random numbers, outside just a [0-1) float).
+I think I am just battling my perfectionist side here, and am trying to make things far too complete for where I am in the proposal.
+
+[13:44:17.0363] <bakkot>
+> <@timotijhof:matrix.org> Hm..  no, result remains different in Chrome/Firefox in the same way with this change applied.
+> 
+> I also thought at first it was the NaN messing it up. It does seem to play a role, but it's not strictly the presence of NaN. From what I can tell, NaN is for all intends and purposes already treated by all implementations as 0. I haven't checked engine sources, but observationally, this appears to be true.
+> 
+> If it was that simple, I would imagine a spec change would be less controversial as well to make it so, but from what I can tell, that has effectively been done already (not sure how recent, if recent).
+
+yeah, it's not the NaN per se (which does indeed get treated as 0). it's the fact that you have three elements `a`, `b`, `c` such that`a = b` and `b = c` but not `a = c` when `b` is the value without an index (because in that case the comparison function will return `NaN` when comparing `b` to either `a` or `c`). this makes it not a consistent comparator and the spec doesn't mandate any particular order here.
+
+[13:44:58.0643] <bakkot>
+it is hard to specify exactly what the order should be when a comparator is not consistent without mandating engines either do a bunch of additional work or implement precisely the same algorithm, neither of which is desirable
+
+[13:45:43.0395] <bakkot>
+> <@whosy:matrix.org> I appreciate the feedback. The proposal is not exactly complex or controversial and exists in pretty much every other language (methods for generating random numbers, outside just a [0-1) float).
+> I think I am just battling my perfectionist side here, and am trying to make things far too complete for where I am in the proposal.
+
+assuming you mean https://github.com/tc39-transfer/proposal-random-functions, the only additional work that it makes sense to do at this stage is documenting use cases and problems caused by the absence of these functions
+
+[13:47:10.0741] <bakkot>
+don't worry about exactly what functions to include or try to specify them or anything like that at this stage, just document "this is a common/reasonable thing to want which is at least moderately annoying to do", i.e., establish that it is a problem worth solving
+
+[13:47:15.0173] <Michael Ficarra>
+> <@whosy:matrix.org> If I might ask a question to such experienced people, as someone working on their first proposal:
+> 
+> How opinionated should a proposal be at stage 0? Should it try to be loose and open for many ideas and suggestions from others, or should it try to be more rigorous and concrete already at this stage?
+> 
+> Or am I thinking too much of the solution when I should really focus more effort on the initial problem at this point?
+
+Err on the more "open" side. It's common, especially for newer proposal authors, to unnecessarily include a fully worked example solution. We sometimes call this "overcooked". It causes the committee to fixate too much on the merits of a particular solution and detracts from our actual goal of approving the problem and suggesting shapes of solutions to be researched. Only include a worked example if it's necessary to explain the problem.
+
+
+2024-05-31
+[21:53:42.0479] <sirisian>
+When writing a lexer for ECMAScript how do you decide when to change between the goal symbols? https://tc39.es/ecma262/#sec-ecmascript-language-lexical-grammar I naively converted them to regex to toy with an idea. https://gist.github.com/sirisian/5c3402ca51a2440f0bc4e5d297269195 (Ignore any mistakes, I plan to redo it). Like I get that you'd start with InputElementHashbangOrRegExp https://regex101.com/r/YYgu1i/1 So the lexer would take tokens until it ran into a TemplateMiddle or TemplateTail. So in that example it takes the "a" then can't consume the "}". Where does one get the context, whether a RegularExpressionLiteral or TemplateMiddle/Tail is permitted? Is this based on the previous tokens? Do you have to like parse as you run the lexer so you'd potentially parse TemplateSpans -> TemplateMiddleList -> TemplateMiddle and this that would mean that's permitted. (And then you'd do the same to see if RegularExpressionLiteral is permitted)?
+
+[22:49:20.0446] <bakkot>
+yes, you have to parse as you run the lexer
+
+[22:49:31.0006] <bakkot>
+or at least, this is how everyone does it afaik
+
+[22:49:54.0918] <bakkot>
+that is what this sentence is getting at:
+
+> There are several situations where the identification of lexical input elements is sensitive to the syntactic grammar context that is consuming the input elements.
+
+[22:50:30.0798] <bakkot>
+i.e., you can't know how to tokenize (the lexical grammar) without knowing the context from the higher-level parse (the syntactic grammar)
+
+[23:30:56.0295] <Richard Gibson>
+my understanding is basically that you start with lexical goal symbol **|InputElementHashbangOrRegExp|** and syntactic goal symbol being either |Script| or |Module|. Production of an input element from application of that |InputElementHashbangOrRegExp| goal will then limit possibilities in the syntactic grammar to the point where the new lexical goal symbol is determined. For example: if the first input element is a |TemplateHead| ``` `prefix${ ``` then the syntactic grammar has committed to an |ExpressionStatement| and its contained |Expression| starts with a |SubstitutionTemplate| whose aforementioned |TemplateHead| must be followed by an |Expression|. |Expression| can expand to |RegularExpressionLiteral| but not to |TemplateMiddle|, so the new lexical goal symbol is **|InputElementRegExp|**. If that produces input element |StringLiteral| `"foo"`, then the syntactic grammar has committed the inner |Expression| to a |MemberExpression| starting with that literal as the |PrimaryExpression|, which can be followed by something that extends the |MemberExpression| (i.e., `[` or `.` for member access or ``` ` ``` for a tagged template or a noncommittal |WhiteSpace| or |LineTerminator| or |Comment|), or otherwise by something that extends a containing production (e.g., `(` for a call or `?.` for an optional chain or `/` for a division or `}` to continue the outer template). So that means the next input element can be a |TemplateMiddle| or |TemplateTail| but not a |RegularExpressionLiteral|, and the new lexical goal symbol is **|InputElementTemplateTail|**. Continue ad nauseam.
+
+[23:48:59.0326] <Richard Gibson>
+> <@bakkot:matrix.org> yeah, it's not the NaN per se (which does indeed get treated as 0). it's the fact that you have three elements `a`, `b`, `c` such that`a = b` and `b = c` but not `a = c` when `b` is the value without an index (because in that case the comparison function will return `NaN` when comparing `b` to either `a` or `c`). this makes it not a consistent comparator and the spec doesn't mandate any particular order here.
+
+Timo Tijhof: you can get consistent sorting like `newPages.sort( ( a, b ) => (isNaN(a.index) ? Infinity : a.index) - (isNaN(b.index) ? Infinity : b.index) )`, but I don't think there's any way to avoid some kind of surrogate value
+
+[13:49:13.0566] <Richard Gibson>
+> <@bakkot:matrix.org> yeah, it's not the NaN per se (which does indeed get treated as 0). it's the fact that you have three elements `a`, `b`, `c` such that`a = b` and `b = c` but not `a = c` when `b` is the value without an index (because in that case the comparison function will return `NaN` when comparing `b` to either `a` or `c`). this makes it not a consistent comparator and the spec doesn't mandate any particular order here.
+
+ * Timo Tijhof: you can get consistent sorting like `newPages.sort( ( a, b ) => (isNaN(a.index) ? Infinity : a.index) - (isNaN(b.index) ? Infinity : b.index) ) || 0`, but I don't think there's any way to avoid some kind of surrogate value
+
+[13:49:34.0800] <Richard Gibson>
+ * Timo Tijhof: you can get consistent sorting like `newPages.sort( ( a, b ) => (isNaN(a.index) ? Infinity : a.index) - (isNaN(b.index) ? Infinity : b.index) || 0 )`, but I don't think there's any way to avoid some kind of surrogate value
+
+[13:51:31.0844] <Richard Gibson>
+ * Timo Tijhof: you can get consistent sorting like `newPages.sort( ( a, b ) => (isNaN(a.index) ? Infinity : a.index) - (isNaN(b.index) ? Infinity : b.index) )`, but I don't think there's any way to avoid some kind of surrogate value
+
+[16:55:59.0968] <jmdyck>
+Richard Gibson re your lexing+parsing description: yup, that sounds about right.
+

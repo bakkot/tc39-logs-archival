@@ -1,0 +1,206 @@
+2024-12-02
+[18:21:22.0456] <Taral>
+I see references to `enterWith` but basically nothing in github about it?
+
+[18:22:12.0158] <Andreu Botella>
+> <@taral:matrix.org> I see references to `enterWith` but basically nothing in github about it?
+
+Hi. This refers to the `enterWith` method in Node.js's `AsyncLocalStorage`
+
+[18:22:24.0133] <Taral>
+Ahh
+
+[18:22:27.0802] <Andreu Botella>
+https://nodejs.org/docs/latest/api/async_context.html#asynclocalstorageenterwithstore
+
+[18:23:09.0823] <Taral>
+Yeah, that's weird. It's basically like putting `var.run` around the _entire continuation_.
+
+[18:28:34.0036] <Taral>
+So "AsyncContext v2" is also a Node reference?
+
+[18:29:53.0001] <Andreu Botella>
+> <@taral:matrix.org> So "AsyncContext v2" is also a Node reference?
+
+I don't know what it's a reference to, where did you see that?
+
+[18:33:30.0417] <Taral>
+> <@stephenhicks:matrix.org> I prototyped a quick proof-of-concept that it's possible to leverage most of an existing implementation and add a disposable `enterWith` by just replacing `AsyncContext.Variable` with a new implementation that indirects through a single "real" variable: https://gist.github.com/shicks/0cd7e9b06535793c137934cc52ed12ce
+
+This gist references v2.
+
+[18:34:29.0584] <Andreu Botella>
+oh, right, this refers to https://github.com/tc39/proposal-async-context/pull/101, which are ideas for an extension to AsyncContext
+
+[18:34:29.0733] <Taral>
+ * ~~Maybe I imagined it? Not finding it any more.~~
+
+[18:34:55.0669] <Taral>
+ah thx
+
+[18:35:41.0188] <Taral>
+Starts to look a bit like Jetpack Compose's snapshots.
+
+[18:36:48.0757] <Andreu Botella>
+I'm not familiar with those
+
+[18:41:07.0925] <Andreu Botella>
+I'm wondering if we should also have a `resetFallbackContext` API, to isolate inner scopes
+
+[18:41:15.0244] <Andreu Botella>
+the SES folks would probably appreciate that
+
+[18:41:34.0180] <Andreu Botella>
+ * (completely disconnected topic:) I'm wondering if we should also have a `resetFallbackContext` API, to isolate inner scopes
+
+[18:41:55.0110] <Taral>
+https://blog.zachklipp.com/introduction-to-the-compose-snapshot-system/ is probably the best explanation
+
+[18:43:25.0907] <Taral>
+It's kind of built on Kotlin's `CoroutineContext`, which is basically the same as `AsyncContext`.
+
+[18:44:14.0352] <Taral>
+(albeit with a somewhat different interface)
+
+[09:20:35.0382] <Jan Olaf Martin>
+After a chat about async context with Steve Hicks, I was wondering if other (non-fetch/non-xhr) async network operations should also preserve context? E.g. image and/or script loading triggers and their `onload` handlers.
+
+[10:22:49.0798] <Steve Hicks>
+> <@abotella:igalia.com> (completely disconnected topic:) I'm wondering if we should also have a `resetFallbackContext` API, to isolate inner scopes
+
+What would `resetFallbackContext` do?  Would it escape out of whatever fallback context it was previously in?  That seems problematic, if fallback contexts were supposed to be able to isolate entire (transitive) chunks of code?  Though, I'm very skeptical of the security implications of AsyncContext at all - specifically, I don't think we can confidently guarantee that isolated inner code can never access outer/root/empty contexts - it seems too easy to smuggle a foreign context.  (For instance, we've talked about how `addEventListener` interacts with `runWithFallbackContext`, but would `onclick` setters also respect the same fallback?  If they're not _all_ currently implemented as setter properties, then this might be extremely infeasible to change)
+
+[10:23:33.0994] <Andreu Botella>
+I was thinking that it would reset to the empty context
+
+[10:24:33.0885] <Steve Hicks>
+> <@taral:matrix.org> Yeah, that's weird. It's basically like putting `var.run` around the _entire continuation_.
+
+As we talk about more and more callback-accepting APIs (`runWithFallbackContext`, `resetFallbackContext`, etc, on top of `Variable#run` and `Snapshot#run`), will all of these be rendered obsolete if we end up exposing a `set`/`enterWith` API?
+
+[10:25:29.0916] <Steve Hicks>
+> <@abotella:igalia.com> I was thinking that it would reset to the empty context
+
+This maybe suggests it's worth making it explicit that empty context should never be considered privileged?
+
+[10:28:33.0199] <nicolo-ribaudo>
+> <@stephenhicks:matrix.org> As we talk about more and more callback-accepting APIs (`runWithFallbackContext`, `resetFallbackContext`, etc, on top of `Variable#run` and `Snapshot#run`), will all of these be rendered obsolete if we end up exposing a `set`/`enterWith` API?
+
+In Node.js I still see significant usage of `.run`, even if there is `.enterWith` (!!! this is not backed up by data, just by me looking at `.enterWith` usage patterns a month ago)
+
+[10:29:26.0283] <Steve Hicks>
+If you have access to the empty context, you could write (in userland)
+
+```
+function resetFallbackContext(fn) {
+  const snapshot = new AsyncContext.Snapshot();
+  return EMPTY_SNAPSHOT.run(() => runWithFallbackContext(() => snapshot.run(fn)));
+}
+```
+
+[10:29:54.0076] <Steve Hicks>
+(though the three extra frames on the stack are unfortunate)
+
+[10:30:41.0185] <Steve Hicks>
+ * (though the three (or six or seven???) extra frames on the stack are unfortunate)
+
+[10:30:47.0109] <nicolo-ribaudo>
+I'm not sure I understand the use case for `resetFallbackContext
+
+[10:31:23.0733] <nicolo-ribaudo>
+ * I'm not sure I understand the use case for `resetFallbackContext`
+
+[10:31:54.0057] <Andreu Botella>
+the use case I see is establishing a security boundary
+
+[10:33:30.0625] <Steve Hicks>
+ * (though the 3-8 extra frames on the stack are unfortunate)
+
+[10:35:38.0532] <nicolo-ribaudo>
+But it does the opposite: it lets you _escape_ the boundary that your caller set up for you
+
+[10:35:57.0579] <nicolo-ribaudo>
+(note: this is not about security, since there are many ways to get to the root context)
+
+
+2024-12-03
+[04:49:19.0617] <Stephen Belanger>
+> <@nicolo-ribaudo:matrix.org> In Node.js I still see significant usage of `.run`, even if there is `.enterWith` (!!! this is not backed up by data, just by me looking at `.enterWith` usage patterns a month ago)
+
+Because the original design of enterWith was quite broken. It’s better at this point, but still not recommended unless you know what you’re doing because it doesn’t work quite the way people seem to expect in some cases.
+
+[07:27:21.0446] <James M Snell>
+> <@stephenbelanger:matrix.org> Because the original design of enterWith was quite broken. It’s better at this point, but still not recommended unless you know what you’re doing because it doesn’t work quite the way people seem to expect in some cases.
+
+In nearly every case where I've seen `enterWith(...)` used it really wasn't necessary. A `.run(...)` would have worked just as well. It's one of those things that folks will use because it's available not really because it is the best tool for the job
+
+[14:45:45.0089] <Stephen Belanger>
+It’s necessary for APMs, unless they have a sufficient diagnostics_channel with runStores to provide a scope. At the time of its creation we needed it to be able to put http requests into a tracing scope without a closure that we could not provide without patching. It mainly existed to avoid costly closures which were a major performance cost to APMs which gave them non-viable overhead for a lot of customers. As async/await became more of a thing though their value resurged—async/await syntax really needs set semantics for context storage to play nice with it.
+
+
+2024-12-09
+[08:49:16.0497] <Andreu Botella>
+The next meeting is supposed to be next week, not tomorrow, right?
+
+[10:05:29.0563] <nicolo-ribaudo>
+I think we decided to postpone any schedule changes until 2025, but I might be misremembering 
+
+[10:05:40.0431] <nicolo-ribaudo>
+If it's tomorrow, I'll join 30 mins late
+
+[11:25:49.0702] <Chengzhong Wu>
+yes, the next meeting is on Dec 17, next Tuesday. (thank you Chris helping with the updates!) And the Dec 31 one is cancelled.
+
+[11:26:50.0470] <Chengzhong Wu>
+* yes, the next meeting is on Dec 17, next Tuesday. (thank you Chris helping with the updates!)
+
+[11:28:07.0759] <Steve Hicks>
+So then Jan 7 would be a great time to switch
+
+[11:28:50.0741] <Chengzhong Wu>
+The first one after the new year would be on Jan 14
+
+[11:32:05.0200] <Steve Hicks>
+Unless we switch to the 7th
+
+[11:37:35.0569] <Chengzhong Wu>
+i thought we are switching on/off weeks all afterwards as last discussed?
+
+[14:53:30.0920] <Steve Hicks>
+Current schedule is Dec 3 (cancelled for TC39), Dec 17, Dec 31 (cancelled for NYE), Jan 14. The switched schedule would be Dec 10, Dec 24 (would be cancelled for holiday), Jan 7, Jan 21. If we switch for the new year, the we'd meet Dec 17, Jan 7, Jan 21, etc.
+
+[14:54:40.0519] <Andreu Botella>
+No, the last meeting was Nov 26, so in the unswitched scheduled, the next meeting would be tomorrow
+
+[14:54:50.0370] <Andreu Botella>
+ * No, the last meeting was Nov 26, so in the unswitched schedule, the next meeting would be tomorrow
+
+[14:55:52.0454] <Steve Hicks>
+Oh, I must have gotten mixed up.
+
+[15:04:35.0866] <Steve Hicks>
+Honestly I'm fine with either for the next meeting, I'll show up whenever my calendar tells me to.
+
+[15:10:40.0935] <Chengzhong Wu>
+The current calendar has been updated
+
+
+2024-12-21
+[10:07:38.0752] <Andreu Botella>
+https://gist.github.com/andreubotella/e061a42b17e4eefcd971aec5c396a9b4
+
+[10:17:14.0038] <Andreu Botella>
+if anyone wants to understand how that polyfill works, `scheduler.taskId` is a property enabled by that Chrome feature flag that is used for testing task attribution
+
+[10:19:20.0054] <Andreu Botella>
+basically, any time that (according to task attribution) a context should be propagated, the `scheduler.taskId` from the time the task gets scheduled gets copied and set on the scheduled task itself
+
+[10:19:39.0827] <Andreu Botella>
+even if the task id gets set by JS code
+
+[10:20:01.0421] <Andreu Botella>
+and new tasks without a dispatch context get new ID's (starting from 1; 0 being the initial context)
+
+[10:20:36.0872] <Andreu Botella>
+so AsyncContext-created contexts get ID's starting at 1000000 to try and avoid clashes
+

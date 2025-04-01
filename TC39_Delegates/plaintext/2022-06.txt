@@ -1,0 +1,3124 @@
+2022-06-05
+[10:23:15.0358] <Rob Palmer>
+As a reminder, tomorrow's plenary meeting is on CDT time, meaning UTC-5.  All meeting details are on the Reflector.
+
+https://github.com/tc39/Reflector/issues/430
+
+
+2022-06-06
+[06:50:36.0470] <Rob Palmer>
+Another reminder:  Plenary begins in 70mins!
+
+[07:50:27.0098] <ryzokuken>
+10 minutes!
+
+[07:59:06.0430] <Rob Palmer>
+1 minute until plenary!
+
+[08:02:05.0490] <Rob Palmer>
+We have 20 people attending so far
+
+[08:03:07.0092] <yulia | PTO>
+hey folks -- i am double booked this morning for the first hour
+
+[08:03:22.0056] <yulia | PTO>
+if there are any questions for mozilla, Dan Minor will be present from mozilla -- and I will join after
+
+[08:03:28.0477] <yulia | PTO>
+ * if there are any questions for mozilla, Dan Minor will be present from mozilla -- and I will join after
+
+[08:04:08.0646] <littledan>
+I'm going to be absent today and joining tomorrow. The schedule looks fine for me, but I'd like to be present during the second time discussing ShadowRealms. Sorry for this information coming late.
+
+[08:04:21.0731] <littledan>
+I'm excited to be back!
+
+[08:58:01.0127] <mpcsh>
+do we have a draft schedule hackmd?
+
+[08:59:19.0093] <Rob Palmer>
+it's linked in the Reflector post
+
+[08:59:24.0424] <snek>
+should i see something right now
+
+[08:59:24.0634] <Rob Palmer>
+(don't post here)
+
+[09:09:35.0333] <mpcsh>
+aha! had to refresh. thank you
+
+[09:20:47.0532] <bakkot>
+shu: can you capture the behavior which got consensus in the notes? not just "the pr" but a short summary, in case we find bugs in the PR or whatever
+
+[09:22:33.0268] <shu>
+yes, after this item
+
+[09:23:55.0545] <Michael Ficarra>
+I always love Justin's presentations, they are very clear
+
+[09:32:56.0630] <bakkot>
+snek: one of the possible solutions is to do the same thing as the `await` fast-path, which actually never gets `.then` at all
+
+[09:33:22.0287] <bakkot>
+(it just checks IsPromise and `.constructor`, and then assumes `.then` is the built-in `Promise.p.then`)
+
+[09:34:10.0320] <snek>
+did you mean to ping me
+
+[09:35:01.0711] <Jack Works>
+> <@bakkot:matrix.org> (it just checks IsPromise and `.constructor`, and then assumes `.then` is the built-in `Promise.p.then`)
+
+can we really do that? I think there definitely someone overwriting `then` on the Promise instance...
+
+[09:35:36.0205] <bakkot>
+snek: this was re "my prediction is this will end up with us moving the Get("then") into the tick"
+
+[09:35:40.0208] <snek>
+oh
+
+[09:35:47.0303] <bakkot>
+Jack Works: that's how `await` works, yeah
+
+[09:35:47.0730] <snek>
+that's cuz of the security thing
+
+[09:38:10.0576] <Jack Works>
+This a bit surprise me. So does that mean Promise from another Realm will have 1 more tick to resolve?
+
+[09:38:24.0312] <bakkot>
+per spec, yeah
+
+[09:47:59.0198] <ljharb>
+yulia: https://blog.izs.me/2013/08/designing-apis-for-asynchrony/
+
+[09:56:01.0276] <yulia>
+my topic is also around this question that shu is asking
+
+[09:56:58.0939] <ljharb>
+to be clear: i intensely support making this change for builtins; justin's case for that was quite compelling and convincing
+
+[09:57:45.0071] <shu>
+understood, the subtext is i'm asking a "who's doing the work" question
+
+[09:58:19.0560] <yulia>
+> <@shuyuguo:matrix.org> understood, the subtext is i'm asking a "who's doing the work" question
+
+which work specifically?
+
+[09:58:22.0977] <shu>
+i'm uncomfortable with an outcome that's like "convince me no userland stuff breaks" == "browsers should ship and see before stage 3 because we have no good procedure to figure out if something breaks"
+
+[09:58:38.0119] <shu>
+like i don't actually know how to be convinced, myself, that no userland stuff breaks
+
+[09:58:41.0271] <shu>
+without shipping and seeing
+
+[09:58:48.0785] <yulia>
+my feeling is similar
+
+[09:59:11.0655] <yulia>
+but we also have a preference for alternative 1, which would iiuc, side step the concerns around species
+
+[09:59:29.0381] <yulia>
+this would be appropriate as a normative pr imo, but requires a way to test this
+
+[09:59:47.0405] <shu>
+yeah i have no real preference for fast pathing natives or not
+
+[10:00:37.0699] <ljharb>
+the context of that comment was as a needs-consensus PR; doing it as a proposal means that "stage 3" is the time when we'd discover that
+
+[10:01:26.0162] <shu>
+i see, so explicitly you're supportive of stage 3 to find out if userland is broken, not blocking stage 3 before being convinced if userland is not broken
+
+[10:01:50.0380] <ljharb>
+correct
+
+[10:02:14.0930] <ljharb>
+but i would hope that the proposal can investigate both paths, so that if breakage is discovered, the "special-case builtins" path can be quickly shifted to
+
+[10:02:26.0213] <ljharb>
+ * but i would hope that the proposal can investigate both paths, so that if breakage is discovered, the "special-case builtins" path can be quickly shifted to
+
+[10:03:16.0085] <shu>
+thanks, sgtm
+
+[10:03:46.0428] <bakkot>
+I am imagining the thing mark wants is `IsPromise(p) && GetOwnProperty(p, 'then') == undefined && GetPrototypeOf(p) == Promise.prototype`, basically, which seems like an interesting alternative to the current `constructor` fast-path in `await`
+
+[10:04:03.0530] <bakkot>
+none of those checks are observable, which is nice
+
+[10:04:47.0740] <bakkot>
+(because the IsPromise check screens out proxies, specifically)
+
+[10:06:44.0892] <yulia>
+"Conditional Advancement" was the word
+
+[10:06:52.0214] <ljharb>
+Justin Ridgewell: please lmk when the repo's made and i'll update the proposals repo
+
+[10:07:35.0955] <ljharb>
+btw starting after lunch, i'm going to be sitting in one of the OpenJS rooms at the JW Marriott in Austin for plenary. whoever's in town is more than welcome to join; DM me for details.
+
+[10:57:46.0403] <Rob Palmer>
+Plenary resumes in ***2*** mins
+
+[11:11:20.0432] <littledan>
++1 with a similar level of review/confidence as bakkot expressed
+
+[11:11:28.0592] <littledan>
+this change seems generally good but I didn't review all the details
+
+[11:11:54.0618] <waldemar>
+rbuckton: I have some comments on the RegExp Atomic Operators but won't be able to participate on Thursday. I reviewed all the proposals after the advancement deadline, and at that time I did not see the semantics. I see you added the semantics later but I was camping off-grid in the desert for the last week so I did not get a chance to review those. (Fun fact our group learned the hard way: covid can spread outdoors!)
+
+[11:13:03.0092] <waldemar>
+rbuckton: I'm ok with advancing to stage 1 but would prefer not doing the double-advance to stage 2 until I get a chance to review it in detail.
+
+[11:13:58.0307] <shu>
+seems like a scheduling conflict, Rob Palmer ^ possible to reschedule that item before Thurs?
+
+[11:14:20.0509] <rbuckton>
+> <@waldemarh:matrix.org> rbuckton: I'm ok with advancing to stage 1 but would prefer not doing the double-advance to stage 2 until I get a chance to review it in detail.
+
+That's fine. I may be able to bring it back in July assuming I'm able to attend (I'll be in the middle of a cross-country move so may not be present at the next meeting).
+
+[11:17:06.0203] <rbuckton>
+Also, I wrote up the spec text while reviewing the proposal internally with some folks who worked on the implementation in .NET. Fully understand on holding any possible double-advancement given the spec text was added after the deadline.
+
+[11:17:19.0726] <rbuckton>
+ * Also, I wrote up the spec text while reviewing the proposal internally with some folks who worked on the implementation in .NET. Fully understand on holding any possible double-advancement given the spec text was added after the deadline.
+
+[11:17:57.0113] <ryzokuken>
+> <@waldemarh:matrix.org> rbuckton: I have some comments on the RegExp Atomic Operators but won't be able to participate on Thursday. I reviewed all the proposals after the advancement deadline, and at that time I did not see the semantics. I see you added the semantics later but I was camping off-grid in the desert for the last week so I did not get a chance to review those. (Fun fact our group learned the hard way: covid can spread outdoors!)
+
+would it help if we moved it to another day?
+
+[11:18:18.0324] <waldemar>
+I'm available Mon-Thu this week. I have a conflict on Thursday.
+
+[11:18:37.0906] <waldemar>
+I'm availabler Mon-Wed this week. I have a conflict on Thursday.
+
+[11:20:57.0443] <snek>
+nobody is running sugarjs on tc53 devices right?
+
+[11:21:52.0091] <littledan>
+I think we can say here, let it be noted that there is a standing disagreement between Shu and Mark on this question of whether frozen environments should be considered
+
+[11:21:52.0120] <ljharb>
+not an old version, surely
+
+[11:22:23.0100] <snek>
+what were the bad names that sugarjs uses
+
+[11:24:21.0155] <Mathieu Hofman>
+I did not hear a disagreement. I heard the opposite: both agree frozen built-ins environments do exists and should be considered the same as other out in the wild code.
+
+[11:25:01.0826] <shu>
+no Mathieu Hofman there's disagreement. i agreed that frozen environments are *a* breakage to consider. i can generalize that disagreement more: the frozen environment breakage is a "second order" breakage to me in that it breaks the users of a library that mutates the environment to be different than the specced standard of 262. i don't want to weigh that very strongly
+
+[11:25:24.0217] <shu>
+i certainly do not consider it the same as other out in the wild code
+
+[11:25:29.0523] <shu>
+you're not saying your library breaks
+
+[11:25:32.0304] <shu>
+you're saying users of your library breaks
+
+[11:27:16.0848] <Mathieu Hofman>
+I wasn't asserting there'd be a breakage in user code running in those environments. I was just saying it may be one type of breakage we might witness in the wild
+
+[11:27:47.0839] <littledan>
+I think we should note in the minutes that this disagreement continues to exist (for clarity).
+
+[11:28:09.0675] <shu>
+but IIUC the only way you can witness that breakage is if _another_ library mutates something that's by-default writable to be not writable
+
+[11:28:12.0753] <Mathieu Hofman>
+That it's a risk with a name which may be used as a named prop
+
+[11:29:35.0220] <littledan>
+This discussion seems to show that the disagreement continues to exist, as it has for as long as I've been in TC39
+
+[11:29:44.0242] <shu>
++1 to dan's assessment
+
+[11:30:47.0969] <Mathieu Hofman>
+(still hopeful for a solution to the override mistake which would make these moot)
+
+[11:31:08.0053] <littledan>
+well, Caitlin Potter prototyped it and found web compat issues...
+
+[11:31:18.0729] <littledan>
+it's not clear to me what the solution should be, but I hope we can find one
+
+[11:32:42.0358] <Mathieu Hofman>
+What was prototyped exactly? I have an approach based on an explicit option bag to `freeze` which would set a slot on the frozen object, which would tweak the `OrdinarySet` step based on the presence of that slot.
+
+[11:33:46.0827] <Mathieu Hofman>
+I would love to see if there is prior experiments that would invalidate this idea
+
+[11:34:37.0145] <littledan>
+oh yeah what was prototyped was a more direct change of the Set behavior, we didn't try that tweak
+
+[11:35:00.0811] <Richard Gibson>
+bakkot: regarding "Where do you get your default time zone?", TL;DR is that we're covered.
+
+More details:
+
+The requirements are described in GetNamedTimeZoneEpochNanoseconds (which returns nanoseconds since epoch for a specific time zone name and local time) similar to the current text in LocalTZA: https://arai-a.github.io/ecma262-compare/?pr=2781#sec-getnamedtimezoneepochnanoseconds (emphasis mine)
+> When the input represents a local time occurring more than once because of a negative time zone transition (e.g. when daylight saving time ends or the time zone offset is decreased due to a time zone rule change), the returned List will have more than one element and will be **sorted by ascending numerical value**. When the input represents a local time skipped because of a positive time zone transition (e.g. when daylight saving time begins or the time zone offset is increased due to a time zone rule change), the returned List will be empty. Otherwise, the returned List will have one element.
+
+And specified more precisely in UTC (which interprets its input as a number representing local time and returns milliseconds since epoch): https://arai-a.github.io/ecma262-compare/?pr=2781#sec-utc-t (emphasis mine)
+> If possibleInstants is not empty, then… Let disambiguatedInstant be possibleInstants[0]. _[i.e., the chronologically first matching local time]_
+> Else [_a local time skipped at a positive time zone transition_], … Let possibleInstants be GetNamedTimeZoneEpochNanoseconds [_corresponding with_] tBefore is the largest integral Number < t for which possibleInstants is not empty (i.e., tBefore represents the last local time before the transition) … Let disambiguatedInstant be the last element of possibleInstants
+> …
+> t is **interpreted using the time zone offset before the transition**
+
+[11:35:32.0844] <Richard Gibson>
+ * bakkot: regarding "Where do you get your default time zone?", TL;DR is that we're covered.
+
+More details:
+
+The requirements are described in GetNamedTimeZoneEpochNanoseconds (which returns a List of nanoseconds since epoch for a specific time zone name and local time) similar to the current text in LocalTZA: https://arai-a.github.io/ecma262-compare/?pr=2781#sec-getnamedtimezoneepochnanoseconds (emphasis mine)
+
+> When the input represents a local time occurring more than once because of a negative time zone transition (e.g. when daylight saving time ends or the time zone offset is decreased due to a time zone rule change), the returned List will have more than one element and will be **sorted by ascending numerical value**. When the input represents a local time skipped because of a positive time zone transition (e.g. when daylight saving time begins or the time zone offset is increased due to a time zone rule change), the returned List will be empty. Otherwise, the returned List will have one element.
+
+And specified more precisely in UTC (which interprets its input as a number representing local time and returns milliseconds since epoch): https://arai-a.github.io/ecma262-compare/?pr=2781#sec-utc-t (emphasis mine)
+
+> If possibleInstants is not empty, then… Let disambiguatedInstant be possibleInstants\[0\]. _\[i.e., the chronologically first matching local time\]_
+> Else \[_a local time skipped at a positive time zone transition_\], … Let possibleInstants be GetNamedTimeZoneEpochNanoseconds \[_corresponding with_\] tBefore is the largest integral Number \< t for which possibleInstants is not empty (i.e., tBefore represents the last local time before the transition) … Let disambiguatedInstant be the last element of possibleInstants
+> …
+> t is **interpreted using the time zone offset before the transition**
+
+[11:35:58.0480] <littledan>
+if we do something with freeze, I guess we'd need to figure out the MOP implications. Maybe we could discuss this in an SES call?
+
+[11:36:00.0018] <Richard Gibson>
+ * bakkot: regarding "Where do you get your default time zone?", TL;DR is that we're covered.
+
+More details:
+
+The requirements are described in GetNamedTimeZoneEpochNanoseconds (which returns a List of nanoseconds since epoch for a specific time zone name and local time) similar to the current text in LocalTZA: https://arai-a.github.io/ecma262-compare/?pr=2781#sec-getnamedtimezoneepochnanoseconds (emphasis mine)
+
+> When the input represents a local time occurring more than once because of a negative time zone transition (e.g. when daylight saving time ends or the time zone offset is decreased due to a time zone rule change), the returned List will have more than one element and will be **sorted by ascending numerical value**. When the input represents a local time skipped because of a positive time zone transition (e.g. when daylight saving time begins or the time zone offset is increased due to a time zone rule change), the returned List will be empty. Otherwise, the returned List will have one element.
+
+And specified more precisely in UTC (which interprets its input as a number representing local time and returns a single milliseconds since epoch): https://arai-a.github.io/ecma262-compare/?pr=2781#sec-utc-t (emphasis mine)
+
+> If possibleInstants is not empty, then… Let disambiguatedInstant be possibleInstants\[0\]. _\[i.e., the chronologically first matching local time\]_
+> Else \[_a local time skipped at a positive time zone transition_\], … Let possibleInstants be GetNamedTimeZoneEpochNanoseconds \[_corresponding with_\] tBefore is the largest integral Number \< t for which possibleInstants is not empty (i.e., tBefore represents the last local time before the transition) … Let disambiguatedInstant be the last element of possibleInstants
+> …
+> t is **interpreted using the time zone offset before the transition**
+
+[11:36:23.0098] <littledan>
+or maybe you mean for preventExtensions in general?
+
+[11:36:24.0379] <Mathieu Hofman>
+> <@littledan:matrix.org> if we do something with freeze, I guess we'd need to figure out the MOP implications. Maybe we could discuss this in an SES call?
+
+We did a few weeks ago
+
+[11:36:32.0434] <littledan>
+oh oops! I'll try to catch up on notes
+
+[11:37:43.0724] <snek>
+today would anything break if we got rid of IsHTMLDDA
+
+[11:38:02.0161] <bakkot>
+yes
+
+[11:38:44.0127] <ljharb>
+i don't hear any audio at all
+
+[11:38:47.0435] <ljharb>
+is it just me?
+
+[11:39:12.0434] <yulia>
+yes, refresh
+
+[11:39:13.0363] <yulia>
+?
+
+[11:39:15.0358] <ljharb>
+k
+
+[11:40:19.0612] <bakkot>
+man sugar used all the cool names
+
+[11:40:38.0203] <bakkot>
+though I guess `groupBy` was uniquely bad because it made use of it during startup
+
+[11:40:44.0008] <bakkot>
+or something like that
+
+[11:40:51.0668] <snek>
+`groupedBy`?
+
+[11:41:06.0508] <ljharb>
+`gimmeGroups`
+
+[11:41:08.0807] <bakkot>
+we just decided to go with `group` I think
+
+[11:41:14.0191] <snek>
+so i hear
+
+[11:41:16.0353] <HE Shi-Jun>
+Have a question: is findLast/findLastIndex in ES2022 or ES2023?
+
+[11:41:27.0348] <snek>
+groupedBy would probably make more sense though if we consider the existence of r&t
+
+[11:41:28.0686] <bakkot>
+2023
+
+[11:41:30.0675] <bakkot>
+ * 2023
+
+[11:41:34.0319] <bakkot>
+2022 is already cut
+
+[11:42:11.0282] <HE Shi-Jun>
+Ok. So we need to fix it in tc39/proposals page?
+
+[11:42:28.0291] <ljharb>
+yep, thanks, just fixed
+
+[11:48:10.0884] <rbuckton>
+> <@usharma:igalia.com> would it help if we moved it to another day?
+
+Is RegExp Atomic Operators going to stay in its current timeslot on Thursday or is it going to be moved up to accommodate Waldemar's schedule?
+
+[11:56:32.0596] <ryzokuken>
+rbuckton: working on it now
+
+[12:01:52.0691] <snek>
+my opinion continues to be that we should just remove the boundary from shadowrealms
+
+[12:02:49.0283] <ryzokuken>
+doesn't that just make them equivalent to contexts?
+
+[12:07:32.0263] <littledan>
+I have to leave due to a conflict; here are my queue items for reference:
+
+Copying the .message for non-callable objects seems like a useful and harmless convenience
+Note that the web makes errors opaque by design on the cross-origin throw case
+
+[12:11:53.0670] <littledan>
+(the web's cross-origin throw case is a little different, having more to do with source location than the origin of the realm)
+
+[12:24:28.0870] <ljharb>
+i mean, only a hanfdul of organizations implement ecmascript and it has a pretty big impact
+
+[12:25:20.0464] <ryzokuken>
+waldemar: I moved rbuckton's items around, please check out the schedule now
+
+[12:25:38.0142] <ryzokuken>
+also, could you please PR your schedule constraints?
+
+[12:26:54.0066] <rbuckton>
+ryzokuken: Is there now nothing scheduled tomorrow morning? The pre-lunch agenda is empty.
+
+[12:27:16.0929] <ryzokuken>
+I'll move items around, the schedule is in flux
+
+[12:28:09.0119] <ryzokuken>
+> <@usharma:igalia.com> also, could you please PR your schedule constraints?
+
+it helps immensely to do that ahead of time, btw
+
+[12:35:46.0565] <Michael Ficarra>
+I forgot you could refer to a named capture by its index
+
+[12:36:32.0826] <Michael Ficarra>
+I hope most people wouldn't ever intentionally use that capability
+
+[12:36:53.0909] <snek>
+i doubt that case happens very often
+
+[12:37:06.0398] <littledan>
+Michael Ficarra: yeah this was a sort of explicit design choice. IIRC it seemed like most other languages allowed that, and I didn't see a reason to diverge/skip those ones
+
+[12:37:50.0880] <littledan>
+I guess I could've been more clear in explaining that to the committee
+
+[12:37:53.0957] <shu>
+so wait what's the proposed behavior for the number references?
+
+[12:38:00.0997] <shu>
+they have globally unique numbers but aliased names?
+
+[12:38:03.0391] <Michael Ficarra>
+littledan: maybe it could be useful for compilers? but I'd hope a human would realise it's not the best way to express themselves
+
+[12:38:10.0573] <littledan>
+> <@shuyuguo:matrix.org> they have globally unique numbers but aliased names?
+
+this is what I would expect
+
+[12:38:16.0879] <shu>
+yeah that seems fine to me
+
+[12:38:30.0047] <shu>
+global-to-the-RE
+
+[12:38:40.0453] <shu>
+would be funnier if it was actually globally unique
+
+[12:38:55.0652] <littledan>
+information leak!!!
+
+[12:40:04.0513] <snek>
+context? in my regex?
+
+[12:43:31.0126] <snek>
+conditional stage 2
+
+[12:56:08.0758] <HE Shi-Jun>
+Could the proposed decorator static initializers allow class member decorators change the shape of the class?
+
+[12:58:54.0252] <bakkot>
+> <@shuyuguo:matrix.org> they have globally unique numbers but aliased names?
+
+yup, numbers continue to be counted as before
+
+[12:59:20.0049] <ljharb>
+if it helps, there's an eslint rule that pushes people to only use names and never numbers; it seems likely people won't be using both
+
+[12:59:35.0849] <shu>
+HE Shi-Jun: it shouldn't
+
+[12:59:40.0459] <shu>
+if it does that goes against the static redesign
+
+[13:00:20.0373] <snek>
+> <@ljharb:matrix.org> if it helps, there's an eslint rule that pushes people to only use names and never numbers; it seems likely people won't be using both
+
+i like to mix it up randomly to keep my teammates on their toes
+
+[13:05:28.0007] <rbuckton>
+In general I agree, you usually don't see a mix of both. There are a few cases where this happens more often in other engines, such as when you can use a relative backreference (i.e., `/(?<group>foo(bar|baz)quxx\k'-1'/`) where a name wouldn't be relevant to the resulting captures.
+
+[13:06:02.0739] <rbuckton>
+> <@ljharb:matrix.org> if it helps, there's an eslint rule that pushes people to only use names and never numbers; it seems likely people won't be using both
+
+ * In general I agree, you usually don't see a mix of both. There are a few cases where this happens more often in other engines, such as when you can use a relative backreference (i.e., `/(?<group>foo(bar|baz)quxx\k'-1'/`) where a name wouldn't be relevant to the resulting captures.
+
+[13:06:12.0015] <HE Shi-Jun>
+> <@shuyuguo:matrix.org> HE Shi-Jun: it shouldn't
+
+It seems if instance decorator could add class initializer, it could ... Maybe I misunderstand the proposal?
+
+[13:08:09.0457] <rbuckton>
+The existing `addInitializer` for a class decorator doesn't *prevent* changing the shape after the class is done, but there's far less reason to do so given the most common cases can be handled with something like `accessor`.
+
+[13:08:54.0148] <shu>
+HE Shi-Jun: ah right good point, i guess that goes back to the point i made that currently we have the statically analyzable guarantee that "no class decorators means no class initializers", which would be broken here
+
+[13:09:06.0349] <shu>
+so not really a fan thus far
+
+[13:10:04.0182] <rbuckton>
+Just as instance initializers don't prevent you from attaching a random `this.foo = 1`, and class fields don't prevent you from doing 
+```js
+function fn() {
+  this.foo = 1;
+}
+class C { x = fn.call(this); }
+```
+
+
+
+[13:13:46.0502] <rbuckton>
+If it came down to it, I'd be happy if you could only change the timing of an "extra" initializer from the default if the new timing was only "class" or "static" (i.e., non-static members can add "instance", "class", or "static" extra initializers, but static members could only add "class" or "static"), since the check to run "class" and "static" extra initializers is a one time cost.
+
+[13:14:00.0292] <rbuckton>
+ * If it came down to it, I'd be happy if you could only change the timing of an "extra" initializer from the default if the new timing was only "class" or "static" (i.e., non-static members can add "instance", "class", or "static" extra initializers, but static members could only add "class" or "static"), since the check to run "class" and "static" extra initializers is a one time cost.
+
+[13:15:21.0755] <rbuckton>
+Being able to add a per-instance initializer would be nice (per my topic in plenary), but isn't strictly necessary for the use cases I'm primarily concerned with.
+
+[13:17:43.0170] <rbuckton>
+i.e., we could possibly allow you to decorate a `constructor` declaration, where the decorator can only really add an instance extra initializer:
+```js
+const dec = // something that just adds an instance extra initializer
+
+class C {
+  @dec constructor() { }
+}
+// is maybe better than
+class C {
+  @dec #unused;
+}
+```
+
+[13:20:30.0173] <rbuckton>
+But I still think `@dec class C {}` is better than either case. A class decorator can already do constructor replacement to inject an instance initalizer, but that requires rewiring the replacement function or subclassing, and wouldn't have the same timing.
+
+[14:10:19.0337] <waldemar>
+bakkot: I posted an issue in proposal-duplicate-named-capturing-groups with some minor spec issues. Stage 2 is fine if those are resolved.
+
+
+2022-06-07
+[07:42:51.0959] <ryzokuken>
+18 minutes to showtime!
+
+[07:58:51.0654] <Rob Palmer>
+Starting in 2 mins!
+
+[08:07:12.0667] <Michael Ficarra>
+we call these "line terminators"
+
+[08:18:57.0094] <Robert Pamely>
+Is the audio choppy for others or just me?
+
+[08:19:30.0743] <Ashley Claymore>
++1
+
+[08:20:56.0621] <shu>
+seems delayed
+
+[08:23:22.0547] <snek>
+big fan of json.parse with source text
+
+[08:25:11.0447] <Ashley Claymore>
+Jitsi does have a 'performance settings' panel. Can choose between 'best performance' and 'highest quality'. I'm trying 'best performance' to see if that helps
+
+[08:25:57.0614] <sarahghp>
+Justin Ridgewell: I am also happy to review ye olde dedente
+
+[08:26:00.0997] <snek>
+if only jitsi had ai background noise removal
+
+[08:26:39.0492] <snek>
+if anyone wants to run their mic through such a tool, check this out https://github.com/noisetorch/NoiseTorch
+
+[08:28:22.0835] <Michael Ficarra>
+also RTX Voice from nvidia: https://www.nvidia.com/en-us/geforce/guides/nvidia-rtx-voice-setup-guide/
+
+[08:28:38.0273] <Justin Ridgewell>
+> <@sarahghp:matrix.org> Justin Ridgewell: I am also happy to review ye olde dedente
+
+Add yourself to the notes
+
+[08:29:29.0812] <rbuckton>
+> <@michaelficarra:matrix.org> also RTX Voice from nvidia: https://www.nvidia.com/en-us/geforce/guides/nvidia-rtx-voice-setup-guide/
+
+This is now part of NVidia Broadcast, which is also very good.
+
+[08:33:12.0075] <ljharb>
+is keith on matrix?
+
+[08:34:05.0114] <bakkot>
+there three substring functions, in fact
+
+[08:34:05.0837] <bakkot>
+three
+
+[08:34:30.0008] <ljharb>
+slice, and the two bad ones?
+
+[08:34:38.0293] <snek>
+one for each stage
+
+[08:36:17.0931] <rbuckton>
+`JSON.parse(text, reviver, { context: true })`?
+
+[08:37:23.0518] <rbuckton>
+Would such a change be acceptable in Stage 3 if engines are concerned about perf? This happened to RegExp match indices as well.
+
+[08:37:40.0601] <snek>
+time to go ask all seven people who use the reviver function if perf is a concern to them
+
+[08:37:59.0363] <shu>
+i don't think that helps unless `reviver` paths are fast paths already, which i doubt
+
+[08:38:07.0263] <shu>
+but hey if someone complains then yeah we'll need something like that probably
+
+[08:38:18.0394] <shu>
+keith is 100% right that we do crazy shit in JSON.parse tuning
+
+[08:38:44.0522] <Michael Ficarra>
+not sure if my audio was coming through: I have not been able to review due to parental leave, but will happily review soon
+
+[08:39:00.0687] <Michael Ficarra>
+do not oppose it conditionally advancing
+
+[08:40:20.0057] <ljharb>
+btw does waldemar's review mean that duplicate named capture groups's conditional stage 2 is now actual stage 2?
+
+[08:46:44.0957] <bakkot>
+ljharb: yes
+
+[08:51:57.0640] <bakkot>
+wait, this creates a _visible_ private field whose name is derived from the name of the accessor? i thought decorator's auto-accessors created private fields which you couldn't actually refer to (even in the body of the class)
+
+[08:54:02.0845] <Ashley Claymore>
+I don't think so. At least that wasn't my reading
+
+[08:54:21.0860] <Ashley Claymore>
+the `#set` creates a private setter 
+
+[08:54:48.0399] <Jack Works>
+> <@bakkot:matrix.org> wait, this creates a _visible_ private field whose name is derived from the name of the accessor? i thought decorator's auto-accessors created private fields which you couldn't actually refer to (even in the body of the class)
+
+No. It's not visible, has a private field that you cannot access directly (must use the #set)
+
+[08:54:57.0004] <littledan>
+I think it's like if you do `accessor x { get; #set }` then you have a paired getter `this.x` and setter `this.#x`
+
+[08:54:59.0966] <Jack Works>
+* No. It's not visible, has a private field that you cannot access directly (must use the #set)
+
+[08:55:34.0781] <littledan>
+I think this is a little weird, so I filed https://github.com/tc39/proposal-grouped-and-auto-accessors/issues/10 for a discussion thread. (Sorry for not filing before the meeting!)
+
+[08:55:56.0743] <snek>
+i think i just agree with kevin for now "I'd like to wait for decorators to exist for a while before advancing this"
+
+[08:56:30.0452] <littledan>
+Do we have examples of cases in mind where you want to observe an accessor pair rather than observing an automatically stored value?
+
+[09:00:11.0165] <mpcsh>
+would people be opposed to moving to zoom? IME it's the highest A/V quality and most reliable among the video conference apps. would a member company be willing to always host zooms?
+
+[09:00:35.0590] <snek>
+i hate zoom
+
+[09:00:37.0589] <ryzokuken>
+I would not strongly oppose zoom but would be quite upset
+
+[09:00:54.0621] <ryzokuken>
+snek: as always expressing things more efficiently! 
+
+[09:01:01.0329] <shu>
+i would be opposed to moving to zoom yes
+
+[09:01:07.0853] <shu>
+ * i would be opposed to moving to zoom yes
+
+[09:01:23.0475] <snek>
+i think every platform is gonna have a bad day at some point
+
+[09:01:34.0285] <ljharb>
+zoom is the best one by a large margin, but the native app can't be used on many corporate laptops
+
+[09:01:48.0630] <ryzokuken>
+ljharb: that just depends on which rubrics you care about
+
+[09:01:49.0535] <ljharb>
+ * zoom is the best one by a large margin, but the native app can't be used on many corporate laptops
+
+[09:01:55.0144] <ryzokuken>
+ * ljharb: that just depends on which rubrics you care about
+
+[09:02:02.0389] <ljharb>
+it's got the best UX and reliability, then :-p
+
+[09:02:04.0813] <ljharb>
+but sure
+
+[09:02:11.0058] <bakkot>
+I liked meet personally
+
+[09:02:23.0327] <snek>
+i mean by quality/reliability alone i think discord stage channels are probably the best
+
+[09:02:28.0620] <yulia>
+i am getting rather choppy audio so it wasn't 100% clear to me the question
+
+[09:02:30.0052] <ljharb>
+i consider meet to be the second best in my experience, but the room-level controls are severely lacking (both for attendees and admins)
+
+[09:02:36.0929] <Jack Works>
+> <@mpcsh_:matrix.org> would people be opposed to moving to zoom? IME it's the highest A/V quality and most reliable among the video conference apps. would a member company be willing to always host zooms?
+
+IIRC Googlers cannot use zoom? 
+
+[09:02:48.0197] <ljharb>
+ * i consider meet to be the second best in my experience, but the room-level controls are severely lacking (both for attendees and admins)
+
+[09:03:01.0111] <Rob Palmer>
+Chairs are planning to switch to a new Jitsi server at the break.
+
+[09:03:04.0004] <shu>
+we can, but need to get exceptions
+
+[09:03:13.0229] <shu>
+(for the native client)
+
+[09:03:16.0355] <snek>
+rip 8x8.vc
+
+[09:03:31.0971] <ryzokuken>
+I mean, I think they're just having a bad server day probably
+
+[09:04:21.0480] <ljharb>
+yesterday too, but yeah it happens
+
+[09:04:31.0349] <ljharb>
+ * yesterday too, but yeah it happens
+
+[09:04:47.0255] <mpcsh>
+right my concern is 8x8 has been noticeably less reliable than alternatives, IME
+
+[09:16:51.0292] <littledan>
++1 to opinionated design!
+
+[09:17:08.0327] <Justin Ridgewell>
+I'd love to start using Google Meet again.
+
+[09:17:44.0515] <waldemar>
+bakkot, ljharb: I'm fine with stage 2 for duplicate named capture groups. The remaining discussion issue is the property creation order issue. I'd prefer the order to be fixed for a given regexp, not variable from invocation to invocation. Looks like some of you agree?
+
+[09:18:10.0272] <rbuckton>
+Grouped and Auto-Accessors advanced to Stage 1 in November, 2020: https://github.com/tc39/notes/blob/main/meetings/2020-11/nov-19.md#continuation-grouped-accessors-and-auto-accessors
+
+[09:18:14.0935] <ljharb>
+> <@waldemarh:matrix.org> bakkot, ljharb: I'm fine with stage 2 for duplicate named capture groups. The remaining discussion issue is the property creation order issue. I'd prefer the order to be fixed for a given regexp, not variable from invocation to invocation. Looks like some of you agree?
+
+i agree, it definitely should be
+
+[09:18:37.0396] <littledan>
+> <@waldemarh:matrix.org> bakkot, ljharb: I'm fine with stage 2 for duplicate named capture groups. The remaining discussion issue is the property creation order issue. I'd prefer the order to be fixed for a given regexp, not variable from invocation to invocation. Looks like some of you agree?
+
+I'd agree with this in general, do you have a reference to the discussion on how it's variable? (Sorry, I missed much of yesterday)
+
+[09:18:37.0545] <bakkot>
+already pushed a change doing that: https://github.com/tc39/ecma262/commit/34545fecc5583a35dbaa7b0f0f5eb532dd9faa63
+
+[09:18:42.0884] <littledan>
+yay!
+
+[09:19:07.0625] <waldemar>
+littledan: My feedback is in https://github.com/bakkot/proposal-duplicate-named-capturing-groups/issues/3
+
+[09:20:12.0138] <bakkot>
+littledan: basically as previously written, `Object.keys(/(?<a>.)(?<b>.)|(?<b>.)(?<a>.)/.exec(foo).groups)` would be either \['a', 'b'\] or \['b', 'a'\] depending on which alternative actually took part in the match
+
+[09:20:32.0795] <bakkot>
+now it's unconditionally the order in which the group names first appeared in the regex (here, ['a', 'b'])
+
+[09:20:41.0886] <bakkot>
+ * littledan: basically as previously written, `Object.keys(/(?<a>.)(?<b>.)|(?<b>.)(?<a>.)/.exec(foo).groups)` would be either \['a', 'b'\] or \['b', 'a'\] depending on which alternative actually took part in the match
+
+[09:24:13.0640] <waldemar>
+It was even weirder than that — if a named capture group never matched, it would be ordered as though it matched in the first place it appeared.
+
+[09:24:41.0010] <bakkot>
+sorry, yes
+
+[09:24:45.0211] <waldemar>
+But if it did match, it would be ordered in the place it matched.
+
+[09:25:10.0848] <littledan>
+well, I'm glad it's fixed
+
+[09:30:18.0803] <littledan>
+Is there going to be another topic about ShadowRealms?
+
+[09:30:28.0044] <littledan>
+or was that entirely handled yesterday
+
+[09:30:51.0830] <ryzokuken>
+littledan: that was withdrawn from the agenda
+
+[09:30:59.0768] <ryzokuken>
+it'll return in july
+
+[09:31:00.0443] <littledan>
+ah OK thanks
+
+[09:33:10.0294] <waldemar>
+@bakkot: Could we have a tiny update on duplicate named capture groups in the plenary to reflect the changes and resolutions we made here for the meeting notes?
+
+[09:33:31.0046] <Michael Ficarra>
+I still don't understand why we don't just allow any value to be a WeakMap key
+
+[09:33:53.0310] <Michael Ficarra>
+this is just going to force me to use a wrapper around a Map and a WeakMap and dispatch based on their type
+
+[09:33:58.0822] <Michael Ficarra>
+*every time*
+
+[09:34:43.0972] <littledan>
+Michael Ficarra: People have said in committee previously that WeakMap's current restriction was actually useful in helping them diagnose bugs
+
+[09:35:04.0669] <littledan>
+which I guess was the intention of their design in ES6
+
+[09:35:53.0108] <bakkot>
+waldemar: I'll ask chairs if we can find a few minutes; if not I'll be sure to call it out during the presentation asking for stage 3
+
+[09:36:43.0172] <Rob Palmer>
+yes, we have time to return to duplicae named capture groups
+
+[09:37:17.0411] <bakkot>
+it should only be ~5 minutes
+
+[09:37:18.0644] <Michael Ficarra>
+littledan: that tradeoff doesn't seem worth it; remember that we can't extend built-ins so using a wrapper means I opt out of getting to use new methods without updating my wrapper
+
+[09:37:37.0464] <bakkot>
+that's ok, WeakMaps don't have any methods
+
+[09:37:48.0245] <bakkot>
+and aren't going to get any
+
+[09:37:49.0506] <bakkot>
+probably
+
+[09:38:05.0331] <Michael Ficarra>
+sure, that particular point probably isn't as strong for WeakMaps in particular
+
+[09:38:09.0699] <bakkot>
+(actually I kind of want a WeakMap.clone)
+
+[09:38:26.0796] <littledan>
+it's always possible to extend built-ins, it's just that if there were methods, you'd need to override them if you wanted them to create subclass instances
+
+[09:39:00.0143] <shu>
+as a VM person i have a pretty visceral reactions to using Maps and WeakMaps interchangeably
+
+[09:39:38.0324] <Michael Ficarra>
+littledan: you weren't here for it, but at the last meeting we had a 2-hour discussion where the conclusion was basically to discourage extending built-ins because "you don't own them" and instead encourage wrapper patterns
+
+[09:40:25.0289] <Michael Ficarra>
+littledan: that's a topic that may be worth reviewing the notes
+
+[09:40:51.0416] <littledan>
+well, I don't disagree with the "should", I was responding to the "can't"
+
+[09:43:18.0368] <littledan>
+I'd register disagreement that anything a browser ships is web-compatible; it's a bit more subtle. But this is probably fine.
+
+[09:43:34.0319] <littledan>
+(it's possible to ship things that don't work!)
+
+[09:44:04.0421] <Michael Ficarra>
+`WeakMap.isValidKey = () => true`, there done
+
+[09:44:58.0765] <littledan>
+Michael Ficarra: yeah it should definitely dynamically look up the current value of that property, to support shims and such
+
+[09:48:58.0349] <yulia>
+are people seeing the slides?
+
+[09:49:13.0075] <Michael Ficarra>
+oh I didn't realise there were supposed to be slides
+
+[09:49:19.0427] <yulia>
+well, tabs
+
+[09:49:23.0832] <yulia>
+im not seeing what shu is showing
+
+[09:49:24.0196] <ryzokuken>
+I see the screen
+
+[09:49:25.0367] <ryzokuken>
+ * I see the screen
+
+[09:49:27.0140] <yulia>
+ok
+
+[09:49:30.0401] <yulia>
+it may just be me
+
+[09:49:36.0344] <rbuckton>
+> <@bakkot:matrix.org> (actually I kind of want a WeakMap.clone)
+
+Or maybe `new WeakMap(oldWeakMap)` (since you can "clone" a Map using `new Map(oldMap)`)?
+
+[09:49:47.0611] <Michael Ficarra>
+I just started seeing the share now
+
+[09:56:26.0220] <Rob Palmer>
+We are all now migrating to the Igalia Jitsi server
+
+[09:56:39.0152] <Rob Palmer>
+(don't post the URL here - I will put it on the Reflector
+
+[09:57:50.0606] <Rob Palmer>
+Has anyone had trouble switching?
+
+[10:00:49.0242] <bakkot>
+ljharb: while we're here, ping on https://github.com/tc39/template-for-proposals/pull/32
+
+[10:01:10.0856] <Luca Casonato>
+> <@robpalme:matrix.org> (don't post the URL here - I will put it on the Reflector
+
+Can’t find it in the reflector
+
+[10:02:48.0507] <Rob Palmer>
+https://github.com/tc39/Reflector/issues/430#issuecomment-1148934322
+
+[10:04:06.0192] <Luca Casonato>
+Thank you
+
+[10:04:58.0525] <ryzokuken>
+> <@robpalme:matrix.org> (don't post the URL here - I will put it on the Reflector
+
+Outsiders won't have the password anyway
+
+[10:56:44.0633] <Rob Palmer>
+Plenary resumes on the ***new Jitsi server** in 3 mins!
+
+[11:04:15.0484] <Rob Palmer>
+Could someone please visit the 8x8 server to redirect anyone that did not get the migration message?
+
+[11:37:38.0337] <yulia>
+it feels weird to use an editors note for this? or maybe i don't understand
+
+[11:37:48.0830] <yulia>
+but maybe the discussion has gone long enough...
+
+[11:38:00.0217] <littledan>
+sorry
+
+[11:38:04.0893] <yulia>
+unless the editors note is only for the unmerged state?
+
+[11:38:11.0982] <littledan>
+yes, that's what editors notes are
+
+[11:38:18.0330] <yulia>
+ah, ok
+
+[11:38:28.0648] <littledan>
+sorry for talking too long there
+
+[11:38:30.0324] <yulia>
+i think we also have editors notes elsewhere (or i recall seeing them)
+
+[11:38:39.0980] <yulia>
+but that might be me misremembering
+
+[11:38:47.0202] <littledan>
+well... that is different from my understanding of the intention, but I also wouldn't be shocked
+
+[11:38:58.0710] <yulia>
+probably misremembering
+
+[11:39:32.0119] <ryzokuken>
+tbf I think the effort involved here either way would be quite minimal as compared to class fields
+
+[11:39:54.0193] <littledan>
+the effort of splitting up the specs was not so big. Giving them coherent readmes and then talking about it with everyone later was the hard part.
+
+[11:40:32.0622] <littledan>
+I don't think we should make a habit of it. If we want to coordinate expectations around shipping part of a proposal, let's just say that's what we're doing
+
+[11:40:34.0174] <ryzokuken>
+in this case I'd just propose diff as normative changes to Temporal
+
+[11:41:04.0996] <ryzokuken>
+Temporal would need to depend on DurationFormat for `Duration#toLocaleString` anyway
+
+[11:41:07.0779] <littledan>
+back when some former committee members were around, it was difficult to get agreement on including certain notes. That's part of why editors notes were introduced, so drafts of proposals could have notes while they would be stripped in the final spec. Maybe that meaning got lost at some point.
+
+[11:41:36.0722] <littledan>
+> <@usharma:igalia.com> Temporal would need to depend on DurationFormat for `Duration#toLocaleString` anyway
+
+Well, yeah, that spec text is at the intersection
+
+[11:42:04.0241] <littledan>
+since both things are at Stage 3, I think we're talking about a very minor detail and we shouldn't continue refactoring at this point, only handling it when merging into the main spec.
+
+[11:42:36.0790] <littledan>
+if you move text from one place to the other, references break, making it more difficult to read historical discussion
+
+[11:42:40.0188] <ryzokuken>
+fair
+
+[11:42:55.0431] <ryzokuken>
+my priority here is getting DurationFormat implemented soon
+
+[11:43:04.0776] <ryzokuken>
+for CLDR reasons
+
+[11:43:09.0172] <littledan>
+yeah, go for it
+
+[11:43:12.0957] <littledan>
+it's Stage 3
+
+[11:43:26.0879] <ryzokuken>
+if it gets blocked on Temporal, implicitly or explicitly, that'd be a shame
+
+[11:43:40.0793] <littledan>
+if you want to delimit a subset of it, then you can do so, but that's an editorial change
+
+[11:43:42.0961] <ljharb>
++1, it shouldn't get blocked on Temporal
+
+[11:44:13.0998] <littledan>
+it can be good to coordinate expectations about this subset, but I don't think this requires making a new repo, seeking consensus on advancement, etc
+
+[11:44:44.0503] <littledan>
+rather, it can just be, "hey, we delimited this subset. Implementers, does this seem good to ship separately, before that other part is done?"
+
+[11:45:12.0847] <littledan>
+this is my understanding of what our current process allows
+
+[11:46:24.0093] <littledan>
+(it'll still be shipping the feature partially, whether or not you call it a separate proposal or part of Temporal or anything. It'll have a separate line in MDN BCD, etc...)
+
+[11:46:36.0895] <littledan>
+ * (it'll still be shipping the feature partially, whether or not you call it a separate proposal or part of Temporal or anything. It'll have a separate line in MDN BCD, etc...)
+
+[11:46:45.0205] <Richard Gibson>
+the solution on slide 18 seems to make sense, in which observable behavior (specifically, objects are valid input while strings are not) is strictly weaker than Temporal
+
+and the spec text supporting that can be written with Temporal compatibility in mind but without an actual dependency upon new observable behavior introduced by Temporal
+
+[11:48:30.0368] <Michael Ficarra>
+I have to ask this every time, but: what was the reasoning behind generators stopping immediately when invoked instead of running until first yield?
+
+[11:48:42.0267] <littledan>
+> <@littledan:matrix.org> rather, it can just be, "hey, we delimited this subset. Implementers, does this seem good to ship separately, before that other part is done?"
+
+Is the issue that we've heard from implementers that they don't want to do this? Is it a broadly held feeling or just some of them?
+
+[11:49:24.0302] <ryzokuken>
+Frank filed this as a bug, but I'm not sure if he'd be opposed to implement if we put in a note to make things clear
+
+[11:49:53.0373] <littledan>
+> <@michaelficarra:matrix.org> I have to ask this every time, but: what was the reasoning behind generators stopping immediately when invoked instead of running until first yield?
+
+There was a big debate about this question before my time, in ES6 days...
+
+[11:50:24.0130] <yulia>
+While i think we made some interesting decisions with generators, i don't think these examples are convincing me of the usecase here..
+
+[11:51:07.0481] <Michael Ficarra>
+littledan: I'm aware, but there was a reasoning given, right? I don't remember what it was
+
+[11:51:33.0837] <bakkot>
+> <@michaelficarra:matrix.org> I have to ask this every time, but: what was the reasoning behind generators stopping immediately when invoked instead of running until first yield?
+
+where would the yielded value go? the return value of `gen()` is the generator object itself
+
+[11:51:59.0206] <bakkot>
+~~or, wait, that doesn't make sense~~ wait yes it does, this is all very hard to keep track of.
+
+[11:52:43.0074] <bakkot>
+ * ~or, wait, that doesn't make sense~ wait yes it does, this is all very hard to keep track of.
+
+[11:52:48.0814] <bakkot>
+ * ~~or, wait, that doesn't make sense~~ wait yes it does, this is all very hard to keep track of.
+
+[11:53:35.0612] <Michael Ficarra>
+oh okay yeah I think that was the motivation: you either miss the first `next`-ed value or you miss the first `yield`-ed value
+
+[11:55:01.0576] <littledan>
+> <@littledan:matrix.org> it can be good to coordinate expectations about this subset, but I don't think this requires making a new repo, seeking consensus on advancement, etc
+
+btw I also don't think you need my/committee consensus to do this refactoring of the AOs from one place to the other, or for moving the semantics at the intersection of the proposals from one side to the other. Feel free to go ahead as far as I'm concerned/as far as I understand TC39 process.
+
+[11:56:01.0888] <littledan>
+> <@michaelficarra:matrix.org> oh okay yeah I think that was the motivation: you either miss the first `next`-ed value or you miss the first `yield`-ed value
+
+Right that's it. So the current solution is "more general"
+
+[11:56:04.0820] <littledan>
+FWIW http://web.archive.org/web/20160315061559/http://wiki.ecmascript.org/doku.php?id=harmony%3agenerators
+
+[11:56:23.0987] <bakkot>
+> <@michaelficarra:matrix.org> oh okay yeah I think that was the motivation: you either miss the first `next`-ed value or you miss the first `yield`-ed value
+
+I guess you could make the first `yield` special (or the `return`, if it happens before any `yield`) and stash the value somewhere to be returned upon the first call to `next`, but that's maybe too much magic
+
+[11:57:22.0918] <Michael Ficarra>
+well this `function.sent` proposal is from the same era, so I'm guessing that delegates at the time just assumed we would add something along these lines to fix this problem
+
+[11:57:57.0981] <littledan>
+> <@michaelficarra:matrix.org> well this `function.sent` proposal is from the same era, so I'm guessing that delegates at the time just assumed we would add something along these lines to fix this problem
+
+This matches my understanding of the history
+
+[11:58:28.0471] <littledan>
+Andreas Rossberg was also a big proponent of function.sent
+
+[11:59:20.0920] <bakkot>
+the ~2 times this has ever come up for me I just said that you had to prime the generator with a throwaway call to `.next()`. any time you're passing stuff into the generator you're defining a new protocol anyway (the iterator protocol doesn't pass anything), so it's not so burdensome to make that be a part of the protocol.
+
+[11:59:34.0940] <yulia>
+the use of yield in this example with function.sent is surprising to me... What happens if we yield a value as well?
+
+[11:59:46.0101] <yulia>
+ah
+
+[11:59:54.0577] <littledan>
+for fun: http://web.archive.org/web/20140430210829/http://wiki.ecmascript.org/doku.php?id=harmony:generator_expressions
+
+[11:59:56.0182] <shu>
+> <@bakkot:matrix.org> the ~2 times this has ever come up for me I just said that you had to prime the generator with a throwaway call to `.next()`. any time you're passing stuff into the generator you're defining a new protocol anyway (the iterator protocol doesn't pass anything), so it's not so burdensome to make that be a part of the protocol.
+
+i kinda like it. alias a nullary `prime()`
+
+[12:00:04.0924] <littledan>
+(if one day we decide we want to be as cool as python)
+
+[12:01:46.0200] <Michael Ficarra>
+bakkot: can't you just expose a wrapper that does the priming instead?
+
+[12:03:15.0992] <bakkot>
+could've I guess
+
+[12:03:40.0469] <bakkot>
+it was a personal project so I don't think I bothered
+
+[12:04:10.0942] <rbuckton>
+> <@michaelficarra:matrix.org> bakkot: can't you just expose a wrapper that does the priming instead?
+
+Something like `generatorWithContext(function * (context, x, y) { console.log(context.sent) })` where `generatorWithContext` injects a `{ sent }` context object in the first parameter would work too.
+
+[12:08:23.0403] <snek>
+what is the new syntax, i joined late
+
+[12:09:03.0473] <Jack Works>
+old: `function.send`
+
+[12:09:20.0256] <Jack Works>
+new: `function* (...params) receives (binding) {}`
+
+[12:09:28.0046] <snek>
+ic
+
+[12:10:01.0590] <littledan>
+In the old version of this, `function.sent` worked based on the [+yield] parameter, which makes it inaccessible in inner bindingss
+
+[12:10:21.0224] <littledan>
+I agree that a magically changing binding would be pretty weird but at least it's visible when parsing from the outside in
+
+[12:10:30.0125] <littledan>
+ * In the old version of this, `function.sent` worked based on the \[+yield\] parameter, which makes it inaccessible in inner bindings
+
+[12:11:41.0588] <Mathieu Hofman>
+My concern is when mixing with `yield*` in an async generator. Would a closure inside the async generator be able to observe the iteration to the delegated generator ?
+
+[12:11:53.0653] <shu>
+a live binding is pretty wild
+
+[12:12:16.0341] <shu>
+i'd strongly recommend it be non-closeable if so, but that's also an entirely new semantics
+
+[12:12:19.0371] <littledan>
+well, I was proposing a live binding with variable decorators... no one liked that, I guess for the same reason
+
+[12:12:40.0640] <yulia>
+i actually think that aliasing next with prime makes the most sense if we need to fix this..
+
+[12:12:45.0400] <Mathieu Hofman>
+yeah a non-closable binding would be new
+
+[12:13:01.0332] <snek>
+live bindings are cool and we need more of them
+
+[12:13:01.0961] <littledan>
+I think the important thing is that it's very visible syntactically which bindings are so special, so we don't get another general with
+
+[12:13:37.0453] <shu>
+i also don't think the naming confusion about "sent" is enough to introduce something that feels _so_ radical
+
+[12:14:00.0281] <yulia>
+im like really convinced about the alias, y'all
+
+[12:16:16.0972] <Michael Ficarra>
+yulia: I don't think the alias solves anything?
+
+[12:16:35.0724] <yulia>
+well, if people feel weird about priming using an empty next
+
+[12:16:46.0147] <yulia>
+it may improve readability also
+
+[12:17:05.0152] <Michael Ficarra>
+I don't think it's the empty next, it's the need to prime at all
+
+[12:17:36.0086] <yulia>
+hm, im not sure I am so convinced that this is such a huge issue though?
+
+[12:17:50.0286] <yulia>
+prime would give you a clear indication that this is a different protocol
+
+[12:18:05.0454] <yulia>
+and it feels proportional in terms of what this adds, in terms of cost to the language
+
+[12:18:15.0702] <Michael Ficarra>
+if anything, we could add a GeneratorFunction.prototype.autoprime so the consumer doesn't have to be aware of it
+
+[12:18:47.0398] <yulia>
+thats also a possibility -- i think if we do this, it should impact the writing of generators using this protocol as little as possible imo
+
+[12:19:35.0675] <yulia>
+i am concerned about the receive syntax, for the issues brought up by mhofman,  though it was really interesting to see and a good experiment
+
+[12:20:09.0325] <bakkot>
+> <@rbuckton:matrix.org> Something like `generatorWithContext(function * (context, x, y) { console.log(context.sent) })` where `generatorWithContext` injects a `{ sent }` context object in the first parameter would work too.
+
+yeah this isn't bad: https://gist.github.com/bakkot/a7db9bf7fd66f66ef97c85cef9822caf
+
+[12:20:36.0367] <bakkot>
+(sorry ron! didn't realize that would ping you)
+
+[12:22:20.0397] <Michael Ficarra>
+stick it on GeneratorFunction.prototype, ship it
+
+[12:23:12.0382] <Michael Ficarra>
+call it something with `bind` in its name
+
+[12:23:20.0644] <yulia>
+wfm
+
+[12:26:31.0126] <bakkot>
+shu: I think generated code which has decided to both enable and disable a flag should be forced to handle that case explicitly; it is not obvious to me that defaulting to "it disables the flag" is obviously the intended thing for the code generator
+
+[12:26:46.0161] <shu>
+yeah that's fair
+
+[12:27:19.0517] <bakkot>
+guess I should say that out loud
+
+[12:31:16.0618] <Richard Gibson>
+oof, 🏃 🚌
+
+[12:31:22.0082] <Richard Gibson>
+but mea culpa
+
+[12:45:25.0830] <rbuckton>
+Shu, TS does not provide any runtime error.
+
+[12:45:30.0966] <Michael Ficarra>
+if we have dedicated syntax for methods, then what use will regular old functions serve? sounds like functions are now the de facto method syntax
+
+[12:45:34.0809] <shu>
+rbuckton: thanks
+
+[12:46:06.0772] <shu>
+the presentation made it sound like you did under the "runtime semantics aligned with TS/Flow"
+
+[12:47:25.0414] <Jack Works>
+I like this proposal, turn foogun/potential bugs into exceptions
+
+[12:47:27.0332] <rbuckton>
+TS erases the `this` parameter currently. Some of these runtime semantics would actually be in conflict with TS (i.e., potentially disallowing `new F()`).
+
+[12:47:56.0118] <shu>
+yes that seems to very much work against the "narrow TS gap" motivation
+
+[12:48:07.0600] <yulia>
+oh, static methods with this is a bit weird? to me? 
+
+[12:48:36.0597] <Jack Works>
+an interesting case would be:
+
+```ts
+function f(this?: T | null) {}
+```
+
+[12:48:38.0006] <rbuckton>
+> <@yulia:mozilla.org> oh, static methods with this is a bit weird? to me?
+
+Its fairly common though
+
+[12:49:07.0040] <ryzokuken>
+does `this` point to the constructor in static methods?
+
+[12:49:12.0145] <ryzokuken>
+ * does `this` point to the constructor in static methods?
+
+[12:49:12.0458] <rbuckton>
+Yes
+
+[12:49:20.0006] <Jack Works>
+> <@jackworks:matrix.org> an interesting case would be:
+> 
+> ```ts
+> function f(this?: T | null) {}
+> ```
+
+If TS emits `function f(this) {}`, it will fail when there is no `this`
+But if TS emits `function f() {}`, it require TS to emit different code based on the type
+
+[12:49:38.0105] <ryzokuken>
+/me unironically liked ruby's `@@foo`, `@foo` and `$foo`
+
+[12:49:54.0090] <rbuckton>
+```js
+class C {
+  static parse(text) { ... }
+  static from(parts) {
+    if (typeof parts === "string") return this.parse(parts);
+    ...
+    return new this(...);
+  }
+}
+```
+
+[12:50:50.0200] <yulia>
+ugh, right -- to call other methods
+
+[12:51:54.0164] <rbuckton>
+Also to access static private fields, though that can be a footgun w.r.t. inheritance (which is part of what the `class.` proposal was trying to address).
+
+[12:53:21.0710] <yulia>
+I see, thanks for the clarification
+
+[12:54:04.0353] <keith_miller>
+Richard Gibson: Oh, per my comment earlier today that we don't have substrings. I was wrong we do have them
+
+[12:54:50.0373] <Jack Works>
+> <@shuyuguo:matrix.org> yes that seems to very much work against the "narrow TS gap" motivation
+
+but as I can recall, the advance of type comment proposal require to reserve the syntax that might have RS.
+
+This proposal is a good example that the syntax can have a useful RS.
+
+[12:55:24.0833] <danielrosenwasser>
+RS?
+
+[12:55:44.0400] <Jack Works>
+runtime semantics
+
+[12:55:48.0016] <shu>
+that seems like circular reasoning. this is clearly *widening* the gap
+
+[12:55:55.0081] <waldemar>
+Yikes! Now we'd be introducing the concept of a function that can't ever be faithfully called via Function.prototype.call.
+
+[12:56:31.0945] <shu>
+that it satisfies a constraint someone else raised wrt the type annotations proposal doesn't trump the fact that it works against the stated goal of both proposals
+
+[12:57:41.0190] <danielrosenwasser>
+Not just that, but you now have to do more work to make something that is compatible with the type annotations proposal with something like `this = undefined` - which I think would be odd
+
+[12:57:45.0426] <Jack Works>
+for TS side it's easy, just add a `emitThisParameter` like what they did to the class fields
+
+[12:57:49.0232] <danielrosenwasser>
+> <@shuyuguo:matrix.org> that seems like circular reasoning. this is clearly *widening* the gap
+
+ * Not just that, but you now have to do more work to make something that is compatible with the type annotations proposal with something like `this = undefined` - which I think would be odd
+
+[12:57:52.0976] <rbuckton>
+> <@waldemarh:matrix.org> Yikes! Now we'd be introducing the concept of a function that can't ever be faithfully called via Function.prototype.call.
+
+Isn't `class` a "function" that can't be faithfully called by Function.prototype.call, or is your concern about the `function` keyword itself?
+
+[12:58:14.0007] <shu>
+danielrosenwasser: +1
+
+[12:58:24.0097] <danielrosenwasser>
+> <@jackworks:matrix.org> for TS side it's easy, just add a `emitThisParameter` like what they did to the class fields
+
+Note, the change in class fields emit is an ongoing disaster for us
+
+[12:58:40.0185] <danielrosenwasser>
+more specifically, for users
+
+[12:59:55.0212] <waldemar>
+rbuckton: `class` is a keyword. I'm talking about a Function value *f* for which there is no way to do invoke the behavior of `f()` via Function.prototype.call.
+
+[13:00:44.0541] <Justin Ridgewell>
+> Note, the change in class fields emit is an ongoing disaster for us
+
+Isn't that because you allowed `foo: Type` to emit a `foo` instead of omitting it entirely.
+
+[13:00:59.0465] <rbuckton>
+My point is that `typeof (class {})` is `"function"`, yet `(class {}).call()` will *always* fail. 
+
+[13:02:21.0370] <Jack Works>
+> <@danielrosenwasser:matrix.org> Note, the change in class fields emit is an ongoing disaster for us
+
+because they _both_ have runtime semantics and they're different
+
+in this case, only ES version has RS and TS version don't
+
+[13:02:30.0251] <Jack Works>
+it won't be so disaster like class fields
+
+[13:03:00.0772] <waldemar>
+rbuckton: I think you misunderstood my point. `(class {})()` fails in the same way. That's ok. What I don't like is a Function (with a regular `call` on its prototype) for which `f()` and `f.call(undefined)` have different behavior.
+
+[13:03:39.0816] <rbuckton>
+> <@jackworks:matrix.org> it won't be so disaster like class fields
+
+This would introduce a runtime semantic that is in conflict with TS, so if there's a `--emitThisParameter` TS would need a *different* way to indicate a disallowed `this` or optional `this`, so its not quite as simple.
+
+[13:04:23.0003] <danielrosenwasser>
+> <@jackworks:matrix.org> because they _both_ have runtime semantics and they're different
+> 
+> in this case, only ES version has RS and TS version don't
+
+The TS version of class fields with no initializers used to have no runtime semantics. Now they do, and that leads to observable runtime behavior, right?
+
+[13:04:36.0224] <Jack Works>
+> <@rbuckton:matrix.org> This would introduce a runtime semantic that is in conflict with TS, so if there's a `--emitThisParameter` TS would need a *different* way to indicate a disallowed `this` or optional `this`, so its not quite as simple.
+
+maybe `this?: T` => no emit and `this: T` => has emit
+
+[13:06:11.0435] <rbuckton>
+You're also talking about hundreds of existing declaration files using `this` parameters with no way to disambiguate which `--emitThisParameter` they were compiled under. The conflicts this would cause are far beneath the surface.
+
+[13:06:57.0968] <Jack Works>
+if they have `this` declaration today, aren't they already expecting receiving a `this`? 🤔
+
+[13:07:44.0845] <Jack Works>
+unless they write `this: T | null`, then TS can emit `this parameter cannot have be null if it is not marked with this?: `
+
+[13:07:58.0498] <rbuckton>
+They aren't expecting runtime semantics, so there's no way to be 100% certain you wouldn't break someone.
+
+[13:08:33.0098] <Jack Works>
+if you don't flag that on by default, it won't accidentally break someone
+
+[13:15:13.0692] <danielrosenwasser>
+I think out-of-bound declaration files from Definitely Typed could become misleading at the least which is undesirable. Your build won't be broken, but the actual problem is the runtime behavior change which is generally seen as worse because there's no way to signal to a user "hey, this is now different"
+
+[13:16:51.0613] <Jack Works>
+> <@danielrosenwasser:matrix.org> I think out-of-bound declaration files from Definitely Typed could become misleading at the least which is undesirable. Your build won't be broken, but the actual problem is the runtime behavior change which is generally seen as worse because there's no way to signal to a user "hey, this is now different"
+
+If a method expects `this` in `.d.ts` and you don't provide it, TS already report type error
+
+[13:17:25.0041] <rbuckton>
+I've merged the PR to disallow `(?i-i:)` for https://github.com/tc39/proposal-regexp-modifiers. All that remains is the pending reviews from waldemar and the TC39 editors.
+
+[13:18:17.0768] <danielrosenwasser>
+> <@jackworks:matrix.org> If a method expects `this` in `.d.ts` and you don't provide it, TS already report type error
+
+The specific case in mind is the optional `this`. e.g.
+
+```
+function foo(this: Foo | undefined, ...args: any[]): void
+```
+
+[13:19:47.0628] <Jack Works>
+> <@danielrosenwasser:matrix.org> The specific case in mind is the optional `this`. e.g.
+> ```
+> function foo(this: Foo | undefined, ...args: any[]): void
+> ```
+
+If it appears in a .d.ts file, typescript should know it is an optional "this"
+
+
+2022-06-08
+[07:22:51.0442] <Michael Ficarra>
+so are we using the Igalia or the 8x8 Jitsi today? Rob Palmer ryzokuken 
+
+[07:23:00.0128] <ryzokuken>
+Igalia
+
+[07:23:20.0953] <Michael Ficarra>
+k please comment on https://github.com/tc39/Reflector/issues/430
+
+[07:23:34.0126] <ryzokuken>
+I suppose I could test if 8x8 has gotten better, but there's no way to load test without wasting everyone's time
+
+[07:27:27.0408] <Jack Works>
+Can we have this item first if it is possible?
+
+> `60m | Import Reflection status update & discussion | Guy Bedford & Luca Casonato`
+
+[07:27:47.0309] <ryzokuken>
+Let me check Jack Works 
+
+[07:28:45.0630] <Luca Casonato>
+Works for me, but I am not sure if Guy is going to be there yet
+
+[07:29:02.0733] <Luca Casonato>
+And he really needs to be there
+
+[07:30:07.0157] <ryzokuken>
+Luca Casonato: could you ask Guy about their availability?
+
+[07:48:04.0539] <Kris Kowal>
+I also would like to be there. Accelerating baby feeding. :-)
+
+[07:55:11.0508] <ljharb>
+looks like it won't let anyone into the igalia jitsi until the "conference has started"? can we start that so people can join early?
+
+[07:55:35.0536] <ljharb>
+ * looks like it won't let anyone into the igalia jitsi until the "conference has started"? can we start that so people can join early?
+
+[07:59:56.0383] <Rob Palmer>
+We are starting plenary in 1 minute on the Igalia server
+
+[08:07:12.0124] <ljharb>
+hm, jitsi just booted me out; i had to completely disconnect and reconnect before it would let me back in
+
+[08:07:59.0938] <ljharb>
+ * hm, jitsi just booted me out; i had to completely disconnect and reconnect before it would let me back in
+
+[08:24:41.0487] <HE Shi-Jun>
+> <@rbuckton:matrix.org> TS erases the `this` parameter currently. Some of these runtime semantics would actually be in conflict with TS (i.e., potentially disallowing `new F()`).
+
+TS already report error if `F` is declared as `F(this: X)`, so I don't understand how it could conflict with TS...
+
+[08:24:41.0668] <Bradford Smith>
+It strikes me that all the examples of regex patterns with catastrophic backtracking in this presentation are very contrived, doing things it would be very strange for a human to write, like `/(a+)*/`. Anyone know a good realistic case?
+
+[08:25:29.0935] <Justin Ridgewell>
+My old manager DOS'd all of Google with a catastrophic backtrack
+
+[08:27:03.0271] <HE Shi-Jun>
+> <@yulia:mozilla.org> oh, static methods with this is a bit weird? to me?
+
+Yeah, it's weird, and easy to forget and make mistake. So `static foo(this) {}` at least self-document the weirdness and can protect the users if have proper runtime semantic.
+
+[08:27:20.0458] <Bradford Smith>
+I ask more with the idea of making the motivation of the proposal stronger than as an objection.
+
+[08:29:18.0121] <Justin Ridgewell>
+cl/27372225
+
+[08:29:24.0223] <HE Shi-Jun>
+> <@jackworks:matrix.org> If TS emits `function f(this) {}`, it will fail when there is no `this`
+> But if TS emits `function f() {}`, it require TS to emit different code based on the type
+
+If we have optional syntax `param?` also in JS (type annotation proposal has that syntax), we could solve that. Another option is allow `f(this = defaultValue)`.
+
+[08:34:02.0070] <HE Shi-Jun>
+> <@shuyuguo:matrix.org> that seems like circular reasoning. this is clearly *widening* the gap
+
+That's why we at least need to explore the area (this is what stage 1 means? isn't it?), to figure out how we can narrow the gap. It's not easy, for example, TS and flow use same syntax but may be have different behavior in some edge cases. But we can't know it before we have the chance to put it on the table.
+
+[08:36:05.0786] <Michael Ficarra>
+I kind of wish we had added support for atomic groups BEFORE making that decision about `\p` atomicity
+
+[08:36:25.0481] <Michael Ficarra>
+because if this proposal fails to advance, what do we even do?
+
+[08:37:14.0028] <Justin Ridgewell>
+Atomic groups aren't necessary for atomic behavior, they just make it more approachable
+
+[08:37:52.0079] <Justin Ridgewell>
+`/(?=(foo))\1/` is atomic
+
+[08:37:54.0588] <shu>
+> <@haxjs:matrix.org> That's why we at least need to explore the area (this is what stage 1 means? isn't it?), to figure out how we can narrow the gap. It's not easy, for example, TS and flow use same syntax but may be have different behavior in some edge cases. But we can't know it before we have the chance to put it on the table.
+
+i'm not convinced atm of how any solution in the space of adding `this` as a parameter in plain JS can narrow the gap
+
+[08:39:33.0812] <Justin Ridgewell>
+https://blog.stevenlevithan.com/archives/mimic-atomic-groups
+
+[08:41:32.0679] <rbuckton>
+> <@jridgewell:matrix.org> `/(?=(foo))\1/` is atomic
+
+I have a backup slide in the deck that talks about this as well.
+
+[08:42:07.0445] <HE Shi-Jun>
+> <@waldemarh:matrix.org> rbuckton: I think you misunderstood my point. `(class {})()` fails in the same way. That's ok. What I don't like is a Function (with a regular `call` on its prototype) for which `f()` and `f.call(undefined)` have different behavior.
+
+It's just one of the option, we could also make it still same behavior, aka. `f.call(undefined)` throw. Though it would need `this=defaultValue` or `this?` syntax to allow `undefined` cases. I don't have the strong opinion on that. 
+
+[08:49:25.0333] <littledan>
+Related thread about parameters to pass to import: https://github.com/whatwg/html/issues/7976
+
+[08:53:12.0532] <littledan>
+I think something like this module reflection would be needed if we want to expose the Wasm component model to JS/the web in a consistent way. But I don't know if it's all worth it; maybe the component model is more of a Wasm-on-the-server-only thing.
+
+[08:54:44.0913] <shu>
+littledan: what are you imagining in the hypothetical that component model never materializes? have the "default" representation of wasm modules be the WebAssembly.Module instead of an instance?
+
+[08:55:06.0817] <littledan>
+I think the default model should be what the Wasm/ESM integration proposal is right now
+
+[08:55:14.0113] <Jack Works>
+What's the relationship of current presenting SourceTextModule with StaticModuleRecord in the compartment proposal? 
+
+[08:55:23.0642] <littledan>
+but I've apparently missed a lot of conversation about this topic and I need to catch up
+
+[08:55:29.0871] <shu>
+littledan: that's an Instance, which is not useful at all
+
+[08:55:55.0835] <shu>
+because of the custom imports / type marshalling wrapping currently needed
+
+[08:55:57.0025] <littledan>
+hmm, could you elaborate on "not useful at all"?
+
+[08:57:07.0862] <Rob Palmer>
+> <@littledan:matrix.org> but I've apparently missed a lot of conversation about this topic and I need to catch up
+
+I was surprised that some folk wanted the default integration to give the Wasm Module, rather than the evaluated instance.  Still not sure why.
+
+[08:57:13.0775] <shu>
+the short of it is that currently, the way wasm modules are instantiated require both 1) exports be wrapped with type-marshalling wrappers for e.g. strings and such and 2) custom imports from the outer global be passed into the wasm module
+
+[08:57:32.0603] <littledan>
+I can understand the argument that Wasm/ESM integration should wait for other things to come through, but CSP seems like a somewhat narrow motivation for this whole proposal (especially since, last time I checked, browsers hadn't bothered to agree with each other on how Wasm CSP works at all)
+
+[08:57:33.0494] <shu>
+neither of those things are possible to do in the current ESM integration proposal
+
+[08:57:51.0778] <shu>
+so while you can a WebAssembly.Instance out, it's not "useful" in that you have "raw" interfaces
+
+[08:58:38.0152] <littledan>
+yeah what I'm missing here is what the motivation is for doing any ESM integration; will it actually help current tooling? this is something I need to understand better, but a bit of a tangent from this presentation
+
+[08:58:39.0466] <shu>
+meaning, the hunch is that the current ESM integration proposal won't be used at all, and people will continue to do programmatic fetching and instantiation anyway
+
+[08:58:48.0946] <shu>
+ah, yeah that's a bit of a tangent
+
+[08:59:04.0760] <littledan>
+> <@shuyuguo:matrix.org> meaning, the hunch is that the current ESM integration proposal won't be used at all, and people will continue to do programmatic fetching and instantiation anyway
+
+sure, I can understand that argument more easily than "we need ESM integration that gives uninstantiated modules"
+
+[08:59:33.0266] <shu>
+my take on that is just like, the ESM module graph is the mechanic we have to tie an app together, it has nice static analyzability properties, so on and so forth
+
+[08:59:48.0789] <shu>
+so it'd be a philosophical good to integrate wasm into it
+
+[08:59:54.0394] <shu>
+i don't know if there's a pressing need anywhere
+
+[08:59:58.0555] <shu>
+since, you know, the imperative way obviously works
+
+[09:00:12.0973] <shu>
+but i do think it's important to try to not keep saying "just keep doing everything imperatively"?
+
+[09:00:34.0134] <littledan>
+IMO passing in the imports dictionary manually is still doing everything imperatively
+
+[09:00:56.0407] <shu>
+well, at least the static import site itself is visible now?
+
+[09:01:02.0512] <Justin Ridgewell>
+> since, you know, the imperative way obviously works
+
+The imperative way is painful
+
+[09:01:16.0744] <Justin Ridgewell>
+How do you interop between browsers and node?
+
+[09:01:28.0531] <shu>
+i agree
+
+[09:02:24.0567] <shu>
+also a previous mistake here is overindexing on the wasm use case, i think guy will go into the asset stuff later
+
+[09:05:28.0455] <littledan>
+IMO import(reflectedModule) should link it into the main module graph
+
+[09:06:18.0853] <littledan>
+this is basically how it works with module blocks
+
+[09:06:34.0735] <littledan>
+and presumably module blocks are the same thing as reflected modules, right?
+
+[09:06:49.0920] <littledan>
+(and these are also the same kind of thing as uninstantiated Wasm modules)
+
+[09:07:04.0754] <Mathieu Hofman>
+They all sound like StaticModuleRecord from the Compartment proposal
+
+[09:07:10.0187] <littledan>
+agreed
+
+[09:08:09.0100] <shu>
+i missed the earlier slides about how the `SourceTextModule` and `ModuleInstance` interfaces actually wrap `WebAssembly.Module` and `Instance` (and module blocks)
+
+[09:08:25.0047] <littledan>
+I think ModuleInstance is an actual instance, which then you imperatively instantiate
+
+[09:08:30.0339] <Mathieu Hofman>
+(if anyone looking at the Compartment proposal, there is an open PR to drastically update / simplify it)
+
+[09:09:07.0785] <littledan>
+I'm a big fan of that PR
+
+[09:09:12.0372] <Jack Works>
+> <@mhofman:matrix.org> They all sound like StaticModuleRecord from the Compartment proposal
+
++1 to me. but not exactly the same
+
+[09:09:54.0488] <littledan>
+they may be different concrete classes but all of the same spec-internal protocol/contract
+
+[09:10:02.0869] <littledan>
+do you agree Jack Works ?
+
+[09:10:18.0118] <Jack Works>
+yeah
+
+[09:10:51.0809] <Jack Works>
+I'm wondering, current presenting API (manually link module stuff) looks even much lower-level than compartment, what can devs benefits from this
+
+[09:10:56.0461] <littledan>
+asset references seem really important on the web to enable prefetching!
+
+[09:11:24.0753] <Jack Works>
+ * I'm wondering, current presenting API (manually link module stuff) looks even much lower-level than compartment, what can devs benefits from this
+
+[09:12:07.0634] <shu>
+wait what do stage 2 reviewers do
+
+[09:12:11.0724] <Mathieu Hofman>
+FYI we're planning to have Luca and Guy over in the SES meeting on 06/22 to chat about overlap between these proposals.
+
+[09:12:55.0594] <Jack Works>
+we need a cross-proposal API for StaticModuleRecord/SourceTextModule stuff
+
+[09:13:13.0924] <littledan>
+> <@jackworks:matrix.org> we need a cross-proposal API for StaticModuleRecord/SourceTextModule stuff
+
+yes and module blocks and WebAssembly.Module
+
+[09:14:34.0860] <littledan>
+asset references on JS modules can stand for things which may be dynamically imported later, and should maybe be prefetched
+
+[09:15:27.0950] <littledan>
+passing in the dictionary of imports is something that both this proposal and compartments and the Wasm JS API have to do
+
+[09:15:39.0401] <littledan>
+ * passing in the dictionary of imports is something that both this proposal and compartments and the Wasm JS API have to do
+
+[09:17:00.0960] <Mathieu Hofman>
+> <@jackworks:matrix.org> we need a cross-proposal API for StaticModuleRecord/SourceTextModule stuff
+
+We plan on doing a non-normative refactor of the spec to address that
+
+[09:17:59.0812] <littledan>
+I read this comment referring to a JS-exposed API
+
+[09:18:41.0139] <Mathieu Hofman>
+Right, but as a first step, we need a definition of what it would be we're exposing. The spec currently conflates the static and instance bits of a module
+
+[09:18:45.0883] <Jack Works>
+> <@mhofman:matrix.org> We plan on doing a non-normative refactor of the spec to address that
+
+In the ecma262 directly?
+
+[09:18:56.0736] <littledan>
+> <@mhofman:matrix.org> Right, but as a first step, we need a definition of what it would be we're exposing. The spec currently conflates the static and instance bits of a module
+
+Ah, yes, good point, that refactoring would be great
+
+[09:19:04.0270] <littledan>
+such a messy part of the spec too!
+
+[09:19:14.0972] <littledan>
+it should be much more readable then
+
+[09:20:08.0390] <Jack Works>
+let me rejoin
+
+[09:21:41.0574] <Kris Kowal>
+> <@mhofman:matrix.org> (if anyone looking at the Compartment proposal, there is an open PR to drastically update / simplify it)
+
+https://github.com/tc39/proposal-compartments/pull/46
+
+[09:22:05.0279] <littledan>
+Should we start a discussion group to talk about module loading? Seems like there's a lot going on.
+
+[09:22:31.0636] <Kris Kowal>
+> <@mhofman:matrix.org> FYI we're planning to have Luca and Guy over in the SES meeting on 06/22 to chat about overlap between these proposals.
+
+Agenda for June 22 https://docs.google.com/document/d/1FZ95-NZIQE9fw3A8Sgcz2BKep6MlC_Kng0dlf1ehabQ/edit#
+
+[09:22:36.0559] <ryzokuken>
+maybe a good idea to do an incubation call on?
+
+[09:22:57.0170] <littledan>
+I think we're beyond that and should have like a weekly discussion (maybe this should just be the SES call)
+
+[09:22:59.0434] <ryzokuken>
+ * maybe a good idea to do an incubation call on?
+
+[09:23:07.0467] <ryzokuken>
+ah, fair
+
+[09:25:10.0006] <Kris Kowal>
+I’m reserving the weekly SES Strategy call for module loading topics through July plenary and all interested parties are welcome.
+
+[09:26:49.0354] <Jack Works>
+I wondering why yulia and shu give support 👀 I though from the engine perspective, they don't want to reify the low level mechanism because it blocks the optimization but why this proposal has support from engine side
+
+[09:27:23.0040] <ryzokuken>
+was a link to these slides shared at some point?
+
+[09:27:47.0314] <Mathieu Hofman>
+Still stays TBD in agenda
+
+[09:27:57.0278] <yulia>
+> <@jackworks:matrix.org> I wondering why yulia and shu give support 👀 I though from the engine perspective, they don't want to reify the low level mechanism because it blocks the optimization but why this proposal has support from engine side
+
+I am supporting because it makes deferred module evaluation much easier, and is also necessary for WASM
+
+[09:28:05.0670] <shu>
+Jack Works: not sure what optimizations you had in mind there. i'm in support in that the use cases are very important
+
+[09:28:08.0899] <ryzokuken>
+yeah, I just double-checked there. Wondering if they sent it someplace else, but probably not.
+
+[09:28:14.0237] <yulia>
+I have some concern, i had a counter proposal to my deferred module evaluation that looked like this
+
+[09:28:24.0222] <yulia>
+but exposing the module loader API may be error prone
+
+[09:28:37.0951] <shu>
+in general i'm against exposing low-level hooks that can fundamentally change assumptions of how certain mechanisms should work, like loading and linking
+
+[09:28:38.0047] <yulia>
+this is what held me back, but its interesting to see this get a positive response from the committee
+
+[09:29:51.0221] <littledan>
+well, apparently the Wasm JS API, which gives you control over imports, was OK
+
+[09:30:02.0549] <shu>
+but also yeah, +1 to yulia, it's not that i have no concerns around the API part of this proposal, but guy has repeatedly said their proposal is just about the "mechanic of reflection"
+
+[09:30:18.0006] <shu>
+so i took that to mean the API parts are exploratory, needed to be unified with other proposals, etc
+
+[09:30:47.0366] <Kris Kowal>
+The compartments proposal don’t leave `link` or module instance creation to the user and loses no expressivity, for what it’s worth.
+
+[09:31:32.0004] <shu>
+sounds like discussions to me, unless you're saying the compartments design is now set in stone?
+
+[09:31:49.0186] <Kris Kowal>
+And in turn, answers the question about threading the global environment record and compartment-scoped evaluators, compartment-scoped dynamic import, to the execution of the module.
+
+[09:32:00.0392] <Kris Kowal>
+Discussions for sure!
+
+[09:32:31.0060] <Kris Kowal>
+It’s set in stage 1 which leaves a great deal of mutability.
+
+[09:33:02.0704] <Kris Kowal>
+ * And in turn, answers the question about threading the global environment record and compartment-scoped evaluators, compartment-scoped dynamic import, to the execution of the module.
+
+[09:34:26.0193] <ljharb>
+Justin Ridgewell:  re your queue item, because reflection things aren't assertions about the module, and because there's value in keeping assertions and reflections separate
+
+[09:34:55.0319] <Justin Ridgewell>
+I think there's only complication for users.
+
+[09:35:20.0889] <Justin Ridgewell>
+This slide could easily have been `assert { type: 'asset-reference' }`
+
+[09:35:43.0545] <ljharb>
+the module isn't an asset reference tho. assertions are about the module. reflections are about the importer.
+
+[09:35:58.0406] <bakkot>
+i don't want to enter the queue but I object to the notion that we should be limiting syntax because bundlers will abuse it
+
+[09:36:03.0352] <bakkot>
+bundlers will abuse whatever they want
+
+[09:36:05.0570] <bakkot>
+they already abuse comments
+
+[09:36:10.0176] <bakkot>
+this should not be a driving concern
+
+[09:36:12.0460] <ljharb>
+ * the module isn't an asset reference tho. assertions are about the module. reflections are about the importer.
+
+[09:36:25.0236] <ljharb>
+bundlers won't violate the spec tho
+
+[09:36:34.0333] <bakkot>
+the claim was that they would
+
+[09:36:58.0320] <littledan>
+> <@bakkot:matrix.org> they already abuse comments
+
+yes, for example, for preloading dynamic imports!
+
+[09:36:58.0578] <ljharb>
+ah, maybe i missed the claim
+
+[09:37:15.0743] <ljharb>
+(also imo that's not an abuse of comments, that's a fine use of them)
+
+[09:37:46.0231] <Jack Works>
+> <@bakkot:matrix.org> they already abuse comments
+
+do you mean this kind of thing?
+
+```js
+import(/* webpackIgnore: true */ 'spec')
+```
+
+[09:37:51.0585] <littledan>
+> <@ljharb:matrix.org> bundlers won't violate the spec tho
+
+Yeah I agree, we've seen a lot of interest from all sorts of tooling in following the spec. It's probably weird plugins that would violate it.
+
+[09:37:52.0629] <Justin Ridgewell>
+I violate the spec with my build step constantly
+
+[09:38:13.0832] <Rob Palmer>
+Me too.  ljharb hates it.
+
+[09:38:36.0386] <ljharb>
+individuals or tools can violate the spec all they want, but things that violate it are unlikely to gain ecosystem adoption, which is good
+
+[09:38:43.0660] <ljharb>
+ * individuals or tools can violate the spec all they want, but things that violate it are unlikely to gain ecosystem adoption, which is good
+
+[09:38:58.0531] <bakkot>
+i don't think that's true, TS "violates the spec" but has plenty of adoption
+
+[09:38:58.0656] <littledan>
+> <@ljharb:matrix.org> individuals or tools can violate the spec all they want, but things that violate it are unlikely to gain ecosystem adoption, which is good
+
+Agreed. We have more sway than we might think!
+
+[09:39:16.0237] <ljharb>
+many, many times in my experience a debate in node or bundlers has been settled by pointing to a line in the spec that disallows something
+
+[09:39:19.0800] <ljharb>
+ * many, many times in my experience a debate in node or bundlers has been settled by pointing to a line in the spec that disallows something
+
+[09:39:48.0144] <Mathieu Hofman>
+What is the difference between `as "asset-reference"` and `as "module"` ? Conceptually aren't they both the static representation of the asset? Would something like `import static foo from './foo.js'` and `import static foo from './foo.png' assert { type: "png" };` not work?
+
+[09:39:49.0712] <Jack Works>
+> <@ljharb:matrix.org> individuals or tools can violate the spec all they want, but things that violate it are unlikely to gain ecosystem adoption, which is good
+
+Babel be like: [iterableIsArray](https://babeljs.io/docs/en/assumptions#iterableisarray) 🤣🤣🤣🤣
+
+[09:39:51.0700] <ljharb>
+similarly, my experience tells me that anything permitted *will be done*, and so it is always in our best interest to forbid as much as possible outside of our intended use cases.
+
+[09:40:00.0546] <Mathieu Hofman>
+ * What is the difference between `as "asset-reference"` and `as "module"` ? Conceptually aren't they both the static representation of the asset? Would something like `import static foo from './foo.js'` and `import static foo from './foo.png' assert { type: "png" };` not work?
+
+[09:40:17.0310] <ljharb>
+in an env without symbols, there's no spec to govern iteration :-p that's a place where caveats/shortcuts like that can be reasonable.
+
+[09:40:38.0945] <ljharb>
+> <@jackworks:matrix.org> Babel be like: [iterableIsArray](https://babeljs.io/docs/en/assumptions#iterableisarray) 🤣🤣🤣🤣
+
+ * in an env without symbols, there's no spec to govern iteration :-p that's a place where caveats/shortcuts like that are reasonable.
+
+[09:41:04.0176] <Kris Kowal>
+For the purposes of declaring a dependency statically with the intention to manually link it, `import defer 'x.wasm'` is sufficient.
+
+[09:41:12.0644] <ljharb>
+ * in an env without symbols, there's no spec to govern iteration :-p that's a place where caveats/shortcuts like that can be reasonable.
+
+[09:41:23.0942] <Kris Kowal>
+(strawman, clearly)
+
+[09:41:25.0721] <Jack Works>
+> <@ljharb:matrix.org> in an env without symbols, there's no spec to govern iteration :-p that's a place where caveats/shortcuts like that can be reasonable.
+
+people adopting loose mode instead of spec semantics even they have `Symbols` or other stuff because it emits shorter/faster code
+
+[09:41:46.0800] <ljharb>
+sure. but then they're explicitly choosing to violate the spec. there's a reason babel changed the defaults to be strict.
+
+[09:43:25.0651] <Kris Kowal>
+Then as strawmanèd, `new Compartment({ someFlagHere }).import('x.wasm')` to execute later, possibly multiple times.
+
+[09:44:37.0964] <yulia>
+Kris Kowal: compartments are fully separate from the current context is that right? 
+
+[09:44:52.0672] <yulia>
+so, for example, you wouldn't be able to do lazy loading via compartments?
+
+[09:45:07.0132] <Jack Works>
+> <@kriskowal:matrix.org> Then as strawmanèd, `new Compartment({ someFlagHere }).import('x.wasm')` to execute later, possibly multiple times.
+
+you have load hook, to "execute later". have no idea about execute multiple times
+
+[09:45:57.0346] <Jack Works>
+> <@yulia:mozilla.org> so, for example, you wouldn't be able to do lazy loading via compartments?
+
+if we don't have your lazy module in the language, I guess it will also not be possible in the compartment
+
+[09:46:31.0337] <yulia>
+ok, thanks for clarifying, i wasn't sure if things had progressed in a new direction than what i remembered from the compartments proposal
+
+[09:50:49.0995] <littledan>
+`as "readonly"` certainly sounds like a very different use case. If we wanted to unify everything into a string, we could've done that with import assertions as well.
+
+[09:51:52.0259] <Jack Works>
+are we going to have a ses call right now?
+
+[09:52:05.0141] <Mathieu Hofman>
+Nope not today
+
+[09:52:40.0315] <Kris Kowal>
+> <@yulia:mozilla.org> so, for example, you wouldn't be able to do lazy loading via compartments?
+
+We’re focusing the scope of compartments on module loading and building a bigger tent. To that end, I’m proposing the more generally useful mode of compartments shares the global environment record with the host compartment (albeit the invisible initial compartment that we factor out of the realm)
+
+[09:53:12.0690] <Kris Kowal>
+That of course leaves us an open door for Compartmetns-after-Lockdown, which would have isolated globals.
+
+[09:53:24.0663] <littledan>
+for better or worse, it feels like we're back at the Loader API. But I feel like it is going to happen this time.
+
+[09:53:27.0370] <bakkot>
+I'm not going to capture this scheduling updating in the notes unless someone really wants it
+
+[09:53:44.0850] <yulia>
+I feel like a Loader API could work, this might be the basis
+
+[09:54:53.0280] <shu>
+i think the core thing insight for me recently is that like 80% of what people want is static specifier resolution to tie their app together. we don't have one, but we do have ESMs, and here we are
+
+[09:55:54.0986] <littledan>
+> <@yulia:mozilla.org> I feel like a Loader API could work, this might be the basis
+
+this all is the loader API; I don't think there's a separate thing that needs to come after this whole batch of proposals
+
+[09:56:03.0527] <Kris Kowal>
+Yes, being able to express the dependency graph statically, and benefit from resolution at runtime, has always been a huge draw.
+
+[09:56:58.0029] <littledan>
+an important thing when importing references to modules is whether the inner modules they import should be interpreted as URLs to (pre)fetch. Fully reflected modules mean "not necessarily" but often you want this to be a yes
+
+[09:57:08.0286] <Kris Kowal>
+And frustrating when we get to the edges. CSS imports, for example.
+
+[09:57:14.0138] <Jack Works>
+I think the first step is to specify a reified Module Record that work for alllllll those proposals
+
+- `import x from 'spec' as 'module` and `module { source text }`  will return a Module Record
+- Compartment will consume the module record
+- should work with WASM import too
+- `new ModuleInstance(record)` is a fresh way to consume module record I see from the today's presentation
+
+[09:57:33.0401] <Jack Works>
+ * I think the first step is to specify a reified Module Record that work for alllllll those proposals
+
+- `import x from 'spec' as 'module` and `module { source text }`  will return a Module Record
+- Compartment will consume the module record
+- should work with WASM import too
+- `new ModuleInstance(record)` is a fresh way to consume module record I see from the today's presentation
+
+[10:00:21.0660] <guybedford>
+Yeah ModuleInstance is just a suggested approach to move beyond needing a full fledged loader, but definitely moving towards a unified module record would be a huge step forward.
+
+[10:00:54.0285] <Jack Works>
+ * I think the first step is to specify a reified Module Record that works for alllllll those proposals
+
+- `import x from 'spec' as 'module` and `module { source text }`  will return a Module Record
+- Compartment and dynamic import will consume the module record
+- should work with WASM import too
+- `new ModuleInstance(record)` is a fresh way to consume module records I see from the today's presentation
+- should be able to have module record without parsing source text (ThirdPartyStaticModuleRecord in the compartment proposal)
+
+[10:00:56.0837] <guybedford>
+Asset reflection as a preload primitive is a really interesting area as well
+
+[10:01:02.0033] <Jack Works>
+ * I think the first step is to specify a reified Module Record that works for alllllll those proposals
+
+- `import x from 'spec' as 'module` and `module { source text }`  will return a Module Record
+- Compartment and dynamic import will consume the module record
+- should work with WASM import too
+- `new ModuleInstance(record)` is a fresh way to consume module records I see from the today's presentation
+- should be able to create module record without parsing source text (ThirdPartyStaticModuleRecord in the compartment proposal)
+
+[10:01:02.0238] <guybedford>
+eg `import.preload(asset)` or similar
+
+[10:01:07.0227] <littledan>
+it's pretty difficult to separate these things; I don't think they need to advance stages together, but we'll need a unified design in mind
+
+[10:01:39.0428] <Kris Kowal>
+ModuleInstance exists but is hidden in the Compartment proposal. We can riff on details if we want to make that public.
+
+[10:02:38.0839] <Kris Kowal>
+e.g., it can be generalized to language-agnostic. new ModuleInstance(bindingsArray) => { ModuleExportsNamespace, ModuleEnvironmentRecord }
+
+[10:03:28.0455] <littledan>
+I think we'll need a separation between the concrete class and the underlying protocol (to allow WebAssembly.Module to conform to the same protocol)
+
+[10:03:39.0494] <Kris Kowal>
+StaticModuleRecord(source) => { bindings, initialize( ModuleEnvironmentRecord, { Import, ImportMeta }) }
+
+[10:03:45.0193] <littledan>
+the rest of the things will be instances of the shared class
+
+[10:03:58.0250] <littledan>
+(internal [[internalSlot]] protocol of course)
+
+[10:04:23.0330] <Kris Kowal>
+Yeah, WebAssembly.Module overlaps the current Compartment draft’s notion of a third-party/synthetic static module record, though the API differs, a small adapter suffices.
+
+[10:04:46.0468] <littledan>
+what do you think of, rather than requiring an adapter, making it "just work"?
+
+[10:05:20.0672] <Kris Kowal>
+It could be done. It’s only a little non-idiomatic. WASM modules have a strange notion of dynamic dispatch.
+
+[10:05:23.0606] <littledan>
+sorry we should split this conversation out into the subgroup, maybe we should make a separate matrix room?
+
+[10:05:25.0230] <Jack Works>
+> <@littledan:matrix.org> what do you think of, rather than requiring an adapter, making it "just work"?
+
+host implement module record internal slots for WebAssembly.Module
+
+[10:05:49.0043] <littledan>
+> <@kriskowal:matrix.org> It could be done. It’s only a little non-idiomatic. WASM modules have a strange notion of dynamic dispatch.
+
+oh OK I'll have to reread your compartments PR to understand this mismatch
+
+[10:05:51.0781] <Kris Kowal>
+Aye, please be welcome in #tc39-compartments:matrix.org 
+
+[10:14:45.0565] <Luca Casonato>
+> <@usharma:igalia.com> was a link to these slides shared at some point?
+
+sorry, they were very in flux. link here: https://docs.google.com/presentation/d/1y0MAo7ymIWzyyrU9o3oKLiHc4BtQwLtqlU4Z_8_XYjU/edit?usp=sharing
+
+[10:15:05.0436] <ryzokuken>
+> <@lucacasonato:matrix.org> sorry, they were very in flux. link here: https://docs.google.com/presentation/d/1y0MAo7ymIWzyyrU9o3oKLiHc4BtQwLtqlU4Z_8_XYjU/edit?usp=sharing
+
+no worries, thanks for sharing!
+
+[10:21:32.0465] <Luca Casonato>
+> <@shuyuguo:matrix.org> so i took that to mean the API parts are exploratory, needed to be unified with other proposals, etc
+
+yes, that is our intention.
+
+[10:53:56.0369] <shu>
+cross-posting here for visibility: plese fill out the doodle for the module harmony call if you're interested: https://github.com/tc39/Reflector/issues/436
+
+
+2022-06-09
+[22:00:30.0352] <Rob Palmer>
+As mentioned in yesterday's meeting, July's meeting is confirmed as our first hybrid meeting in over two years.  Meaning you can attend in-person if you wish.
+
+The Reflector now has [the July plenary invite,](https://github.com/tc39/Reflector/issues/437) which includes a registration form that anyone who plans to attend in-person **must** complete.
+
+https://github.com/tc39/Reflector/issues/437
+
+[22:37:53.0498] <bakkot>
+> <@robpalme:matrix.org> As mentioned in yesterday's meeting, July's meeting is confirmed as our first hybrid meeting in over two years.  Meaning you can attend in-person if you wish.
+> 
+> The Reflector now has [the July plenary invite,](https://github.com/tc39/Reflector/issues/437) which includes a registration form that anyone who plans to attend in-person **must** complete.
+> 
+> https://github.com/tc39/Reflector/issues/437
+
+the doodle link is broken; also the in-person form asks for your email twice
+
+[22:51:10.0648] <Rob Palmer>
+I have asked Patrick to create an Ecma-approved doodle.  He normally does that part.
+
+[01:44:22.0343] <Rob Palmer>
+The Doodle is live.
+
+[02:40:37.0012] <ryzokuken>
+Could someone with edit access to the calendar remove the event today? 
+
+[05:06:02.0078] <yulia>
+Done
+
+[11:30:52.0021] <keith_miller>
+yulia: shu Out of curiosity do either FF or Chrome need the function part (at least I'm not sure about normal var variables) of https://tc39.es/ecma262/#sec-web-compat-globaldeclarationinstantiation for web compatibility? JSC at least doesn't do it per our failing of: 
+
+https://test262.report/browse/annexB/language/global-code/block-decl-global-block-scoping.js?engines=chakra%2Cjavascriptcore%2Cspidermonkey%2Cv8%2Cxs%2Cqjs%2Cengine262
+
+[11:34:16.0787] <shu>
+i've not tried to remove the logic and see what happens on chrome
+
+[11:34:41.0716] <shu>
+when i implemented this for SM i feel like there *were* breakages without it?
+
+[11:35:26.0342] <shu>
+are you interested in seeing if it's web compatible to remove the weird function var synthesis + hoisting?
+
+[11:36:38.0724] <keith_miller>
+Yeah, at least for functions
+
+[11:36:53.0725] <keith_miller>
+Although maybe that's just more confusing than doing it for all var-like things
+
+[11:39:20.0164] <shu>
+i'd be all for it if it didn't require constant vigilance for unexplainable "site stopped working" bugs
+
+[11:40:06.0026] <littledan>
+I mean, I tried implementing it without all that and it definitely broke the web in 2015
+
+[11:40:25.0931] <littledan>
+maybe the web got better? I wouldn't chance it though
+
+[11:40:30.0566] <keith_miller>
+I see, it's weird that it would break sites since Safari never did it
+
+[11:40:44.0367] <keith_miller>
+Or maybe those sites were always broken safari lol
+
+[11:41:13.0013] <littledan>
+well, no one did the "full lexical scoping" thing for inner functions before ES6
+
+[11:41:27.0793] <littledan>
+everyone had their own hacks to somehow or other permit functions in blocks in sloppy mode
+
+[11:41:37.0634] <littledan>
+nobody scoped them exactly just to the block
+
+[11:41:59.0081] <keith_miller>
+Oh, I just mean that the binding inside the function should be the same as the outer block
+
+[11:42:11.0810] <shu>
+wait what does that mean
+
+[11:42:14.0843] <littledan>
+well, kinda, except there's if statements and stuff
+
+[11:42:37.0698] <littledan>
+in ES6 times, the committee liked to apply "intersection semantics" logic, reasoning that if it's not permitted in all browsers, then it won't affect web compatibility. Such a philosophy didn't turn out to result in something that Chrome could ship in all cases.
+
+[11:42:50.0633] <keith_miller>
+Like AFIACT, f() { f = 123 }; f() print(f); doesn't print 123
+
+[11:42:55.0257] <littledan>
+"union semantics" would be unnecessarily strict; web compat reality is messy
+
+[11:43:29.0354] <shu>
+it doesn't print 123 by my understanding too but what does that example have to do with the annex b lexical function hoisting thing?
+
+[11:44:08.0694] <keith_miller>
+It has to do with the fact that annex b creates a new binding inside f
+
+[11:44:16.0179] <keith_miller>
+Maybe I linked to the wrong section?
+
+[11:44:19.0761] <shu>
+wait, really?
+
+[11:44:45.0131] <shu>
+the thing you linked by my understanding only deals with stuff like `{ function f() {} }` or `if (exp) { function f() {} }` etc
+
+[11:44:48.0314] <keith_miller>
+I mean that's why you don't print 123
+
+[11:44:59.0620] <shu>
+but your example has no lexically scoped function decl
+
+[11:45:01.0404] <keith_miller>
+AFAICT
+
+[11:45:03.0637] <keith_miller>
+Sorry
+
+[11:45:17.0891] <keith_miller>
+There should be `{ }` around the declaration of f
+
+[11:47:00.0228] <keith_miller>
+So, `{ function f() { f = 123 } } f(); console.log(f);`
+
+[11:48:04.0120] <keith_miller>
+That will print `123` in Safari but `ƒ f() { f = 123 }` in Chrome
+
+[11:52:43.0059] <shu>
+uhh let me page this cursed knowledge back in
+
+[11:53:30.0787] <keith_miller>
+Also, the fact that `let b = function() { b = 123 }; b(); console.log(b);` and `let b = function b() { b = 123 }; b(); console.log(b);` have different outputs is 😭
+
+[11:53:41.0463] <littledan>
+there are definitely other things that we could've done while being web-compatible, but I don't see the point in changing things now
+
+[11:53:47.0644] <littledan>
+I mean yeah it's a complete mess and horrible
+
+[11:54:14.0101] <keith_miller>
+I have NO idea why those are different...
+
+[11:54:26.0904] <littledan>
+oh, that is more straightforward, that example
+
+[11:54:40.0511] <littledan>
+in the second case, there is an inner b binding, which is non-writeable, but writing to it is a silent error in sloppy mode
+
+[11:54:50.0806] <littledan>
+whereas the first case overwrites the outer b binding
+
+[11:55:12.0509] <littledan>
+this is because JS permits anonymous functions to be recursive by just having an inner name!
+
+[11:55:22.0923] <keith_miller>
+Oh, ok, what a beautiful language lol
+
+[11:55:25.0904] <shu>
+that scope is the worst
+
+[11:55:27.0122] <littledan>
+the inner name pattern is mirrored by named class expressions even!!!
+
+[11:55:30.0134] <shu>
+the anonymous lambda scope
+
+[11:55:34.0411] <littledan>
+but the errors are a little stricter
+
+[11:55:40.0071] <shu>
+it's like, almost a const
+
+[11:55:41.0015] <shu>
+but it's not a const
+
+[11:55:46.0292] <shu>
+because it predates consts
+
+[11:55:48.0242] <shu>
+it is the ur-const
+
+[11:55:48.0402] <littledan>
+right, for classes it's just a const
+
+[11:56:08.0806] <littledan>
+as of a few years ago, V8 scope tracking had a special bit for this particular case
+
+[11:57:38.0118] <littledan>
+> <@keith_miller:matrix.org> That will print `123` in Safari but `ƒ f() { f = 123 }` in Chrome
+
+yeah I think Chrome is right here, because you need to make the block-level lexically scoped mutable function declaration as well (this wasn't for web compat but rather for ES6 ideological reasons)
+
+[11:57:50.0890] <littledan>
+/me heads out for an exorcism
+
+[11:58:25.0301] <keith_miller>
+Right, I see what's happening here even though I hate it
+
+[11:58:42.0042] <keith_miller>
+I wonder why it differs between the other example and that
+
+[11:58:59.0755] <keith_miller>
+> <@keith_miller:matrix.org> Right, I see what's happening here even though I hate it
+
+Also known as implementing JS generally
+
+[12:01:36.0988] <shu>
+okay i think i have this paged in
+
+[12:01:36.0998] <littledan>
+IIRC back in 2015 when I came across this mess, i first proposed that we just make sloppy-mode block-scoped functions basically vars that were just assigned to where their declaration appeared
+
+[12:01:45.0513] <littledan>
+Waldemar wasn't a fan
+
+[12:02:00.0323] <shu>
+yes, i had the same proposal maybe? it was the first thing i presented to tc39
+
+[12:02:14.0935] <shu>
+and also rejected, allen didn't like it either i think
+
+[12:02:16.0046] <littledan>
+oops, yeah probably that was you and I remembered wrong? or we worked together on it?
+
+[12:02:19.0924] <shu>
+maybe
+
+[12:02:33.0886] <littledan>
+but yes I remember Allen also not liking it
+
+[12:02:35.0535] <shu>
+it was a disheartening start
+
+[12:02:41.0068] <shu>
+i was like "these are a bunch of wackjobs"
+
+[12:02:57.0994] <littledan>
+yeah same
+
+[12:03:09.0478] <littledan>
+I think folks were defensive since ES6 had just gone out
+
+[12:03:31.0130] <shu>
+keith_miller: so wait what are the two examples you were wondering the difference between?
+
+[12:03:45.0117] <shu>
+the function declaration one and the function expression one that dan already explained?
+
+[12:04:12.0892] <shu>
+i mean yes it is kind of weird that named function expressions get a const inner binding and named function declarations do not
+
+[12:04:23.0182] <shu>
+but that's also nothing to do with annex b
+
+[12:05:43.0623] <littledan>
+yeah that predates ES6
+
+[12:05:48.0775] <littledan>
+maybe it was an ES5 thing?
+
+[12:06:04.0055] <littledan>
+or earlier?
+
+[12:07:17.0200] <shu>
+the positive spin is that that annex b semantics section is the forge in which true bonds of brotherhood of JS implementers are forged!
+
+[12:07:27.0646] <bakkot>
+for anyone trying to follow along, https://dev.to/rkirsling/tales-from-ecma-s-crypt-annex-b-3-3-56go has an explanation of the spec semantics here
+
+[12:07:58.0577] <bakkot>
+incidentally there are still one or two known outstanding bugs here (places web reality requires a different thing than the spec says) which are going to live forever unless one of us feels like fixing them
+
+[12:08:20.0669] <littledan>
+bakkot: Are these tracked by issues?
+
+[12:08:28.0685] <bakkot>
+https://github.com/tc39/ecma262/issues?q=is%3Aissue+is%3Aopen+b.3.3
+
+[12:09:12.0519] <littledan>
+omg https://github.com/tc39/ecma262/issues/2019
+
+[12:09:50.0939] <littledan>
+yeah I used to be really excited about fixing the web reality...
+
+[12:11:18.0573] <shu>
+i am in this picture and i don't like it
+
+[12:27:41.0663] <keith_miller>
+> <@shuyuguo:matrix.org> keith_miller: so wait what are the two examples you were wondering the difference between?
+
+I think I have now realized the issue is a JSC one so it's not super important
+
+[12:28:22.0612] <keith_miller>
+shu: Also, is resizable TypedArray's ready to ship? Or is it stage 3 but not plz don't ship?
+
+[12:29:13.0290] <keith_miller>
+We really need a stage 3.5 that's this is ready to ship publicly or w/e
+
+[12:34:21.0675] <littledan>
+I think what held up Stage 3.5 was both standing disagreements about what the stages mean (now resolved) as well as concerns that requiring consensus on Stage 3.5 would slow our velocity
+
+[12:34:45.0583] <littledan>
+What if Stage 3.5 is just something unilaterally declared by champions based on their understanding of the state of everything?
+
+[12:35:23.0452] <littledan>
+We could just call it "shippable" and not a stage (so that it wouldn't call into question the meaning of Stage 3 or 4)
+
+[12:35:53.0916] <littledan>
+it could be documented in the proposal's readme, and just used as a term in meetings, e.g., "Status update: XYZ proposal is shippable, thanks everyone, good work"
+
+[12:36:23.0757] <littledan>
+but declarations of shippability wouldn't rely on committee consensus--the committee had already done that handoff at Stage 3
+
+[12:36:31.0259] <littledan>
+wdyt?
+
+[12:39:24.0338] <littledan>
+engines would not be expected to definitely hold off until a champion group declares something shippable, but if an engine wants to be conservative, it can look for that bit, and in the normal case the champions would set the bit in time that things usually match up
+
+[12:41:24.0429] <keith_miller>
+That seems reasonable to me? I'd like an easily searchable list of proposals in that stage though. It could even just be a column in the proposals GH page.
+
+[12:42:40.0960] <littledan>
+yeah that page already has lots of non-consensus-seeking information
+
+[13:30:55.0175] <shu>
+keith_miller: on chrome side? it's almost ready to ship
+
+[13:31:13.0964] <shu>
+we're doing the last bits now to make sure it's fast in the optimizing JIT and double-checking that the Array.prototype builtins work
+
+[15:00:58.0794] <littledan>
+shu: The question is, is the proposal definition stable enough to ship, or should engines hold back for possible changes/discussion
+
+[15:22:36.0239] <shu>
+oh, yes, i consider it stable enough to ship modulo editorial improvements
+
+[15:23:07.0856] <littledan>
+(this is what a "shippable" declaration by a champion would mean)
+
+[15:23:31.0448] <shu>
+well i feel like if i felt that way, or felt it was full of bugs, i wouldn't have asked for stage 3?
+
+[15:23:47.0219] <littledan>
+sometimes we keep discussing things after Stage 3 and we ask people to hold them back
+
+[15:23:49.0569] <shu>
+a few times we have had conditional stage 3 based on upstream changes like HTML integration that blocks shipping
+
+[15:23:56.0137] <shu>
+but for a self-contained proposal i'd hope not
+
+[15:24:14.0489] <littledan>
+e.g., Wasm/ESM integration is at the equivalent of Stage 3 and I've heard that you asked for it to be held back...
+
+[15:24:28.0502] <littledan>
+anyway that is not very comparable
+
+[15:24:35.0603] <littledan>
+but this has come up in TC39 before
+
+[15:24:58.0909] <littledan>
+I think it'd be fine to say, "this is shippable" at the exact same time as we say "this is Stage 3" but it wouldn't be the first time we had this as a question
+
+[15:25:23.0375] <littledan>
+ * e.g., we debated class features for a while, though arguably that was regrettable
+
+[15:29:22.0672] <shu>
+agreed, i'd be fine with the state that we should strive very hard for "shippable" and "stage 3" to coincide
+
+[15:29:32.0938] <shu>
+but we know they don't always coincide, so when they don't we should be explicit
+
+[15:29:41.0232] <shu>
+ * but we know they don't always coincide, so when they don't we should be explicit
+
+[15:30:01.0681] <littledan>
+I think we try to do that, but would it be OK to have an explicit signal with the reverse polarity?
+
+[15:30:15.0094] <littledan>
+where the normal practice would be to set that bit immediately
+
+[15:30:46.0055] <littledan>
+the problem is something like, we don't have a great way to keep track of that explicit signal in the opposite direction; it may be buried in the notes
+
+[15:31:21.0042] <shu>
+what's the opposite direction?
+
+[15:31:32.0285] <shu>
+i thought the only direction is "shippable" can lag behind "stage 3"
+
+[15:31:59.0740] <littledan>
+sorry by "opposite direction" I mean going out and marking shippable, rather than only noting "unshippable" as the exception to keep track of
+
+[15:32:34.0966] <shu>
+i think i'd prefer we identify the proposals that need to track the shippable signal separately at stage 3 time
+
+[15:32:37.0587] <shu>
+do you think that's possible?
+
+[15:32:51.0057] <shu>
+for some it obviously is, like ShadowRealms due to the upstream integration
+
+[15:34:55.0433] <littledan>
+yeah, I could see this working either way, as long as we have a column in the proposals page which indicates a yay/nay
+
+[15:35:20.0312] <littledan>
+I agree that the default should be that Stage 3 things are already considered shippable and need no further confirmation
+
+
+2022-06-10
+[21:00:46.0568] <ljharb>
+Temporal is stage 3 but not yet shippable, for example
+
+[21:01:12.0932] <ljharb>
+i definitely agree that the time to identify these kinds of risk areas is stage 3 acceptance - i have an open process document PR to that effect
+
+[21:58:32.0921] <Jack Works>
+A question, why Temporal not named `Time`? 
+
+[23:09:11.0662] <rkirsling>
+because it's a DateTime library, not just a Time library :D
+
+[23:09:34.0197] <rkirsling>
+er s/library/module/ whatever
+
+[23:10:28.0778] <Kris Kowal>
+diem et tempus
+
+[23:10:51.0686] <Ashley Claymore>
+> <@rkirsling:matrix.org> er s/library/module/ whatever
+
+Namespace?
+
+[23:11:13.0192] <rkirsling>
+that too 😅
+
+[23:16:24.0347] <Kris Kowal>
+> <@jackworks:matrix.org> A question, why Temporal not named `Time`?
+
+To me, temporal reads as “about time” rather than “time”, so it stretches to cover “date”, “moment”, “duration”, “clock”, “calendar”, “timezone”, “appointment”, and “procrastinate” more easily. Every precedent has been tried and this one’s not the worst.
+
+[23:19:20.0557] <Kris Kowal>
+But yes, if we did not tend to conflate Time with wall-clock time by default, Time would be a better name for the namespace.
+
+[23:20:44.0298] <Kris Kowal>
+It’s like, what do you call a Test in a test framework?
+
+[23:22:20.0798] <Kris Kowal>
+Or, what do you call a Module in a module system? (Trick question, you name *nothing* Module and burn its page in the dictionary)
+
+[23:27:50.0710] <Ashley Claymore>
+“Relating to practical matters” 😆
+
+[23:28:55.0730] <Ashley Claymore>
+I like this as, in practice, it will be much nicer than Date
+
+[23:29:46.0472] <rkirsling>
+I guess even more importantly, it's that Time sounds like a companion to, and not a replacement for, Date
+
+[23:31:39.0382] <Ashley Claymore>
+That’s a really good point, the “marketing message” is a bit easier with a more distinct name
+
+[23:32:00.0343] <Ashley Claymore>
+“Use Temporal” rather than “use Time”
+
+[00:00:40.0837] <Rob Palmer>
+Reminder:  the 19-21 July plenary meeting includes the possibility of in-person attendance in San Francisco at Google's office, but you must **register in advance** for this.  Right now there are 27 remaining places.
+
+https://github.com/tc39/Reflector/issues/437
+
+[05:24:00.0456] <littledan>
+> <@ljharb:matrix.org> Temporal is stage 3 but not yet shippable, for example
+
+My contention is that this determination is best done unilaterally by champions. Do you agree?
+
+[10:49:50.0882] <ljharb>
+> <@littledan:matrix.org> My contention is that this determination is best done unilaterally by champions. Do you agree?
+
+i think champions should be free to unilaterally decide when they think it's ready, but like all committee decisions, if there's objectors then it needs to be discussed
+
+[10:50:14.0627] <ljharb>
+i expect virtually every case to be uncontroversial, ofc
+
+[11:16:45.0864] <littledan>
+hmm, I agree that all committee members should be able to bring things up for discussion, but I don't think we'll get consensus on a process change which would require an additional consensus-seeking step which marks "shippability". I was hoping that this could be more like a documentation improvement, process-wise and not even require discussion in a meeting (more like encourage notification but not necessarily synchronized with meetings).
+
+[11:16:56.0388] <littledan>
+ * hmm, I agree that all committee members should be able to bring things up for discussion, but I don't think we'll get consensus on a process change which would require an additional consensus-seeking step which marks "shippability". I was hoping that this could be more like a documentation improvement, process-wise and not even require discussion in a meeting (more like encourage notification but not necessarily synchronized with meetings).
+
+[11:19:30.0981] <littledan>
+in general, proposal authors can go about editing their proposals pre-Stage 3 without committee consensus, and even after Stage 3, only normative changes require consensus (whereas this is sort of editorial). Committee consensus (which is the only time it makes sense to talk about "objectors") is only required at stage advancement or consideration of normative PRs (including to Stage 3 proposals)
+
+[11:54:56.0202] <ljharb>
+i didn't mean consensus would be required first
+
+[11:55:14.0947] <ljharb>
+i'm just saying that if delegates think it's not actually shippable, that needs to be discussed
+
+[12:27:35.0967] <littledan>
+right, I agree that any discussions about proposals can be brought up to the committee, whether by the champion or some other delegate
+
+[12:28:23.0061] <littledan>
+ * right, I agree that any discussions about proposals can be brought up to the committee, whether by the champion or some other delegate
+
+[12:31:04.0016] <littledan>
+(I'm not sure how to interpret "needs"--who would this be an obligation on, and how would we judge whether we're in the state of needing that? But any delegate who thinks they have something important to discuss *can* do so.)
+
+
+2022-06-11
+[21:21:31.0269] <Jack Works>
+what's the difference between Object.[[Apply]] and Object.[[Construct]]?
+
+[21:22:02.0436] <Jack Works>
+the only observable difference I can found is though subclassing Object
+
+[21:22:40.0322] <Jack Works>
+```js
+function O() {
+    if (new.target) return Reflect.construct(Object, arguments, new.target);
+    else return Reflect.apply(Object, this, arguments)
+}
+
+O(1) // Number { 1 }
+new O(1) // O { }
+
+Object(1) // Number { 1 }
+new Object(1) // Number { 1 }
+```
+
+[21:23:29.0861] <Jack Works>
+ * ```js
+function O() {
+    if (new.target) return Reflect.construct(Object, arguments, new.target);
+    else return Reflect.apply(Object, this, arguments)
+}
+
+O(1) // Number { 1 }
+new O(1) // O { }
+
+Object(1) // Number { 1 }
+new Object(1) // Number { 1 }
+```
+
+[04:13:38.0227] <Rob Palmer>
+> <@robpalme:matrix.org> Reminder:  the 19-21 July plenary meeting includes the possibility of in-person attendance in San Francisco at Google's office, but you must **register in advance** for this.  Right now there are 27 remaining places.
+> 
+> https://github.com/tc39/Reflector/issues/437
+
+Further reminder:  Please sign-up soon if you wish to attend July plenary in-person.  There are 18 remaining places.
+
+
+2022-06-12
+[11:15:18.0667] <littledan>
+> <@jackworks:matrix.org> the only observable difference I can found is though subclassing Object
+
+In theory these are generally supposed to correspond, but Proxies have the freedom to do otherwise and so it is observable which is called. Another observable difference is through proxies with callable/constructable things as targets—these inherit the callability/constructability. Honestly I am not sure why these were split into two MOP methods though.
+
+
+2022-06-13
+[14:49:44.0321] <sffc>
+Rob Palmer: Do we have approximate dates for the November TC39 meeting? I'm trying to schedule some other things around that time and want to avoid a conflict if possible
+
+
+2022-06-14
+[06:37:05.0897] <littledan>
+I noticed that Ecma has added an Invited Expert form which is recommended by the how-we-work docs. Last time Ecma had such a form and pledged to keep track of the results, it lost these results, and I had to ask everyone to resign the IPR form since we literally had no record of who had signed it. (Fortunately, everyone agreed to do so except Domenic Denicola who had previously been an IE when writing the Promises specification.) Let's be very careful here to maintain our own infrastructure for keeping track of IPR and IE information, as Ecma had agreed to allow us to do after this past incident.
+
+[06:37:51.0820] <littledan>
+ * I noticed that Ecma has added an Invited Expert form which is recommended by the how-we-work docs. Last time Ecma had such a form and pledged to keep track of the results, it lost these results, and I had to ask everyone to resign the IPR form since we literally had no record of who had signed it. (Fortunately, everyone agreed to do so except Domenic Denicola who had previously been an IE when writing the Promises specification.) Let's be very careful here to maintain our own infrastructure for keeping track of IPR and IE information, as Ecma had agreed to allow us to do after this past incident.
+
+[06:39:13.0901] <littledan>
+Where does the new IE form send data to?
+
+[06:40:31.0295] <littledan>
+ * I noticed that Ecma has added an Invited Expert form which is recommended by the how-we-work docs. Last time Ecma had such a form and pledged to keep track of the results, it lost these results, and I had to ask everyone to resign the IPR form since we literally had no record of who had signed it. (Fortunately, everyone agreed to do so except Domenic Denicola who had previously been an IE when writing the Promises specification--it would still be great if someone could convince him to resign this.) Let's be very careful here to maintain our own infrastructure for keeping track of IPR and IE information, as Ecma had agreed to allow us to do after this past incident.
+
+[06:42:54.0941] <littledan>
+There's some legal text on the new IE form which somewhat overlaps with the non-member contributor form, but not entirely. I don't understand the intended relationship between these documents.
+
+
+2022-06-15
+[15:06:06.0148] <Richard Gibson>
+editors: I don't have permission to post in #tc39-editors:matrix.org , but review of https://github.com/tc39/ecma402/pull/689 would be very much appreciated
+
+[15:08:16.0984] <bakkot>
+Richard Gibson: do you want us to do an actual review along the lines of figuring out how the current machinery works and confirming the diff is correct, or you just want a review along the lines of "yup, that's a good use of enums"?
+
+
+2022-06-16
+[17:05:36.0629] <shu>
+the new incubator call agenda is up: https://github.com/tc39/incubator-agendas/issues/25
+
+[17:05:53.0957] <shu>
+i do not remember the stakeholders list very well for call-this and pipeline. if you're interested, could you please add yourself to the list?
+
+[08:56:37.0559] <Richard Gibson>
+bakkot: "yup, that's a good use of enums" would be fine
+
+
+2022-06-17
+[05:14:25.0260] <littledan>
+> <@gibson042:matrix.org> bakkot: "yup, that's a good use of enums" would be fine
+
++100 let's do web specs next
+
+[08:58:20.0446] <shu>
+the time of the Strings is over, and the time of the Enums is at hand
+
+
+2022-06-18
+[19:36:04.0170] <Kris Kowal>
+or: when I became enum, I gave up childish strings
+
+
+2022-06-21
+[02:01:05.0812] <ptomato>
+any delegates have an opinion on whether https://github.com/tc39/proposal-temporal/pull/2312#pullrequestreview-1012089158 is a change that needs to be presented at plenary? the author (anba) marked it as "normative" but to me it seems like it fixes an invalidity in the proposal as written, i.e. it wouldn't be implementable without this
+
+[04:32:37.0989] <HE Shi-Jun>
+Someone asked questions about the notes in the [scope analysis](https://tc39.es/ecma262/#sec-syntax-directed-operations-scope-analysis) section in the spec (see https://www.zhihu.com/question/479537603 if u can read chinese):
+
+1. At the top level of a Script, function declarations are treated like var declarations rather than like lexical declarations.
+2. At the top level of a Module, function declarations are treated like lexical declarations rather than like var declarations.
+3. At the top level of a function, or script, function declarations are treated like var declarations rather than like lexical declarations.
+4. At the top level of a function or script, inner function declarations are treated like var declarations.
+
+I guess all these notes are try to explain whether function declaration are included in the return result of the syntax-directed operations. But it may be not easy to understand if not familiar with the spec. Can we make the note much explicit? For example, can we change the first note to "...are treated like var declarations rather than like lexical declarations, *So they are not included.*" ?
+
+And there are two specific questions in the original post: A. Is there any differences between capitalized "Script" (in the 1st note) and "script" (in the 3rd and 4th note)? B. What "inner functions declarations" mean it the 4th note?
+
+For question A, I suppose there is no difference, I guess "Script" is capitalized just because it's a link to the "Script" section. I don't know the convention of the spec, but it seems a little bit inconsistent that in one note it's linked and capitalized, in another notes they are not.
+
+For question B, I think the confusion is "inner functions" of "script", I can understand what that mean, but it may be only common to say "inner functions" of a "function" (I'm not sure about that)?
+
+
+
+[14:08:00.0189] <littledan>
+Does anyone know how to get the Ecma documents for the GA tomorrow? (We can follow up in DMs.)
+
+[14:34:06.0973] <littledan>
+Got my answer, thanks ryzokuken !
+
+[14:35:07.0874] <littledan>
+Love the Ecma window manager
+
+[14:35:52.0601] <ryzokuken>
+"what do you mean which compositor? wayland? no, canvas!"
+
+[15:47:57.0369] <Rob Palmer>
+Someone put a lot of love into recreating retro windowing on the Ecma NAS box.
+
+
+2022-06-22
+[09:11:07.0830] <Michael Ficarra>
+> <@haxjs:matrix.org> Someone asked questions about the notes in the [scope analysis](https://tc39.es/ecma262/#sec-syntax-directed-operations-scope-analysis) section in the spec (see https://www.zhihu.com/question/479537603 if u can read chinese):
+> 
+> 1. At the top level of a Script, function declarations are treated like var declarations rather than like lexical declarations.
+> 2. At the top level of a Module, function declarations are treated like lexical declarations rather than like var declarations.
+> 3. At the top level of a function, or script, function declarations are treated like var declarations rather than like lexical declarations.
+> 4. At the top level of a function or script, inner function declarations are treated like var declarations.
+> 
+> I guess all these notes are try to explain whether function declaration are included in the return result of the syntax-directed operations. But it may be not easy to understand if not familiar with the spec. Can we make the note much explicit? For example, can we change the first note to "...are treated like var declarations rather than like lexical declarations, *So they are not included.*" ?
+> 
+> And there are two specific questions in the original post: A. Is there any differences between capitalized "Script" (in the 1st note) and "script" (in the 3rd and 4th note)? B. What "inner functions declarations" mean it the 4th note?
+> 
+> For question A, I suppose there is no difference, I guess "Script" is capitalized just because it's a link to the "Script" section. I don't know the convention of the spec, but it seems a little bit inconsistent that in one note it's linked and capitalized, in another notes they are not.
+> 
+> For question B, I think the confusion is "inner functions" of "script", I can understand what that mean, but it may be only common to say "inner functions" of a "function" (I'm not sure about that)?
+
+Submit a PR or open an issue on tc39/ecma262 if you're unsure what to do.
+
+
+2022-06-23
+[17:35:54.0516] <shu>
+i completely missed this during stage 3 review: https://github.com/tc39/proposal-change-array-by-copy/issues/88
+
+[17:36:38.0054] <shu>
+i don't think we discussed this during plenary, perhaps we were all under the misconception that `TypedArray.prototype.splice` existed
+
+[17:36:54.0777] <shu>
+cc yulia keith_miller hopefully it's not too late
+
+[19:32:25.0261] <Ashley Claymore>
+I’m OK with removing this from TA. I can’t imagine it’s too late.
+
+[22:05:43.0031] <ljharb>
+ES2022 was approved today, so now it's official: https://github.com/tc39/ecma262/releases/tag/es2022
+
+[00:30:02.0269] <yulia>
+> <@shuyuguo:matrix.org> cc yulia keith_miller hopefully it's not too late
+
+I think we can manage something
+
+[07:15:47.0524] <shu>
+Ashley Claymore: i'm not strongly opposed to having it but maybe a quick re-discussion would be good, since i feel like people might've been under the assumption that `TA.p.splice` existed
+
+[07:17:26.0935] <shu>
+if we do decide to keep it it needs parameter conversion changes like https://github.com/tc39/proposal-change-array-by-copy/pull/86
+
+[07:18:46.0252] <shu>
+which is... kind of unfortunate, actually, because it would need temporary storage for the items
+
+[07:18:50.0937] <shu>
+but oh well, no different than for sort, i guess
+
+[07:21:41.0133] <Ashley Claymore>
+there is the "Record & Tuple Monthly Call" on the tc39 calendar for this coming Tuesday. We've been using that call to also discuss the change-array-by-copy proposal.
+
+[07:23:52.0673] <shu>
+if you could ask for me if folks feel strongly about having it
+
+[07:24:20.0364] <shu>
+i don't really have the intuition that zloirock has that `Tuple` is analogous here
+
+[07:24:29.0520] <shu>
+like, we didn't add these methods to all indexables
+
+[07:27:49.0907] <Ashley Claymore>
+I think its more that TA not having splice could be seen as similar to it not having push and pop. In that they modify length. (putting aside that not all inputs to splice will modify length)
+
+[07:28:10.0869] <shu>
+for now i guess it's safer to assume that it'll remain in, so i'll prep a PR that does the items conversion up front
+
+[07:28:14.0046] <shu>
+that's a good point, yes
+
+[07:28:25.0682] <shu>
+(but also there's no withPushed or withPopped, right?)
+
+[07:28:43.0591] <nicolo-ribaudo>
+Because we have .concat and .slice
+
+[07:28:47.0497] <Ashley Claymore>
+correct. There was orginally, but they were dropped as they have direct alternatives
+
+[07:28:52.0025] <nicolo-ribaudo>
+> <@shuyuguo:matrix.org> (but also there's no withPushed or withPopped, right?)
+
+ * Because we have .concat and .slice
+
+[07:29:00.0065] <Ashley Claymore>
+`.concat` and `.slice(0, -1)`
+
+[07:29:06.0553] <Ashley Claymore>
+ * `.concat` and `.slice(0, -1)`
+
+[07:29:28.0076] <shu>
+okay, i think i'm coming around to "it's fine to have toSpliced"
+
+[07:29:55.0050] <shu>
+then i'd ask for the folks on the record and tuples call to just reaffirm this is a conscious decision
+
+[07:29:57.0846] <Ashley Claymore>
+but 100% agree, the conversion needs to be done up front if we do have it. To isolate the userland reentrace
+
+[07:30:11.0492] <Ashley Claymore>
+ * but 100% agree, the conversion needs to be done up front if we do have it. To isolate the userland re-entrance
+
+[07:30:12.0083] <shu>
+as a rule of thumb i don't like adding extra things to TA.p because TAs are weird
+
+[07:30:19.0775] <shu>
+like they aren't "just" type-enforced arrays
+
+[07:30:42.0712] <Ashley Claymore>
+ * but 100% agree, the type-conversion needs to be done up front if we do have it. To isolate the userland re-entrance
+
+[07:30:50.0299] <littledan>
+yeah I'd be OK if we said, "we no longer believe in what we did in ES6 of trying to make TAs analogous to Array" FWIW, but if we want to follow that ES6 logic we'd include the method
+
+[07:31:03.0889] <littledan>
+ * yeah I'd be OK if we said, "we no longer believe in what we did in ES6 of trying to make TAs analogous to Array" FWIW, but if we want to follow that logic we'd include the method
+
+[07:31:19.0661] <shu>
+littledan: i don't follow the second part
+
+[07:31:32.0444] <littledan>
+TAs include all the Array methods that could possibly work
+
+[07:31:37.0830] <littledan>
+even the ones that are pretty useless-feeling
+
+[07:31:48.0857] <shu>
+right
+
+[07:31:52.0831] <littledan>
+this is a design that we could decide to carry forward here, or we could go more utility-driven
+
+[07:31:55.0367] <shu>
+oh "that logic" == "ES6 logic"
+
+[07:32:00.0751] <littledan>
+yes
+
+[07:32:02.0550] <shu>
+okay now i understand
+
+[07:32:07.0464] <littledan>
+I'd be OK with the conscious decision to reject ES6 logic, yeah
+
+[07:33:52.0225] <littledan>
+ * yeah I'd be OK if we said, "we no longer believe in what we did in ES6 of trying to make TAs analogous to Array" FWIW, but if we want to follow that ES6 logic we'd include the method
+
+[07:35:24.0161] <Ashley Claymore>
+> <@shuyuguo:matrix.org> for now i guess it's safer to assume that it'll remain in, so i'll prep a PR that does the items conversion up front
+
+thanks. Im happy to put the PR up if you could do with one less thing on your plate
+
+[07:35:38.0625] <shu>
+oh much appreciated, that'd be nice
+
+[07:35:42.0057] <shu>
+tag me for review please
+
+[07:35:46.0526] <Ashley Claymore>
+on it
+
+[08:00:13.0556] <shu>
+> <@littledan:matrix.org> I'd be OK with the conscious decision to reject ES6 logic, yeah
+
+that's my preference for sure, at least going forward
+
+[08:00:54.0137] <Ashley Claymore>
+https://github.com/tc39/proposal-change-array-by-copy/pull/89/files
+
+
+2022-06-28
+[10:06:48.0969] <Ashley Claymore>
+Reminder. Record & Tuple monthly call starting in just under 1 hour. Details in TC39 calendar 😃
+
+[10:07:05.0958] <Ashley Claymore>
+all welcome of course 
+
+[13:15:48.0056] <littledan>
+Check it out, Secretary General position advertised in ESNext News! http://esnextnews.com/archive/es-next-news-2022-06-28.html
+
+[13:16:09.0211] <littledan>
+remember to share this around to all qualified candidates!
+
+
+2022-06-29
+[20:05:05.0788] <Richard Gibson>
+bakkot: any ideas about why ecmarkup is failing to populate <emu-import>s in ECMA-402? https://github.com/tc39/ecma402/runs/7104742995?check_suite_focus=true#step:6:1
+
+[20:16:48.0875] <bakkot>
+Richard Gibson: looks like it is to me?
+
+[20:16:56.0238] <bakkot>
+you're `cat`ing `spec/index.html`, which is the input, though
+
+[20:17:17.0156] <Richard Gibson>
+no, out/index.html is only 7.8K
+
+[20:17:37.0245] <Richard Gibson>
+please disregard the confusing cat
+
+[20:20:29.0079] <bakkot>
+ah, hm, let me see.
+
+[20:26:12.0710] <Richard Gibson>
+updated to output out/index.html contents: https://github.com/tc39/ecma402/runs/7104920026?check_suite_focus=true#step:6:1
+
+[20:26:39.0181] <Richard Gibson>
+ * updated to output out/index.html contents: https://github.com/tc39/ecma402/runs/7104920026?check_suite_focus=true#check-step-6
+
+[20:26:56.0268] <Richard Gibson>
+ * updated to output out/index.html contents: https://github.com/tc39/ecma402/runs/7104920026?check_suite_focus=true#step:6:1
+
+[20:27:11.0400] <Richard Gibson>
+and of course everything works fine locally
+
+[20:27:31.0091] <bakkot>
+I can repro locally
+
+[20:27:39.0389] <bakkot>
+by rm -rf'ing node_modules and `out`
+
+[20:28:08.0598] <bakkot>
+poking through the debugger, seems to be because https://github.com/tc39/ecmarkup/blob/3a872ca5c19872bf1ed5cd84ff8db1ecf7c3ddef/src/Spec.ts#L1910 is, for some reason, failing - looks like it's case-sensitive, when it really should not be
+
+[20:28:13.0696] <bakkot>
+don't know why that would have changed though
+
+[20:28:35.0165] <Richard Gibson>
+jsdom?
+
+[20:32:26.0404] <bakkot>
+looks like the selectors come via https://github.com/dperini/nwsapi, which had its first release in three years six days ago
+
+[20:32:29.0136] <bakkot>
+so that's a very likely candidate
+
+[20:34:05.0362] <bakkot>
+yeah, pinning `"nwsapi": "2.2.0",` seems to fix it locally
+
+[20:34:14.0191] <bakkot>
+I'll file the actual bug but that's a fine workaround for now
+
+[20:34:26.0005] <bakkot>
+in the mean time, I suggest committing your package-lock, so this doesn't happen
+
+[20:34:39.0124] <bakkot>
+you should always commit your package-lock
+
+[20:38:14.0376] <Richard Gibson>
+I didn't even realize we weren't. There's an .npmrc with package-lock=false! 😱
+
+[20:49:30.0252] <bakkot>
+https://github.com/dperini/nwsapi/issues/57 for posterity
+
+[21:02:51.0788] <Richard Gibson>
+thanks for being so responsive
+
+[14:03:27.0730] <ljharb>
+> <@gibson042:matrix.org> I didn't even realize we weren't. There's an .npmrc with package-lock=false! 😱
+
+i put this in there years ago; i have it in all my published projects, but arguably the specs should have one since they're closer to apps than packages
+

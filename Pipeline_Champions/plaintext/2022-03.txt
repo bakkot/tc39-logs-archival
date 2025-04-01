@@ -1,0 +1,1626 @@
+2022-03-16
+[09:53:50.0931] <jschoi>
+At the next plenary, I am planning to present the results of the dataflow ad-hoc meeting (as well as the results of the recent function-helpers incubator meeting), with an eye towards future advancement of the pipe operator and a bind/call-this operator. Hopefully that sounds good to everyone. 
+
+[09:54:17.0603] <jschoi>
+I also plan to ask for time to bikeshed both the topic reference and the syntax of bind/call-this. 
+
+[09:55:00.0726] <jschoi>
+I’ll try to have slides for these by March 18. 
+
+[10:25:11.0635] <TabAtkins>
+Yes, that matches what I was expecting. So just to be clear - we're asking the committee to help decide the topic reference this meeting, but *not* asking for Stage 2 yet, right? That'll be next meeting, assuming the bikeshedding concludes satisfactorily?
+
+[10:50:30.0940] <jschoi>
+> <@tabatkins:matrix.org> Yes, that matches what I was expecting. So just to be clear - we're asking the committee to help decide the topic reference this meeting, but *not* asking for Stage 2 yet, right? That'll be next meeting, assuming the bikeshedding concludes satisfactorily?
+
+Yeah, just updates, no advancement. 
+
+[10:52:42.0113] <jschoi>
+There are cross-cutting concerns between the pipe operator and bind/call-this for Jordan, so I want to try to have them not stay too far apart in process. 
+
+[10:52:57.0047] <jschoi>
+Also, Tab, did you mean Stage 3 for pipe in the following plenary?
+
+[10:53:02.0908] <TabAtkins>
+yes
+
+[10:53:07.0893] <TabAtkins>
+the next stage
+
+[10:53:14.0624] <TabAtkins>
+whichever
+
+
+2022-03-18
+[19:28:46.0697] <jschoi>
+FYI: https://github.com/tc39/agendas/pull/1133
+
+
+
+[19:29:24.0723] <jschoi>
+(Please update https://github.com/tc39/agendas/blob/main/2022/03.md#schedule-constraints if you have schedule constraints and don’t want to miss the topic-reference bikeshedding, the bind-this syntax bikeshedding, or the holistic dataflow redux. ljharb, you have some constraints, so you might want to do so.)
+
+[19:49:26.0108] <ljharb>
+thanks, will do
+
+[19:49:44.0712] <ljharb>
+I’ll land your PR shortly also
+
+[20:35:17.0239] <jschoi>
+Just also made a community update: https://github.com/tc39/proposal-pipeline-operator/issues/232#issuecomment-1071995811
+
+[10:30:18.0562] <jschoi>
+I’ve come around to `#` as the topic reference again, even if tuple literals go with `#[]`.
+
+Requiring separation between topic and property access isn’t too bad: `x |> (#)[0]`…since dynamically accessing the property of a topic is going to be strictly less common than using the topic reference itself. And it’s not really a “special case”…or at least it’s as much as a special case as requiring separation between `(^^)^y` or `(%%)%y`.
+
+Our candidates right now are `#`, `^^`, `%%`, `@@`, and `##`.
+
+[10:30:32.0315] <jschoi>
+> <@ljharb:matrix.org> jschoi: `x |> #y in #` isn't all too bad, to be sure (with `#` or `##`)
+
+ * I’ve come around to `#` as the topic reference again, even if tuple literals go with `#[]`.
+
+Requiring separation between topic and property access isn’t too bad: `x |> (#)[0]`…since dynamically accessing the property of a topic is going to be strictly less common than using the topic reference itself. And it’s not really a “special case”…or at least it’s as much as a special case as requiring separation between `(^^)^ y` or `(%%)% y`.
+
+Our candidates right now are `#`, `^^`, `%%`, `@@`, and `##`.
+
+[10:30:41.0511] <jschoi>
+ * I’ve come around to `#` as the topic reference again, even if tuple literals go with `#[]`.
+
+Requiring separation between topic and property access isn’t too bad: `x |> (#)[0]`…since dynamically accessing the property of a topic is going to be strictly less common than using the topic reference itself. And it’s not really a “special case”…or at least it’s as much as a special case as requiring separation between `(^^)^y` or `(%%)%y`.
+
+Our candidates right now are `#`, `^^`, `%%`, `@@`, and `##`.
+
+[10:30:55.0250] <ljharb>
+in that case you'd do `(#)[x]` but `#.x` and `#?.[x]`?
+
+[10:30:58.0834] <jschoi>
+Yes.
+
+[10:31:04.0797] <ljharb>
+ * in that case you'd do `(#)[x]` but `#.x` and `#?.[x]`?
+
+[10:31:18.0549] <ljharb>
+so it's only non-optional bracketed access that would need parens
+
+[10:31:19.0832] <jschoi>
+Leaving the `#[` token to be reserved for tuple literals.
+
+[10:31:21.0251] <jschoi>
+Yes.
+
+[10:31:24.0042] <ljharb>
+ * so it's only non-optional bracketed access that would need parens
+
+[10:31:28.0519] <jschoi>
+ * Leaving the `#[` token to be reserved for tuple literals.
+
+[10:31:34.0422] <ljharb>
+while in practice that's probably fine, that is an odd inconsistency
+
+[10:32:32.0225] <ljharb>
+i assume in Records, `#\n{` wouldn't be allowed
+
+[10:32:46.0728] <jschoi>
+Yes, I believe they are making `#[` and `#{` their own lexical tokens.
+
+[10:33:31.0985] <jschoi>
+https://tc39.es/proposal-record-tuple/#sec-punctuators
+
+[10:35:40.0336] <jschoi>
+Requiring parentheses to distinguish dynamic access `(#)[0]` from tuple `#[0]` is an odd inconsistency, I agree, but…
+The benefit of having a single- rather than double-character token (which would occur very frequently, every time a topic occurs) might be great enough to outweigh the cost of that inconsistency (which would occur relatively infrequently).
+
+[10:39:35.0272] <jschoi>
+ * Requiring parentheses to distinguish dynamic access `(#)[0]` from tuple `#[0]` is an odd inconsistency, I agree, but…
+The benefit of having a single- rather than double-character token (which would occur very frequently, every time a topic occurs) might be great enough to outweigh the cost of that inconsistency (which would occur relatively infrequently).
+
+[10:44:39.0194] <TabAtkins>
+Oh no, `#[0]` being a tuple *by default* is absolutely awful. Property access is going to remain *far* more common than tuple literals, forever.
+
+[10:45:00.0880] <TabAtkins>
+So long as tuples stick with `#[]` a single `#` for topic is verboten, imo.
+
+[10:45:36.0890] <TabAtkins>
+`(#)[0]` is, by itself, a substantially worse outcome than `##` everywhere for all other uses.
+
+[10:45:56.0142] <TabAtkins>
+(God, just *typing* it is awful - the hash and the parens are on different hands and all Shifted.)
+
+[10:51:31.0434] <jschoi>
+> <@tabatkins:matrix.org> `(#)[0]` is, by itself, a substantially worse outcome than `##` everywhere for all other uses.
+
+Well, if we must have a two-character token (tuples are likely to go with `#[]` in the end), then I would rather have `^^` or `%%` than `##`…because, although topic references (and property access on them) may become more frequent than tuple literals…I expect tuple literals to be far more common than bitwise xor or remainder. 
+
+[10:52:22.0679] <TabAtkins>
+All of these are fine with me; my weak aesthetic preference is still for `##` but I'm happy to stick with whatever the committee decides on.
+
+[10:53:53.0965] <jschoi>
+I suppose that saying “we can’t fully disqualify `#` until the tuple champions commit to `#[]` syntax” is tantamount to saying “we cannot advance pipe operator until tuples advance too”. Which would probably be Bad.
+
+[10:57:10.0261] <jschoi>
+(It’s still a shame that we can’t have a single-character topic though. 🥲)
+
+[10:58:30.0840] <rbuckton>
+> <@jschoi:matrix.org> (It’s still a shame that we can’t have a single-character topic though. 🥲)
+
+It's a shame we can't have an Identifier topic, imo. Double character isn't so bad, at least. 
+
+[11:29:59.0050] <jschoi>
+https://docs.google.com/presentation/d/1dDucwsW8qM22yWLr_NHFmAiAltQSht3AXYW00kET4GA/edit?usp=sharing
+
+[11:33:42.0304] <TabAtkins>
+Slide 2's find() looks weird - it'd take an arrow function, surely, rather than constructing a comparison out of three strings?
+
+[11:34:07.0233] <TabAtkins>
+In all the examples those three args move as a unit anyway, so having them separate doesn't seem to be valuable for what you're showing off.
+
+[11:35:36.0833] <TabAtkins>
+otherwise +1
+
+[11:36:48.0614] <jschoi>
+> <@tabatkins:matrix.org> Slide 2's find() looks weird - it'd take an arrow function, surely, rather than constructing a comparison out of three strings?
+
+Yeah, I took this code from this Firebase video about its new modular API (https://www.youtube.com/watch?v=r5eJQ3nPc6A).
+I’ll revisit the example and see if I can make it more compelling. Let me know if you have any ideas.
+
+[11:37:26.0769] <jschoi>
+I do think that arguments are an important part of reading order, and the fact that nested function calls require zigzagging of arguments is an important disadvantage of nested function calls.
+
+[11:37:31.0750] <jschoi>
+ * I do think that arguments are an important part of reading order, and the fact that nested function calls require zigzagging of arguments is an important disadvantage of nested function calls.
+
+[11:37:51.0972] <TabAtkins>
+The code is reasonable otherwise, that's just a *really weird* set of arguments for a find() function.
+
+[11:38:23.0044] <TabAtkins>
+Just swapping that trio out for `x=>x.name == "fruit"` woudl work
+
+[11:38:48.0236] <jschoi>
+Yeah, good idea. I think I’ll replace it with `.find(pred)`.
+
+[11:38:58.0742] <TabAtkins>
+Sure, that works.
+
+[11:43:00.0232] <jschoi>
+And done. Thanks for the suggestion.
+
+[11:43:04.0732] <jschoi>
+ * And done. Thanks for suggestion.
+
+[11:43:06.0884] <jschoi>
+ * And done. Thanks for the suggestion.
+
+[11:52:11.0288] <TabAtkins>
+Yeah, the 4-2-1-0-3-5 order really works now
+
+[15:27:52.0024] <jschoi>
+ljharb: I’m making slides for the bind/call-this operator plenary bikeshedding.
+
+I wanted to confirm your opinion—though you would block the pipe operator if bind/call-this did not advance, would you still block the pipe operator if Function.unThis advanced instead?
+
+[15:27:54.0746] <jschoi>
+
+
+I ask because Mark Miller had stated in the previous plenary that he is currently against any dataflow syntax proposal other than pipe operator to advance, but he is fine with functions (https://github.com/tc39/notes/blob/main/meetings/2022-01/jan-26.md#holistic-discussion-of-tc39-dataflow-proposals). So I am wondering what would happen if he stated that he would block any bind/call-this syntax…I would then pursue Function.unThis instead. Would this be acceptable to you as a substitute for a bind-this operator?
+
+[15:32:14.0525] <jschoi>
+https://docs.google.com/presentation/d/1-MLGCibETPX8NiIvNJ1xOxiMS-NB8GCbDGNcB5patiU/edit?usp=sharing
+
+[15:44:32.0276] <ljharb>
+> <@jschoi:matrix.org> ljharb: I’m making slides for the bind/call-this operator plenary bikeshedding.
+> 
+> I wanted to confirm your opinion—though you would block the pipe operator if bind/call-this did not advance, would you still block the pipe operator if Function.unThis advanced instead?
+
+yes, i want a syntactic mechanism that restores receiver-first ordering. Function.callBind is just sugar for `Function.call.bind`, it doesn't really add much otherwise
+
+
+2022-03-19
+[17:18:12.0234] <jschoi>
+ljharb: Got it, thank you. I will not float Function.unThis as an alternative possibility to bind-this/call-this.
+Although I will direct the bikeshedding over bind/call-this’s syntax, I will try to push `rec :> f(arg0)` as my favored syntax, since rkirsling and Justin Ridgewell are also fine with it.
+
+
+[17:18:18.0783] <jschoi>
+I will also try to be persuasive to MM and company that both pipe and bind-this deserve to be in the language (“big frequency
+× big clunkiness = worth improving with syntax”). 
+
+[17:18:50.0756] <jschoi>
+I wonder if it would be more persuasive if we dropped the binding semantics without arguments (making `rec :> f` an error)…That would get rid the overlap with PFA syntax and pipe operator.
+
+[17:19:38.0205] <jschoi>
+We could always add binding semantics later. And, as people have pointed out, most binding involves extraction from the same original owner object as the receiver, which requires repetition in `rec :> rec.f` anyway.
+
+[17:20:01.0715] <jschoi>
+ * We could always add binding semantics later. And, as people have pointed out, most binding involves extraction from the same original owner object as the receiver, which requires repetition in `rec :> rec.f` anyway.
+
+[17:20:13.0962] <jschoi>
+ * We could always add binding semantics later. And, as people have pointed out, most binding involves extraction from the same original owner object as the receiver, which requires clunky repetition in `rec :> rec.f` anyway.
+
+[17:20:18.0509] <ljharb>
+i am perfectly content to not have the binding form, but also it seems practically zero-cost to have, so I’m not sure why we’d drop it
+
+[17:20:23.0511] <Justin Ridgewell>
+I personally want a call syntax, and don’t care at all about the binding ability
+
+[17:21:10.0444] <Justin Ridgewell>
+** a receiver-first call syntax
+
+[17:23:17.0853] <jschoi>
+Because some other representatives (definitely TabAtkins, hence his call-this syntax idea…maybe yulia | sick during January plenary?) have expressed concerns about new proposals overlapping with each other – and the desire to minimize overlap between features where possible. So this may make it more palatable in that sense.
+
+[17:23:20.0562] <jschoi>
+We did resolve in the post-plenary meeting, “In general, some overlap is okay, but too much is bad; we have to decide this on a case-by-case basis.”
+
+[17:24:01.0766] <jschoi>
+In this case, it seems to be “not really much loss, not really much gain, maybe punt to later”. I don’t have strong opinions on this issue myself, other than whatever it takes to garner the most support within Committee…
+
+[17:24:19.0726] <jschoi>
+> <@ljharb:matrix.org> i am perfectly content to not have the binding form, but also it seems practically zero-cost to have, so I’m not sure why we’d drop it
+
+ * Because some other representatives (definitely TabAtkins, hence his call-this syntax idea…maybe yulia | sick during January plenary?) have expressed concerns about new proposals overlapping with each other – and the desire to minimize overlap between features where possible. So this may make it more palatable in that sense.
+
+[17:25:21.0136] <jschoi>
+Persuading MM about bind-this’s worth is going to be important, because if we cannot persuade MM to not block bind-this, then JHD will block pipe operator…In the situation that we have, we must have both or neither.
+
+[17:25:44.0761] <ljharb>
+sure, agreed. As long as i have one or the other syntax, in proper receiver-first order, I’m happy
+
+[17:26:56.0664] <jschoi>
+Just to clarify: You had expressed in the January post-plenary meeting that you do greatly prefer bind-this (receiver first) to call-this (function first), but even call-this would be acceptable enough for you not to block the pipe operator. That’s still true, right?
+
+[17:27:06.0452] <jschoi>
+> <@ljharb:matrix.org> sure, agreed. As long as i have one or the other syntax, in proper receiver-first order, I’m happy
+
+ * Just to clarify: You had expressed in the January post-plenary meeting that you do greatly prefer bind-this (receiver first) to call-this (function first), but even call-this would be acceptable enough for you not to block the pipe operator. That’s still true, right?
+
+[17:27:56.0849] <jschoi>
+ * Because some other representatives (definitely TabAtkins, hence their call-this syntax idea…maybe yulia | sick during January plenary?) have expressed concerns about new proposals overlapping with each other – and the desire to minimize overlap between features where possible. So this may make it more palatable in that sense.
+
+[17:31:34.0400] <ljharb>
+Yes, but i also don’t think call-this holds its syntax weight without receiver-first
+
+[17:31:40.0050] <ljharb>
+we already have .call for that
+
+[17:32:34.0014] <ljharb>
+call-this would provide the robustness i want, but without the aesthetics/ergonomics it deserves, iow
+
+[17:32:35.0543] <jschoi>
+`.call` is still clunky; I’d make a conciseness argument there, especially for such a frequently used feature of the language.
+
+[17:32:52.0945] <ljharb>
+* call-this would provide the robustness i want, but without the aesthetics/ergonomics it deserves, iow
+
+[17:34:43.0638] <jschoi>
+If I drop binding from `r :> f()`, then it no longer would make sense to call it “bind-this”. 
+Therefore I plan to start calling the proposal as a whole the “this” operator, and I will distinguish `r :> f()` versus `f.@(r)` with “receiver first” versus “function first”.
+
+[17:36:03.0378] <jschoi>
+ * If we drop binding from `r :> f()`, then it no longer would make sense to call it “bind-this”.
+Therefore I plan to start calling the proposal as a whole the “this” operator, and we can continue to distinguish `r :> f()` versus `f.@(r)` with “receiver first” versus “function first”.
+
+[17:52:40.0950] <jschoi>
+Justin Ridgewell: You’ve expressed before the desire for object-oriented programmers to use less prototype methods and more individually exported functions. This is a big reason why you have supported adding the pipe operator. It’s part of a bigger shift in the ecosystem, e.g., with Firebase’s new JS API.
+
+However, if both the pipe operator and the “this” operator get added to the language…do you anticipate yourself or other programmers individually exporting `this`-based functions for use with the “this” operator – rather than non-`this`-based functions for use with the pipe operator?
+
+
+[17:52:45.0600] <jschoi>
+I ask this because I anticipate viral ecosystem schism to continue being a (weak?) concern from Waldemar and maybe Tab and others. 
+
+[17:53:10.0156] <jschoi>
+We concluded that this concern was relatively weak in the post-plenary meeting, but it’s probably going to get brought up again…
+
+[17:53:13.0889] <jschoi>
+ * We affirmed that this concern was relatively weak in the post-plenary meeting, but it’s probably going to get brought up again…
+
+[17:53:21.0922] <jschoi>
+ * We concluded that this concern was relatively weak in the post-plenary meeting, but it’s probably going to get brought up again…
+
+[17:54:29.0786] <jschoi>
+ * If we drop binding from `r :> f()`, then it no longer would make sense to call it “bind-this”.
+Therefore I plan to start calling the proposal as a whole the “call-this” operator, and we can continue to distinguish `r :> f()` versus `f.@(r)` with “receiver first” versus “function first”.
+
+[17:54:42.0611] <jschoi>
+ * If we drop binding from `r :> f()`, then it no longer would make sense to call it “bind-this”.
+Therefore I plan to start calling the proposal as a whole the “this” operator, and we can continue to distinguish `r :> f()` versus `f.@(r)` with “receiver first” versus “function first”.
+
+[17:56:07.0155] <jschoi>
+ * If we drop binding from `r :> f()`, then it no longer would make sense to call it “bind-this”.
+Therefore I plan to start calling the proposal as a whole the “this” operator (“call-on operator”?), and we can continue to distinguish `r :> f()` versus `f.@(r)` with “receiver first” versus “function first”.
+
+[17:57:00.0689] <jschoi>
+ * If we drop binding from `r :> f()`, then it no longer would make sense to call it “bind-this”.
+Therefore I plan to start calling the proposal as a whole the “this” operator (“call-this”?), and we can continue to distinguish `r :> f()` versus `f.@(r)` with “receiver first” versus “function first”.
+
+[18:16:34.0361] <jschoi>
+TabAtkins: If we drop function binding from `rec :> fn()`, then the overlap with PFA syntax disappears. Is it okay if I call this new proposal “receiver-first call-this”, and change your idea to “function-first call-this”? I’m asking since you have first claim to the “call-first” name.
+
+[18:17:10.0644] <TabAtkins>
+Yeah that's fine, I have no attachment to the proposal except as a way to thread the syntax needle
+
+[19:21:52.0420] <Justin Ridgewell>
+Yes, I'd prefer this-based functions, because I think the IDE integration for a receiver first is considerably better.
+
+[19:22:17.0985] <Justin Ridgewell>
+ * Yes, I'd prefer this-based functions, because I think the IDE integration for a receiver first is considerably better.
+
+[19:22:33.0960] <Justin Ridgewell>
+Eg, imagine you already have a `const foo = new Foo()`
+
+[19:23:19.0281] <Justin Ridgewell>
+If I do `foo :> b` (and I just typed `b`), and IDE could predict functions which receive a `Foo` instance
+
+[19:30:24.0098] <jschoi>
+> <@jridgewell:matrix.org> Yes, I'd prefer this-based functions, because I think the IDE integration for a receiver first is considerably better.
+
+Do you anticipate that IDEs will add support for function suggestions after `|>`? I can certainly see that happening…
+
+[19:30:42.0188] <jschoi>
+This IDE-integration advantage for `this`-based functions unfortunately somewhat weakens my argument. But I anticipate that the IDE advantage is going to be temporary.
+
+[19:30:46.0155] <jschoi>
+ * This IDE-integration advantage unfortunately somewhat weakens my argument. But I anticipate that the IDE advantage is going to be temporary.
+
+[19:30:52.0783] <jschoi>
+ * This IDE-integration advantage for `this`-based functions unfortunately somewhat weakens my argument. But I anticipate that the IDE advantage is going to be temporary.
+
+[19:30:56.0314] <Justin Ridgewell>
+I think both will receive IDE support
+
+[19:31:18.0110] <jschoi>
+> <@jschoi:matrix.org> This IDE-integration advantage for `this`-based functions unfortunately somewhat weakens my argument. But I anticipate that the IDE advantage is going to be temporary.
+
+…That is, it weakens my argument that the ecosystem-schism risk is low.
+
+[19:31:30.0930] <Justin Ridgewell>
+But the pipeline operator's won't be as efficient because it could be _any_ function that has those starting letters
+
+[19:31:42.0450] <jschoi>
+It would have to infer the typing of the pipe head in order to be able to filter them, yes. Though I’m not sure if that’s any different than having to infer the type of the expression before `:>`.
+
+[19:31:59.0499] <Justin Ridgewell>
+With bind-op/call-op, it can narrow it down to functions with those starting letter that also use this type as the recevier
+
+[19:32:14.0228] <jschoi>
+ * It would have to infer the typing of the pipe head in order to be able to filter them, yes. Though I’m not sure if that’s any different than having to infer the part before `:>`.
+
+[19:32:25.0804] <jschoi>
+ * It would have to infer the typing of the pipe head in order to be able to filter them, yes. Though I’m not sure if that’s any different than having to infer the type of the expression before `:>`.
+
+[19:32:31.0291] <Justin Ridgewell>
+The `|>`'s argument can go anywhere
+
+[19:32:39.0458] <jschoi>
+Ah, I see, yes.
+
+[19:32:52.0959] <Justin Ridgewell>
+`##.prop` access, `fn(##)` first arg, `fn(1, 2, ##)` third arg, etc
+
+[19:33:02.0149] <Justin Ridgewell>
+With call-op, we know it's the recevier
+
+[19:33:18.0137] <Justin Ridgewell>
+ * `##.prop` access, `fn(##)` first arg, `fn(1, 2, ##)` third art, etc
+
+[19:33:23.0062] <Justin Ridgewell>
+ * `##.prop` access, `fn(##)` first arg, `fn(1, 2, ##)` third arg, etc
+
+[19:35:18.0110] <jschoi>
+Okay, so with that, I think I’m going to have difficulty arguing that `:>` won’t encourage an ecosystem schism between libraries that export functions that use `this` and libraries whose functions do not use `this`…
+
+[19:36:00.0644] <jschoi>
+The best I may be able to argue might be: “Even if libraries appear that export functions that use `this`—which is already possible without `:>`—it would not be a big deal, because, when you have both `|>` and `:>`, you can fluently switch between the two styles in a flow of data by mixing `|>` and `:>`…just like how you can already mix `|>` and `.`.”
+
+[19:36:15.0661] <jschoi>
+ * The best I may be able to argue might be: “Even if libraries appear that export functions that use `this`—which is already possible without `:>`—it would not be a big deal, because, when you have both `|>` and `:>`, you can fluently switch between the two styles in a flow of data by mixing `|>` and `:>`.”
+
+[19:36:23.0386] <jschoi>
+ * The best I may be able to argue might be: “Even if libraries appear that export functions that use `this`—which is already possible without `:>`—it would not be a big deal, because, when you have both `|>` and `:>`, you can fluently switch between the two styles in a flow of data by mixing `|>` and `:>`…just like how you can already mix `|>` and `.`.”
+
+[19:36:50.0405] <Justin Ridgewell>
+I think the schism already exists with prototype-based methods and free functions in pipeline?
+
+[19:37:31.0239] <Justin Ridgewell>
+If anything, this is closer to the way programmers write code in prototype-based APIs.
+
+[19:37:48.0305] <jschoi>
+The argument, I believe, is that, while it already exists, it may worsen it by encouraging further creation of individually exported `this`-based functions (which are not common right now).
+
+[19:38:17.0643] <jschoi>
+Though I could try to argue that fluency would actually be improved by using both `|>` and `:>`…
+
+[19:39:04.0710] <jschoi>
+`a.b |> c(^^).d :> e() |> f().g`…
+
+
+[19:39:23.0358] <jschoi>
+ * `a.b |> c(^^).d :> e() |> f().g`…
+
+
+[19:39:53.0944] <jschoi>
+ * The argument, I believe, is that, while it already exists, it may worsen it by encouraging further creation of individually exported `this`-based functions (which are not common right now).
+
+[19:40:16.0405] <jschoi>
+ * Though I could try to argue that, even if libraries in that style may become more common, fluency would not be impacted when you can mix both `|>` and `:>`…
+
+[19:41:38.0434] <jschoi>
+ * `import { a, c, e, f } from 'A'; import { e } from 'B'; a.b |> c(^^).d :> e() |> f().g`.
+
+[19:41:53.0872] <jschoi>
+ * Though I could try to argue that, even if libraries in that style may become more common, fluency would not be impacted when you can mix both `|>` and `:>`…That’s the best argument I got now.
+
+[19:42:48.0268] <jschoi>
+ * ```js
+import { a, c, e, f } from 'A'; 
+import { e } from 'B'; 
+a.b |> c(^^).d :> e() |> f().g;
+```
+
+[19:43:11.0108] <Justin Ridgewell>
+You're missing a context token in the `f().g`
+
+[19:43:22.0309] <jschoi>
+ * ```js
+import { a, c, e, f } from 'A'; 
+import { e } from 'B'; 
+a.b |> c(^^).d :> e() |> f(^^).g;
+```
+
+[19:43:49.0698] <jschoi>
+Fixed. Anyways, A there is a library exporting functions that don’t use `this`, and B is a library that exports functions that do use `this`.
+
+[19:44:39.0394] <jschoi>
+That’s the schism that Waldemar et al. are concerned about—that libraries like B would be encouraged, as you yourself would create—but maybe it would still be okay, since we can mix `|>` and `:>` in dataflows…?
+
+[19:46:02.0052] <jschoi>
+(Yes, this is similar to the ecosystem schism between ordinary `.` prototype method calls versus non-`this`-using function calls, but one could argue that this existing schism is already “bad”…and that compounding it by making the third category—non-prototype `this`-using functions—more common…would make the situation even worse. So I imagine they might say.)
+
+[19:46:40.0537] <jschoi>
+ * (Yes, this is similar to the ecosystem schism between ordinary `.` prototype method calls versus non-`this`-using function calls, but one could argue that this existing schism is already “bad”, and that compounding it by making the third category—non-prototype `this`-using functions—would be even worse.)
+
+[19:47:10.0286] <jschoi>
+ * (Yes, this is similar to the ecosystem schism between ordinary `.` prototype method calls versus non-`this`-using function calls, but one could argue that this existing schism is already “bad”…and that compounding it by making the third category—non-prototype `this`-using functions—more common…would make the situation even worse. So I imagine they might say.)
+
+[19:47:51.0670] <jschoi>
+ * Fixed. Anyways, `A` there is a library exporting functions that don’t use `this`, and `B` is a library that exports functions that do use `this`.
+
+[19:48:21.0875] <Justin Ridgewell>
+I understand and sympathize a bit, but I think it's warranted in this case.
+
+[19:49:58.0412] <Justin Ridgewell>
+The upside here for extremely efficient tree-shaking is massive
+
+[19:50:32.0599] <Justin Ridgewell>
+The similarity with class-based approaches make ease-of-use pretty good
+
+[19:51:24.0290] <Justin Ridgewell>
+Without the "ideal" syntax here, I worry that we won't reach that point
+
+[19:51:37.0556] <Justin Ridgewell>
+Even with pipeline (which has a huge ergo benefit)
+
+[19:52:08.0226] <Justin Ridgewell>
+The backwards ordering and topic token are enough friction where people may continue to use prototype-based.
+
+[19:52:21.0718] <Justin Ridgewell>
+ * The backwards ordering and topic token are enough friction where people may continue to use prototype-based.
+
+[19:52:58.0757] <Justin Ridgewell>
+I would say that pipeline's ability to support receiver-first-arg style functions is the odd one out
+
+[19:53:23.0766] <Justin Ridgewell>
+That's the unneeded overlap
+
+[19:53:47.0715] <jschoi>
+Receiver-first-arg style functions?
+
+[19:54:48.0406] <Justin Ridgewell>
+Instead of `function foo(this: Bar) {}`, accepting `Bar` as the first param: `function foo(rec: Bar) {}`
+
+[19:56:53.0172] <jschoi>
+Ah, functions that do not use `this` and which instead use arguments only. Well…surely you are not saying that all functions that do not use `this` are non-idiomatic, are you? There are plenty of such functions in JavaScript core alone, like `console.log` or `parseInt`. Or with things like Lodash.
+
+[19:57:08.0330] <jschoi>
+ * Ah, functions that do not use `this` and which instead use arguments only. Well…surely you are not saying that all functions that do not use `this` are non-idiomatic, are you? There are plenty of such functions in JavaScript core alone, like `console.log` or `parseInt`.
+
+[19:58:25.0673] <jschoi>
+ * Ah, functions that do not use `this` and which instead use arguments only. Well…surely you are not saying that all functions that do not use `this` are non-idiomatic, are you? There are plenty of such functions in JavaScript core alone, like `console.log` or `parseInt`. Or with things like Lodash.
+
+[19:58:35.0931] <jschoi>
+We already have this schism between functions that use `this` and functions that do not…and the pipe operator’s ability make the latter more fluent is crucial. 
+
+[19:59:01.0048] <jschoi>
+In fact, I daresay most newly written functions nowadays might not use `this` at all…
+
+[19:59:08.0433] <jschoi>
+ * In fact, I daresay most newly written functions nowadays might not use `this` at all…
+
+[20:00:06.0808] <Justin Ridgewell>
+I think the standard lib only has a few first-arg like that
+
+[20:00:36.0939] <Justin Ridgewell>
+Most APIs are class based, and there's a huge difference when using a method vs a first-arg function
+
+[20:00:50.0360] <Justin Ridgewell>
+I should say, I think most APIs are class based
+
+[20:01:34.0074] <Justin Ridgewell>
+The jump from method to first-arg is large enough that I don't think pipeline is really solving for it.
+
+[20:01:51.0080] <Justin Ridgewell>
+Like, it does it because it falls naturally out of the expression based format we chose for pipeline
+
+[20:02:09.0646] <Justin Ridgewell>
+But it's not really revolutionizing the way we call functions
+
+[20:02:25.0414] <Justin Ridgewell>
+(single-depth functions, nested functions are vastly improved)
+
+[20:02:30.0349] <jschoi>
+Well, it allows us to make nested function calls into linear flows. Which we are arguing is a big deal.
+
+[20:02:40.0896] <jschoi>
+Yeah, and with functional dataflow you always have nesting.
+
+[20:03:23.0487] <jschoi>
+Well, so what I’m seeing is that some people are going to be set on `this`-based functions. And, yes, the pipe operator does not help them much, because `|> blah.call(^^)` is still a big pain.
+
+[20:03:37.0615] <jschoi>
+In that case, ecosystem schism with `:>` might be inevitable.
+
+[20:03:52.0193] <jschoi>
+The best way that I see to assuage concerns about ecosystem schism, then, is to argue that schism already exists and would be improved with `:>` and `|>` together.
+
+[20:05:04.0869] <jschoi>
+That `|>` alone does not sufficiently solve the problem for developers, because it does not much help `this`-based functions, and many developers will still gladly use `this`-based functions…and they are not going away.
+
+[20:05:07.0621] <jschoi>
+…So, if mixing between `|>` and `:>` is inevitable, then is there a way to better harmonize `|>` (a very loose operator) and `:>` (a very tight operator similar to `.`), I wonder…? 
+
+[20:05:54.0094] <jschoi>
+```js
+a.b |> c(^^).d :> e() |> f(^^).g :> i()
+```
+
+
+[20:07:37.0045] <jschoi>
+I can hear people saying, “It’s confusing that we have both `|>` and `:>`. Do I need to use `^^` with `:>`? How does the grouping work?” Can we harmonize this better…? 
+Is it really good that we are making `:>` look like `|>`? Would it be better to make it look like `.`? (I know that rkirsling would much prefer the former.)
+
+[20:08:27.0481] <jschoi>
+ * …So, if mixing between `|>` and `:>` is inevitable, then is there a way to better harmonize `|>` (a very loose operator) and `:>` (a very tight operator similar to `.`), I wonder…? 
+
+[20:17:11.0859] <rbuckton>
+I'm not sold on an infix operator for this, it seems too ripe for confusion. I.e., how do I pass `this` to `foo().bar()`? To which call is it passed? What if I want to pass it to the other one? 
+
+[20:18:37.0076] <rbuckton>
+I still generally favor something like `foo(this: x).bar()` or `foo().bar(this: x)` because it's explicit and unambiguous. 
+
+[20:21:13.0229] <Justin Ridgewell>
+I think that's a prettier syntax than the `foo@(x)`
+
+[20:21:14.0399] <jschoi>
+I do present `foo(this: x).bar()` as one of the options in https://docs.google.com/presentation/d/1-MLGCibETPX8NiIvNJ1xOxiMS-NB8GCbDGNcB5patiU/edit?usp=sharing.
+
+For what it’s worth, `x :> foo().bar()` would be `(x :> foo()).bar()`.
+
+[20:21:41.0784] <Justin Ridgewell>
+But doesn't help with the ergo that I'm looking for
+
+[20:22:12.0113] <jschoi>
+> <@rbuckton:matrix.org> I'm not sold on an infix operator for this, it seems too ripe for confusion. I.e., how do I pass `this` to `foo().bar()`? To which call is it passed? What if I want to pass it to the other one?
+
+ * I do present `foo(this: x).bar()` as one of the options in https://docs.google.com/presentation/d/1-MLGCibETPX8NiIvNJ1xOxiMS-NB8GCbDGNcB5patiU/edit?usp=sharing.
+
+For what it’s worth, `x :> foo().bar()` would be `(x :> foo()).bar()`.
+
+[20:23:36.0540] <jschoi>
+I had read “ergo” as “therefore” at first…In the end, we’re all looking for that ergo in life.
+
+[20:24:30.0874] <Justin Ridgewell>
+Lol. I mean ergonomics
+
+[20:24:49.0821] <jschoi>
+Yeah, it took me a while but I got it in the end. 😅
+
+[23:42:30.0378] <ljharb>
+i don't think passing the receiver inside the argument parens is clean, simple, or acceptable
+
+[23:43:29.0095] <ljharb>
+you'd do `x :> foo().bar()`, i'd expect, because it applies to the last one in the chain. if you wanted to pass a receiver to foo, you'd do `(x:> foo()).bar()`.
+
+[23:46:36.0844] <rbuckton>
+Then `:>` seems a confusing choice of sigil as it can't chain with `.` and it's too close to `|>`, which *can* chain. 
+
+[23:49:57.0016] <rbuckton>
+And your intuition about which call gets the `this` is the opposite of mine, which is exactly my point. In-argument-list makes more sense to me because that's how you do it today in JS: `foo.call(x).bar()`, or `foo().bar.call(x)`. 
+
+[04:35:16.0652] <Justin Ridgewell>
+> <@ljharb:matrix.org> you'd do `x :> foo().bar()`, i'd expect, because it applies to the last one in the chain. if you wanted to pass a receiver to foo, you'd do `(x:> foo()).bar()`.
+
+It has to be the opposite for exactly the reason Ron says.
+
+[07:32:43.0211] <jschoi>
+> <@rbuckton:matrix.org> Then `:>` seems a confusing choice of sigil as it can't chain with `.` and it's too close to `|>`, which *can* chain.
+
+I think this is a real concern. I switched from `::` to `:>` because of rkirsling’s concerns about confusion with `.` and with other languages’ `::`, but now the precedence seems weirdly mismatched with `|>`.
+
+[07:33:35.0033] <jschoi>
+> <@ljharb:matrix.org> you'd do `x :> foo().bar()`, i'd expect, because it applies to the last one in the chain. if you wanted to pass a receiver to foo, you'd do `(x:> foo()).bar()`.
+
+Wait, right now `x :> foo().bar()` groups as `(x :> foo()).bar()`. Because it’s basically a slightly looser version of `.`, which is very tight. Are you saying you would expect it to group as `x :> (foo().bar())`?
+
+[07:34:04.0818] <jschoi>
+…I should add a precedence bikeshed slide to the slideshow.
+
+[07:34:58.0892] <jschoi>
+I note that brackets would not suffer from precedence problems: the grouping of something like `x~[foo]()` is clear. 
+
+[07:35:06.0901] <jschoi>
+ * I note that bracketed receiver-first style would not suffer from precedence problems: the grouping of something like `x~[foo]()` is clear.
+
+[07:35:10.0352] <jschoi>
+ * (I note that bracketed receiver-first style would not suffer from precedence problems: the grouping of something like `x~[foo]()` is clear.)
+
+[07:35:17.0523] <jschoi>
+ * (I note that bracketed receiver-first style would not suffer from precedence problems: the grouping of something like `x~[foo]()` is clear and explicit.)
+
+[07:35:28.0818] <jschoi>
+ * (I note that bracketed receiver-first style would not suffer from precedence problems: the grouping of something like `x~[foo]().bar()` is clear and explicit.)
+
+[07:36:49.0956] <jschoi>
+ * (I note that bracketed receiver-first style would not suffer from precedence problems: the grouping of something like `x![foo]().bar()` is clear and explicit.)
+
+[07:58:19.0060] <jschoi>
+ * …I should add a syntax-precedence bikeshed slide to the slideshow.
+
+[08:00:37.0514] <jschoi>
+> <@ljharb:matrix.org> you'd do `x :> foo().bar()`, i'd expect, because it applies to the last one in the chain. if you wanted to pass a receiver to foo, you'd do `(x:> foo()).bar()`.
+
+ * Wait, right now, the operator’s RHS must be an identifier, a chain of identifiers, or a parenthesized expression—like decorator expressions.
+
+Right now `x :> foo().bar()` groups as `(x :> foo()).bar()`. Because it’s basically a slightly looser version of `.`, which is very tight. 
+
+Are you saying you would expect it to group as `x :> (foo().bar())`?
+
+[08:00:55.0655] <jschoi>
+ * Wait, right now, the operator’s RHS still must be an identifier, a chain of identifiers, or a parenthesized expression—like decorator expressions.
+
+Right now `x :> foo().bar()` groups as `(x :> foo()).bar()`. Because it’s basically a slightly looser version of `.`, which is very tight.
+
+Are you saying you would expect it to group as `x :> (foo().bar())`?
+
+[08:02:05.0656] <jschoi>
+ * …Maybe I should add a syntax-precedence bikeshed slide to the slideshow…
+
+[08:02:29.0887] <jschoi>
+ * …Maybe I should add a syntax-precedence bikeshed slide to the slideshow…but I don’t know how the RHS syntax would even work with `|>`-like loose precedence.
+
+[08:10:48.0916] <ljharb>
+> <@rbuckton:matrix.org> And your intuition about which call gets the `this` is the opposite of mine, which is exactly my point. In-argument-list makes more sense to me because that's how you do it today in JS: `foo.call(x).bar()`, or `foo().bar.call(x)`. 
+
+the way you already do it with .call is the problem. We need a way where the receiver appears before the function, just like in OOP chaining. in-arg-list doesn’t solve that problem, it just adds one of the weirder things in TS. Arg lists are for args, only.
+
+which sigil we use or what precedence it has isn’t important to me, and we can bikeshed that all we like.
+
+[08:25:39.0173] <jschoi>
+ljharb: You have expressed before that you dislike *bracketed* receiver-first style, like `x![foo]().bar()`. Can you elaborate on this: Do you dislike it as much as you dislike function-first style or this-argument style? 
+
+People already do things like bracketed receiver-first style “fluently” anyway, like with `x[Symbol.iterator]().next()`…
+
+[08:42:34.0377] <ljharb>
+x![foo] looks like I’m accessing a foo property on x, which I’m asserting is non-nullish
+
+[08:42:48.0145] <ljharb>
+i believe that’s precisely what TS interprets that as
+
+[08:43:00.0622] <ljharb>
+(a property referenced by the name in the variable foo, ofc)
+
+[08:43:32.0737] <ljharb>
+square brackets are for computed properties, whether definition, access, destructuring, etc.
+
+[08:45:51.0187] <jschoi>
+Yeah, I agree, square brackets are for computed properties…but, in a sense, though, calling a function on a receiver `x![foo]()` can be seen as using it as a computed “quasi-property”, as if it were a function property that belonged to the receiver like `x[foo]()`. I think that analogy could be conceptually useful. (Though I am more concerned about the clearer grouping.)
+
+[08:46:05.0125] <jschoi>
+> <@ljharb:matrix.org> square brackets are for computed properties, whether definition, access, destructuring, etc.
+
+ * Yeah, I agree, square brackets are for computed properties…but, in a sense, though, calling a function on a receiver can be seen as using it as a “computed quasi-property”, as if it were a function property that belonged to the receiver. I think that analogy could be conceptually useful. (Though I am more concerned about the clearer grouping.)
+
+[08:46:33.0503] <jschoi>
+ * Yeah, I agree, square brackets are for computed properties…but, in a sense, though, calling a function on a receiver `x![foo]()` can be seen as using it as a computed “quasi-property”, as if it were a function property that belonged to the receiver like `x[foo]()`. I think that analogy could be conceptually useful. (Though I am more concerned about the clearer grouping.)
+
+[08:47:20.0281] <jschoi>
+It doesn’t have to be `x![foo]` either. It could be `x#[foo]` or `x~[foo]`.
+
+[08:47:30.0070] <jschoi>
+ * It doesn’t have to be `x![foo]` either. It could be `x#[foo]` or `x~[foo]`.
+
+[08:59:32.0808] <ljharb>
+i really don’t think it’s clear with the brackets. That primarily implies it’s a property on the object to me - that it will set the receiver is incidental.
+
+[09:00:29.0050] <ljharb>
+the goal here isn’t to “pretend it’s a property on the object”, because that’s not how `this` works, that’s just one of the justifiably confused mental models some folks have
+
+[09:42:07.0544] <Richard Gibson>
+shouldn't receiver-first vs. function-first matter much less in a world where pipelines make inversion easy, e.g. `nodes |> Array.prototype.at@(^^, -1)` or `nodes |> Array.prototype.at(this: ^^, -1)`? I think the dominant concern ought to be syntax burden, particularly factoring in the effects of binding precedence upon [mandatory] parenthesization in plausible expressions.
+
+[09:55:57.0793] <ljharb>
+just because pipelines are one way to do it doesn’t mean they must be the only way.
+
+
+2022-03-20
+[20:53:33.0874] <pokute>
+> <@jschoi:matrix.org> I’ve come around to `#` as the topic reference again, even if tuple literals go with `#[]`.
+> 
+> Requiring separation between topic and property access isn’t too bad: `x |> (#)[0]`…since dynamically accessing the property of a topic is going to be strictly less common than using the topic reference itself. And it’s not really a “special case”…or at least it’s as much as a special case as requiring separation between `(^^)^y` or `(%%)%y`.
+> 
+> Our candidates right now are `#`, `^^`, `%%`, `@@`, and `##`.
+
+The most common use case for `#[]` for me was `#[0]` usually done after sort. `#.at(0)` is a sensible alternative.
+
+[21:12:50.0645] <pokute>
+But as mentioned before, having `#[]` for tuples with `#` as topic would result in way too many surprises. The worst part is that there's a good chance that the syntax is valid.
+
+
+2022-03-22
+[14:54:27.0080] <TabAtkins>
+I'm abso going to block any attempt to make the topic sigil `#` if it means we can't do array access. It would be a huge mistake regardless of if there are (longer) alternatives (for some cases). But we're not even putting that forward as an option right now, last I saw jschoi's slides, so it's not a relevant topic anyway.
+
+
+2022-03-23
+[21:38:14.0350] <jschoi>
+> <@tabatkins:matrix.org> I'm abso going to block any attempt to make the topic sigil `#` if it means we can't do array access. It would be a huge mistake regardless of if there are (longer) alternatives (for some cases). But we're not even putting that forward as an option right now, last I saw jschoi's slides, so it's not a relevant topic anyway.
+
+The reason why `#` was even on the table again for a while is because it had looked like that `@[]` might be viable for tuple literals. But the reception I got from some TC39 representatives was cool, so out it went again…
+
+[21:38:24.0128] <jschoi>
+* > <@tabatkins:matrix.org> I'm abso going to block any attempt to make the topic sigil `#` if it means we can't do array access. It would be a huge mistake regardless of if there are (longer) alternatives (for some cases). But we're not even putting that forward as an option right now, last I saw jschoi's slides, so it's not a relevant topic anyway.
+
+The reason why `#` was even on the table again for a while is because it had looked like that `@[]` might be viable for tuple literals. But the reception I got from some TC39 representatives was cool, so out it went again…
+
+[08:47:00.0727] <TabAtkins>
+Right
+
+[12:00:36.0417] <rkirsling>
+I do still feel `#_` to be an option worth remembering 😅
+
+[12:20:54.0291] <jschoi>
+I’d be happy to add `#_` to the slides. We need to properly consider every still-viable possibility at the next plenary meeting. It was my mistake that `^^` was not properly discussed in the 2021-11-15 incubator meeting.
+
+[12:21:16.0398] <jschoi>
+> <@rkirsling:matrix.org> I do still feel `#_` to be an option worth remembering 😅
+
+ * I’d be happy to add `#_` to the slides. We need to properly consider every possibility at the next meeting. It was my mistake that `^^` was not properly discussed in the 2021-11-15 incubator meeting.
+
+[12:21:41.0707] <jschoi>
+ * I’d be happy to add `#_` to the slides. We need to properly consider every still-viable possibility at the next meeting. It was my mistake that `^^` was not properly discussed in the 2021-11-15 incubator meeting.
+
+[12:21:44.0087] <jschoi>
+ * I’d be happy to add `#_` to the slides. We need to properly consider every still-viable possibility at the next plenary meeting. It was my mistake that `^^` was not properly discussed in the 2021-11-15 incubator meeting.
+
+[12:26:40.0976] <jschoi>
+I’ve added `#_` to the slides. For what it’s worth, I feel (moderately) that `#_` is less ASCII soupy / visually noisy than `##` when mixed with tuple/record literals.
+
+[12:28:44.0944] <jschoi>
+ * I’ve added `#_` to the slides. For what it’s worth, I feel (moderately) that `#_` is less ASCII soupy / visually noisy than `##` when mixed with tuple/record literals.
+
+[15:21:17.0697] <jschoi>
+…Should we consider bare `@` again? `x |> @(0);` technically would not be ambiguous, because there is no following class expression. It just requires lookahead to the end of the parentheses…
+
+[15:21:37.0656] <jschoi>
+* …Should we consider bare `@` again? `x |> @(0);` technically is not ambiguous, because there is no following class expression. It just requires lookahead to the end of the parentheses…
+
+[15:21:47.0226] <jschoi>
+* …Should we consider bare `@` again? `x |> @(0);` technically would not be ambiguous, because there is no following class expression. It just requires lookahead to the end of the parentheses…
+
+[15:22:59.0494] <jschoi>
+I want to make sure we aren’t excluding anything that might be viable from the plenary discussion next week, and we’ve always dismissed single `@` because of `@(expr) class {}` decorator syntax, but it isn’t actually ambiguous. 
+
+[15:23:39.0313] <jschoi>
+…I suppose ASI would be the problem.
+```js
+x |> @(blah)
+class {}
+```
+
+[15:24:39.0625] <jschoi>
+* …I suppose ASI would be the problem.
+```js
+x |> @(blah)
+class {}
+```
+
+[15:24:56.0986] <jschoi>
+But the ASI problem is not insurmountable, and either way probably would be at least worth talking about at plenary.
+
+[15:25:09.0069] <jschoi>
+* But the ASI problem may not be insurmountable, and either way probably would be at least worth talking about at plenary.
+
+[15:48:18.0580] <jschoi>
+* …I suppose ASI would be the problem.
+```js
+x |> @(blah)
+class C {}
+```
+
+[15:51:26.0999] <jschoi>
+Come to think of it, even if `@` is the topic token, `x |> @(blah) class C {}` would be a SyntaxError because the `@` indicates a decorator pipe body has no topic reference, so arguably this isn’t even an ASI hazard. And this scenario (a decorator expression in a pipe body) will hopefully be quite uncommon anyway…
+
+[15:52:11.0206] <jschoi>
+* Come to think of it, even if `@` is the topic token, `x |> @(blah) class C {}` would be a SyntaxError because the `@` indicates a decorator pipe body has no topic reference, so arguably this isn’t even an ASI hazard. And this scenario (a decorator expression in a pipe body) will hopefully be quite uncommon anyway…
+
+[16:12:14.0622] <jschoi>
+Also rkirsling: I had forgotten that `#_ in this` is already valid syntax, and therefore `x |> #_ in this` would be ambiguous between `#_` as topic and `#_` as private field (since the LHS of `in` can be an arbitrary expression). So `#_` as topic is probably not viable, sorry.
+
+[16:15:11.0743] <jschoi>
+…I suppose we could make a special case with a cover grammar such that `#_ in this` always means `#_` as private field and not as topic, but that seems bad.
+
+[16:15:50.0436] <jschoi>
+ * …I suppose we could make a special case with a cover grammar such that `#_ in this` always means `#_` as private field and not as topic, but that seems bad.
+
+[16:19:43.0434] <rkirsling>
+hm I was aware of that case when I suggested it, but I'm not sure why I felt that it didn't affect viability
+
+[16:20:09.0615] <rkirsling>
+becoming _unable_ to do something is certainly not good
+
+[16:21:21.0072] <rkirsling>
+@ would be amazing if it were viable.
+
+[16:21:30.0016] <jschoi>
+* Come to think of it, even if `@` is the topic token, `x |> @(blah) class C {}` would be a SyntaxError because the `@` indicates a decorator, and therefore the pipe body has no topic reference……so arguably this isn’t even an ASI hazard. And this scenario (a decorator expression in a pipe body) will hopefully be quite uncommon anyway…
+
+[16:22:08.0872] <jschoi>
+Yeah, it would be such a huge boon if the topic could be one character long.
+
+[16:23:04.0609] <jschoi>
+And developers should be encouraged to keep their pipe bodies short and simple…and decorated expressions are almost never short or simple, so they almost never should be in pipe bodies anyway. So I don’t think this ASI hazard is much of a hazard.
+
+[16:23:24.0242] <jschoi>
+* And developers should be encouraged to keep their pipe bodies short and simple…and decorated expressions are almost never short or simple, so they almost never should be in pipe bodies anyway.
+
+[16:23:49.0642] <jschoi>
+* And developers should be encouraged to keep their pipe bodies short and simple…and decorated expressions are almost never short or simple, so they almost never should be in pipe bodies anyway. So I don’t think this ASI hazard is much of a hazard.
+
+
+2022-03-24
+[11:15:54.0052] <nicolo-ribaudo>
+jschoi: I'm reading your slides, and at slide 6 there is a `#` that probably should be a `@`
+
+[11:54:24.0763] <ljharb>
+the auto-cooldown bot worked well
+
+[12:25:43.0803] <TabAtkins>
+did the bot trigger recently? or is this just a historic observation?
+
+[13:17:45.0480] <James DiGioia (mAAdhaTTah on GH)>
+It triggered on the topic bikeshed issue
+
+[13:17:50.0634] <James DiGioia (mAAdhaTTah on GH)>
+ * It triggered on the topic bikeshed issue
+
+[13:49:03.0448] <TabAtkins>
+Ah, I'm not sure how I didn't see that, thanks
+
+[13:56:30.0056] <TabAtkins>
+And yup, that is *precisely* what that bot was installed for, hell yeah
+
+[14:00:18.0621] <jschoi>
+> <@nicolo-ribaudo:matrix.org> jschoi: I'm reading your slides, and at slide 6 there is a `#` that probably should be a `@`
+
+Which slideshow—the pipe one?
+
+[14:00:29.0740] <nicolo-ribaudo>
+Yes
+
+[14:00:35.0572] <nicolo-ribaudo>
+Where you show ASI
+
+[14:00:38.0263] <jschoi>
+> <@jamesdigioia:matrix.org> It triggered on the topic bikeshed issue
+
+Oh no, what happened, haha…
+
+[14:01:09.0229] <James DiGioia (mAAdhaTTah on GH)>
+People are mad Jordan is blocking valid identifiers
+
+[14:01:57.0885] <James DiGioia (mAAdhaTTah on GH)>
+ * People are mad Jordan is blocking valid identifiers
+
+[14:02:26.0091] <jschoi>
+Ah, I see. Well, I’m glad I wrote that bot, then……
+
+[14:03:15.0371] <jschoi>
+…Maybe we should unlock it tomorrow or something.
+
+[14:05:38.0271] <jschoi>
+* Ah, I see. Well, I’m glad the bot worked, then……
+
+[14:07:58.0715] <jschoi>
+nicolo-ribaudo: I see it now; thank you; fixed!
+I think https://github.com/tc39/proposal-pipeline-operator/issues/91#issuecomment-1077038247 has a good point in that this is analogous to the ASI hazard with class fields without semicolons. We might want to make this case an early error to force developers to use parentheses if they don’t want to use semicolons.
+
+[14:08:04.0559] <jschoi>
+ * nicolo-ribaudo: I see it now; thank you; fixed!
+I think https://github.com/tc39/proposal-pipeline-operator/issues/91#issuecomment-1077038247 has a good point in that this is analogous to the ASI hazard with class fields without semicolons. We might want to make this case an early error to force developers to use parentheses if they don’t want to use semicolons.
+
+[14:09:03.0015] <nicolo-ribaudo>
+Or force them to use semicolons! (/s ?)
+
+[14:53:07.0084] <TabAtkins>
+While I'm generally quite strongly on the side of "just use semicolons you weirdos", that example of ending a pipe by calling the topic, and then having a class as the next expression, does seem kinda bad. It's not killer - if the committee decided it was okay and worth being able to have a single-character topic, I def wouldn't block - but it's less than ideal I think.
+
+[14:56:36.0937] <jschoi>
+nicolo-ribaudo, TabAtkins: I just updated the slide with that ASI example (#6); please take a look and give your feedback on the updated slide when you’re able to. 
+I’m okay with making it an early error and forcing developers to be explicit. Developers who do not want to use semicolons can just parenthesize.
+
+[14:58:09.0798] <jschoi>
+```js
+x |>
+  @(foo)
+  class C {}
+```
+…would already be an early error. The anti-semicolon developer must explicitly specify:
+```js
+x |> (
+  @(foo)
+)
+class C {}
+```
+…or
+```js
+x |> (
+  @(foo)
+  class C { x = @; } // The pipe body must have a topic reference!
+)
+```
+
+
+
+[14:58:13.0203] <TabAtkins>
+so an early error to have a non-parenthesized decorated class in a pipeline body? works for me
+
+[14:58:53.0275] <jschoi>
+Great. And I think we should be encouraging developers to keep pipe bodies simple anyway……
+
+[15:00:40.0198] <TabAtkins>
+def
+
+[15:10:56.0921] <jschoi>
+…Come to think of it, I’m uncertain whether ASI would have happened anyway even without a special early error.
+```js
+x |> @(foo)
+class C {}
+```
+I’m…not sure if this fulfills any of the three ASI criteria…
+
+[15:11:20.0600] <jschoi>
+…But, without ASI, this would be an early error anyway, because then there is no topic reference in the pipe body `@(foo)«newline»class C {}`.
+
+[15:13:04.0720] <rbuckton>
+I wonder if records & tuples considered	`	{{ }}` and `{[ ]}`. The second form would require a cover grammar, but it's visually distinct:
+
+```
+const rec = {{ x: 1, y: 2 }};
+const tuple = {[1, 2, 3]};
+```
+
+[15:15:37.0738] <TabAtkins>
+too bad [[...]] doesn't work
+
+[15:17:14.0177] <jschoi>
+Time to bring in non-ASCII brackets.
+
+[15:18:39.0807] <jschoi>
+https://en.wikipedia.org/wiki/Bracket_(mathematics)#Symbols_for_representing_angle_brackets
+
+[15:18:56.0332] <rbuckton>
+I'd considered something like `{+}`, `{-}`, etc. for an "operator functions" proposal, though I'm unsure if it would be well received, but it was heavily predicated on PFA:
+
+```
+sum = ar 
+  |> map(##, {*} 2)
+  |> reduceLeft(##, {+})
+```
+
+[15:20:44.0213] <rbuckton>
+It can be implemented in userland without syntax, though, which lessens its necessity
+
+[15:20:57.0016] <jschoi>
+I remember that. It’s a cool idea, though, yes, I don’t know if expected usage would be widespread enough to persuade the Committee.
+I’m reminded of Perl 6’s hyperoperators: «+», «*», etc…
+
+[15:21:04.0580] <jschoi>
+ * I remember that. It’s a cool idea, though, yes, I don’t know if expected usage would be widespread enough to persuade the Committee.
+I’m reminded of Perl 6’s hyperoperators: «+», «*», etc…
+
+[15:21:16.0595] <rbuckton>
+* It can be implemented in userland without syntax, though, which lessens its necessity
+
+[15:22:05.0195] <rbuckton>
+It made more sense with F# pipes and PFA. Even more sense with some kind of dot-compose operator for function composition. 
+
+[15:22:49.0884] <rbuckton>
+(i.e., `{.}` for compose) 
+
+[15:23:31.0775] <rbuckton>
+The design was based on how F# operators work. 
+
+[15:24:22.0033] <jschoi>
+I think maybe the biggest fundamental impedance mismatch, in the end, from adapting those patterns comes from the fact that JS is an n-ary functional language, not a currying unary functional language like Haskell…The PFA syntax was an admirable effort at bridging that difference, though. 
+
+[15:24:28.0464] <jschoi>
+ * I think maybe the biggest fundamental impedance mismatch, in the end, from adapting those patterns comes from the fact that JS is an n-ary functional language, not a currying unary functional language like Haskell…The PFA syntax was an admirable effort at bridging that difference, though. 
+
+[15:27:09.0322] <rbuckton>
+I still hope to bring PFA back, but I haven't had time to seek out more compelling use cases for it. Maybe even find a less terse syntax than `f~(?)` to introduce an extra syntax cost to indicate the hidden runtime cost of function allocation. 
+
+[15:27:37.0346] <rbuckton>
+Must go, boarding a plane. Good luck at plenary! 
+
+[15:28:58.0201] <jschoi>
+ * I think maybe the biggest fundamental impedance mismatch, in the end, from adapting those patterns comes from the fact that JS is an n-ary functional language, not a currying unary functional language like Haskell or F#…The PFA syntax was an admirable effort at bridging that difference, though. 
+~~still hoping to bring F# computation expressions to JS though~~
+
+[15:29:01.0509] <jschoi>
+ * I think maybe the biggest fundamental impedance mismatch, in the end, from adapting those patterns comes from the fact that JS is an n-ary functional language, not a currying unary functional language like Haskell or F#…The PFA syntax was an admirable effort at bridging that difference, though. 
+
+~~still hoping to bring F# computation expressions to JS though~~
+
+
+2022-03-25
+[17:19:13.0127] <jschoi>
+https://i.imgur.com/qV5ClVf.png
+
+[17:19:15.0824] <jschoi>
+https://i.imgur.com/ff9aniE.png
+
+[17:19:29.0648] <jschoi>
+I have here two versions of the updated dataflow-proposal diagram.
+
+[17:22:00.0407] <jschoi>
+What I’m wondering is if I can get away with claiming that call-this does not overlap with the pipe operator, since trying to use `.call` with the pipe operator solves the word order alone…but it doesn’t make the clunkiness better—it makes it worse.
+```js
+fn.call(rec, arg) // Unnatural word order
+rec |> fn.call(@, arg) // Natural word order but worsened readability
+rec :> f(arg)
+```
+
+
+[17:22:33.0408] <jschoi>
+ * I have here two versions of the updated dataflow-proposal diagram. The second version gets rid of the overlap between pipe operator and call-this.
+
+[17:26:01.0233] <jschoi>
+Richard Gibson gave me this idea at the Research Call today.
+
+Since we must have both pipe operator and call-this, it’s going to be important to convey the idea that pipe operator does not solve `.call`’s clunkiness problem, and that another operator is necessary. (Slide 6 in the call-this presentation talks about this too.)
+
+[17:26:06.0289] <jschoi>
+But will I be able to put this idea without pushback in the dataflow diagram too? Or is it too subjective?
+
+[17:26:37.0817] <jschoi>
+ * I have here two versions of the updated dataflow-proposal diagram. The second version gets rid of the overlap between pipe operator and call-this, which I believe is appropriate…but I worry that getting rid of that overlap will get pushback at plenary for being too subjective.
+
+[17:27:01.0061] <jschoi>
+ * Richard Gibson gave me this idea at the Research Call today.
+
+Since we must have both pipe operator and call-this, it’s going to be important to convey the idea that pipe operator does not solve `.call`’s clunkiness problem, and that another operator is necessary. (Slide 6 in the call-this presentation talks about this too.)
+
+[19:19:09.0355] <Richard Gibson>
+I think there _is_ overlap in the sense that a pipe operator allows for expression an invocation in SVO order like `receiver |> method.call(@̂%̂, ...args)`, but I also like the idea of strikethrough on the pipe examples under call-this to indicate that they don't really address the clunkiness motivation for it. So basically, a combination of the two diagrams—graphical layout of the first, textual formatting of the second.
+
+[19:26:19.0616] <jschoi>
+Whoa, somehow Matrix turned those carets into circumflex accents: @̂%̂. 
+
+[19:26:31.0500] <Richard Gibson>
+but also, in the wake of today's meeting and to further separate call-this from pipelines, I think it would make sense to update both the diagram and the slides to replace the `:>` example punctuator for call-this with something more suggestive of tight binding, e.g. `~>` (I understand it could change, but this seems like a "best foot forward" approach)
+
+[19:26:57.0392] <Richard Gibson>
+> <@jschoi:matrix.org> Whoa, somehow Matrix turned those carets into circumflex accents: @̂%̂.
+
+that was me trying to be maximally token-agnostic 😉
+
+[19:30:56.0097] <jschoi>
+> <@gibson042:matrix.org> I think there _is_ overlap in the sense that a pipe operator allows for expression an invocation in SVO order like `receiver |> method.call(@̂%̂, ...args)`, but I also like the idea of strikethrough on the pipe examples under call-this to indicate that they don't really address the clunkiness motivation for it. So basically, a combination of the two diagrams—graphical layout of the first, textual formatting of the second.
+
+https://imgur.com/S0QLrhn
+
+[19:32:43.0535] <Richard Gibson>
+nice!
+
+[19:32:54.0814] <Richard Gibson>
+ * nice!
+
+[19:33:50.0071] <jschoi>
+By the way, I’m a bit surprised you think `~>` may suggest a tight `.`-like precedence rather than loose `|>`-like precedence. I do recall you saying that you didn’t much like `:>` (whether tight or loose?).
+
+[19:33:55.0096] <jschoi>
+> <@gibson042:matrix.org> but also, in the wake of today's meeting and to further separate call-this from pipelines, I think it would make sense to update both the diagram and the slides to replace the `:>` example punctuator for call-this with something more suggestive of tight binding, e.g. `~>` (I understand it could change, but this seems like a "best foot forward" approach)
+
+ * By the way, I’m a bit surprised you think `~>` may suggest a tight `.`-like precedence rather than loose `|>`-like precedence. I do recall you saying that you didn’t much like `:>` (whether tight or loose?).
+
+[19:35:47.0815] <Richard Gibson>
+correct, I think it has too much visual similarity with `|>`. `~>` suggests tight binding to me because it is arrow-like (as does `->`, for the same reason)
+
+[19:36:59.0951] <Richard Gibson>
+I would have also suggested `::`, but I think it's more important for the content to differentiate proposals and that is already being homesteaded by extensions
+
+[19:37:42.0876] <jschoi>
+> <@gibson042:matrix.org> I would have also suggested `::`, but I think it's more important for the content to differentiate proposals and that is already being homesteaded by extensions
+
+Ah, okay, so this isn’t necessarily about call-this in of itself but just for the dataflow-proposal diagram.
+
+[19:38:29.0993] <jschoi>
+This applies only for *tight* unbracketed receiver-first style, right? Since if precedence is loose, like with `|>`, then you see similarity to `|>` as an advantage, right?
+
+[19:38:36.0118] <jschoi>
+> <@gibson042:matrix.org> correct, I think it has too much visual similarity with `|>`. `~>` suggests tight binding to me because it is arrow-like (as does `->`, for the same reason)
+
+ * This applies only for *tight* unbracketed receiver-first style, right? Since if precedence is loose, like with `|>`, then you see similarity to `|>` as an advantage, right?
+
+[19:39:44.0030] <Richard Gibson>
+right. I think the example call-this punctuator should suggest tight binding to put some distance between that proposal and pipeline, but if the proposal evolves towards loose binding then the punctuator should follow suit and `:>` becomes more illustrative
+
+[19:41:41.0791] <jschoi>
+I know that some representatives are concerned about too much visual similarity between whatever bind-this looks like and `.` or `|>`, even if they are functionally similar or have similar precedence.
+
+[19:41:54.0763] <jschoi>
+Ditto for confusion with other programming languages’ `->`, `::`, etc.
+
+[19:42:06.0643] <jschoi>
+It’ll be hard to balance all of these criteria. Maybe thirty plenary minutes won’t be enough and I should steal some from pipe’s sixty plenary minutes.
+
+[19:42:15.0739] <jschoi>
+ * It’ll be hard to balance all of these criteria. Maybe thirty plenary minutes won’t be enough.
+
+[19:42:33.0724] <jschoi>
+ * It’ll be hard to balance all of these criteria. Maybe thirty plenary minutes won’t be enough and I should steal some from pipe’s sixty plenary minutes.
+
+[19:43:33.0073] <Richard Gibson>
+I hope it doesn't go down that road next week. The ideal example punctuator would suggest tight binding (or at least _not_ suggest loose binding) and avoid those concerns, because they're not appropriate at this early stage anyway
+
+[19:45:17.0264] <Richard Gibson>
+I suggested `~>` rather than `->` because I'm aware of some languages that already use the latter, but if there are also some that use the former then varying even further afield might be prudent
+
+[19:48:02.0087] <jschoi>
+I would be quite interested to poll which operators visually/psychologically suggest tighter `.`-like precedences versus looser `|>`-like precedences…
+
+[19:48:25.0433] <jschoi>
+Obviously there’s a spectrum, but it’d be fun (albeit probably difficult) to empirically study this.
+
+[19:48:30.0924] <jschoi>
+ * I would be quite interested to poll which operators visually/psychologically suggest tighter `.`-like precedences versus looser `|>`-like precedences…
+
+[19:49:09.0815] <Richard Gibson>
+I agree. I just don't want to get the plenary bogged down in it 😅
+
+[19:49:47.0593] <jschoi>
+Yeah, probably should focus most on which of the four syntax styles we want to pursue (or exclude).
+
+[20:33:18.0065] <rkirsling>
+I don't see how precedence could be more important than "what it does" though
+
+[20:33:46.0314] <rkirsling>
+`:>` was suggested because it behaves as a pipeline operator for `this`
+
+[20:35:27.0526] <rkirsling>
+ * `:>` was suggested because it behaves as a pipeline operator for `this`, i.e. for the invisible zeroth argument
+
+[20:44:52.0774] <rkirsling>
+but if that's problematic then I would support the `f(this: x, y)` approach since it's unmistakable
+
+[20:45:01.0153] <rkirsling>
+ * but if that's problematic then I would support the `f(this: x, y)` approach since it's unmistakable
+
+[20:46:28.0680] <rkirsling>
+ * but if that's problematic then I would support the `f(this: x, y)` approach since it's unmistakable. I've never understood the claim of "natural word order" here, so I definitely don't think any solution is better than nothing
+
+[20:48:43.0096] <rkirsling>
+ * but if that's problematic then I would support the `f(this: x, y)` approach since it's unmistakable. I've never understood the claim of "natural word order" here (I think it's wildly unnatural _unless_ analogized with pipeline), so I definitely don't think any solution is better than nothing
+
+[20:49:21.0423] <rkirsling>
+ * but if that's problematic then I would support the `f(this: x, y)` approach since it's unmistakable. I've never understood the claim of "natural word order" here (again, I think it's wildly unnatural _unless_ analogized with pipeline), so I definitely don't think any solution is better than nothing
+
+[21:46:11.0398] <jschoi>
+> <@rkirsling:matrix.org> `:>` was suggested because it behaves as a pipeline operator for `this`, i.e. for the invisible zeroth argument
+
+`:>` is not problematic in of itself. It’s just that we need to decide what we want it to be most conceptually analogous to.
+
+Richard’s primary concern about `:>` is that he would want `:>` to have loose `|>`-like precedence, not tight `.`-like precedence.
+
+[21:47:54.0869] <jschoi>
+Precedence is an important part of “what it does” because it’s a core part of what we think it is.
+
+Should it behave like a pipe operator? Then it arguably should look similar to `|>` and have a similar loose precedence to `|>`.
+
+Should it behave like `.` dot calls? Then it should arguably look similar to `.` and have a similar tight precedence to `.`.
+
+[21:49:07.0023] <jschoi>
+At least that’s the core of Richard’s argument, which I think is reasonable.
+
+[21:50:46.0294] <jschoi>
+“Natural word order” can be analogized with the pipe operator. But it can also be analogized with `.` dot calls. And there’s the choice we have to make, and precedence (loose like pipe or tight like `.`) is a key part of our choice: like pipe or like dot.
+
+[21:50:55.0610] <jschoi>
+* “Natural word order” can be analogized with the pipe operator. But it can also be analogized with `.` dot calls. And there’s the choice we have to make, and precedence (loose like pipe or tight like `.`) is a key part of choice.
+
+[21:51:04.0507] <jschoi>
+* “Natural word order” can be analogized with the pipe operator. But it can also be analogized with `.` dot calls. And there’s the choice we have to make, and precedence (loose like pipe or tight like `.`) is a key part of our choice.
+
+[21:51:15.0022] <jschoi>
+* “Natural word order” can be analogized with the pipe operator. But it can also be analogized with `.` dot calls. And there’s the choice we have to make, and precedence (loose like pipe or tight like `.`) is a key part of our choice: like pipe or like dot.
+
+[21:58:03.0684] <rkirsling>
+yeah. I do think that's kind of an unpostponable conversation though
+
+[21:58:34.0757] <rkirsling>
+I didn't really understand the comment about certain concerns occurring at too early a stage
+
+[21:58:51.0646] <jschoi>
+What comment was that?
+
+[21:59:15.0775] <rkirsling>
+ah, Richard's comment that
+> The ideal example punctuator would suggest tight binding (or at least not suggest loose binding) and avoid those concerns, because they're not appropriate at this early stage anyway
+
+[21:59:35.0788] <jschoi>
+Ah, he was referring to my dataflow-proposal diagram.
+
+[21:59:56.0737] <jschoi>
+Since I have to use one of the syntaxes just for illustrative purposes in that diagram. 
+
+[22:00:06.0964] <jschoi>
+* Ah, he was referring to my updated diagram of dataflow proposals.
+
+[22:00:31.0784] <jschoi>
+* Ah, I believe he was referring there specifically to my updated diagram of dataflow proposals.
+
+[22:15:26.0960] <Justin Ridgewell>
+> <@jschoi:matrix.org> https://imgur.com/S0QLrhn
+
+The SQ example for the PFA code on the bottom left is itself using PFA syntax
+
+[22:33:53.0950] <jschoi>
+> <@jridgewell:matrix.org> The SQ example for the PFA code on the bottom left is itself using PFA syntax
+
+Thanks! Will fix.
+
+
+2022-03-28
+[12:37:28.0493] <jschoi>
+FYI: https://jschoi.org/22/es-dataflow/
+
+[12:38:33.0049] <jschoi>
+Because it is a hard requirement from Jordan that the pipe operator be packaged with a call-this operator (because the pipe operator reached Stage 1 conditional on a bind/call-this operator also passing, all those years ago), I’m trying to sell the complementarity of pipe and call-this…
+
+
+2022-03-29
+[17:32:14.0453] <Justin Ridgewell>
+You have a few “bind-this” in the ECOSYSTEM SCHISM—FUTURE RISK section
+
+[17:32:53.0204] <Justin Ridgewell>
+Also a “migration to the latter from the latter”
+
+[19:45:20.0682] <jschoi>
+Justin Ridgewell: Thank you; fixed. : )
+
+[08:45:02.0695] <jschoi>
+I’m presenting about pipe now.
+
+[08:45:06.0032] <jschoi>
+ * FYI: I’m presenting about pipe now.
+
+[09:05:30.0615] <jschoi>
+We agreed generally on single `@` for the topic reference.
+
+[09:05:35.0172] <jschoi>
+ * We agreed generally on single `@` for the topic reference.
+
+[09:06:16.0469] <sarahghp>
+😭
+
+[10:23:16.0931] <pokute>
+I'm actually quite positively surprised.
+
+[10:24:08.0639] <rkirsling>
+I'm surprised by the decorator advancement so I'm also surprised by this in that context
+
+[10:24:44.0372] <rkirsling>
+but hey, that means that no one should be overlooking anything :)
+
+[10:40:28.0195] <pokute>
+Is `class C { @(decFun) m() {} }` allowed in decorators? It seems to be, based on Decorators Playground.
+
+[10:41:32.0374] <ljharb>
+i'd expect it to be; `@(<expr>)` should work for any expression
+
+[10:44:37.0454] <pokute>
+`console.log |> @(decFun) function f(param) { @(param) }` will be pretty difficult to parse, both for mind and matter. Fortunately it will probably be rare.
+
+[10:46:08.0316] <pokute>
+ * `const decoratedLogger = console.log |> @(decFun) function f(param) { @(param) }` will be pretty difficult to parse, both for mind and matter. Fortunately it will probably be rare.
+
+[10:47:47.0509] <pokute>
+Well, we don't have to wait for free function decorators either. I think the same might happen with class decorators too.
+
+[10:57:19.0015] <jschoi>
+> <@pokute:matrix.org> `const decoratedLogger = console.log |> @(decFun) function f(param) { @(param) }` will be pretty difficult to parse, both for mind and matter. Fortunately it will probably be rare.
+
+This would be a syntax error. We would ban pipe bodies that are unparenthesized decorated expressions.
+
+[10:58:11.0241] <jschoi>
+We also should encourage developers to keep pipe bodies simple. Linters should probably ban class expressions and decorated functions in pipe bodies.
+
+[11:01:24.0126] <ljharb>
+i think most of that would be overstepping
+
+[11:01:45.0283] <ljharb>
+in general, anything that works outside a pipe body should work inside it, modulo a very few things that would otherwise be serious footguns
+
+[11:02:14.0041] <jschoi>
+Yeah, I’m talking about linting, which can afford to be more opinionated. Maybe that’s too restrictive though, yeah. 
+
+[11:02:49.0009] <jschoi>
+* Yeah, I’m talking about linting, which can afford to be more opinionated. Maybe that’s too restrictive though, yeah. 
+
+[11:02:49.0367] <ljharb>
+in linting it's fine
+
+[11:02:54.0058] <ljharb>
+but we don't specify linters
+
+[11:03:31.0468] <jschoi>
+Yeah, here I’m talking about developer education on how to use the operator, which isn’t part of the specification but is still important. 
+
+[11:10:53.0604] <jschoi>
+* Yeah, sorry, here I’m also talking about developer education on how to use the operator, which isn’t part of the specification but is still important. 
+
+[11:11:04.0378] <ljharb>
+right, i think i misread your earlier comments
+
+[11:11:09.0012] <ljharb>
+we're on the same page
+
+[11:32:29.0424] <pokute>
+Yeah, from fleshy reader perspective, that situation should be very rare / witnessing a "crime" against sensibility in code. From a machine parser perspective, I believe it does require lookahead for `class` / parameter / `function` / codeblock / `do {}` when encountering an `@(expr)`. All except the first are still only possible extensions to decorators.
+
+[11:32:39.0237] <pokute>
+ * Yeah, from fleshy reader perspective, that situation should be very rare / witnessing a "crime" against sensibility in code. From a machine parser perspective, I believe it does require lookahead for `class` / parameter / `function` / codeblock / `do {}`. All except the first are still only possible extensions to decorators.
+
+[11:34:17.0593] <pokute>
+ * Yeah, from fleshy reader perspective, that situation should be very rare / witnessing a "crime" against sensibility in code. From a machine parser perspective, I believe it does require lookahead for `class` / parameter / `function` / codeblock / `do {}` when encountering an `@(expr)`. All except the first are still only possible extensions to decorators.
+
+[11:36:11.0292] <pokute>
+Which is still a ton better situation than `#` has. Most other token candidates have some kind of readability problems when thought about enough.
+
+[11:56:35.0206] <pokute>
+Ah, I noticed the point in the slide about `|> @(@)`. So basically encountering a `|> (@(expr))` would require different parser behaviour.
+
+[11:59:21.0072] <jschoi>
+> <@pokute:matrix.org> Ah, I noticed the point in the slide about `|> @(@)`. So basically encountering a `|> (@(expr))` would require different parser behaviour.
+
+`|> @(@)`, `|> (@(@))`, `|> @(expr)`, and `|> (@(expr))` will be all valid. However, `|> @(@) class {}` and `|> @(expr) class {}` will be early errors.
+
+[11:59:42.0704] <jschoi>
+`|> (@(@) class {})` is valid.
+
+[11:59:54.0382] <jschoi>
+`|> (@(expr) class {})` is an error (because no topic in the pipe body).
+
+[12:00:26.0037] <pokute>
+I meant requiring parser lookahead in the valid cases.
+
+[12:01:26.0583] <jschoi>
+Ah, yes, `@ (` will require lookahead until just after `)`.
+
+[12:01:35.0591] <jschoi>
+ * Ah, yes, `@ (` will require lookahead until just after `)`.
+
+[12:02:14.0457] <jschoi>
+(There is an open question on whether spaces after `@` will be allowed in decorators: https://github.com/tc39/proposal-decorators/issues/430 …I am not sure on what its status is because decorators are just Stage 3 now.)
+
+[12:04:06.0032] <ljharb>
+wouldn't that just be unbounded lookahead then?
+
+[12:04:15.0542] <jschoi>
+ * (There is an open question on whether spaces after `@` will be allowed in decorators: https://github.com/tc39/proposal-decorators/issues/430…I am not sure on what its status is because decorators are just Stage 3 now.)
+
+[12:04:16.0625] <ljharb>
+because inside the parens could be an IIFE with a default argument that is itself an IIFE, etc
+
+[12:04:31.0486] <jschoi>
+ * (There is an open question on whether spaces after `@` will be allowed in decorators: https://github.com/tc39/proposal-decorators/issues/430 …I am not sure on what its status is because decorators are just Stage 3 now.)
+
+[12:05:07.0645] <nicolo-ribaudo>
+It's unbounded lookahead but I don't think you need to re-parse the parentheses contents, so it's not much expensive
+
+[12:05:09.0701] <jschoi>
+ * (There is an open question on whether spaces after `@` will be allowed in decorators: https://github.com/tc39/proposal-decorators/issues/430 …I am not sure on what its status is because decorators are Stage 3 now.)
+
+[12:05:38.0955] <jschoi>
+Yeah, it’s just switching between what to do with the expression that got already parsed inside `@( )`.
+
+[12:06:22.0454] <TabAtkins>
+It just changes from "treat it like a decorator" vs "call the topic as a function and pass it as the argument", right?
+
+[12:06:34.0719] <jschoi>
+Yes.
+
+[12:07:02.0078] <jschoi>
+No cover grammar needed either. It’s an ordinary expression inside the `@( )` either way.
+
+[12:07:20.0753] <jschoi>
+ * No cover grammar needed either. It’s an ordinary expression inside the `@( )` either way.
+
+[12:07:33.0135] <TabAtkins>
+yup
+
+[12:07:54.0307] <pokute>
+I didn't notice in the slides, but I guess the mentions of `@(@)` mean that `decFun |> @@ class () {}` is illegal?
+
+[12:08:12.0629] <jschoi>
+Yes; `@@` is not a valid decorator.
+
+[12:08:14.0251] <TabAtkins>
+did you mean to put some parens in there?
+
+[12:08:47.0342] <jschoi>
+`decFun |> @(@) class {}` is also illegal; `decFun |> (@(@) class {})` is legal.
+
+[12:08:56.0384] <TabAtkins>
+ah yeah, @ isn't an ident so it's not valid after an @ to name a decorator, same as `{@: 1}` is invalid even if the topic is a string
+
+[12:10:02.0248] <TabAtkins>
+jschoi: is that first code sample illegal by fiat, or is it falling out of some rule in a way i'm not seeing?
+
+[12:10:31.0641] <jschoi>
+> <@tabatkins:matrix.org> jschoi: is that first code sample illegal by fiat, or is it falling out of some rule in a way i'm not seeing?
+
+It’s that new early error we talked about a few days ago banning pipe bodies that are unparenthesized decorated classes/functions.
+
+[12:10:41.0276] <jschoi>
+Otherwise this confusing no-semicolon code would be valid:
+
+```js
+x |> @(@)
+class C {}
+```
+
+[12:10:41.0745] <TabAtkins>
+okay, so fiat. kk
+
+[12:10:59.0238] <jschoi>
+ * Otherwise this would be valid:
+```js
+x |> @(@)
+class C {}
+```
+
+[12:11:04.0392] <jschoi>
+ * Otherwise this confusing code would be valid:
+
+```js
+x |> @(@)
+class C {}
+```
+
+[12:11:13.0417] <jschoi>
+ * Otherwise this confusing code no-semicolon would be valid:
+
+```js
+x |> @(@)
+class C {}
+```
+
+[12:11:19.0282] <jschoi>
+ * Otherwise this confusing no-semicolon code would be valid:
+
+```js
+x |> @(@)
+class C {}
+```
+
+[12:18:25.0634] <jschoi>
+If the other co-champions are fine with it, I plan to update the explainer and specification to use `@` sometime in the next month.
+
+[12:19:08.0575] <pokute>
+Well, I like this token. It's single character and it seems like the only apparent complicated case has both well defined rules for how to avoid ambiguousness and apparent ability to give good error messages on rule breaking that help comply with the rules.
+
+[12:20:20.0987] <TabAtkins>
+yeah, @ is a nice chunky token that has similar aesthetics to # for me personally, so I'm satisfied with the resolution.
+
+[12:20:37.0681] <TabAtkins>
+(Sorry, btw, that I couldn't attend this morning, but I've been editting notes from your topics as penance.)
+
+[13:39:05.0501] <shu>
+i have a topic token suggestion, can i shitpost more or have you had enough of me for today TabAtkins 
+
+[13:39:52.0695] <TabAtkins>
+i'm busy this afternoon and not reviewing the chatroom, shitpost away since i won't see it until tomorrow
+
+[13:40:06.0517] <shu>
+have y'all considered using identifiers followed immediately by は
+
+[13:41:20.0958] <TabAtkins>
+that's part of the ident production shu
+
+[13:41:24.0798] <TabAtkins>
+ * that's part of the ident production shu
+
+[13:41:34.0454] <shu>
+shit, you're right
+
+[13:41:45.0155] <shu>
+i will walk away head hanging in shame
+
+[13:41:54.0930] <TabAtkins>
+you can already ha your day away
+
+
+2022-03-30
+[12:51:49.0581] <jschoi>
+I’m a bit concerned that Waldemar expressed new discomfort with `@` being the topic token today. He seems to think there might be real parsing ambiguities, which I don’t yet understand. But I guess we shouldn’t discuss this in earnest until we update the spec with concrete productions that he can point at during pre-Stage-3 review.
+
+[12:51:56.0876] <jschoi>
+ * I’m a bit concerned that Waldemar expressed new discomfort with `@` being the topic token today. He seems to think there might be real parsing ambiguities. But I guess we shouldn’t talk about this until we update the spec with concrete productions that he can point at during pre-Stage-3 review.
+
+[12:52:12.0674] <jschoi>
+ * I’m a bit concerned that Waldemar expressed new discomfort with `@` being the topic token today. He seems to think there might be real parsing ambiguities, which I don’t yet understand. But I guess we shouldn’t discuss this in earnest until we update the spec with concrete productions that he can point at during pre-Stage-3 review.
+
+
+2022-03-31
+[12:32:55.0341] <jschoi>
+Waldemar made a comment showing his concerns at https://github.com/tc39/proposal-pipeline-operator/issues/91#issuecomment-1084946624. They’re about distinguishing decorators from topic-then-infix-operators-that-are-also-valid-identifiers (examples he gave are `of` and `as`).
+
+Thankfully, as far as I can tell, they are not a problem; the example he gave already has a SyntaxError (the LHS of `of` in `for` statements can only be identifiers, not `@`). 
+
+The biggest issue is with any future infix operators that are also valid identifiers (like `as`), and we can just keep `@ as class {}` and `@ as function () {}` decorators, and require parentheses to distinguish `@ as (class {})` and `@ as (function () {})`.
+
+[12:41:35.0448] <jschoi>
+ * Waldemar made a comment showing his concerns at https://github.com/tc39/proposal-pipeline-operator/issues/91#issuecomment-1084946624. They’re about distinguishing decorators from topic-then-infix-operators-that-are-also-valid-identifiers (examples he gave are `of` and `as`).
+
+Thankfully, as far as I can tell, they are not a problem; the example he gave already has a SyntaxError (the LHS of `of` in `for` statements can only be identifiers or destructuring forms, not `@`).
+
+The biggest issue is with any future infix operators that are also valid identifiers (like `as`), and we can just keep `@ as class {}` and `@ as function () {}` decorators, and require parentheses to distinguish `@ as (class {})` and `@ as (function () {})`.
+
+[12:46:00.0282] <jschoi>
+ * Waldemar made a comment showing his concerns at https://github.com/tc39/proposal-pipeline-operator/issues/91#issuecomment-1084946624. They’re about distinguishing decorators from topic-then-infix-operators-that-are-also-valid-identifiers (examples he gave are `of` and `as`).
+
+Thankfully, as far as I can tell, they are not a problem; the example he gave already has a SyntaxError (the LHS of `of` in `for` statements can only be identifiers or destructuring forms, not `@`).
+
+The biggest issue is with any future infix operators that are also valid identifiers (like `as`), and we can just keep `@ as class {}` and `@ as function () {}` as decorator expressions, and we can require parentheses to distinguish them from `@ as (class {})` and `@ as (function () {})` using lookahead. There’s an example grammar in https://github.com/tc39/proposal-pipeline-operator/issues/91#issuecomment-1085006912.
+
+[15:28:30.0895] <nicolo-ribaudo>
+jschoi: I think `@in x` is currently valid and it would be quite surprising if it wasn't! The lexical grammar in the spec (ignoring oddities like regexps) eagerly consumes the tokens as long as they match, so `@in x` is tokenized as `@`,`in`,`x`. Then the syntactic grammar sees `@`,`in` and `x`, without any whitespace knowledge.
+
+There are only two places where witespaces matter:
+- in private identifiers, because `#foo` is parsed as a single token
+- between an identifier and a keyword, because the tokenizer is eager and would parse it as a single identifier
+
+[15:31:18.0093] <jschoi>
+> <@nicolo-ribaudo:matrix.org> jschoi: I think `@in x` is currently valid and it would be quite surprising if it wasn't! The lexical grammar in the spec (ignoring oddities like regexps) eagerly consumes the tokens as long as they match, so `@in x` is tokenized as `@`,`in`,`x`. Then the syntactic grammar sees `@`,`in` and `x`, without any whitespace knowledge.
+> 
+> There are only two places where witespaces matter:
+> - in private identifiers, because `#foo` is parsed as a single token
+> - between an identifier and a keyword, because the tokenizer is eager and would parse it as a single identifier
+
+Yeah, I agree: I personally think `@in x` is fine. And if we go with the current (finalized?) grammar of decorators, that’s the way it’s going to be.
+
+[15:31:26.0222] <jschoi>
+* > <@nicolo-ribaudo:matrix.org> jschoi: I think `@in x` is currently valid and it would be quite surprising if it wasn't! The lexical grammar in the spec (ignoring oddities like regexps) eagerly consumes the tokens as long as they match, so `@in x` is tokenized as `@`,`in`,`x`. Then the syntactic grammar sees `@`,`in` and `x`, without any whitespace knowledge.
+> 
+> There are only two places where witespaces matter:
+> - in private identifiers, because `#foo` is parsed as a single token
+> - between an identifier and a keyword, because the tokenizer is eager and would parse it as a single identifier
+
+Yeah, I agree: I personally think `@in x` is fine. And if we go with the current (finalized?) grammar of decorators, that’s the way it’s going to be.
+
+[15:42:25.0705] <jschoi>
+I’ll try to write a full grammar with what I have in mind soon. Look out for the pull request. : )
+

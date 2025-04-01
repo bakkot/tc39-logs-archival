@@ -1,0 +1,439 @@
+2023-02-01
+[18:17:41.0250] <rkirsling>
+so uh
+
+[18:17:55.0134] <rkirsling>
+the note in https://tc39.es/proposal-set-methods/#sec-set.prototype.intersection seems kind of surprising, upon attempting implementation
+
+[18:18:10.0767] <rkirsling>
+ * the note in https://tc39.es/proposal-set-methods/#sec-set.prototype.intersection seems kind of surprising, upon attempting implementation
+
+[18:18:44.0629] <rkirsling>
+because it seems like it's literally saying "hey V8 and JSC, why don't you redo your existing Set impls to match SM"
+
+[18:19:48.0595] <rkirsling>
+given that you're not gonna copy a Set into a new data structure in order to perform an operation on it
+
+[18:20:18.0107] <rkirsling>
+ * given that copying a Set into a new data structure in order to perform an operation on it is not going to constitute a perf win
+
+[18:24:21.0359] <bakkot>
+I looked into V8's and believed it would work
+
+[18:24:24.0226] <rkirsling>
+ah damn, or maybe not V8
+
+[18:24:25.0636] <rkirsling>
+https://github.com/v8/v8/blob/main/src/objects/ordered-hash-table.h#L30-L32
+
+[18:24:27.0356] <bakkot>
+in the same way described there
+
+[18:24:37.0437] <bakkot>
+if JSC's doesn't, that's a good data point and we could consider a different sorting option
+
+[18:24:47.0652] <rkirsling>
+in JSC a Set is a hashmap with a linked list
+
+[18:25:44.0009] <bakkot>
+hm, how does that... work
+
+[18:26:16.0623] <rkirsling>
+ah I mean that like, the buckets have a `next()` (and incidentally `prev()`)
+
+[18:26:38.0157] <bakkot>
+hm
+
+[18:26:45.0600] <bakkot>
+but are not contiguous in memory?
+
+[18:28:52.0001] <rkirsling>
+yeah exactly
+
+[18:29:42.0741] <bakkot>
+so how does iterator invalidation work? I guess chasing down all the iterators and updating them?
+
+[18:29:56.0875] <bakkot>
+or not invalidation _per se_ but if you delete an item that an iterator is pointing to
+
+[18:32:07.0766] <bakkot>
+hm. so this is fixable without redoing the entire implementation by e.g. adding uint64_t to each bucket to keep track of when items were added, but that does cost an extra word per item, which is a little unfortunate (and I guess requires you to re-scan the whole list once a total of 2^64 items have been added to a set over its lifetime)
+
+[18:32:14.0765] <bakkot>
+but the extra word per item is maybe not worth it
+
+[18:32:24.0424] <bakkot>
+I was really hoping this would be easy in all the engines, darn
+
+[18:32:57.0379] <bakkot>
+ * but the extra word per item is maybe not worth it
+
+[18:33:38.0635] <rkirsling>
+https://github.com/WebKit/WebKit/blob/main/Source/JavaScriptCore/runtime/HashMapImplInlines.h#L279-L304 is what happens upon delete(item)
+
+[18:34:09.0781] <bakkot>
+(that is: with each Set add a uint64_t, which is incremented whenever you add an item to the set, and never decremented; whenever you make a bucket put the value from that uint64_t in a field on the bucket. then you can sort buckets based on that field.)
+
+[18:34:10.0180] <rkirsling>
+yeah, sorry for the bubble bursting 😓
+
+[18:34:35.0169] <rkirsling>
+> <@bakkot:matrix.org> (that is: with each Set add a uint64_t, which is incremented whenever you add an item to the set, and never decremented; whenever you make a bucket put the value from that uint64_t in a field on the bucket. then you can sort buckets based on that field.)
+
+oh I see, yeah
+
+[18:36:20.0144] <bakkot>
+do you happen to know where HashMapImpl is instantiated with a concrete HashMapBucketType, so I can look at the buckets?
+
+[18:37:12.0273] <bakkot>
+nvm, found it/one
+
+[18:38:56.0136] <rkirsling>
+yeah, for Set it's HashMapBucket<HashMapBucketDataKey>
+
+[18:40:23.0276] <bakkot>
+so I see there is a `offsetOfNext` method
+
+[18:40:25.0342] <bakkot>
+no idea what that's for
+
+[18:41:26.0326] <bakkot>
+oh, it's the offset _of the field_, not the offset of the next bucket, so not the thing you'd need
+
+[18:42:06.0396] <rkirsling>
+right exactly
+
+[18:42:14.0963] <rkirsling>
+I got excited about that for a second at first too
+
+[18:42:35.0328] <rkirsling>
+but unfortunately those are just helpers for JIT to find exact locations in memory
+
+[18:55:38.0082] <bakkot>
+yeah, I don't see a way to get constant-time sort order with this implementation as it is :(
+
+[18:56:04.0566] <bakkot>
+guess I will bring an item to plenary about choosing some other, worse ordering, vs asking JSC to do a bunch of work
+
+[18:57:05.0530] <rkirsling>
+thank you sir 🙇
+
+[18:57:23.0645] <bakkot>
+(or the third option of iterating both sets, at the cost of twice as many observable `.has()` calls, I guess)
+
+[19:01:08.0298] <rkirsling>
+it does seem like you'd want to preserve the "this" set's ordering, but
+
+[19:01:36.0234] <rkirsling>
+it seems that the assumption that's hard to uphold is that one should iterate over the smaller set
+
+[19:01:55.0511] <bakkot>
+that assumption is more important than the order of the result IMO
+
+[19:02:15.0501] <rkirsling>
+ah okay
+
+[19:02:30.0505] <bakkot>
+(since it affects big-o performance - consider intersecting a singleton with a massive set)
+
+[19:02:43.0724] <rkirsling>
+right, I do get you there
+
+[19:03:10.0783] <rkirsling>
+I guess I wonder how hard people lean on the ordering of Sets
+
+[19:03:20.0441] <rkirsling>
+obviously they should not
+
+[19:03:58.0462] <rkirsling>
+but we do provide guarantees, hence people surely do make use of those guarantees in certain ways
+
+[19:04:02.0769] <bakkot>
+oh I lean on it all the time
+
+[19:04:04.0526] <bakkot>
+it's very useful
+
+[19:04:13.0946] <bakkot>
+no reason not to
+
+[19:04:56.0460] <rkirsling>
+> <@rkirsling:matrix.org> obviously they should not
+
+er yeah this was a bit too strong
+
+[19:05:19.0306] <rkirsling>
+I just mean like, definition of what a set is, but
+
+[19:05:32.0235] <bakkot>
+yeah our Sets are stronger than mathematic sets
+
+[19:06:05.0711] <bakkot>
+(the most obvious way to rely on it, of course, is the dedup trick of `x = [...new Set(x)]`)
+
+[19:06:43.0600] <rkirsling>
+anyway what I'm trying to say is that depending on how important that is to the mental model of a set in JS, I could see people taking issue with intersection going in two different directions based on which of two similarly-sized sets was the receiver and which was the argument
+
+[19:06:48.0362] <rkirsling>
+ * anyway what I'm trying to say is that depending on how important that is to the mental model of a set in JS, I could see people taking issue with intersection going in two different directions based on which of two similarly-sized sets was the receiver and which was the argument
+
+[19:06:56.0809] <ljharb>
+I’d bet that’s something that’s done probably more often than any other set usage tbh (deduping i mean)
+
+[19:07:07.0563] <rkirsling>
+ahhh right yeah
+
+[19:07:27.0901] <ljharb>
+* I’d bet that’s something that’s done probably more often than any other set usage tbh (deduping i mean)
+
+[19:10:52.0508] <bakkot>
+> <@rkirsling:matrix.org> anyway what I'm trying to say is that depending on how important that is to the mental model of a set in JS, I could see people taking issue with intersection going in two different directions based on which of two similarly-sized sets was the receiver and which was the argument
+
+hm, well, all of the other things also do that
+
+[19:10:57.0280] <bakkot>
+union does this-then-arg, etc
+
+[19:12:04.0732] <rkirsling>
+err
+
+[19:12:07.0013] <bakkot>
+that is: every set-producing operation in this proposal produces Sets consisting of, in order, things that were in the receiver, followed by things that were in the argument (if any are to be emitted that were not in the receiver)
+
+[19:12:17.0302] <rkirsling>
+sigh, I literally said the opposite thing of what I meant to 🤦
+
+[19:12:21.0558] <bakkot>
+intersection is the only one where it is not totally obvious how to do that
+
+[19:12:22.0890] <rkirsling>
+ * sigh, I literally said the opposite thing of what I meant to
+
+[19:12:40.0890] <rkirsling>
+ * sigh, I literally said the opposite thing of what I meant to 🤦
+
+[19:14:07.0327] <rkirsling>
+I meant to say that "hey take this set and intersect it with that one" could be pretty surprising if sometimes the ordering is based on "that one", particularly if the two are close in size
+
+[19:15:37.0131] <rkirsling>
+I feel like it's pretty easy to come up with a scenario where you'd want the receiver to be the one in control (take your de-dupe example above and add a filter set to it)
+
+[19:16:03.0445] <rkirsling>
+obviously these are originally commutative operations but well, so are AND and OR
+
+[19:16:48.0338] <rkirsling>
+ * I meant to say that "hey take this set and intersect it with that one" could be pretty surprising if the ordering is based on "that one" part of the time, particularly if the two are close in size
+
+[19:17:29.0673] <rkirsling>
+ * I feel like it's pretty easy to come up with a scenario where you'd want the receiver to be the one in control (take your de-dupe example above and add a filter set to it)
+
+[19:18:37.0488] <bakkot>
+for intersection, the options I see are:
+
+- rely on engines being able to sort results as they were in the receiver efficiently (current option)
+- order of the result changes depending on the relative sizes of the two sets (gross)
+- regardless of sizes, iterate _both_ sets up to the minimum size, checking membership in the other and keeping items which pass (this gives you an order which is not particularly easy to explain but is deterministic and O(smaller) performance, just with an extra factor of 2 overhead)
+- literally randomize the order of the result (I refuse this one)
+- give up on being big-O efficient and always iterate the receiver (I also refuse this one)
+
+[19:19:15.0373] <bakkot>
+ * for intersection, the options I see are:
+
+- rely on engines being able to sort results as they were in the receiver efficiently (current option)
+- order of the result changes depending on the relative sizes of the two sets (gross)
+- regardless of sizes, iterate _both_ sets up to the minimum size, checking membership in the other and keeping items which pass (this gives you an order which is not particularly easy to explain but is deterministic and O(smaller) performance, just with an extra factor of 2 overhead)
+- literally randomize the order of the result (I refuse this one)
+- give up on being big-O efficient and always iterate the receiver (I also refuse this one)
+
+[19:22:30.0955] <rkirsling>
+so I kind of want to dig into the big-O thing a bit more
+
+[19:22:41.0480] <rkirsling>
+this is only an issue if it's a footgun
+
+[19:22:54.0263] <bakkot>
+for which option?
+
+[19:23:04.0345] <rkirsling>
+"always iterate the receiver"
+
+[19:23:35.0570] <bakkot>
+intersecting a very large set with a very small set should be fast. this I am committed to in my heart of hearts
+
+[19:23:39.0398] <rkirsling>
+I'm not saying for sure that it _isn't_ a footgun, but
+
+[19:24:29.0825] <rkirsling>
+I'm just saying that in a JS world where sets have deterministic ordering, then setting aside commutativity in favor of receiver control makes sense
+
+[19:24:47.0917] <bakkot>
+I'm not sure what you mean by "receiver control"
+
+[19:25:10.0391] <rkirsling>
+and _if_ that were understood (without assuming how large of an "if" this is), then it would not be so hard to do a size check in userland
+
+[19:26:00.0346] <rkirsling>
+I'm saying it's not A ∩ B, it's "take A and intersect it _against_ B"
+
+[19:27:13.0969] <bakkot>
+I think that "take A and intersect it against B" implies the result should be ordered as in the receiver, but does not imply anything about performance
+
+[19:27:29.0303] <bakkot>
+the current option does achieve ordering of the result as in the receiver
+
+[19:29:49.0796] <bakkot>
+even in JSC the current option has the same theoretical big-O performance as iterating the receiver directly (to within a log factor, anyway), but fewer user-observable calls, so it seems like it dominates
+
+[19:31:29.0635] <bakkot>
+(iterating the receiver requires doing a user-observable `arg.has` check for every item in the receiver, which could be arbitrarily many more calls than would be required to iterate the argument instead if the receiver is much larger than the argument)
+
+[19:31:38.0494] <bakkot>
+ * (iterating the receiver requires doing a user-observable `arg.has` check for every item in the receiver, which could be arbitrarily many more calls than would be required to iterate the argument instead if the receiver is much larger than the argument)
+
+[19:32:53.0550] <rkirsling>
+ahhh
+
+[19:33:09.0710] <rkirsling>
+I was overlooking that bit
+
+
+2023-02-02
+[17:11:24.0473] <rkirsling>
+lemme know if you need me to raise an issue on the repo or anything
+
+[17:25:45.0799] <bakkot>
+I have a note to put it on the next plenary but an issue is probably good too
+
+
+2023-02-15
+[10:39:48.0223] <ptomato>
+hi! I'm wondering what all the implementations are doing in their test262 runs regarding JSON modules - it's a stage 3 proposal but IIUC it requires the syntax from import assertions, which was bumped back to stage 2 in the last meeting
+
+[10:40:27.0344] <ptomato>
+I'm trying to figure out if it's more useful to keep JSON modules tests in-tree or if you all are skipping the feature flag anyway
+
+
+2023-02-17
+[07:49:33.0033] <Jack Works>
+isn't json modules a host-defined thing? 🤔
+
+[08:00:21.0337] <Ashley Claymore>
+https://github.com/tc39/proposal-json-modules
+
+[08:08:56.0302] <Jack Works>
+cool
+
+
+2023-02-18
+[23:13:22.0938] <ljharb>
+technically an impl could allow json imports without an assertion - the web can't, and node sadly won't, but i think it's fine to leave the json modules tests in
+
+
+2023-02-20
+[13:25:24.0734] <littledan>
+I think a feature flag is enough to express the current state, but in general the tests should eventually represent what all engines must do, not what they may do. So I don’t understand ljharb’s comment.
+
+[13:26:54.0350] <ljharb>
+i took the question to mean, that since JSON Modules didn't go down to stage 2 also (which makes sense that it didn't), and all current implementations have chosen to require JSON Module imports to include the assertion, what value are the current tests being in main
+
+[13:27:17.0959] <ljharb>
+if an implementation (like node) had chosen to exercise its ability to make the assertion optional, then i don't think there'd be any question about the json module tests
+
+
+2023-02-21
+[06:43:02.0154] <littledan>
+I think test262 feature flags generally need to be understood on a case-by-case basis. In general, they are works in progress (not just because Stage 3 proposals may change, but also because newer things with feature flags often require enabling flags in JS engines while features are under development, or being skipped, and the tests are sometimes incomplete or buggy)
+
+[08:09:25.0318] <littledan>
+> <@ljharb:matrix.org> if an implementation (like node) had chosen to exercise its ability to make the assertion optional, then i don't think there'd be any question about the json module tests
+
+Yeah, I disagree with this--test262 tests should usually represent what all engines must do (modulo specific flags that indicate that not all engines have to pass it--but this is not what proposal feature flags typically represent)
+
+[08:14:49.0181] <ljharb>
+I’m not sure what you disagree with
+
+[08:15:25.0468] <ljharb>
+what are you suggesting should be done with json modules tests? who would benefit from running them rn?
+
+[08:19:26.0157] <littledan>
+I'm suggesting, we should just leave things as is, but I don't think Node's decisions have anything to do with what should be in test262
+
+[09:41:27.0972] <ljharb>
+oh, i just meant that the point of tests is that an implementation can run them, and rn nobody can run them without import assertions
+
+[09:41:44.0716] <ljharb>
+if any implementation has json modules without import assertions then they can be ran
+
+[09:42:03.0066] <ljharb>
+generally speaking test262 doesn't include tests that nobody can use :-)
+
+[09:42:32.0899] <ljharb>
+it's certainly a fine outcome to just leave them there under the feature flag, but i do think it's a reasonable question to ask
+
+[09:45:46.0402] <littledan>
+> <@ljharb:matrix.org> generally speaking test262 doesn't include tests that nobody can use :-)
+
+I think this isn't accurate; it's fine for test262 to include tests for Stage 3 proposals that no one has implemented. IIRC we also decided that test262 can land things for Stage 2 proposals as well, behind a feature flag, right?
+
+[09:46:11.0181] <ljharb>
+*can* use isn't the same as *is* using
+
+[09:46:12.0082] <littledan>
+> <@ljharb:matrix.org> it's certainly a fine outcome to just leave them there under the feature flag, but i do think it's a reasonable question to ask
+
+Yeah, I think the question of whether to remove them is reasonable to ask; I'm OK with either outcome in this case.
+
+[09:47:00.0237] <ptomato>
+that's not correct, I think
+
+[09:47:25.0262] <ptomato>
+> <@littledan:matrix.org> I think this isn't accurate; it's fine for test262 to include tests for Stage 3 proposals that no one has implemented. IIRC we also decided that test262 can land things for Stage 2 proposals as well, behind a feature flag, right?
+
+sorry, message collision - I meant this about stage 2 proposals isn't correct
+
+
+2023-02-28
+[00:23:30.0865] <rkirsling>
+so I was still thinking like, "hmm, feel like it's gonna be really surprising if `intersection` is the _only_ operation that incurs non-obvious ordering" and "isn't requiring a userland `size` check for perf still preferable to losing that obviousness?", but like
+
+[00:23:56.0541] <rkirsling>
+ * so I was still thinking like, "hmm, feel like it's gonna be really surprising if `intersection` is the _only_ operation that incurs non-obvious ordering" and "isn't requiring a userland `size` check for perf still preferable to losing that obviousness?", but like
+
+[00:26:02.0369] <rkirsling>
+I guess it's kind of contradictory for me to say "well it's a method and not an operator, so it's natural for it not to be commutative" AND "you can just check `size` and decide which should be the receiver based on that"
+
+[00:26:23.0266] <rkirsling>
+in particular if you had sets like
+
+[00:28:35.0302] <rkirsling>
+`everyKindOfFood` and `foodsXLikes` for each of your friends X
+
+[00:29:38.0694] <rkirsling>
+so it's like `result = everyKindOfFood` and then repeatedly doing `result.intersection(foodsXLikes)`
+
+[00:30:46.0971] <rkirsling>
+ * so it's like `result = everyKindOfFood` and then repeatedly doing `result = result.intersection(foodsXLikes)`
+
+[00:31:55.0944] <rkirsling>
+and perhaps after just a couple turns of that, `result` is already smaller than those `foodsXLikes` sets
+
+[00:32:13.0062] <rkirsling>
+well, yeah, that'd be super awkward to suddenly have to flip 'em
+
+[00:32:39.0311] <rkirsling>
+ * and perhaps after just a couple turns of that, `result` is already smaller than those `foodsXLikes` sets
+
+[11:02:07.0578] <Ashley Claymore>
+I did suggest a middle ground which adds per loop overhead but is still `O(min(a.size, b.size))` 
+
+https://github.com/tc39/proposal-set-methods/issues/70#issuecomment-1179692731
+
+[11:03:33.0609] <Ashley Claymore>
+Chaotic good? Or lawful evil?
+
+[13:32:47.0301] <bakkot>
+Ashley Claymore the downside of that approach is that the resulting order is impossible to understand
+
+[13:54:03.0308] <Ashley Claymore>
+It's like a zip
+

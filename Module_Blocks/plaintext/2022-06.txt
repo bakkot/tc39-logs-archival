@@ -1,0 +1,714 @@
+2022-06-07
+[06:15:25.0845] <Surma>
+I feel like the biggest open question is whether module blocks are cached by source position or not. I think it might be most efficient to just have an incubator call about this. Anyone not okay with that? And how do I schedule one officially? 😅
+
+[06:15:26.0545] <Surma>
+https://github.com/tc39/proposal-js-module-blocks/issues/45
+
+[06:17:14.0183] <Jack Works>
+Isn t my `unique` solution good enough? 😂
+
+[06:17:50.0733] <Surma>
+Well, I’m kinda changing my opinion that all module blocks should be cached by source position
+
+[06:18:26.0233] <Surma>
+so that would make that extra syntax moot 😅
+
+[06:18:44.0052] <Surma>
+I hope we can avoid additional syntax
+
+[08:09:15.0238] <ljharb>
+an incubator call would be good. to have one, during plenary when incubator call chartering happens, we'd add module blocks. ping shu to give him a heads up
+
+[09:23:33.0248] <Kris Kowal>
+Surma: You’re also welcome at the SES Strategy meetings at 10am Pacific. https://docs.google.com/document/d/1FZ95-NZIQE9fw3A8Sgcz2BKep6MlC_Kng0dlf1ehabQ/edit#heading=h.f8mfwudm59mq
+
+[09:24:35.0060] <Kris Kowal>
+We’re stepping up spec work on Compartments and it would be good to get in sync.
+
+[09:39:24.0251] <Jack Works>
+> <@kriskowal:matrix.org> Surma: You’re also welcome at the SES Strategy meetings at 10am Pacific. https://docs.google.com/document/d/1FZ95-NZIQE9fw3A8Sgcz2BKep6MlC_Kng0dlf1ehabQ/edit#heading=h.f8mfwudm59mq
+
+Is SES meeting still happen in the tc39 meetings week?
+
+[09:41:10.0179] <Kris Kowal>
+No SES meeting the week of plenary, ever. We also usually cancel the week after plenary to give folks a rest.
+
+
+2022-06-22
+[05:11:26.0953] <nicolo-ribaudo>
+Surma I plan to review the proposal this week; do you still plan to include module function shorthands? Or should I ignore that part?
+
+[05:19:58.0739] <Surma>
+I don't think I'll include it in the mvp
+
+[05:20:07.0828] <Surma>
+Thanks for taking a look! Really appreciate it
+
+[05:39:17.0173] <littledan>
+We had a pretty extensive discussion about module blocks in the "loader" chat
+
+[05:39:49.0898] <littledan>
+ultimately it underscored for me the conclusion that we probably want to say, if you postMessage a module block multiple times, you get a different identity/module map entry each time
+
+[05:40:05.0371] <littledan>
+nicolo-ribaudo: Did you see this discussion? What did you think?
+
+[05:42:14.0582] <nicolo-ribaudo>
+I still haven't caught up with that discussion (it happened during the night for me), but I'll have an opinion by the end of the day
+
+[05:42:39.0509] <littledan>
+we can talk it over later today if you want; there was a lot of back-and-forth and it's not necessary that you read it all
+
+[05:43:41.0521] <nicolo-ribaudo>
+Oh btw Surma, it would probably be good for you to join the biweekly TC39 Module Loading call (the next one is on July 6th, you can check the TC39 calendar for the time in your local time zone)
+
+[05:45:10.0273] <Surma>
+> <@littledan:matrix.org> ultimately it underscored for me the conclusion that we probably want to say, if you postMessage a module block multiple times, you get a different identity/module map entry each time
+
+I haven't caught up, but i agree with the conclusion :D
+
+[05:45:29.0138] <Surma>
+> <@nicolo-ribaudo:matrix.org> Oh btw Surma, it would probably be good for you to join the biweekly TC39 Module Loading call (the next one is on July 6th, you can check the TC39 calendar for the time in your local time zone)
+
+I thought i was on the list?? I didn't know one already happened 
+
+[05:45:37.0704] <littledan>
+ah OK someone thought you were pushing the other direction
+
+[05:46:53.0220] <Surma>
+> <@littledan:matrix.org> ah OK someone thought you were pushing the other direction
+
+No, but one thought experiment I had was what happens if I send a block to a worker, and the worker sends it straight back. Is it desirable that we restore identity? 
+
+[05:48:25.0650] <nicolo-ribaudo>
+> <@surma:matrix.org> I thought i was on the list?? I didn't know one already happened
+
+You can find the notes at https://github.com/tc39/Reflector/issues/436#issuecomment-1154620771 (and some slides from Kris in the notes). Mostly Kris presented their vision of how all the proposals interact together by going through the slides, and how some can be re-explained in terms of the others.
+
+
+2022-06-23
+[23:12:39.0236] <Kris Kowal>
+Just to register my personal preference regarding module blocks and idempotence: import(module {}) should be analogous to eval. The module should always be evaluated and should not be memoized, even by a gensym. That would provide a consistent experience even in the case where the module gets transported or returned. Also means that the loader doesn’t retain the resulting graph of module instances, so some things could be collected earlier. That doesn’t preclude user code memoizing the result, even using the identity of the block as a memo key. In short, I strongly prefer to avoid inconsistent behavior between local and remote versions of import(block).
+
+[00:25:56.0671] <nicolo-ribaudo>
+Kris Kowal On the other hand `import("data:text/javascript, ...")` is memoized, and it's the closest thing we have to module blocks 
+
+[00:27:18.0420] <nicolo-ribaudo>
+Even if being a primitive does not suffer from the structured clone problem 
+
+[02:11:09.0321] <littledan>
+> <@surma:matrix.org> No, but one thought experiment I had was what happens if I send a block to a worker, and the worker sends it straight back. Is it desirable that we restore identity?
+
+My intuition is, it'd be cool if it did, but also I don't see why anyone should depend on that
+
+[02:12:35.0235] <littledan>
+> <@kriskowal:matrix.org> Just to register my personal preference regarding module blocks and idempotence: import(module {}) should be analogous to eval. The module should always be evaluated and should not be memoized, even by a gensym. That would provide a consistent experience even in the case where the module gets transported or returned. Also means that the loader doesn’t retain the resulting graph of module instances, so some things could be collected earlier. That doesn’t preclude user code memoizing the result, even using the identity of the block as a memo key. In short, I strongly prefer to avoid inconsistent behavior between local and remote versions of import(block).
+
+This is a little hard for me to square with, if you use module fragments and have a little module subgraph with a diamond import pattern, you clearly don't expect cloning in that case, or do you?
+
+[07:47:26.0561] <Kris Kowal>
+I would expect one fresh instance of each module in the subgraph. The subgraph does not need to be memoized by the loader in order to achieve idempotence within the subgraph.
+
+[07:49:37.0310] <Kris Kowal>
+That is to say, I think we agree that importing a module fragment should not produce more than one instance of each of the transitively imported module fragments.
+
+[07:50:21.0857] <Kris Kowal>
+But I do think it’s acceptable for each dynamic import of a module fragment to instantiate exactly one fresh copy of the module fragment subgraph.
+
+[08:05:39.0580] <Kris Kowal>
+One of the things that I learned from our last conversation, that I quite like, is that every module fragment has an equivalent source text, effectively a single static module record that can be cached on the identity of the fragment. That also implies that it is content addressable and can be cached as a document or in transit. So there’s a lot to recommend that as a feature of transportability.
+
+[08:06:57.0223] <Kris Kowal>
+But caching the content doesn’t necessarily require memoization of the instances. Instantiating a module fragment essentially means instantiating a list of blocks. All of this is of course provisional, assuming that the idea of lexically named module blocks is popular here.
+
+[08:08:47.0932] <Kris Kowal>
+ * But caching the content doesn’t necessarily require memoization of the instances. Instantiating a module fragment essentially means instantiating a list of blocks. All of this is of course provisional, assuming that the idea of lexically named module blocks is popular here.
+
+[08:13:55.0898] <Kris Kowal>
+But, I’ll concede this idea holds no water at all if there’s a hope that it’ll eventually be possible for a module fragment to be imported or exported between modules. If there’s a hope that would be eventually possible, I think that’s a very different design world.
+
+[08:15:37.0404] <Kris Kowal>
+(In that world, I would hold the opposite opinion: that fragments should be memoized, but by virtue of being contained within another module that is memoized by full/referrer specifier, and that fragments would not be transportable without the entirety of the surrounding document.)
+
+[08:41:53.0536] <littledan>
+I think this would make module fragments unusable for the bundling case
+
+[08:42:34.0208] <littledan>
+for example, `module x { console.log("happened"); } module y { import x; } module z { import x; } module w { import y; import x; } import x;`
+
+[08:42:40.0430] <littledan>
+this should really print "happened" just once
+
+[08:42:49.0605] <littledan>
+otherwise we're doing something new and different from how modules work normally
+
+[08:50:29.0553] <littledan>
+as Guy pointed out, the internal representation need not mention gensyms, just a bunch of recursive data structures, which can be transported as such (some serializations may need to create a gensym/counter but this is just a local thing; it doesn't leak out)
+
+[08:50:51.0450] <littledan>
+HTML structured clone, for one, doesn't need gensyms and is fine with just having a recursive structure
+
+[08:51:04.0246] <littledan>
+(of course implementations don't actually work like that, just the spec formalism)
+
+[10:10:51.0078] <Kris Kowal>
+> <@littledan:matrix.org> this should really print "happened" just once
+
+I agree and think that can be coherent with dynamic import printing "happened" once more each time.
+
+[10:11:24.0785] <littledan>
+Hmm, I also think the dynamic import behavior should match
+
+[10:11:49.0953] <Kris Kowal>
+I can sympathize with that.
+
+[10:11:52.0070] <littledan>
+This is also something which would inhibit bundlers from using module fragments as an output format
+
+[10:12:08.0928] <Kris Kowal>
+I do not think that follows.
+
+[10:13:37.0986] <Kris Kowal>
+I’ll mull on the tension between these motivations some more.
+
+[10:14:05.0989] <nicolo-ribaudo>
+The problem with bundlers that Dan is trying to show is that if you have this code:
+
+```js
+// main.js
+await import("./dep.js");
+await import("./dep.js");
+
+// dep.js (different file)
+console.log("Hi!");
+```
+
+you cannot (if `import()` re-evaluates module blocks) rewrite it to a single file like
+
+```js
+// bundle.js
+
+import main;
+
+module main {
+  await import(dep);
+  await import(dep);
+}
+
+module dep {
+  console.log("Hi!");
+}
+```
+
+[10:14:32.0154] <nicolo-ribaudo>
+ * The problem with bundlers that Dan is trying to show is that if you have this code:
+
+```js
+// main.js
+await import("./dep.js");
+await import("./dep.js");
+
+// dep.js (different file)
+console.log("Hi!");
+```
+
+you cannot (if `import()` re-evaluates module blocks) rewrite it to a single file like
+
+```js
+// bundle.js
+
+import main;
+
+module main {
+  await import(dep);
+  await import(dep);
+}
+
+module dep {
+  console.log("Hi!");
+}
+```
+
+[10:15:35.0160] <Kris Kowal>
+I see. So behind door A, we get an inconsistency in behavior between static and dynamic import, behind door B, we get an inconsistency between local and remote dynamic import.
+
+[10:16:26.0201] <nicolo-ribaudo>
+By "remote" do you mean "I pass a dynamic import to a worker, and that worker would re-evaluate it"?
+
+[10:16:44.0609] <nicolo-ribaudo>
+Or "I pass it to a worker, then the worker passes it back to me, and I will re-evaluate it"?
+
+[10:17:13.0044] <nicolo-ribaudo>
+worker = compartment, or realm, or something else
+
+[10:19:36.0034] <nicolo-ribaudo>
+I wonder if we could attach an "unique id" to every module block, similar to the shared registered symbols registry, so that when I receive it back `import()` can give me back the same module namespace
+
+[10:20:12.0134] <nicolo-ribaudo>
+ * I wonder if we could attach an "unique id" to every module block, similar to the shared registered symbols registry, so that when I receive it back `import()` can give me back the same module namespace. The "id to namespace" cache would be per-realm, but the id needs to be globally unique
+
+[10:20:33.0801] <nicolo-ribaudo>
+ * I wonder if we could attach an "unique numeric id" to every module block, similar to the shared registered symbols registry, so that when I receive it back `import()` can give me back the same module namespace. The "id to namespace" cache would be per-realm, but the id needs to be globally unique
+
+[10:21:47.0666] <nicolo-ribaudo>
+This would mean that module namespaces coming from module blocks cannot be garbage collected until the realm is collected, but that's already true for namespaces coming from "file modules"
+
+[10:29:01.0693] <Kris Kowal>
+I presume that if module fragments are idempotent within the lifecycle of a loader (where currently, loader === realm), then they are necessarily retained by the loader.
+
+[10:30:21.0162] <nicolo-ribaudo>
+Oh true you are right. I was thinkng about module blocks ("expressions") that coud otherwise be collected when they become unreachable
+
+[10:35:28.0441] <ljharb>
+"static and dynamic" seems like a much more important consistency to maintain imo
+
+[10:52:33.0412] <Kris Kowal>
+I’m leaning to agree, if there’s no way to have both.
+
+[10:53:50.0371] <Kris Kowal>
+> <@nicolo-ribaudo:matrix.org> I wonder if we could attach an "unique numeric id" to every module block, similar to the shared registered symbols registry, so that when I receive it back `import()` can give me back the same module namespace. The "id to namespace" cache would be per-realm, but the id needs to be globally unique
+
+I believe integrating a fragment id into the module memo key is necessary if module blocks and fragments are memoized.
+
+[10:55:30.0933] <Kris Kowal>
+Thinking aloud, it also follows that the ModuleBlock is stable across evaluations of the same block. They’re lexical but not lexical closures, so no need for a fresh identity.
+
+[10:56:28.0533] <Kris Kowal>
+So having a sequential index as an internal slot of ModuleBlock within a document would work fine.
+
+[10:57:30.0829] <nicolo-ribaudo>
+Note that there are two things: the identity of the object retunred by the `module {}` syntax, and the identity of the internal module:
+```js
+function getModule() { return module {} }
+
+getModule() === getModule();
+await import(getModule()) === await import(getModule());
+```
+
+are you talking about both, or only the second one?
+
+[10:57:36.0747] <Kris Kowal>
+Again, thinking aloud, unless they have shared mutable state, in which case a fresh instance closing over the same ID should also be fine.
+
+[10:58:02.0275] <nicolo-ribaudo>
+Ok, you were already answering 😂
+
+[11:00:00.0605] <Kris Kowal>
+Yeah, I was thinking through the former case. Regardless of whether they’re identical, they would have the same value for the module block sequential number internal slot.
+
+[11:00:23.0582] <Kris Kowal>
+In order for the answer for the latter case to be true.
+
+[12:36:00.0035] <Kris Kowal>
+Continuing to think aloud, with the approach of sequentially numbering blocks in order to preserve idempotence locally, to stretch that property to another loader (today, just realms), the wire representation of a block or fragment would have to capture the entirety of the originating document, or send each fragment individually with the content address of the surrounding document and the sequential id within the original document.
+
+[12:38:25.0963] <Kris Kowal>
+Daniel, Guy and I discussed a couple days ago an approach where every block could have its own static module record that captures just the subgraph of its transitive lexical fragments. That form would not be able to preserve idempotence if it were sent as a value to another realm’s import function.
+
+[12:44:56.0361] <Kris Kowal>
+But, you *could* preserve idempotence if the arrangement is that the remote loader pulls in the original static module records of the surrounding document and the import(ModuleBlock) sends the referrer and sequential ID of the block/fragment. The arrangement presumes that the sender and receiver both have the same loader hooks.
+
+[14:09:20.0451] <littledan>
+I think it's OK if passing a value to the remote end makes a copy of it, and it's observable that there was one thing on the sender end and two things on the receiver end. This is how structured clone works for objects, after all
+
+[14:09:42.0461] <littledan>
+(maybe I'm missing something in the above discussion)
+
+[14:59:12.0552] <Kris Kowal>
+I don’t disagree. I’m just suggesting the compromise is avoidable.
+
+[15:36:16.0291] <Kris Kowal>
+ * I don’t disagree. I’m just thinking that the compromise might be avoidable.
+
+[15:38:11.0220] <Kris Kowal>
+ * I agree that the trade-off is acceptable for structured clone. I’m less convinced that modules are comparable. I’m just thinking that the compromise might be avoidable.
+
+
+2022-06-24
+[19:33:49.0620] <littledan>
+Well, this is an interesting area to talk through but I am having trouble seeing what is wrong with the design I have been proposing 
+
+[19:34:38.0151] <littledan>
+Yes, other transport mechanisms may have other properties and as a result be simpler
+
+
+2022-06-27
+[06:07:54.0940] <nicolo-ribaudo>
+Surma  I opened https://github.com/tc39/proposal-js-module-blocks/pull/65 to define a spec text we can iterate on to clearly define caching semantics. That PR does not aim at choosing a "definitive caching strategy" (I don't like how it behaves with `import(aModuleBlockFromAnotherRealm)`), but they are the simplest consistent semantics that I could write.
+
+[07:36:07.0124] <littledan>
+interesting to not go through the host; this should reduce a lot of the complexity that I was imagining
+
+[07:36:59.0192] <littledan>
+Surma and I had worked on https://github.com/whatwg/html/pull/7009 which takes a different approach, probably worse
+
+[07:37:21.0462] <littledan>
+anyway there's a very nice symmetry between not calling host hooks and not calling compartment hooks for this kind of thing!
+
+[07:37:34.0627] <nicolo-ribaudo>
+> <@littledan:matrix.org> Surma and I had worked on https://github.com/whatwg/html/pull/7009 which takes a different approach, probably worse
+
+Thanks for the link!
+
+[07:38:22.0338] <nicolo-ribaudo>
+Yup, in my mind "hosts" are just "compartments one level below" (when it comes to modules)
+
+[07:38:53.0571] <nicolo-ribaudo>
+Note that _if we want to do it_ it would still be possible to add back some host hooks in the future
+
+[07:39:07.0069] <nicolo-ribaudo>
+> <@littledan:matrix.org> anyway there's a very nice symmetry between not calling host hooks and not calling compartment hooks for this kind of thing!
+
+ * Yup, in my mind "hosts" are just "compartments one level below" (when it comes to modules)
+
+[07:39:34.0654] <littledan>
+yeah compartments are sort of like a cleaned up version of host hooks for modules, I think
+
+[07:40:00.0223] <littledan>
+if we do our job very well, maybe making them actually match would be a nice refactoring for the modules host hooks. The logic right now is a bit confusing.
+
+
+2022-06-28
+[02:48:47.0148] <Surma>
+Finally getting back around to catching up on chat log and reviewing nicolo-ribaudo’s issue and PR. Sorry for the absence, had a fire at work.
+
+[02:48:59.0934] <Surma>
+Catching up on the discussion, seems like it was really fruitful.
+
+[02:59:24.0958] <nicolo-ribaudo>
+Thanks for merging!
+
+[03:00:26.0644] <nicolo-ribaudo>
+Btw, could you rename `master` to `main`? (because we should do it, and because it's annoying that my muscle memory is `git checkout main` but it fails in that repo 😅)
+
+[03:00:34.0489] <Surma>
+oh absolutely
+
+[03:00:36.0015] <Surma>
+will do that now
+
+[03:00:42.0032] <Surma>
+(and remove the function expressions from the spec)
+
+[03:01:36.0223] <nicolo-ribaudo>
+Thank you!
+
+[03:02:00.0084] <Surma>
+Done
+
+[05:31:13.0407] <littledan>
+Do we want to arrange a sync between Surma, Nicolo and me on module blocks some time soon?
+
+[05:32:17.0598] <littledan>
+could be with others too but especially I want to make sure to catch up with Surma
+
+[05:34:34.0507] <Surma>
+I'm game!
+
+[05:44:18.0611] <nicolo-ribaudo>
+Sure! If you want to do it today, I'm free at 16 CEST (in 1:15 hours) or 19 CEST
+
+[05:44:25.0981] <nicolo-ribaudo>
+Otherwise tomorrow 
+
+[05:44:47.0477] <littledan>
+Yeah I'm free then if Surma is
+
+[05:56:46.0883] <Surma>
+No sorry, today is meeting extravaganze for me. Tomorrow?
+
+[06:03:02.0203] <nicolo-ribaudo>
+Tomorrow between 15 and 18 CEST? (between 24 and 27 hours from now)
+
+[07:03:01.0217] <Surma>
+Yup, I’m free
+
+[08:58:23.0570] <nicolo-ribaudo>
+Regarding "keeping the same `import.meta.url`": that is something that should be done at the HTML level, and in ecma262 we just have to make sure to pass enough info to host hooks to make it possible. However, I would also like to guarantee that, when running in the same realm, the two dynamic imports in this file always return the same module:
+```js
+await import("./foo.js");
+const foo = module {
+  await import("./foo.js");
+};
+```
+This should be done at the ecma262 level, similarly to how it's already guaranteed when they are in the same module (in a pre-module-blocks world).
+
+In practice this will mean passing something like _parentModule_.[[HostData]] to _moduleBlock_.[[HostData]], however we might need to do it using a new host-reserved slot (for example, the currently non-existing [[Referrer]] mentioned in the loaders room) that is guaranteed to be realm-agnostic (because the same module block could be instantiated in multiple realms). This is because [[HostData]] can currently be anything.
+
+[08:59:00.0369] <littledan>
+I think the same import.meta object should be used, and the same referrer *module* should be passed up to HTML (rather than passing the module block up)
+
+[08:59:12.0218] <littledan>
+is this what your patch does?
+
+[08:59:28.0608] <nicolo-ribaudo>
+No, my patch didn't take care of that yet
+
+[08:59:41.0747] <nicolo-ribaudo>
+You cannot use the same `import.meta` object, because they could be in different realms
+
+[09:05:52.0602] <littledan>
+oh right of course... it should be the same referrer module, and then the host will probably build an import.meta which has the same import.meta.url
+
+[09:06:39.0838] <littledan>
+this would compromise a goal that Jordan has, where the import.meta.url would be the same for two different modules... but this is already the case if you have multiple <script type=module> things on the same page
+
+[09:23:42.0389] <ljharb>
+if you have two script type modules on the same page, they'd have the same import.meta.url but the second one might not necessarily evaluate, right?
+
+[09:23:55.0194] <ljharb>
+(eg it'd be nondeterministic whether you got 1 or 2 evaluations)
+
+[09:24:14.0310] <ljharb>
+ * (eg it'd be nondeterministic whether you got 1 or 2 evaluations)
+
+[09:24:15.0499] <littledan>
+not sure what you mean by nondeterministic
+
+[09:24:24.0274] <ljharb>
+like it would depend on network conditions and the state of the cache
+
+[09:24:37.0077] <ljharb>
+if the first one loaded fast enough, the second one would use the cached version, i think?
+
+[09:24:51.0105] <littledan>
+Yeah a race condition like that would be bad; could you say more about how that would come up?
+
+[09:25:08.0379] <ljharb>
+i think that's already the case tho
+
+[09:25:46.0992] <ljharb>
+like if you have a module that does a console.log, and you do `await import(path); import(path)`, you'd get one log, but if you did `import(path); import(path);` you'd _probably_ get two logs but maybe you'd get one
+
+[09:25:47.0207] <littledan>
+I mean sure if you have script tags for external things they could not run based on what the server does, network conditions, etc. But I don't understand the race condition/caching issue
+
+[09:26:18.0030] <littledan>
+I think if you do `import(path); import(path)` you're pretty guaranteed to get just one log
+
+[09:26:53.0626] <ljharb>
+hm, iirc we had to relax the constraint about that with import assertions because HTML didn't want to guarantee the caching
+
+[09:27:38.0672] <littledan>
+I don't think it's relaxed in practice. HTML may do two fetches but definitely not evaluate the same JS code twice
+
+[09:28:14.0900] <littledan>
+that's the reason I was OK with it, since the right caching behavior happens in practice
+
+[09:28:33.0025] <littledan>
+(anyway your code sample didn't contain import assertions so this doesn't come up)
+
+[09:28:39.0979] <ljharb>
+hmm, ok
+
+[09:29:26.0981] <littledan>
+well, if you're unconvinced we can talk this through
+
+[09:29:50.0044] <littledan>
+are you referring to the restrictions in the JS spec or the behavior of HTML + JS?
+
+[09:33:17.0112] <Surma>
+I’m pretty sure only one eval is guaranteed.
+
+[09:34:03.0893] <Surma>
+IIRC, Chrome even fires only one request because it dedupes those requests via the module map
+
+[09:34:35.0451] <littledan>
+hmm, if it dedups those requests via the module map then maybe we should change the HTML spec back to what I initially proposed rather than the version Domenic insisted on
+
+[09:34:49.0314] <Surma>
+I mean we should verify....
+
+[09:34:57.0378] <Surma>
+Don’t hold me to this 😅
+
+[09:35:37.0987] <littledan>
+well, I already had a long argument about this topic; I don't feel like raising it again myself, but if you verify this then I'm happy to follow through to codify that strategy
+
+[09:36:00.0762] <Surma>
+Let’s chat this through tomorrow so I can properly understand what’s going on
+
+[09:51:28.0309] <Luca Casonato>
+I know for a fact that Chrome only fetched each specifier once per realm.
+
+[09:52:03.0541] <Luca Casonato>
+Deno does the same too, and it implements there HTML module loader pretty exactly 
+
+[09:52:35.0725] <littledan>
+In this case, we should probably go back to having the module map key not contain the import assertion
+
+[11:29:48.0770] <Kris Kowal>
+I think a lot of the above conversation presumes that the module memo key and `import.meta.url` are the same. Within my current mental model, I would expect module script tags to have the same `import.meta.url` but maybe a gensym key for the module map, a key comprised of the referrer and something like a sequence number, or no key at all, similar to what I’d expect of module blocks. I would expect the referrer to be the same in all these cases as well, but I do not expect a referrer to be sufficient to uniquely address a module instance.
+
+[11:32:54.0840] <Kris Kowal>
+However, if there truly is a constraint that there be one module instance per referrer per realm (eventually per loader), that can be made to work for loaders. I don’t think that can be made to work for blocks and fragments, even in the base case of just one block.
+
+[11:33:49.0703] <Kris Kowal>
+Oh, Surma, I am available to reprise my presentation with you, if that’s useful.
+
+[11:34:16.0409] <Surma>
+(not sure I fully follow, but i don't think `import.meta.url` works as a unique identifier for a module even right now)
+
+[11:34:36.0455] <Kris Kowal>
+I agree. I might be misunderstanding the proposed constraint.
+
+[11:34:45.0910] <Surma>
+I might take you up on that. Thanks for offering! I'll catch up with some folks and see if i still have mental gaps
+
+
+2022-06-30
+[08:10:35.0985] <littledan>
+maybe the proposed constraint implicitly something like "if we don't consider HTML because we consider the web to be legacy and bad" -- I feel like that's the subtext for a lot of conversations in TC39, and I have trouble empathizing with it since my work includes the web.
+
+[09:16:35.0275] <littledan>
+by the proposed constraint I'm referring to Jordan's idea that each module should have a distinct import.meta.url which identifies it
+
+[09:17:04.0261] <littledan>
+the way this isn't true for script tags is exactly the same way as it wouldn't be true for module blocks and fragments
+
+[09:36:44.0427] <ljharb>
+in practice tho, it is true for script tags, because the same script is loaded, even if there's more than one evaluation of it
+
+[09:37:22.0221] <nicolo-ribaudo>
+If you have multiple inline script tags, they are different scripts
+
+[09:37:43.0885] <littledan>
+I'm not sure if we're talking about the same thing. If you have multiple inline script tags with different contents, it is a different script
+
+[09:38:00.0417] <littledan>
+(we = Jordan and me, I think Nicolo and I are referring to the same thing)
+
+[09:38:45.0958] <littledan>
+ * I'm not sure if we're talking about the same thing. If you have multiple inline script tags with different contents, it is a different script
+
+[09:38:52.0563] <littledan>
+sorry fixed an error above
+
+[09:39:02.0061] <ljharb>
+yes, i realize that
+
+[09:39:05.0979] <ljharb>
+but it's *conceptually* the same thing
+
+[09:39:11.0791] <littledan>
+I don't follow
+
+[09:39:18.0363] <ljharb>
+regular script tags are basically always side-effecting, so it's not the best analogy
+
+[09:39:24.0461] <ljharb>
+since modules usually *aren't* side-effecting
+
+[09:39:47.0558] <ljharb>
+what i mean is, if i have 2 script tags that load the same version of, say, react, i end up with one copy of react on the page
+
+[09:40:25.0689] <littledan>
+sure, sounds like you aren't talking about the multiple inline script tag case
+
+[09:40:29.0107] <ljharb>
+maybe not
+
+[09:40:41.0408] <ljharb>
+i mean like how `function () {}` and `function () {}` are two different functions, but are conceptually the same function
+
+[09:40:44.0156] <littledan>
+because you can't import an inline script tag
+
+[09:40:56.0690] <ljharb>
+right, that's why it's not really analogous
+
+[09:41:35.0894] <littledan>
+so, the claim is, things that are imported should have an import.meta.url that you can use to import them?
+
+[09:41:43.0219] <ljharb>
+yes
+
+[09:41:44.0263] <littledan>
+and this is why it doesn't apply to inline script tags?
+
+[09:41:47.0433] <ljharb>
+yes
+
+[09:42:17.0294] <littledan>
+maybe we want to split up import.meta.url into two things, one which exposes the base for resolution and the other which is the resolved module specifier
+
+[09:42:35.0676] <littledan>
+ * maybe we want to split up import.meta.url into two things, one which exposes the base for resolution and the other which is the resolved module specifier
+
+[09:42:38.0106] <ljharb>
+also `import.meta.resolve` is a thing now in the web
+
+[09:42:46.0280] <ljharb>
+so what does `import.meta.resolve(moduleBlock)` do?
+
+[09:43:00.0860] <ljharb>
+my assumption is it'd produce something related to `import.meta.url` inside moduleBlock
+
+[09:43:11.0246] <littledan>
+why would we expect it to work at all? sorry
+
+[09:43:47.0908] <littledan>
+yeah I could see the argument that import.meta.url should instead be the full module specifier, now that we have import.meta.resolve
+
+[09:43:54.0452] <littledan>
+so for a module block it'd be that block
+
+[09:44:20.0133] <littledan>
+I haven't been tracking how broad buy-in import.meta.resolve has
+
+[09:44:32.0052] <ljharb>
+i think the HTML PR got merged this week
+
+[09:44:42.0188] <littledan>
+sure that's not the complete story
+
+[09:44:48.0731] <ljharb>
+fair
+
+[09:45:03.0119] <ljharb>
+it's just an example tho of how i expect module URLs to work on the web
+
+[09:45:04.0109] <littledan>
+I mean sometimes HTML PRs are merged for things which have support but not implementations from multiple browsers (this happened to JSON modules!)
+
+[09:49:58.0069] <littledan>
+> <@ljharb:matrix.org> it's just an example tho of how i expect module URLs to work on the web
+
+I understand better what you're getting at but we're always going to be making design tradeoffs which end up being surprising to some people. For example, many expectations will be broken by module specifiers no longer always being strings; this is a real cost to the proposal that we just have to weigh and decide on.
+
+[09:50:22.0193] <ljharb>
+that's also true
+
+[09:53:11.0794] <littledan>
+(I guess Stage 2 meant we decided, "we are OK with breaking this expectation, we think, once we work out all the details".)
+
+[10:02:09.0862] <nicolo-ribaudo>
+ljharb Do you expect every module block to be "public" and thus always importable with an URL?
+
+[10:02:31.0633] <nicolo-ribaudo>
+Because with the current proposal they are more like functions 
+
+[10:02:34.0863] <ljharb>
+that's a fair point
+
+[10:03:21.0861] <ljharb>
+i do also think there'd need to be some way to figure out what module the block was created in, for debugging, and if that's not import.meta.url it could be something else
+
+[10:35:20.0540] <Kris Kowal>
+I think the right constraint on `import.meta.url` is that, iff it is present, it is useful for `new URL(asset, import.meta.url)` and whatever retrieval mechanism the underlying platform supports for URLs, albeit `fs.readFileSync(url.fileURLToPath(new URL(asset, import.meta.url)))` or `fetch(new URL(asset, import.meta.url))`. If you start there, multiple modules must be able to have the same `import.meta.url` including (I suggest) multiple module scripts in a single HTML file, module blocks, and module fragments.
+
+[10:36:48.0883] <Kris Kowal>
+The interesting other conclusion, starting from that constraint, is that not even all web modules should have an `import.meta.url`. Modules that are pulled from a bundle do not necessarily have a useful `import.meta.url`.
+
+[10:37:44.0021] <Kris Kowal>
+Or rather, they might have had a useful `import.meta.url` in their original physical locations but the relative locations of the assets in the destination physical location are not necessarily the same. This motivates proposals for asset modules.
+
+[10:37:51.0352] <Kris Kowal>
+ * Or rather, they might have had a useful `import.meta.url` in their original physical locations but the relative locations of the assets in the destination physical location are not necessarily the same. This motivates proposals for asset modules.
+
+[10:38:25.0942] <littledan>
+> <@kriskowal:matrix.org> I think the right constraint on `import.meta.url` is that, iff it is present, it is useful for `new URL(asset, import.meta.url)` and whatever retrieval mechanism the underlying platform supports for URLs, albeit `fs.readFileSync(url.fileURLToPath(new URL(asset, import.meta.url)))` or `fetch(new URL(asset, import.meta.url))`. If you start there, multiple modules must be able to have the same `import.meta.url` including (I suggest) multiple module scripts in a single HTML file, module blocks, and module fragments.
+
+This is my understanding of the current web and what I'd lean towards for the proposals being worked on
+

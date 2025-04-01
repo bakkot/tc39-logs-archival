@@ -1,0 +1,138 @@
+<!DOCTYPE html><html><head>
+  <title>TC39-TG4_ Source Maps on 2024-03-07</title>
+  <link rel="stylesheet" href="../style.css">
+  <script>window.room = "TC39-TG4_ Source Maps";</script><script src="../render-roomlist.js"></script>
+  <script src="../logs.js"></script>
+</head>
+<body><div class="wrapper">
+<div class="sidebar">
+<div class="title">TC39-TG4_ Source Maps<br>2024-03-07<br><a href="plaintext/">plaintext logs</a></div>
+<div class="nav">
+<a href="2024-03-06" class="nav-link"><span>prev</span></a>
+<a href="2024-03-08" class="nav-link"><span style="float:right">next</span></a>
+</div>
+    <div class="all-rooms"><noscript>JavaScript is required to load the channel index, but you can go to <a href="../..">the static index</a> directly.</noscript></div>
+<div class="footer"><a href="https://github.com/bakkot/matrix-archive-bot">source on github</a></div>
+</div>
+<div class="rhs">
+<div class="rhs-header">
+<span id="error" style="color: red; display:none">error</span>
+
+<input type="text" id="query" size="25" placeholder="Search TC39-TG4_ Source Maps">
+<a id="search-submit" class="button icon-link" title="Search">
+  <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M505 442.7L405.3 343c-4.5-4.5-10.6-7-17-7H372c27.6-35.3 44-79.7 44-128C416 93.1 322.9 0 208 0S0 93.1 0 208s93.1 208 208 208c48.3 0 92.7-16.4 128-44v16.3c0 6.4 2.5 12.5 7 17l99.7 99.7c9.4 9.4 24.6 9.4 33.9 0l28.3-28.3c9.4-9.4 9.4-24.6.1-34zM208 336c-70.7 0-128-57.2-128-128 0-70.7 57.2-128 128-128 70.7 0 128 57.2 128 128 0 70.7-57.2 128-128 128z"></path></svg>
+</a>
+</div>
+
+<div class="log"><table id="log-table"><tbody id="log-tbody">
+
+  <tr class="msg" id="L0"><td class="ts-cell"><a class="ts" href="#L0" alt="Thu Mar 07 2024 00:56:49 GMT-0800 (Pacific Standard Time)">08:56</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell"><p>I have a couple of questions/comments on the Scopes proposal:</p>
+<ul>
+<li>Why is Original Scope <code>column</code> absolute?</li>
+<li>What’s the point of splitting Original Scope’s Start/End? Just encode it together</li>
+<li>Are Generated Range’s <code>originalScope</code> and <code>callsite</code> mutually exclusive?</li>
+<li>I have no idea how to parse Generated Range’s <code>bindings</code>.
+<ul>
+<li>Is <code>M</code> a DATA?</li>
+<li>What is “negative number of sub-ranges”?</li>
+<li>“Use -1 to indicate that the current variable is unavailable (e.g. due to shadowing) in this sub-range”…
+<ul>
+<li>This causes a large delta encoding to jump backwards, then a large delta to jump forwards. Just encode an empty string value into <code>names</code> array</li>
+</ul>
+</li>
+<li>[Side note: the note telling you that <code>line</code> is relative is in the <code>column</code> list item]</li>
+</ul>
+</li>
+</ul>
+</td></tr>
+  <tr class="msg" id="L1"><td class="ts-cell"><a class="ts" href="#L1" alt="Thu Mar 07 2024 01:27:20 GMT-0800 (Pacific Standard Time)">09:27</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@szuend:matrix.org">Simon Zünd</span>&gt;</div></td><td class="msg-cell"><p>Thanks for the ideas/feedback! Yeah there are couple of rough edges in the current proposal.</p>
+<ul>
+<li>Original files are formatted normally, so I'd imagine that most of the columns are absolute anyway given that not many scopes will start on the same line.</li>
+<li>Encoding start/end items separately gives us the tree structure of scopes immediately and you don't have to nest the scopes manually based on position alone (which could be ambiguous if 2 scopes have the same start, not sure if that occurs in practice though).</li>
+<li>No, call-site is specifically for inlining. So for a generated range that represents an inlined function the <code>originalScope</code> points to the original inlined function scope and call-site points to where that inlined function was actually called in the original code. This is required to get stack traces right.</li>
+<li>Bindings are a bit tricky, maybe we went overboard with trying to encode it efficiently.
+<ul>
+<li>We basically distinguish between 2 cases:
+<ol>
+<li>The variable is available for the full range with the same expression, in that case we only need a single offset into the names array.</li>
+<li>The variable requires different expressions for parts of the generated range. In this case the first DATA is again a single offset into the names array. This is the expression from the range start. Then we encode another data <code>M</code>, to denote how many more live ranges we have. We encode it negated, so decoders can distinguish between case 1) and 2).</li>
+</ol>
+</li>
+<li>Holger filed a bug about how to encode unavailable here. <a href="https://github.com/tc39/source-map-rfc/issues/70">https://github.com/tc39/source-map-rfc/issues/70</a>. I like your suggestion as well and will add it to the list.</li>
+</ul>
+</li>
+</ul>
+</td></tr>
+  <tr class="msg" id="L2"><td class="ts-cell"><a class="ts" href="#L2" alt="Thu Mar 07 2024 01:35:58 GMT-0800 (Pacific Standard Time)">09:35</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell"><blockquote>
+<p>Original files are formatted normally, so I'd imagine that most of the columns are absolute anyway given that not many scopes will start on the same line.</p>
+</blockquote>
+<p>We could make it relative to the last Original Source Start's <code>column</code>, though, meaning indentation would be handled easily with 1 VLQ byte. Because of our crappy 5/8s base64, and the first byte containing the sign bit, we only have only 4 bits of data in the first byte. If a column is at column 16, then we have to use 2 bytes in an absolute encoding. If it's relative, it's just <code>E</code>s and <code>F</code>s to indent and dedent.</p>
+</td></tr>
+  <tr class="msg" id="L3"><td class="ts-cell"><a class="ts" href="#L3" alt="Thu Mar 07 2024 01:39:05 GMT-0800 (Pacific Standard Time)">09:39</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell"><blockquote>
+<p>Encoding start/end items separately gives us the tree structure of scopes immediately</p>
+</blockquote>
+<p>This is gonna hurt serialize/deserialize performance because I'll have to make a tree. It's <strong>much</strong> faster to have a flat array</p>
+</td></tr>
+  <tr class="msg" id="L4"><td class="ts-cell"><a class="ts" href="#L4" alt="Thu Mar 07 2024 01:43:18 GMT-0800 (Pacific Standard Time)">09:43</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell"><blockquote>
+<p>Bindings are a bit tricky, maybe we went overboard with trying to encode it efficiently. We basically distinguish between 2 cases:</p>
+</blockquote>
+<p>Can you give me two example encodings?</p>
+</td></tr>
+  <tr class="msg" id="L5"><td class="ts-cell"><a class="ts" href="#L5" alt="Thu Mar 07 2024 01:45:24 GMT-0800 (Pacific Standard Time)">09:45</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@szuend:matrix.org">Simon Zünd</span>&gt;</div></td><td class="msg-cell">I don't have an example for bindings encoding but holgers impl is here: <a href="https://github.com/hbenl/tc39-proposal-scope-mapping/blob/master/src/encodeScopes.ts">https://github.com/hbenl/tc39-proposal-scope-mapping/blob/master/src/encodeScopes.ts</a></td></tr>
+  <tr class="msg" id="L6"><td class="ts-cell"><a class="ts" href="#L6" alt="Thu Mar 07 2024 01:45:56 GMT-0800 (Pacific Standard Time)">09:45</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">Oh, and should we have the ability to set a binding expression?</td></tr>
+  <tr class="msg" id="L7"><td class="ts-cell"><a class="ts" href="#L7" alt="Thu Mar 07 2024 01:46:23 GMT-0800 (Pacific Standard Time)">09:46</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@szuend:matrix.org">Simon Zünd</span>&gt;</div></td><td class="msg-cell">Also I don't follow how decoding this is more expensive. The decoder I wrote does this in a single pass. Instead of dumping it into a single array it keeps a stack around to build the tree on the fly</td></tr>
+  <tr class="msg" id="L8"><td class="ts-cell"><a class="ts" href="#L8" alt="Thu Mar 07 2024 01:46:39 GMT-0800 (Pacific Standard Time)">09:46</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@szuend:matrix.org">Simon Zünd</span>&gt;</div></td><td class="msg-cell">encoding might be a different story depending if you already have the tree or not, otherwise it's just a normal depth first traversal</td></tr>
+  <tr class="msg" id="L9"><td class="ts-cell"><a class="ts" href="#L9" alt="Thu Mar 07 2024 01:46:55 GMT-0800 (Pacific Standard Time)">09:46</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">Eg, if I need an expression to read <code>JSBI.BigInt(…)</code>, how do I set it?</td></tr>
+  <tr class="msg" id="L10"><td class="ts-cell"><a class="ts" href="#L10" alt="Thu Mar 07 2024 01:49:16 GMT-0800 (Pacific Standard Time)">09:49</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@szuend:matrix.org">Simon Zünd</span>&gt;</div></td><td class="msg-cell">I don't follow fully, can you give a bit more context for an example. Whats the original vs generated</td></tr>
+  <tr class="msg" id="L11"><td class="ts-cell"><a class="ts" href="#L11" alt="Thu Mar 07 2024 01:52:14 GMT-0800 (Pacific Standard Time)">09:52</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell"><mx-reply><blockquote> Also I don't follow how decoding this is more expensive. The decoder I wrote does this in a single pass. Instead of dumping it into a single array it keeps a stack around to build the tree on the fly</blockquote></mx-reply>I'm competing against WASM impls, so the encoding/decoding code I write needs to be absurdly efficient. If I have to create a tree structure to deserialize, then I'm recursing to and my hot loop is jumping around.</td></tr>
+  <tr class="msg" id="L12"><td class="ts-cell"><a class="ts" href="#L12" alt="Thu Mar 07 2024 01:52:47 GMT-0800 (Pacific Standard Time)">09:52</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">I need to come up with a way to get a flat array out of all of this for every entry, something like the current segment decoding in <a href="https://github.com/jridgewell/sourcemap-codec?tab=readme-ov-file#usage">https://github.com/jridgewell/sourcemap-codec?tab=readme-ov-file#usage</a></td></tr>
+  <tr class="msg" id="L13"><td class="ts-cell"><a class="ts" href="#L13" alt="Thu Mar 07 2024 01:53:18 GMT-0800 (Pacific Standard Time)">09:53</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">Flat, packed, SMI arrays</td></tr>
+  <tr class="msg" id="L14"><td class="ts-cell"><a class="ts" href="#L14" alt="Thu Mar 07 2024 01:56:44 GMT-0800 (Pacific Standard Time)">09:56</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">I'm going to have deal with it anyways in the Generated side, where at least it makes sense because we're doing <code>;</code> delimiters for lines</td></tr>
+  <tr class="msg" id="L15"><td class="ts-cell"><a class="ts" href="#L15" alt="Thu Mar 07 2024 01:58:58 GMT-0800 (Pacific Standard Time)">09:58</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@szuend:matrix.org">Simon Zünd</span>&gt;</div></td><td class="msg-cell">It's still flat packed SMI arrays. For original scopes they are delimited by <code>,</code> for generated ranges it's <code>;</code> and <code>,</code></td></tr>
+  <tr class="msg" id="L16"><td class="ts-cell"><a class="ts" href="#L16" alt="Thu Mar 07 2024 01:59:10 GMT-0800 (Pacific Standard Time)">09:59</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell"><p>The proposal has an example with <code>BigInt</code>. Something like:</p>
+<pre><code class="language-js">// input
+const n = 9007199254740991n;
+
+// output
+const n = JSBI.BigInt(9007199254740991); // [1073741823, 8388607]
+</code></pre>
+<p>Then explains there's a way run an expression to "get" the current value formatted as <code>"BigInt(9007199254740991)"</code></p>
+</td></tr>
+  <tr class="msg" id="L17"><td class="ts-cell"><a class="ts" href="#L17" alt="Thu Mar 07 2024 01:59:16 GMT-0800 (Pacific Standard Time)">09:59</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@szuend:matrix.org">Simon Zünd</span>&gt;</div></td><td class="msg-cell">Sematnics is determined by how many elements the SMI arrays has</td></tr>
+  <tr class="msg" id="L18"><td class="ts-cell"><a class="ts" href="#L18" alt="Thu Mar 07 2024 01:59:16 GMT-0800 (Pacific Standard Time)">09:59</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">But what if I want to update that value?</td></tr>
+  <tr class="msg" id="L19"><td class="ts-cell"><a class="ts" href="#L19" alt="Thu Mar 07 2024 02:01:56 GMT-0800 (Pacific Standard Time)">10:01</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@szuend:matrix.org">Simon Zünd</span>&gt;</div></td><td class="msg-cell">Good question, at the moment we only cover reading variables, but not writing them.</td></tr>
+  <tr class="msg" id="L20"><td class="ts-cell"><a class="ts" href="#L20" alt="Thu Mar 07 2024 02:05:10 GMT-0800 (Pacific Standard Time)">10:05</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">I'm not sure what you mean, the encoding is forced to be nested</td></tr>
+  <tr class="msg" id="L21"><td class="ts-cell"><a class="ts" href="#L21" alt="Thu Mar 07 2024 02:05:16 GMT-0800 (Pacific Standard Time)">10:05</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell"><a href="https://github.com/hbenl/tc39-proposal-scope-mapping/blob/e73d4254d9c258888d37f0889e937aa9b78de04b/src/decodeScopes.ts#L43">https://github.com/hbenl/tc39-proposal-scope-mapping/blob/e73d4254d9c258888d37f0889e937aa9b78de04b/src/decodeScopes.ts#L43</a></td></tr>
+  <tr class="msg" id="L22"><td class="ts-cell"><a class="ts" href="#L22" alt="Thu Mar 07 2024 02:07:22 GMT-0800 (Pacific Standard Time)">10:07</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">I'm either recursing to pull data into a nested Original Source, or maybe I'm maintaining my own stack to assign values to</td></tr>
+  <tr class="msg" id="L23"><td class="ts-cell"><a class="ts" href="#L23" alt="Thu Mar 07 2024 02:08:49 GMT-0800 (Pacific Standard Time)">10:08</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">I guess a stack will work, I can pop from it and assign the end line/col when I encounter the End message</td></tr>
+  <tr class="msg" id="L24"><td class="ts-cell"><a class="ts" href="#L24" alt="Thu Mar 07 2024 02:09:53 GMT-0800 (Pacific Standard Time)">10:09</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@szuend:matrix.org">Simon Zünd</span>&gt;</div></td><td class="msg-cell">FWIW here is how I implemented it in DevTools for now: <a href="https://crrev.com/c/5307620">https://crrev.com/c/5307620</a></td></tr>
+  <tr class="msg" id="L25"><td class="ts-cell"><a class="ts" href="#L25" alt="Thu Mar 07 2024 02:10:57 GMT-0800 (Pacific Standard Time)">10:10</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@szuend:matrix.org">Simon Zünd</span>&gt;</div></td><td class="msg-cell">It's split into a generator producing the start/end items from VLQ and a for-loop + stack that builds the tree</td></tr>
+  <tr class="msg" id="L26"><td class="ts-cell"><a class="ts" href="#L26" alt="Thu Mar 07 2024 02:12:53 GMT-0800 (Pacific Standard Time)">10:12</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@szuend:matrix.org">Simon Zünd</span>&gt;</div></td><td class="msg-cell">If you are only interested in producing SMI arrays as fast as possible you can simplify the generator to read VLQs until it sees a <code>,</code> and you distinguish start/end items by the length of the produced array</td></tr>
+  <tr class="msg" id="L27"><td class="ts-cell"><a class="ts" href="#L27" alt="Thu Mar 07 2024 02:13:02 GMT-0800 (Pacific Standard Time)">10:13</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">Yah, you maintained a stack and assigned the end-index aftewards: <a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/devtools-frontend/src/front_end/core/sdk/SourceMapScopes.ts;l=88-92;drc=80a32637bfe732b657407430464d5b81b6bdf5ea">https://source.chromium.org/chromium/chromium/src/+/main:third_party/devtools-frontend/src/front_end/core/sdk/SourceMapScopes.ts;l=88-92;drc=80a32637bfe732b657407430464d5b81b6bdf5ea</a></td></tr>
+  <tr class="msg" id="L28"><td class="ts-cell"><a class="ts" href="#L28" alt="Thu Mar 07 2024 02:13:15 GMT-0800 (Pacific Standard Time)">10:13</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@szuend:matrix.org">Simon Zünd</span>&gt;</div></td><td class="msg-cell">yep</td></tr>
+  <tr class="msg" id="L29"><td class="ts-cell"><a class="ts" href="#L29" alt="Thu Mar 07 2024 02:13:46 GMT-0800 (Pacific Standard Time)">10:13</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@szuend:matrix.org">Simon Zünd</span>&gt;</div></td><td class="msg-cell">basically what you said</td></tr>
+  <tr class="msg" id="L30"><td class="ts-cell"><a class="ts" href="#L30" alt="Thu Mar 07 2024 02:15:24 GMT-0800 (Pacific Standard Time)">10:15</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@szuend:matrix.org">Simon Zünd</span>&gt;</div></td><td class="msg-cell">The problem is if you encode scopes fully, then you have to sort them afterwards based on source position. That saves you the stack during decoding, but it's expensive to build</td></tr>
+  <tr class="msg" id="L31"><td class="ts-cell"><a class="ts" href="#L31" alt="Thu Mar 07 2024 02:16:00 GMT-0800 (Pacific Standard Time)">10:16</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@szuend:matrix.org">Simon Zünd</span>&gt;</div></td><td class="msg-cell">Since scopes could occur in any order. So you have to sort them first, and then nest them</td></tr>
+  <tr class="msg" id="L32"><td class="ts-cell"><a class="ts" href="#L32" alt="Thu Mar 07 2024 02:16:29 GMT-0800 (Pacific Standard Time)">10:16</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">I think it's a line/col stack check to see if you're in a nested scope?</td></tr>
+  <tr class="msg" id="L33"><td class="ts-cell"><a class="ts" href="#L33" alt="Thu Mar 07 2024 02:16:41 GMT-0800 (Pacific Standard Time)">10:16</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">It's basically the same both ways</td></tr>
+  <tr class="msg" id="L34"><td class="ts-cell"><a class="ts" href="#L34" alt="Thu Mar 07 2024 02:17:18 GMT-0800 (Pacific Standard Time)">10:17</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell"><blockquote>
+<p>Since scopes could occur in any order. So you have to sort them first, and then nest them</p>
+</blockquote>
+<p>:straight-to-jail:</p>
+</td></tr>
+  <tr class="msg" id="L35"><td class="ts-cell"><a class="ts" href="#L35" alt="Thu Mar 07 2024 02:17:54 GMT-0800 (Pacific Standard Time)">10:17</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">Keep them monotonically increasing, like the informal offset note in sectioned maps</td></tr>
+  <tr class="msg" id="L36"><td class="ts-cell"><a class="ts" href="#L36" alt="Thu Mar 07 2024 02:19:59 GMT-0800 (Pacific Standard Time)">10:19</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@szuend:matrix.org">Simon Zünd</span>&gt;</div></td><td class="msg-cell">Sure, I'm also a bit afraid if tools spit out scopes with identical start/end, so you'd also need the convention that the first entry is the parent of the second</td></tr>
+  <tr class="msg" id="L37"><td class="ts-cell"><a class="ts" href="#L37" alt="Thu Mar 07 2024 02:21:44 GMT-0800 (Pacific Standard Time)">10:21</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@szuend:matrix.org">Simon Zünd</span>&gt;</div></td><td class="msg-cell">But yeah, in the end it probably doesn't matter. If more folks prefer to not encode as a tree, then I'm also fine with that</td></tr>
+  <tr class="msg" id="L38"><td class="ts-cell"><a class="ts" href="#L38" alt="Thu Mar 07 2024 02:22:40 GMT-0800 (Pacific Standard Time)">10:22</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell"><a href="https://github.com/hbenl/tc39-proposal-scope-mapping/blob/e73d4254d9c258888d37f0889e937aa9b78de04b/src/encodeScopes.ts#L72">https://github.com/hbenl/tc39-proposal-scope-mapping/blob/e73d4254d9c258888d37f0889e937aa9b78de04b/src/encodeScopes.ts#L72</a></td></tr>
+  <tr class="msg" id="L39"><td class="ts-cell"><a class="ts" href="#L39" alt="Thu Mar 07 2024 02:22:45 GMT-0800 (Pacific Standard Time)">10:22</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">Ee gad</td></tr>
+  <tr class="msg" id="L40"><td class="ts-cell"><a class="ts" href="#L40" alt="Thu Mar 07 2024 02:23:04 GMT-0800 (Pacific Standard Time)">10:23</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">Tree traversal to get the <code>DATA scope offset into originalScopes[offset]</code></td></tr>
+  <tr class="msg" id="L41"><td class="ts-cell"><a class="ts" href="#L41" alt="Thu Mar 07 2024 02:24:26 GMT-0800 (Pacific Standard Time)">10:24</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">And <a href="https://github.com/hbenl/tc39-proposal-scope-mapping/blob/e73d4254d9c258888d37f0889e937aa9b78de04b/src/decodeScopes.ts#L129">https://github.com/hbenl/tc39-proposal-scope-mapping/blob/e73d4254d9c258888d37f0889e937aa9b78de04b/src/decodeScopes.ts#L129</a></td></tr>
+  <tr class="msg" id="L42"><td class="ts-cell"><a class="ts" href="#L42" alt="Thu Mar 07 2024 02:25:22 GMT-0800 (Pacific Standard Time)">10:25</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">You're going to have to maintain a flat array anyways, or suffer recursion</td></tr>
+  <tr class="msg" id="L43"><td class="ts-cell"><a class="ts" href="#L43" alt="Thu Mar 07 2024 02:25:31 GMT-0800 (Pacific Standard Time)">10:25</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@szuend:matrix.org">Simon Zünd</span>&gt;</div></td><td class="msg-cell">It's just a proof of concept :)</td></tr>
+  <tr class="msg" id="L44"><td class="ts-cell"><a class="ts" href="#L44" alt="Thu Mar 07 2024 02:26:37 GMT-0800 (Pacific Standard Time)">10:26</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">Does Dev Tools not deal with it?</td></tr>
+  <tr class="msg" id="L45"><td class="ts-cell"><a class="ts" href="#L45" alt="Thu Mar 07 2024 02:27:04 GMT-0800 (Pacific Standard Time)">10:27</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@szuend:matrix.org">Simon Zünd</span>&gt;</div></td><td class="msg-cell">There could be a better way to reference the corresponding original scope in the encoding, but I'm not sure.</td></tr>
+  <tr class="msg" id="L46"><td class="ts-cell"><a class="ts" href="#L46" alt="Thu Mar 07 2024 02:27:04 GMT-0800 (Pacific Standard Time)">10:27</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@szuend:matrix.org">Simon Zünd</span>&gt;</div></td><td class="msg-cell">Impl wise you either track the reference. Or you flatten out the decoded original scopes again into an array and just index into that</td></tr>
+  <tr class="msg" id="L47"><td class="ts-cell"><a class="ts" href="#L47" alt="Thu Mar 07 2024 02:28:54 GMT-0800 (Pacific Standard Time)">10:28</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@szuend:matrix.org">Simon Zünd</span>&gt;</div></td><td class="msg-cell">I haven't landed the code yet, I'm in the middle of implementing</td></tr>
+
+</tbody></table></div></div></div>
+</body></html>

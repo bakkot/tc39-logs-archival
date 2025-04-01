@@ -1,0 +1,61 @@
+<!DOCTYPE html><html><head>
+  <title>TC39 Delegates on 2024-02-14</title>
+  <link rel="stylesheet" href="../style.css">
+  <script>window.room = "TC39 Delegates";</script><script src="../render-roomlist.js"></script>
+  <script src="../logs.js"></script>
+</head>
+<body><div class="wrapper">
+<div class="sidebar">
+<div class="title">TC39 Delegates<br>2024-02-14<br><a href="plaintext/">plaintext logs</a></div>
+<div class="nav">
+<a href="2024-02-13" class="nav-link"><span>prev</span></a>
+<a href="2024-02-15" class="nav-link"><span style="float:right">next</span></a>
+</div>
+    <div class="all-rooms"><noscript>JavaScript is required to load the channel index, but you can go to <a href="../..">the static index</a> directly.</noscript></div>
+<div class="footer"><a href="https://github.com/bakkot/matrix-archive-bot">source on github</a></div>
+</div>
+<div class="rhs">
+<div class="rhs-header">
+<span id="error" style="color: red; display:none">error</span>
+
+<input type="text" id="query" size="25" placeholder="Search TC39 Delegates">
+<a id="search-submit" class="button icon-link" title="Search">
+  <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M505 442.7L405.3 343c-4.5-4.5-10.6-7-17-7H372c27.6-35.3 44-79.7 44-128C416 93.1 322.9 0 208 0S0 93.1 0 208s93.1 208 208 208c48.3 0 92.7-16.4 128-44v16.3c0 6.4 2.5 12.5 7 17l99.7 99.7c9.4 9.4 24.6 9.4 33.9 0l28.3-28.3c9.4-9.4 9.4-24.6.1-34zM208 336c-70.7 0-128-57.2-128-128 0-70.7 57.2-128 128-128 70.7 0 128 57.2 128 128 0 70.7-57.2 128-128 128z"></path></svg>
+</a>
+</div>
+
+<div class="log"><table id="log-table"><tbody id="log-tbody">
+
+  <tr class="msg" id="L0"><td class="ts-cell"><a class="ts" href="#L0" alt="Tue Feb 13 2024 18:21:24 GMT-0800 (Pacific Standard Time)">02:21</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell"><p>I just ran across a strange case while writing additional tests for RegExp Modifiers. I've found exactly two cases where <code>/\b/u</code> and <code>/\b/ui</code> disagree for the same character:</p>
+<ul>
+<li>U+017f - ſ LATIN SMALL LETTER LONG S</li>
+<li>U+212a - K KELVIN SIGN</li>
+</ul>
+<p>A quick test of the same patterns and inputs in C# shows no disagreement, so its not clear to me if this is expected or possibly a bug in <code>\b</code>.</p>
+</td></tr>
+  <tr class="msg" id="L1"><td class="ts-cell"><a class="ts" href="#L1" alt="Tue Feb 13 2024 18:31:22 GMT-0800 (Pacific Standard Time)">02:31</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell">possibly having to do with how Unicode case folding for those characters produces an ASCII character. It just seems strange to have something that is not considered a word character when preserving case, but is considered a word character when ignoring case.</td></tr>
+  <tr class="msg" id="L2"><td class="ts-cell"><a class="ts" href="#L2" alt="Tue Feb 13 2024 18:39:22 GMT-0800 (Pacific Standard Time)">02:39</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">the original sin here is that <code>\b</code> and <code>\w</code> are not unicode-aware even in <code>u</code> mode</td></tr>
+  <tr class="msg" id="L3"><td class="ts-cell"><a class="ts" href="#L3" alt="Tue Feb 13 2024 18:40:17 GMT-0800 (Pacific Standard Time)">02:40</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">this behavior follows immediately from that: <code>U+017f</code> is not an ascii word character, but it case-folds to <code>s</code>, which is, and <code>i</code> means that the regex operates on case-folded characters</td></tr>
+  <tr class="msg" id="L4"><td class="ts-cell"><a class="ts" href="#L4" alt="Tue Feb 13 2024 18:40:42 GMT-0800 (Pacific Standard Time)">02:40</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">the decision to make <code>\b</code> and <code>\w</code> not unicode-aware predates me, unfortunately, so I cannot tell you why this is. it does seem... bad.</td></tr>
+  <tr class="msg" id="L5"><td class="ts-cell"><a class="ts" href="#L5" alt="Tue Feb 13 2024 18:40:55 GMT-0800 (Pacific Standard Time)">02:40</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">(<code>\d</code> too but that one matters a lot less.)</td></tr>
+  <tr class="msg" id="L6"><td class="ts-cell"><a class="ts" href="#L6" alt="Tue Feb 13 2024 19:19:09 GMT-0800 (Pacific Standard Time)">03:19</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">Time to introduce a <code>w</code> flag for very very unicode mode?</td></tr>
+  <tr class="msg" id="L7"><td class="ts-cell"><a class="ts" href="#L7" alt="Tue Feb 13 2024 19:27:44 GMT-0800 (Pacific Standard Time)">03:27</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">we actually did specifically discuss and reject the possibility of making <code>\b</code> etc unicode-aware in <code>v</code>-mode <a href="https://github.com/tc39/notes/blob/2fccc7f7a38201354a007394ab867ec7b245b464/meetings/2021-08/aug-31.md#regexp-set-notation--properties-of-strings">https://github.com/tc39/notes/blob/2fccc7f7a38201354a007394ab867ec7b245b464/meetings/2021-08/aug-31.md#regexp-set-notation--properties-of-strings</a></td></tr>
+  <tr class="msg" id="L8"><td class="ts-cell"><a class="ts" href="#L8" alt="Tue Feb 13 2024 20:59:01 GMT-0800 (Pacific Standard Time)">04:59</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell"><blockquote>
+<p>JRL: Also voicing support, I would not change these shorthands.</p>
+</blockquote>
+<p>I do not remember this</p>
+</td></tr>
+  <tr class="msg" id="L9"><td class="ts-cell"><a class="ts" href="#L9" alt="Tue Feb 13 2024 21:31:49 GMT-0800 (Pacific Standard Time)">05:31</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell">I think waldemar's concern at the time was that changing <code>\b</code>, <code>\w</code>, and <code>\d</code> shouldn't be tied to the mode that adds set notation. We'd need to opt in either with a new mode or a <code>{u}</code> suffix. Either are fine so long as the new mode could be included in the modifiers list, i.e., <code>\b{u}</code> or <code>(?w:\b)</code> (or whatever flag we'd use) would work for those cases.</td></tr>
+  <tr class="msg" id="L10"><td class="ts-cell"><a class="ts" href="#L10" alt="Tue Feb 13 2024 21:38:22 GMT-0800 (Pacific Standard Time)">05:38</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell">Oh, I guess I mentioned modifiers during that discussion as well.</td></tr>
+  <tr class="msg" id="L11"><td class="ts-cell"><a class="ts" href="#L11" alt="Wed Feb 14 2024 07:40:46 GMT-0800 (Pacific Standard Time)">15:40</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-11" title="@gibson042:matrix.org">Richard Gibson</span>&gt;</div></td><td class="msg-cell"><mx-reply><blockquote> the decision to make <code>\b</code> and <code>\w</code> not unicode-aware predates me, unfortunately, so I cannot tell you why this is. it does seem... bad.</blockquote></mx-reply><p><a href="https://github.com/tc39/proposal-regexp-unicode-property-escapes/issues/22#issuecomment-279930140">https://github.com/tc39/proposal-regexp-unicode-property-escapes/issues/22#issuecomment-279930140</a></p>
+<blockquote>
+<p>There was a pre-ES6 <a href="https://github.com/mathiasbynens/es-regexp-unicode-character-class-escapes/blob/master/d-w-b.md">proposal to change the meaning of <code>\w</code>, <code>\d</code>, and <code>\b</code> in Unicode mode</a>. It was ultimately rejected out of fear it would hurt adoption of the <code>u</code> flag.</p>
+</blockquote>
+<p>(<a href="https://github.com/tc39/proposal-regexp-unicode-property-escapes/issues/22">https://github.com/tc39/proposal-regexp-unicode-property-escapes/issues/22</a> is the [failed] attempt to make those escapes Unicode-aware under the <code>v</code> flag)</p>
+</td></tr>
+  <tr class="msg" id="L12"><td class="ts-cell"><a class="ts" href="#L12" alt="Wed Feb 14 2024 07:57:14 GMT-0800 (Pacific Standard Time)">15:57</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@shuyuguo:matrix.org">shu</span>&gt;</div></td><td class="msg-cell">who can add new members to the tc39 organization on GH?</td></tr>
+  <tr class="msg" id="L13"><td class="ts-cell"><a class="ts" href="#L13" alt="Wed Feb 14 2024 07:57:50 GMT-0800 (Pacific Standard Time)">15:57</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@shuyuguo:matrix.org">shu</span>&gt;</div></td><td class="msg-cell">i'd like to add a V8 bot account for the purposes of test262 2-way sync. i can add the account to the right teams but first it has to be part of the tc39 organization, apparently</td></tr>
+  <tr class="msg" id="L14"><td class="ts-cell"><a class="ts" href="#L14" alt="Wed Feb 14 2024 08:07:01 GMT-0800 (Pacific Standard Time)">16:07</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-6" title="@ljharb:matrix.org">ljharb</span>&gt;</div></td><td class="msg-cell">done.</td></tr>
+
+</tbody></table></div></div></div>
+</body></html>

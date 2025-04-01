@@ -1,0 +1,84 @@
+2024-06-17
+[08:48:25.0450] <shu>
+reminder that the next working session call is this Thursday, June 20, 10-11am PT. topic is methods again
+
+[08:48:55.0713] <shu>
+please agoric folks, remind Mark to attend
+
+
+2024-06-20
+[09:02:01.0506] <nicolo-ribaudo>
+Is there an agenda for the shared structs meeting? (after the plenary presentation, I'm considering attending)
+
+[09:02:55.0208] <nicolo-ribaudo>
+It seems like there are some common problems to solve between shared structs and modules, with regards to what does it mean to "be the same code"
+
+[09:03:06.0036] <nicolo-ribaudo>
+ * It seems like there are some common problems to solve between shared structs and modules, with regard to what it means to "be the same code"
+
+[09:28:48.0952] <littledan>
+I think we're hoping that Mark will show up and we can continue the discussion from plenary
+
+[09:34:27.0689] <shaylew>
+IMO the most awkward thing about the "same code" question is that WASM linking -- and especially WASM gc reference types -- already has a coherent answer to what it means for types to be compatible/identical/etc 
+
+[09:34:56.0155] <shaylew>
+(a story based on exporting types and type witnesses)
+
+[09:35:42.0684] <littledan>
+do you have a reference for the type witness thing? I thought it was all structural
+
+[09:35:47.0654] <shaylew>
+and it's not been clear to me which parts of that story are possible or desirable to also do in JS, but it would sure make things simpler to use some of the same principles
+
+[09:36:31.0314] <shaylew>
+uhhh I don't know which parts of WASM are real and which are still imaginary, I read proposals and don't use it in practice yet
+
+[09:37:44.0176] <shaylew>
+but the exceptions/call tags pieces are definitely using witnesses and opaque coercions, and at least in some stage the GC proposal had some of that (for subtyping)
+
+[09:41:58.0835] <littledan>
+hmm yeah I don't see how/why we'd use those. I like the idea of identifying by parse node, and maybe adding onto that, reference (via module sources)
+
+[10:11:08.0526] <shaylew>
+if you have witnesses you can have different declarations share the same identifier (different methods in different workers for the same struct), and subtyping/sealed witnesses provides a foundation for private fields
+
+[10:11:43.0446] <shaylew>
+(it's very alien to the JS world though, if it's the only place witnesses show up)
+
+[11:08:56.0253] <littledan>
+towards the end of the discussion, it felt like we were moving towards some concept of witnesses, but obviously a runtime not type-time witness
+
+[12:07:09.0066] <rbuckton>
+One way to tackle the "same code" issue might be code signing. If you're not using a custom loader you can just rely on source location (i.e., module cache key + source text position). If you want to use a custom loader, or even if you want to expose private state to WASM, you could give your shared struct a fixed identity (i.e., a UUID, URN, etc.) and sign the module. A custom loader could be given a suitable signing mechanism to sign its version of the module, or your WASM assembly could be signed in the same way. During correlation, we would compare both the fixed identity and whether both sources were signed with the same signing key. We could also have a syntactic mechanism to establish "trust" with other digital signatures.
+
+```js
+export shared struct Point {
+  with identity "uuid:191edd8d-ad62-4c5e-acec-4f2c0525e753";
+  #x;
+  #y;
+  ...
+}
+
+// SIG // Begin signature block
+// SIG // <base64 encoded signature>
+// SIG // End signature block
+```
+(NOTE: the `// SIG` comment, above, is how the Windows Scripting Host (WSH) recognizes a digitally signed script signed using `signtool.exe`)
+
+Loaders would need a way to enforce signatures at runtime, which is a bit trickier. One way this could be accomplished would be to have a syntactic mechanism to declare a dynamically generated signing key whose trust is associated with the trust of the containing module. If a loader can be locked down to prevent dynamic patching of its various resolve/fetch/link/evaluate algorithms, its methods were not generic (i.e., `this` was brand checked), and if those algorithms are trusted, then it could use the dynamic signing key to sign code as part of linking. Untrusted code wouldn't be able to create its own loader as it also wouldn't be trusted. A trusted loader could opt to not sign untrusted code, establishing a trust boundary.
+
+
+[12:14:04.0493] <rbuckton>
+To be fair, I've been daydreaming about establishing trust boundaries at the module level in JS for awhile, with other ramifications besides this one. For example, establishing a membrane across a trust boundary and using decorators to enforce various trust relationships, such as ensuring the `this` of a function call is trusted by the function/method being called, or preventing untrusted code from calling a trusted method or function, or vice versa.
+
+[12:35:51.0398] <rbuckton>
+Then again, .NET has been moving away from code access security and partially trusted code for awhile, and .NET Core doesn't support it at all. Current security recommendations are to never call partially trusted or untrusted code and to instead utilize virtualization or sandboxing. In that model, if you want code to run in isolation from the rest of your code, you actually run it in isolation. In that model, we'd probably establish a unique key for the current Realm and just indicate whether to copy that key (opt-in) to Realms it creates via workers/ShadowRealm/etc. If you want to run untrusted code, you create a new Worker/ShadowRealm and don't copy the Realm key. When we correlate `shared structs` based on `with identity ...`, we just combine the Realm's key with the struct's identity. Untrusted code can't match, but trusted code can.
+If you want WASM to have access to private state, you pass a flag when you instantiate the assembly indicating whether to share the realm's key with the WASM module.
+
+[12:37:27.0402] <rbuckton>
+That is fairly simple, and is closed by default. If you want your workrer to correlate via `with identity`, you do something like `new Worker(code, { structCorrelation: "allow" })`.
+
+[12:37:33.0760] <rbuckton>
+ * That is fairly simple, and is closed by default. If you want your worker to correlate via `with identity`, you do something like `new Worker(code, { structCorrelation: "allow" })`.
+

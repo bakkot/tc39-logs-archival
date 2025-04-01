@@ -1,0 +1,949 @@
+2022-05-02
+[12:37:13.0040] <TabAtkins>
+I'm translating the Map/Set prototype methods over to WebIDL-ese (so we can define maplikes and setlikes in terms of Infra maps and sets, rather than doing weird and fraught indirections to actual ES Maps and Sets), and I noticed that while the @@iterator for them records the initial length and only iterates to that length at max (can stop earlier if things are deleted so it hits the end before that point), the `forEach` methods just visit every entry "live" and can potentially run forever if the callback keeps adding entries.
+
+[12:37:21.0583] <TabAtkins>
+Is this behavior difference intentional?
+
+[12:43:30.0619] <bakkot>
+uh
+
+[12:43:35.0503] <bakkot>
+that's probably a bug from when we refactored those
+
+[12:43:44.0682] <bakkot>
+ * that's probably a bug from when we refactored those
+
+[12:44:01.0233] <bakkot>
+oh, wait, no it's not
+
+[12:44:04.0055] <bakkot>
+you missed a step:
+
+[12:44:21.0127] <bakkot>
+CreateMapIterator step 2.d.iii.6: Set numEntries to the number of elements of entries.
+
+[12:44:36.0312] <TabAtkins>
+Right, I mentioned that.
+
+[12:44:50.0553] <bakkot>
+no, that's in the loop
+
+[12:45:03.0292] <bakkot>
+it updates numEntries within the loop
+
+[12:45:12.0743] <bakkot>
+or I am not understanding your question
+
+[12:45:53.0217] <TabAtkins>
+Oh dang you're right, I *did* miss/misunderstand that.
+
+[12:48:01.0968] <TabAtkins>
+Hm then, the two methods can both run infinitely, ok. Is there a particular reason why the two have their iteration written significantly differently, or is that intended to just be an editorial detail? (Iterator goes over the entries by index and makes no mention of "empty" values; forEach iterates the entries list directly and explicitly jumps over "empty" values. (I note that "empty" is supposed to be a spec convenience for deleted entries and not an actual author-exposed thing.))
+
+[12:50:51.0374] <bakkot>
+Iterator does handle empty values, it seems to me?
+> iii. If e.[[Key]] is not empty, then
+
+[12:51:02.0926] <bakkot>
+They actually look pretty similar to me, all told
+
+[12:51:25.0009] <TabAtkins>
+Sigh, I'm blind.
+
+[12:51:50.0207] <TabAtkins>
+Yeah, so it's just the explicit index-based vs just looping over the List directly, I guess
+
+[12:52:10.0389] <bakkot>
+yeah, and that one... I think it's a path-dependence thing
+
+[12:53:22.0659] <bakkot>
+in earlier editions iterators were specified in terms of explicitly keeping all of the state on internal slots, but in https://github.com/tc39/ecma262/pull/2045 we made it possible to specify a "spec generator" which is more similar to how you'd write it in JS
+
+[12:53:54.0921] <bakkot>
+prior to that, the iterator _needed_ to be specified in terms of an index so it could store the index on an internal slot, as in https://tc39.es/ecma262/2016/#sec-%mapiteratorprototype%.next
+
+[12:54:09.0318] <bakkot>
+with the refactoring that's no longer strictly necessary but the refactoring was written as a delta from what was originally there
+
+[12:54:35.0519] <TabAtkins>
+Ahhhhh, ok, thanks for the history, that makes sense.
+
+[13:16:34.0426] <TabAtkins>
+Okay, more questions in this regard: `Array`'s `forEach`_does_ compute the length once at the beginning and then doesn't go past it <https://tc39.es/ecma262/#sec-array.prototype.foreach>, so you can't infinite-loop yourself by pushing to the array in the callback. Is the behavior difference between arr.forEach and map.forEach intentional or accidental? (And which should we copy for general web-platform purposes when we define iteration better for Infra types in https://github.com/whatwg/infra/issues/396?)
+
+[13:16:56.0093] <TabAtkins>
+ * Okay, more questions in this regard: `Array`'s `forEach`_does_ compute the length once at the beginning and then doesn't go past it <https://tc39.es/ecma262/#sec-array.prototype.foreach>, so you can't infinite-loop yourself by pushing to the array in the callback. Is the behavior difference between arr.forEach and map.forEach intentional or accidental? (And which should we copy for general web-platform purposes when we define iteration better for Infra types in https://github.com/whatwg/infra/issues/396?)
+
+[13:18:07.0875] <bakkot>
+That one is before my time, so someone else will have to give the actual answer
+
+[13:18:36.0181] <bakkot>
+but I do note that looking up the length of an array is observable, whereas looking up the length of a Map's internal list is not, so it's possible that's the reason for the difference?
+
+[13:18:48.0985] <TabAtkins>
+Hm, but Array's @@iterator *does* allow infinite-loops, so I guess that might just be a legacy detail we got stuck with
+
+[13:18:56.0869] <bakkot>
+ah, yeah, in that case probably
+
+[13:22:22.0394] <bakkot>
+that does seem to be the consensus in other languages also
+
+[13:22:30.0038] <TabAtkins>
+Excellent, thanks. Looks like we just need to add some details to Infra to make it clear how mid-iteration changes to the collection should work; we can match JS and define it in terms of an internal index that advances until it's past the (current) end.
+
+[13:22:54.0585] <TabAtkins>
+And that'll mean I get to simplify some of my text in WebIDL that's doing this by hand, which is nice.
+
+
+2022-05-10
+[12:05:18.0169] <bakkot>
+Domenic: do you happen to remember why `new Promise(res => res(thenable))` calls `thenable.then()` on the next tick rather than synchronously, in defiance of the A+ spec? cf https://github.com/tc39/ecma262/issues/2770#issuecomment-1121612732
+
+[12:05:40.0239] <bakkot>
+or bterlson or anyone else who was involved in the details of specifying async/await
+
+[12:06:12.0428] <bterlson>
+I don't recall sorry :(
+
+[12:08:38.0731] <bakkot>
+ * Domenic: do you happen to remember why `new Promise(res => res(thenable))` calls `thenable.then()` on the next tick rather than synchronously, in defiance of the A+ spec? cf https://github.com/tc39/ecma262/issues/2770#issuecomment-1121612732
+
+[12:13:02.0540] <shu>
+thenable delenda est :(
+
+[12:15:12.0251] <bakkot>
+happens when `thenable` is a native promise too, to be clear
+
+[12:22:03.0547] <bakkot>
+I guess this actually dates back to promises in ES6, which I always forget predate async/await
+
+[12:41:31.0847] <bakkot>
+aha, finally dug up previous discussion: https://github.com/domenic/promises-unwrapping/issues/105
+
+[12:59:28.0757] <Mathieu Hofman>
+So basically the problem is that `new Promise(res => res(thenable))` is not a clean stack but`Promise.resolve().then(() => thenable)` is a clean stack. As I mentioned earlier, I do believe that there would be a lot less code that will break if only the second case is made synchronous, since it'd be after a return, and thus I believe unlikely that any code would be relying on a new tick
+
+[12:59:46.0162] <Mathieu Hofman>
+ * So basically the problem is that `new Promise(res => res(thenable))` is not a clean stack but`Promise.resolve().then(() => thenable)\` is a clean stack. As I mentioned earlier, I do believe that there would be a lot less code that will break if only the second case is made synchronous, since it'd be after a return, and thus I believe unlikely that any code would be relying on a new tick
+
+[12:59:54.0584] <Mathieu Hofman>
+ * So basically the problem is that `new Promise(res => res(thenable))` is not a clean stack but`Promise.resolve().then(() => thenable)` is a clean stack. As I mentioned earlier, I do believe that there would be a lot less code that will break if only the second case is made synchronous, since it'd be after a return, and thus I believe unlikely that any code would be relying on a new tick
+
+[13:01:25.0272] <bakkot>
+the actual issue Justin Ridgewell was worried about arises from the first case, though
+
+[13:01:56.0809] <Mathieu Hofman>
+does it? My understanding was the adoption of a return promise
+
+[13:02:43.0181] <Justin Ridgewell>
+It falls out of the first case
+
+[13:03:17.0877] <Justin Ridgewell>
+The async functions implicit promise wrapper calls resolve with the return value
+
+[13:03:51.0631] <Justin Ridgewell>
+* The async functions implicit promise wrapper calls resolve with the return value
+
+[13:05:33.0653] <bakkot>
+when the function returns, `res(retv)` is called with the (raw, not boxed) return value of the function, and when `retv` is already a thenable, it waits a tick before invoking `retv.then`
+
+[13:06:04.0897] <bakkot>
+we could just add a fast-path to `res` when the `then` from `thenable` is the actual `Promise.prototype.then`, I suppose
+
+[13:06:32.0246] <bakkot>
+ * when the function returns, `res(retv)` is called with the (raw, not boxed) return value of the function, and when `retv` is already a thenable, it waits a tick before invoking `retv.then`
+
+[13:09:06.0552] <Mathieu Hofman>
+Oh yeah right, if we had `(async () => thenable)()` technically that would call the `.then` synchronously at that point, and not on a clean stack. Ugh
+
+[13:09:59.0447] <Mathieu Hofman>
+> <@bakkot:matrix.org> we could just add a fast-path to `res` when the `then` from `thenable` is the actual `Promise.prototype.then`, I suppose
+
+Now we're getting into realms complexities.
+
+[13:10:12.0974] <bakkot>
+we already have those with the fast-path in Promise.resolve
+
+[13:10:19.0218] <Mathieu Hofman>
+Should the spec be allowed to recognize `Promise.prototype.then` form other realms ?
+
+[13:10:32.0517] <Justin Ridgewell>
+We have a similar  fast path for await
+
+[13:10:57.0907] <bakkot>
+specifically PromiseResolve does SameValue, which fails cross-realm
+
+[13:11:04.0244] <bakkot>
+and it's fine
+
+[14:56:57.0256] <shu>
+i can imagine that might be a problem for shadowrealms which have different Promise prototypes but the same microtask queue
+
+[14:57:01.0021] <shu>
+ * i can imagine that might be a problem for shadowrealms which have different Promise prototypes but the same microtask queue
+
+[14:57:24.0032] <shu>
+i say this, i want to be very clear here, having zero concerns with having it just do `SameValue`
+
+[15:14:52.0216] <bakkot>
+you can't pass a promise across the shadowrealm boundary anyway
+
+[15:51:04.0983] <Domenic>
+The more you can simplify this mess the better
+
+[15:51:22.0660] <Domenic>
+I'm not sure if adding a fast-path is really simplifying, but I guess it's making things faster, which is also good
+
+[15:52:00.0688] <Domenic>
+But if you can just get rid of all the extra microtasks and "untrusted" code guards and stuff... that was all really misguided.
+
+[15:53:02.0418] <Domenic>
+Thenable support in general, was probably still important, but less important than I thought it would be, and we could have gotten away with something simpler I'm sure.
+
+[16:31:10.0263] <bakkot>
+Yeah, fast-path would be the "we're adding a back-compat hack to make the common case less gross" option: not an actual reduction in complexity when you understand the full machinery in detail but probably a reduction in complexity in practice because the common case ends up cleaner
+
+[16:32:05.0281] <bakkot>
+Mathieu Hofman: this is off topic for the PR thread, but how would having a built-in `IsPromise` help your use case? `IsPromise` holds for instances of Promise subclasses, but those can have custom `then` which the spec will dutifully call (as long as the subclass instances don't reset their `.constructor` to the native Promise).
+
+[16:37:00.0414] <Mathieu Hofman>
+`const isSafePromise = (p) => Promise.isPromise(p) && Reflect.getPrototypeOf(p) === Promise.prototype && !Reflect.getOwnPropertyDescriptor(p, 'then') && !Reflect.getOwnPropertyDescriptor(p, 'constructor')` (Given frozen instrinsics)
+
+[16:39:06.0816] <Mathieu Hofman>
+Or whatever Promise subclass the user chooses to trust
+
+[16:41:24.0454] <Mathieu Hofman>
+The problem is that right now the only way to guard against evil thenables is to take a tick hit on every objects values, including unaltered native promises.
+
+[16:43:30.0227] <Mathieu Hofman>
+ * `const isSafePromise = (p) => Promise.isPromise(p) && !Reflect.isExtensible(p) && Reflect.getPrototypeOf(p) === Promise.prototype && !Reflect.getOwnPropertyDescriptor(p, 'then') && !Reflect.getOwnPropertyDescriptor(p, 'constructor')` (Given frozen instrinsics)
+
+[16:51:53.0512] <bakkot>
+what do you mean by "guard against" here?
+
+[16:55:13.0391] <Mathieu Hofman>
+Making sure the untrusted value will not be able to trigger any synchronous execution when doing `val.then()` or `Promise.resolve(val)`
+
+[16:56:59.0897] <Mathieu Hofman>
+The only safe way right now is basically something like `val !== null && typeof val === 'object' ? Promise.resolve().then(() => val) : Promise.resolve(val)`
+
+
+2022-05-11
+[17:02:12.0150] <bakkot>
+ah
+
+[17:02:33.0721] <bakkot>
+the problem specifically being that Promise.prototype.then does the SpeciesConstructor stuff, I suppose
+
+[17:03:49.0244] <bakkot>
+otherwise you could just use `Promise.prototype.then.call(val)` as your test
+
+[17:03:52.0530] <Mathieu Hofman>
+and Promise.resolve, yes
+
+[17:05:14.0686] <Mathieu Hofman>
+There is no place in the spec that does `IsPromise` without also poking at `.constructor` or `.then` on the object.
+
+[17:06:05.0971] <bakkot>
+perhaps we will manage to remove Symbol.species instead
+
+[17:06:56.0900] <Mathieu Hofman>
+I don't think it'll help. `.constructor` based species is not slated for removal from what I recall
+
+[17:09:13.0314] <bakkot>
+that's Type II in the taxonomy in the proposal, and it is proposed to be removed per https://github.com/tc39/proposal-rm-builtin-subclassing#proposed-new-old-semantics
+
+[17:09:22.0128] <bakkot>
+I don't think we'll actually manage it but I live in hope
+
+[17:10:25.0969] <Mathieu Hofman>
+I'm curious if there would be any opposition to basically have a `Promise.isPromise(x)` which basically does `IsPromise(x)`. I know it'd solve my problem
+
+[17:11:51.0197] <bakkot>
+I think there would need to be more motivation than your very narrow use case
+
+[17:12:21.0079] <bakkot>
+and I'd be hard pressed to come up with such motivation given that the actual thing one usually cares about is "is thenable"
+
+[17:13:52.0050] <Mathieu Hofman>
+The thing is that it's impossible to workaround currently, and I fail to see how exposing something that already exists as a new namespaced API has much complexity.
+
+[17:15:17.0758] <Mathieu Hofman>
+I am sure ljharb would love a clean way to brand check a promise for his libraries ;)
+
+[17:15:32.0434] <bakkot>
+People would use it instead of "is thenable" and be confused
+
+[17:16:32.0554] <bakkot>
+"is promise" is almost never the test anyone actually wants; you and ljharb have extremely unusual use cases
+
+[17:16:58.0968] <bakkot>
+but it _looks_ like a thing you might want, so people will use it in other cases, and that's bad
+
+[17:19:13.0557] <Mathieu Hofman>
+Do you have any suggestion to make it more obvious what this does, or less likely to be misused?
+
+[17:19:14.0494] <Kris Kowal>
+I’m sure there’s a way to express the brand-check that would be clear and sufficiently out of reach.
+
+[17:21:24.0660] <Kris Kowal>
+I agree that there’s potential for confusion for any particular behavior for `Promise.isPromise(thenable)`.
+
+[17:22:35.0315] <Kris Kowal>
+And I also agree we need to be able to check whether a value is a native promise without reentering any of its API.
+
+[17:24:27.0916] <Kris Kowal>
+Though, `Promise.isPromise(thenable) === false` isn’t _that_ weird of an answer. It’s not a `Promise` _yet_, even if it’s a promise with a little P.
+
+[17:26:03.0404] <Kris Kowal>
+The notion that `Promise.isPromise(X) === true` only for X that can _become_ a promise invites the possibility that `"hello"` is a promise.
+
+[17:26:19.0959] <Kris Kowal>
+ * The notion that `Promise.isPromise(X) === true` only for X that can _become_ a promise invites the possibility that `"hello"` is a promise.
+
+[17:35:14.0796] <bakkot>
+IME the main reason people use `isArray` is to make polymorphic APIs, where e.g. you take either a list of names or a single name. and I expect that's the main way people would use this as well: `if (Promise.isPromise(x)) x = await x`, say. but that doesn't do the right thing if `x` is thenable but not a Promise.
+
+[17:36:04.0928] <bakkot>
+this seems bad. especially for people who want to make proxies for stuff unless we make isPromise pierce proxies like isArray does, which we _definitely will not do_
+
+[17:36:25.0187] <ljharb>
+in practice tho it’s rarely a thenable
+
+[17:36:30.0075] <Mathieu Hofman>
+I would not expect proxies to pierce this
+
+[17:36:30.0605] <Kris Kowal>
+The example is not coherent because `await 1` works fine, but 1 is not a promise.
+
+[17:36:40.0707] <bakkot>
+the example is perfectly coherent
+
+[17:36:44.0567] <ljharb>
+non-Promise thenables largely died once Promise and async/await became commonplace
+
+[17:36:52.0062] <bakkot>
+ljharb: depends on how many proxies you have around
+
+[17:36:56.0984] <bakkot>
+proxy for a promise is thenable but not a promise
+
+[17:37:17.0151] <ljharb>
+“Any use of proxy” is incredibly niche automatically :-)
+
+[17:37:22.0231] <bakkot>
+fair enough
+
+[17:37:25.0736] <bakkot>
+Kris Kowal: how is the example not coherent?
+
+[17:37:50.0560] <bakkot>
+I mean, it's _wrong_, because it's treating "thenable" as the same as "is promise", but I guarantee people are going to do that; that's my point
+
+[17:38:24.0464] <bakkot>
+if we didn't have thenables and only had promises, the example would be correct for a polymorphic API which wants to skip the `await` when passed a value which is not boxed in a promise
+
+[17:38:25.0494] <Mathieu Hofman>
+I agree that using `isPromise` with the intent to skip an await would be misguided.
+
+[17:38:28.0479] <bakkot>
+which is a thing people do in fact want to do
+
+[17:38:30.0907] <bakkot>
+constantly
+
+[17:38:52.0507] <ljharb>
+not just polymorphic; these kinds of checks are always useful for helpful runtime validation of input types
+
+[17:39:10.0874] <ljharb>
+which includes an IsPromise check, which thus isn’t quite as niche as claimed
+
+[17:39:58.0137] <Mathieu Hofman>
+currently people do `Promise.resolve(val) === val`, but that can synchronously trigger user code attached to `val`
+
+[17:40:19.0287] <ljharb>
+Which is absurdly rare, so it’s ‘good enough’ but still not perfect
+
+[17:40:24.0177] <bakkot>
+I am fine with this
+
+[17:40:24.0189] <Kris Kowal>
+I’m drawing a blank on what sensible thing one would be achieving with`if (Promise.isPromixe(x)) await x` that would not be achieved by `await x`.
+
+[17:40:41.0030] <bakkot>
+skipping the `await` when passed a value which is not boxed in a promise, like i said
+
+[17:40:49.0098] <ljharb>
+Kris Kowal: also telling someone “i wanted a promise here, and you gave me something else, so you probably have a bug”
+
+[17:41:24.0858] <ljharb>
+if i expect “an awaitable” then it doesn’t matter, and if i accept a thenable then I’d check for .then being a function ¯\_(ツ)_/¯ 
+
+[17:41:43.0839] <Kris Kowal>
+Indeed.
+
+[17:41:56.0863] <ljharb>
+but virtually nobody expects a thenable - they expect a Promise.
+
+[17:42:02.0851] <bakkot>
+false
+
+[17:42:14.0016] <bakkot>
+I have absolutely no problem with someone handing me a proxy for a promise
+
+[17:42:16.0115] <Mathieu Hofman>
+What if we introduce both a `isPromise` and `isThenable`, then people wouldn't be as confused ?
+
+[17:42:17.0481] <bakkot>
+or a different-realm promise
+
+[17:42:19.0024] <bakkot>
+those things are fine
+
+[17:42:22.0352] <ljharb>
+intentionally i mean. A thenable works perfectly fine ofc
+
+[17:42:27.0967] <bakkot>
+Mathieu Hofman: that would be... more confusing
+
+[17:42:36.0111] <ljharb>
+and “a different realm” is almost as rare as proxy
+
+[17:43:20.0172] <Jessidhia>
+is it still common for people to use \<favorite A1 implementation\> instead of native Promise or a polyfill
+
+[17:43:32.0785] <bakkot>
+people do still use bluebird pretty often, yes
+
+[17:43:35.0501] <bakkot>
+not as much as they used to
+
+[17:43:38.0615] <Jessidhia>
+* is it still common for people to use \<favorite A1 implementation\> instead of native Promise or a polyfill
+
+[17:43:42.0931] <ljharb>
+mostly by inertia, not for a good reason
+
+[17:43:52.0201] <Mathieu Hofman>
+> <@bakkot:matrix.org> Mathieu Hofman: that would be... more confusing
+
+How so?
+
+[17:44:48.0474] <bakkot>
+"thenable" means "has a callable .then property", which is a thing you can check directly; the existence of a method which does this implies it is something else
+
+[17:44:59.0441] <Mathieu Hofman>
+> <@jessidhia:matrix.org> is it still common for people to use \<favorite A1 implementation\> instead of native Promise or a polyfill
+
+React Native for example forces on a promise polyfill (bluebird from what I recall). I'm incredulous why, but that's one example of weird always on non-native promises
+
+[17:45:11.0133] <ljharb>
+weird
+
+[17:45:11.0432] <Kris Kowal>
+Q’s still getting an absurd weekly download figure, for what it’s worth.
+
+[17:45:43.0530] <bakkot>
+so, right. bluebird and Q are good examples of why normal users don't _actually_ want IsPromise in the example I gave, and giving them IsPromise would lead them to have the wrong behavior.
+
+[17:45:47.0873] <bakkot>
+so, we should not have IsPromise.
+
+[17:45:55.0614] <ljharb>
+you could probably hunt through dependents and figure out how much of those numbers are due to new usage 
+
+[17:46:17.0676] <ljharb>
+normal users don’t use bluebird or q directly, i claim, and thus have no desires for them
+
+[17:46:39.0656] <Jessidhia>
+avoiding `await`s seems very misguided IMO, that’s just borderline attempting to revive the Zalgo problem
+
+[17:46:41.0532] <bakkot>
+I don't know what "thus have no desires for them" is doing in that sentence
+
+[17:46:42.0601] <Kris Kowal>
+Also, Q.isPromise is real and does a brand check of Q promises.
+
+[17:46:47.0833] <ljharb>
+(I’m not expecting IsPromise to ever be exposed, ofc)
+
+[17:46:49.0045] <bakkot>
+you might end up with a bluebird promise because someone else gave you one
+
+[17:46:56.0710] <bakkot>
+and you shouldn't trip over and die as soon as that happens
+
+[17:47:03.0885] <bakkot>
+you should just use it like any other promise
+
+[17:47:07.0997] <bakkot>
+and life will be good
+
+[17:47:22.0176] <ljharb>
+> <@bakkot:matrix.org> I don't know what "thus have no desires for them" is doing in that sentence
+
+i mean that the existence of those libs in transitive deps doesn’t prove people want them. They probably just don’t realize they’re there
+
+[17:47:27.0530] <bakkot>
+yeah but
+
+[17:47:28.0629] <bakkot>
+they are there
+
+[17:47:34.0899] <bakkot>
+and they don't have to realize it
+
+[17:47:41.0469] <bakkot>
+specifically because we don't have IsPromise
+
+[17:47:45.0111] <bakkot>
+which is... good
+
+[17:47:52.0530] <ljharb>
+sure. But as an API producer i have the right to force them to realize it if i want.
+
+[17:48:00.0944] <ljharb>
+and i can do that now already. Just imperfectly.
+
+[17:48:13.0979] <bakkot>
+I don't know what "have the right" means
+
+[17:48:19.0174] <Jessidhia>
+I remember that for a good while bluebird had better DX than native; I haven’t revisited this in years though
+
+[17:48:19.0880] <bakkot>
+you can write whatever code the language allows you to write, yes
+
+[17:48:36.0269] <ljharb>
+lol i mean, i can do it, and it’s not a bad thing if i do it
+
+[17:48:53.0571] <bakkot>
+I'm not going to pass judgement on "a bad thing"
+
+[17:49:18.0002] <ljharb>
+right - so i think while the argument in favor of the predicate is weak, the argument against it is also weak
+
+[17:49:40.0153] <bakkot>
+my argument has nothing to do with whether API consumers have the right to deliberately reject bluebird promises if they are so inclined
+
+[17:49:48.0484] <ljharb>
+iow “non-Promise thenables exist” isn’t a good argument imo against IsPromise
+
+[17:49:55.0809] <bakkot>
+my claim is that, for a normal user, who is doing the totally normal thing of trying to skip an `await` when given something which is not boxed, `IsPromise` would lead them to doing the wrong check, because that would lead them to skipping bluebird promises, which is not something they are specifically trying to do
+
+[17:50:17.0665] <ljharb>
+perhaps. How can we know that unless they learn the difference?
+
+[17:50:28.0212] <Mathieu Hofman>
+> <@ljharb:matrix.org> (I’m not expecting IsPromise to ever be exposed, ofc)
+
+Why not? I would very much like to figure out a way to expose it
+
+[17:50:30.0201] <bakkot>
+they should not _have_ to learn the difference
+
+[17:50:35.0959] <bakkot>
+that's my point
+
+[17:50:48.0397] <Kris Kowal>
+I do agree that we should generally steer folks away from checking whether things are promises.
+
+[17:50:58.0557] <bakkot>
+the thing I presented them as wanting to do was not "reject bluebird promises"
+
+[17:51:03.0318] <ljharb>
+i disagree with that opinion; Promise landed and other thenables are thus undesirable
+
+[17:51:06.0494] <bakkot>
+that is a totally unrelated thing to what I was hypothesizing
+
+[17:51:08.0428] <Jessidhia>
+my argument against it is an argument against the proposed _use_ of the predicate — conditional `await` is misguided, leads to unpredictable execution order (“Zalgo 2.0”), and if you’re already in a context where you _can_ `await` you are already asynchronous and there is no benefit to skipping awaits other than skipping the cooperative microtask yield point
+
+[17:51:52.0297] <Kris Kowal>
+I also agree that we should discourage conditionally awaiting.
+
+[17:51:52.0739] <Jessidhia>
+* my argument against it is an argument against the proposed _use_ of the predicate — conditional `await` is misguided, leads to unpredictable execution order (“Zalgo 2.0”), and if you’re already in a context where you _can_ `await` you are already asynchronous and there is no benefit to skipping awaits other than skipping the cooperative microtask yield point
+
+[17:52:02.0517] <bakkot>
+ljharb: it may well be that other thenables are undesirable but I don't understand what that has to do with the user story I'm discussing
+
+[17:52:04.0935] <bakkot>
+other thenables exist
+
+[17:52:25.0855] <bakkot>
+code which does `if (typeof arg.then === 'function') arg = await arg;` correctly interoperates with those thenables
+
+[17:52:32.0192] <bakkot>
+ * code which does `if (typeof arg.then === 'function') arg = await arg;` correctly interoperates with those thenables
+
+[17:52:45.0384] <bakkot>
+code which does `if (Promise.isPromise(arg)) arg = await arg` would not
+
+[17:52:50.0460] <Kris Kowal>
+I believe you’re also arguing that folks will inevitably abuse `Promise.isPromise(x)` in all these ways if a function by that name exists.
+
+[17:52:57.0702] <bakkot>
+yeah
+
+[17:53:02.0602] <bakkot>
+which is a claim I stand by
+
+[17:53:09.0035] <devsnek>
+i can see the dev.to articles now
+
+[17:53:14.0340] <Kris Kowal>
+I’m not sure that’s true. `Q.isPromise` has existed forever.
+
+[17:53:14.0864] <ljharb>
+a conditional await, i agree. A conditional validation exception tho is fine
+
+[17:53:15.0733] <devsnek>
+prescribing poor usage of IsPromise
+
+[17:53:38.0231] <bakkot>
+Kris Kowal: if you're using `Q` you are aware that there are multiple kinds of promise in the world and want to check specifically for `Q`'s promises
+
+[17:53:51.0117] <bakkot>
+if you are a normal JS user you probably are not _and should not have to be_ aware that other people are using other Promise implementations
+
+[17:54:16.0460] <bakkot>
+so it would not occur to you that `Promise.isPromise` is not the check you actually want
+
+[17:54:24.0085] <ljharb>
+imo they shouldn’t be using those other impls :-)
+
+[17:54:46.0658] <bakkot>
+your opinion is noted but I don't see what relevance it has
+
+[17:54:52.0258] <bakkot>
+ * your opinion is noted but I don't see what relevance it has
+
+[17:55:01.0553] <snek>
+what if Promise.isPromise(v) returns `typeof v.then === 'function'`
+
+[17:55:02.0631] <bakkot>
+there is, empirically, plenty of other code which is using other impls
+
+[17:55:58.0195] <ljharb>
+agreed
+
+[17:58:13.0515] <Kris Kowal>
+> <@devsnek:matrix.org> what if Promise.isPromise(v) returns `typeof v.then === 'function'`
+
+`typeof v.then === 'function'` doesn’t need a name.
+
+[17:58:58.0942] <Kris Kowal>
+The motivation for a brand check is specifically to avoid reentrance from the API of the given value.
+
+[18:00:08.0492] <snek>
+i mean if you wanna just skip awaiting it
+
+[18:00:12.0616] <snek>
+that seems like anti-promise behavior
+
+[18:00:35.0408] <snek>
+the point of promises is to avoid zalgo logic right
+
+[18:00:45.0344] <bakkot>
+`await` invokes getters synchronously, is the concern discussed above
+
+[18:01:24.0613] <snek>
+yeah i saw that in the gh thread
+
+[18:03:20.0416] <snek>
+i don't quite understand what the concern was with that
+
+[18:03:45.0343] <snek>
+like "security" was the term used but that seems a bit excessive 
+
+[18:04:40.0013] <bakkot>
+some people are writing code with very strong guarantees
+
+[18:52:33.0649] <Mathieu Hofman>
+Sorry I had to step away for a minute. Yes the concern is reentrancy, and knowing where that can happen or not. It's not obvious that doing `Promise.resolve(x)` can trigger synchronous execution of non platform code. And there is no way to prevent it without taking a tick hit for any non-primitive (which is what we're doing now)
+
+[09:37:33.0548] <Mathieu Hofman>
+So crazy suggestion, but what if we changed `Promise.prototype [ @@toStringTag ]` to do a `IsPromise( this )` before returning `"Promise"` ?
+
+[09:38:28.0701] <Mathieu Hofman>
+Um we'd have to make it a `get`
+
+[09:38:56.0134] <Mathieu Hofman>
+yeah that would probably break something
+
+[09:57:46.0762] <Kris Kowal>
+Is `Promise.isNativePromise` more or less palatable?
+
+[10:02:49.0430] <Jack Works>
+> <@kriskowal:matrix.org> Is `Promise.isNativePromise` more or less palatable?
+
+Isn't that "real brand check" blocks SES? 
+
+[10:26:03.0895] <nicolo-ribaudo>
+> <@mhofman:matrix.org> Sorry I had to step away for a minute. Yes the concern is reentrancy, and knowing where that can happen or not. It's not obvious that doing `Promise.resolve(x)` can trigger synchronous execution of non platform code. And there is no way to prevent it without taking a tick hit for any non-primitive (which is what we're doing now)
+
+Unless I misunderstood what you mean, it can already trigger synchronous code execution:
+```js
+let sync = true;
+Promise.resolve({
+  get then() {
+    console.log("sync?", sync)
+  }
+});
+sync = false;
+```
+logs `sync? true`
+
+[11:06:59.0333] <Mathieu Hofman>
+Yes, the goal is to be able to detect whether something is a native promise without triggering synchronous code execution. So that a "cast" would basically do `const cast = (val) => (typeof val !== 'object' && typeof val !== 'function') || !val || isSafePromise(val) ? Promise.resolve(val) : Promise.resolve().then(() => val)`
+
+[11:07:14.0026] <Mathieu Hofman>
+ * Yes, the goal is to be able to detect whether something is a native promise without triggering synchronous code execution. So that a "cast" would basically do `const cast = (val) => typeof val !== 'object' || !val || isSafePromise(val) ? Promise.resolve(val) : Promise.resolve().then(() => val)`
+
+[11:07:38.0000] <Mathieu Hofman>
+ * Yes, the goal is to be able to detect whether something is a native promise without triggering synchronous code execution. So that a "cast" would basically do `const cast = (val) => (typeof val !== 'object' && typeof val !== 'function') || !val || isSafePromise(val) ? Promise.resolve(val) : Promise.resolve().then(() => val)`
+
+[12:05:32.0731] <Kris Kowal>
+We discussed promise brand check in the SES meeting today and the good news is that we agree with everyone. (should be processed shortly) https://youtu.be/kLuJZiPUI44
+
+[12:06:45.0715] <Kris Kowal>
+In short, we want a brand check and we also would prefer it to be sufficiently obscure that people wouldn’t be tempted to use it to make a Zalgo induced fast lane for non-thenable native promises.
+
+[12:07:51.0532] <Kris Kowal>
+We already use a sufficiently obscure brand check for TypedArrays in our SES / hardened JavaScript / Lockdown shim, through the TypedArray prototype Symbol.toStringTag getter.
+
+[12:08:45.0232] <Kris Kowal>
+So we’re currently pondering whether we could navigate into a world where the same trick could be used for Promise.
+
+[12:11:29.0395] <Kris Kowal>
+I know @ljharb uses the same heinous crime in shims, though no such crime is yet possible with Promise. I assume having any way to brand check would be satisfying, even if that heinous.
+
+[12:36:00.0291] <Kris Kowal>
+Mathieu Hofman points out that the toStringTag getter trick would break the SES shim and probably other similar programs, so changing the property from value to getter wouldn’t be web compatible. I’m hoping we can come up with a similar trick. Something sufficiently obscure that people wouldn’t be tempted to misconstrue its purpose.
+
+[12:38:52.0967] <ljharb>
+> <@mhofman:matrix.org> So crazy suggestion, but what if we changed `Promise.prototype [ @@toStringTag ]` to do a `IsPromise( this )` before returning `"Promise"` ?
+
+that’s what every toStringTag should be changed to imo, a brand-checking getter that returns a string. If I’d thought of it before ES6 we could have done it then :-(
+
+[12:41:54.0465] <Mathieu Hofman>
+Besides the SES shim, I'm wondering what else would break if we did this
+
+[12:43:32.0090] <Mathieu Hofman>
+The SES shim refuses to initialize if it finds a getter instead of a string value, at least it "fails safe", but unless people update, it's definitely a breaking change.
+
+[13:09:34.0498] <ljharb>
+the SES shim could be changed tho to just replace the getter, right?
+
+[13:09:54.0098] <ljharb>
+that seems acceptable for this level of win. But that presumes it’d be an acceptable change to the wider committee
+
+[13:10:45.0174] <Mathieu Hofman>
+The SES shim can be updated of course, but there are people using it out there that would need to update to unbreak
+
+[13:10:45.0797] <bakkot>
+what's the proposal for the behavior when `IsPromise(this)` returns false? throwing seems bad
+
+[13:11:00.0871] <bakkot>
+but no other option seems obvious to me
+
+[13:11:13.0547] <Mathieu Hofman>
+return `undefined` is what TypedArray does
+
+[13:11:20.0022] <bakkot>
+hm, ok
+
+[13:11:23.0421] <bakkot>
+did not know TA did that
+
+[13:12:15.0813] <bakkot>
+oh, because of the shared prototype, right
+
+[13:13:42.0168] <Mathieu Hofman>
+yeah it causes `Object.prototype.toString()` to fallback to the `builtinTag` aka `"Object"`
+
+[13:14:36.0899] <ljharb>
+definitely any such getter wouldn't need to throw if it returned a different string when the brand was absent
+
+[13:14:40.0675] <ljharb>
+ * definitely any such getter wouldn't need to throw if it returned a different string when the brand was absent
+
+[13:47:41.0194] <bakkot>
+Mathieu Hofman: my main takeaway from watching the SES meeting linked above is that not enough people know about the `Pin` functionality in the spec document
+
+[13:47:53.0833] <bakkot>
+can recommend: pin things you keep coming back to
+
+[13:57:42.0705] <Mathieu Hofman>
+Genius, how did I not know about this!
+
+[14:05:41.0041] <bakkot>
+anyway: I am ok with making `Promise.prototye[Symbol.toStringTag]` be a getter which does `if (IsPromise(this)) return "Promise"; return undefined;`. that seems sufficiently obscure that people will only use it in obscure cases, as long as ljharb agrees not to publish an `is-promise` package on npm
+
+[14:06:01.0642] <bakkot>
+(fortunately the actual `is-promise` on npm is just the thenable check)
+
+[14:11:00.0177] <ljharb>
+lol i mean, i already have `IsPromise` in es-abstract and it'd definitely use this
+
+[14:11:56.0168] <ljharb>
+but there wouldn't be much of a need for a separate package
+
+[14:31:42.0696] <Ashley Claymore>
+> <@mhofman:matrix.org> Yes, the goal is to be able to detect whether something is a native promise without triggering synchronous code execution. So that a "cast" would basically do `const cast = (val) => (typeof val !== 'object' && typeof val !== 'function') || !val || isSafePromise(val) ? Promise.resolve(val) : Promise.resolve().then(() => val)`
+
+Wouldn’t a custom subclass of promise pass the brand check but still trigger sync user code if it overrrides then?
+
+[14:33:12.0541] <Mathieu Hofman>
+> <@mhofman:matrix.org> `const isSafePromise = (p) => Promise.isPromise(p) && !Reflect.isExtensible(p) && Reflect.getPrototypeOf(p) === Promise.prototype && !Reflect.getOwnPropertyDescriptor(p, 'then') && !Reflect.getOwnPropertyDescriptor(p, 'constructor')` (Given frozen instrinsics)
+
+Ashley Claymore: `isSafePromise` would have to check for the proto
+
+[16:59:52.0903] <Justin Ridgewell>
+I don't understand how a "is safe promise" won't immediately be misused.
+
+
+2022-05-12
+[17:00:20.0314] <Justin Ridgewell>
+Eg, for a proxied promise, you want to wait to adopt the thenable into your native promise
+
+[17:00:57.0519] <Justin Ridgewell>
+It seems the goal isn't determine whether a promise is safe, it's to safely cast it to a native promise
+
+[17:01:03.0962] <Justin Ridgewell>
+Why not just add that instead?
+
+[17:03:23.0896] <Kris Kowal>
+I do believe `Promise.resolveSkepitcally(landmine)` would be equally satisfying for the hardened JavaScript trade-offs.
+
+[17:03:53.0233] <Mathieu Hofman>
+"is safe promise" is a user land thing
+
+[17:04:01.0960] <Justin Ridgewell>
+```
+Promise.safeResolve = (input) => {
+  if (input.[[PromiseState]]) {
+    // guaranteed to not be a proxy, so no GetOwnDesc traps
+    const constructor = GetOwnPropertyDescriptor(input, 'constrcutor);
+    const then = GetOwnPropertyDescriptor(input, 'then');
+    if (constructor?.value === %Promise% && then?.value === %Promise.p.then%) {
+      return input;
+    }
+  }
+  return Promise.resolve().then(() => input);
+};
+```
+
+[17:05:15.0901] <Justin Ridgewell>
+Now, given that `Promise.resolve` already isn't safe and there's some need for `Promise.safeResolve`, can we make the `then` call sync?
+
+[17:05:27.0258] <Mathieu Hofman>
+But yes, a "safeResolve" would work as well
+
+[17:06:44.0665] <Justin Ridgewell>
+The `Promise.safeResolve` would protect you from the sync `then`, and we could make regular code using `Promise.resolve`/`then`-return-value/Promise-constructor-executor-resolve/direct-return-async-fn faster
+
+[17:08:44.0678] <Mathieu Hofman>
+I do consider my inquiry orthogonal to the "call then sync" question. I am not concerned regarding safety on that since we established it's already unsafe. My concern on that is what was raised on github, that at this point people do expect a thenable to be called in a new tick.
+
+[17:09:38.0477] <Mathieu Hofman>
+I'm ok with fast-tracking native promises, but I'm skeptical about calling random `then` synchronously
+
+[17:11:59.0692] <Justin Ridgewell>
+> that at this point people do expect a thenable to be called in a new tick
+
+I'm hopeful that there are very few programs that need this
+
+[17:12:03.0539] <Justin Ridgewell>
+ * > that at this point people do expect a thenable to be called in a new tick
+
+I'm hopeful that there are very few programs that need this
+
+[17:12:30.0639] <Justin Ridgewell>
+Or that there's some other way to fix those programs
+
+[17:13:47.0866] <Justin Ridgewell>
+Eg, your async_hooks example is looking for `then` being used to adopt state, but that could be an async_hook itself.
+
+[17:14:55.0488] <Mathieu Hofman>
+Yes and I would very much prefer it to be a first class hook
+
+[17:16:06.0619] <Mathieu Hofman>
+I'm just not sure trying to reduce the ticks of non-native-promise thenables is worth the risk of breakage
+
+
+2022-05-16
+[21:59:47.0046] <sideshowbarker>
+If anybody has some time to do a technical review of https://github.com/mdn/content/pull/16090 that’d be much appreciated
+
+
+2022-05-20
+[10:40:37.0404] <TabAtkins>
+> the `Pin` functionality
+
+the WHAT
+
+[10:42:06.0266] <TabAtkins>
+oh jeez i need this in Bikeshed
+
+[12:55:05.0620] <bakkot>
+hm
+
+[12:55:13.0199] <bakkot>
+maybe I will mention this during the next editor update
+
+[12:55:17.0669] <bakkot>
+clearly is not sufficiently well advertised
+
+[12:55:42.0351] <Mathieu Hofman>
+Somehow I use Permalink and references all the time, but missed the Pin in the middle...
+
+
+2022-05-23
+[08:50:07.0507] <snek>
+is this a bug in jsc https://gc.gy/121026003.png
+
+[08:50:20.0323] <snek>
+seems like this is the +N reparse thing?
+
+[08:57:15.0679] <snek>
+actually this isn't even dependent on the N flag
+
+[08:57:28.0926] <snek>
+just a bug in the overall parsing
+
+[08:57:34.0302] <snek>
+ * just a bug in the overall parsing
+
+[09:37:07.0472] <bakkot>
+snek: safari doesn't have lookahead assertions
+
+[09:37:10.0799] <bakkot>
+so it's not exactly a bug
+
+[09:37:29.0919] <bakkot>
+it's just that it sees `(?<` and assumes you're doing a named group, since it has never heard of `(?<!`
+
+[09:37:38.0619] <bakkot>
+ * so it's not exactly a bug
+
+[09:37:43.0554] <snek>
+oh right 
+
+[09:38:00.0123] <snek>
+how does safari just not have lookaround
+
+[09:39:09.0701] <bakkot>
+features not being implemented is the default state of affairs
+
+[09:39:24.0120] <bakkot>
+if you would like it to be otherwise someone has to take action. could be you!
+
+[09:39:52.0888] <snek>
+i wish
+

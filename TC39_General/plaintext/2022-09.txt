@@ -1,0 +1,439 @@
+2022-09-02
+[14:23:35.0122] <iain>
+Working on implementing Atomics.waitAsync: the spec text doesn't appear to say anything about what happens to a WaiterRecord if the agent that called waitAsync to create it terminates before it is notified. My initial expectation is that it would be removed from the WaiterList, but testing Chrome's implementation seems to indicate that there's still an entry
+
+[14:24:53.0562] <iain>
+(Methodology: create two workers, each of which calls Atomics.waitAsync on the same location, then terminate the first one. Atomics.notify has to be called twice to resolve the promise in the second worker, implying that the first worker's WaiterRecord is still hanging around)
+
+[14:25:11.0720] <iain>
+Is this the intended behaviour?
+
+[15:58:39.0931] <shu>
+yes, this is unfortunately a known leak
+
+[15:58:45.0478] <shu>
+i think there's some kind of lazy sweeping
+
+[15:59:33.0553] <shu>
+as for what the specified semantics are, i think it is currently underspecified. ecma262 doesn't really have a concept of "agent terminated"
+
+[15:59:41.0357] <shu>
+ * as for what the specified semantics are, i think it is currently underspecified. tc39 doesn't really have a concept of "agent terminated"
+
+[15:59:48.0013] <shu>
+ * as for what the specified semantics are, i think it is currently underspecified. ecma262 doesn't really have a concept of "agent terminated"
+
+[16:02:03.0416] <shu>
+it's not clear to me right now how easy it is to do this kind of sweeping eagerly
+
+[16:02:13.0132] <shu>
+iain: can it be done in Firefox easily?
+
+[16:02:46.0497] <shu>
+i agree with your intuition, it'd be nice if terminated agents made those entries disappear
+
+[16:02:55.0793] <shu>
+but like, how do you define when it's terminated?
+
+[16:05:06.0289] <iain>
+shu: I don't have any of it working yet in Firefox, so it's hard to say for sure how difficult it would be
+
+[16:05:45.0049] <iain>
+I thought I had a plan for clearing entries out when the runtime was shut down, but as I type this I realize that my current design only handles entries with an associated timeout
+
+[16:09:14.0657] <iain>
+But in any case, we already have code that cleans up when the runtime/context goes away: https://searchfox.org/mozilla-central/source/js/src/vm/JSContext.cpp#221
+
+[16:11:10.0621] <iain>
+In my test I just used `worker.terminate()`
+
+[16:22:26.0297] <iain>
+Actually, I don't understand why [this code](https://source.chromium.org/chromium/chromium/src/+/main:v8/src/execution/futex-emulation.cc;l=876;drc=2d80b7b69c11da0716326b7fdc15568fc30820c2) in V8 doesn't already clean out the waiter when the isolate for the terminated worker thread goes away
+
+[16:48:19.0969] <shu>
+huh, that's a good question
+
+[16:48:28.0861] <shu>
+it's been a while, could you please file an issue if you have a testcase handy?
+
+
+2022-09-03
+[17:34:37.0034] <iain>
+shu: https://bugs.chromium.org/p/v8/issues/detail?id=13258
+
+[17:39:55.0618] <jmdyck>
+github appears to be down
+
+[17:42:17.0113] <jmdyck>
+yay, it's back up.
+
+[18:32:27.0116] <shu>
+iain: thank you!
+
+
+2022-09-05
+[12:05:06.0137] <nicolo-ribaudo>
+Sorry for the refs spam in https://github.com/tc39/ecma262/pull/2819 😅
+
+[12:06:17.0197] <nicolo-ribaudo>
+I didn't realize that linking an issue/PR in our release notes means that it gets flooded by dependabot refs
+
+[12:06:29.0669] <nicolo-ribaudo>
+ * I didn't realize that linking an issue/PR in our release notes means that it gets flooded by dependabot refs
+
+[12:26:22.0593] <bakkot>
+yet another way dependabot is bad
+
+[14:10:04.0004] <snek>
+>735 hidden items
+
+[14:11:43.0378] <snek>
+its still going
+
+[14:11:54.0636] <snek>
+is this just gonna roll over to all 40k repos or whatever
+
+
+2022-09-06
+[20:21:29.0754] <Domenic>
+I want to give a shout out to nicolo-ribaudo for some really exemplary work interfacing with a grouchy host maintainer (me) in https://github.com/whatwg/html/pull/8253#issuecomment-1236820949 . He went above and beyond to address my questions in detail, as well as ones I didn't ask, and totally flipped my feelings on the proposal. 🎉🚀
+
+[01:23:19.0313] <nicolo-ribaudo>
+> 3858 hidden items
+
+[10:40:14.0224] <James DiGioia (mAAdhaTTah on GH)>
+it just keeps going
+
+[11:48:42.0231] <Michael Ficarra>
+this is fine
+
+[12:03:35.0635] <James DiGioia (mAAdhaTTah on GH)>
+the PR is taking 10s to load now too
+
+[12:05:35.0598] <ljharb>
+I did file an issue with dependabot and pinged their PM fwiw
+
+[12:20:56.0054] <nicolo-ribaudo>
+They also got pinged on twitter a few hours ago, apparently this "feature" was supposed to be fixed more than one year ago
+
+[12:21:20.0107] <nicolo-ribaudo>
+> <@michaelficarra:matrix.org> sent an image.
+
+Party at 10k?
+
+[12:22:08.0145] <nicolo-ribaudo>
+Oh let me try to remove the link from the release notes; if dependabot doesn't cache the changelog it will make it stop
+
+[12:22:42.0093] <bakkot>
+honestly kinda want to see how high it gets
+
+[12:22:47.0035] <bakkot>
+at least it's not sending me an email for every one
+
+[12:23:43.0989] <nicolo-ribaudo>
+> <@bakkot:matrix.org> honestly kinda want to see how high it gets
+
+I'm curious too 😂
+
+[12:23:53.0952] <nicolo-ribaudo>
+I'll leave it as is then 🤷
+
+[13:26:20.0540] <rkirsling>
+s t r e s s  t e s t i n g
+
+[13:26:21.0615] <rkirsling>
+lol
+
+[14:03:10.0365] <shu>
+can someone explain what is happening to me
+
+[14:10:59.0823] <Justin Ridgewell>
+https://github.com/babel/babel/pull/14877 references `tc39/ecma262#2819` in the commit title, which DependaBot is copying into PRs to update Babel, which GH renders as a backlink to the ecma262 PR.
+
+[14:11:26.0492] <Justin Ridgewell>
+ * https://github.com/babel/babel/pull/14877 references `tc39/ecma262#2819` in the commit title, which DependaBot is copying into PRs to update Babel, which GH renders as a backlink to the ecma262 PR.
+
+[14:19:20.0456] <shu>
+lol
+
+[14:19:57.0536] <shu>
+DependaBot is a GH thing?
+
+[14:21:14.0283] <joepie91 🏳️‍🌈>
+reply-all chains, github edition
+
+[14:56:31.0510] <ljharb>
+yes, sadly it's a github thing
+
+[14:56:56.0599] <ljharb>
+they acquired one of the least good tools for this in the ecosystem, and proceeded to give it first-class billing and integration while not actually making it good
+
+[14:58:44.0971] <bakkot>
+and now github is down
+
+[14:58:54.0115] <bakkot>
+I choose to believe it's this PR hogging all the servers
+
+[14:59:19.0953] <bakkot>
+though if that does prove to be the case I'm going to feel slightly bad about suggesting we see how high it can get
+
+[14:59:44.0454] <ljharb>
+hahaha
+
+[14:59:50.0024] <ljharb>
+nah it'll serve them right if so
+
+[15:00:04.0105] <shu>
+teach them to depend on javascript
+
+[15:00:23.0258] <ljharb>
+dependabot was also the only dep updater tool that included at-names without backticking them, so i got about a year's worth of useless notifications before they fixed that one
+
+[15:00:58.0401] <shu>
+wonder how many notifications we generate for this person https://github.com/species
+
+[15:02:16.0261] <joepie91 🏳️‍🌈>
+> <@bakkot:matrix.org> I choose to believe it's this PR hogging all the servers
+
+considering that nixpkgs stuff has *frequently* been unicorning, I would not even be very surprised
+
+[15:02:33.0393] <joepie91 🏳️‍🌈>
+above a certain amount of comments/commits/whatever, stuff starts breaking
+
+[15:03:03.0958] <joepie91 🏳️‍🌈>
+one of my gists also got so many comments that it started unicorning, and not long after that started happening, gist comments suddenly had a "load more" button 🙃
+
+[15:08:00.0129] <joepie91 🏳️‍🌈>
+https://www.githubstatus.com/
+
+[15:08:09.0873] <joepie91 🏳️‍🌈>
+it is now a reported issue across everything
+
+[15:08:36.0299] <joepie91 🏳️‍🌈>
+probably at least not the fault of dependabot, considering that everything is affected
+
+
+2022-09-07
+[11:34:04.0206] <Michael Ficarra>
+great, now the PR just unicorns: https://github.com/tc39/ecma262/pull/2819
+
+[11:34:44.0074] <Michael Ficarra>
+this is a bit unfortunate, since we actually need to merge that PR at some point
+
+[11:34:57.0411] <shu>
+oh is that what "unicorning" means?
+
+[11:35:03.0409] <shu>
+i thought it was referring to having a billion views or something...
+
+[11:35:13.0074] <Michael Ficarra>
+no lol it means showing a literal unicorn
+
+[11:36:24.0112] <Michael Ficarra>
+bakkot's going to need to open another PR from that branch (can you even do that?) or contact GitHub support
+
+[11:36:50.0400] <Michael Ficarra>
+I guess you could push the commits from that branch onto a new branch, too
+
+[11:41:38.0954] <bakkot>
+it loads for me sometimes
+
+[11:41:51.0501] <bakkot>
+but yeah this is silly
+
+[12:01:40.0711] <bakkot>
+if I wrote a script which just repeatedly loaded that page do you figure the failure would eventually show up in their metrics enough for them to go fix it
+
+[12:02:18.0385] <bakkot>
+they've just fixed dependabot to sanitize mentions of this form but that won't remove the spam from the existing issue
+
+[12:05:50.0586] <jugglinmike>
+Write a script to replicate the problem in new issues
+
+[12:07:54.0469] <nicolo-ribaudo>
+How many hidden items does it have now? (It never loads for me)
+
+[12:09:47.0502] <bakkot>
+6480
+
+[12:10:01.0118] <bakkot>
+most recent from 34 minutes ago
+
+[12:10:42.0756] <nicolo-ribaudo>
+Ohh it stopped! It was at ~6400 hours ago
+
+[14:54:59.0970] <snek>
+i think it depends purely on the luck of it loading 6500 pr titles from the db within the valid request duration
+
+[15:16:04.0948] <bakkot>
+which is silly given that it hides all but a couple dozen of them
+
+
+2022-09-08
+[20:42:26.0429] <ljharb>
+we do not need another pr; if it ends up being a problem a) it can be merged without the webpage and b) i can get github support to fix it.
+
+
+2022-09-09
+[08:57:26.0916] <snek>
+https://twitter.com/tcurdt/status/1568214302594588675
+
+[08:58:31.0748] <shu>
+#curious
+
+[10:49:10.0826] <TabAtkins>
+which PR is getting this, btw? i want to see it
+
+[10:50:08.0125] <TabAtkins>
+oh the one above, i see
+
+[10:50:12.0871] <TabAtkins>
+i was looking in babel
+
+
+2022-09-12
+[12:17:52.0078] <jmdyck>
+TabAtkins: re the slides problem in the Delegates room: if you click on "SLIDE X OF 38", you get a menu that allows you to go to any slide, including the ones after 32.
+
+[12:38:42.0657] <TabAtkins>
+Ah ok *that* does work, but I would have had no idea how to do that. (And now the slides are out of presentation order.)
+
+
+2022-09-15
+[14:56:16.0263] <TabAtkins>
+Yo, I *think* these steps in HTML mean that if you import the same CSS url multiple times, you'll get distinct CSSStyleSheet objects, right? No deduping occurs? https://html.spec.whatwg.org/multipage/webappapis.html#creating-a-css-module-script
+
+[14:59:00.0580] <TabAtkins>
+Just unsure if any deduping magic happens in the CreateDefaultExportSyntheticModule algo (https://tc39.es/proposal-json-modules/#sec-create-default-export-synthetic-module) that gets invoked at the end. It doesn't *look* like it does but there's a lot of spec-ese to wade thru.
+
+[15:00:59.0097] <Domenic>
+Isn't it stored in the module map?
+
+[15:02:33.0360] <TabAtkins>
+Unless the ES algo does that, no. And if it does, the HTML algo as specified does duplicate (observable?) work before consulting the module map and returning an old sheet anyway.
+
+[15:03:33.0232] <TabAtkins>
+.....wait i'm reading the wrong algo because the right one is near the bottom of the page
+
+[15:03:50.0141] <TabAtkins>
+yeah it does consult the module map
+
+
+2022-09-17
+[13:19:13.0404] <bakkot>
+I've written new spec text for the set methods proposal following the discussion in plenary, if anyone's interested: https://tc39.es/proposal-set-methods/
+
+[13:19:39.0517] <bakkot>
+also most of the interesting decisions are summarized in https://github.com/tc39/proposal-set-methods/blob/main/details.md
+
+
+2022-09-23
+[13:39:00.0176] <Michael Ficarra>
+does anyone know when the chair and editor elections are held?
+
+
+2022-09-28
+[23:17:14.0023] <bakkot>
+```
+(0, Array.of)(1); // [1]
+(0, Promise.resolve)(0) // throws
+```
+which of these is better, do you think
+
+[23:18:23.0015] <bakkot>
+keeping in mind how subclassing works - `class X extends Array {}; (0, X.of)(1)` also gives an array, not an X, unlike a direct `X.of(1)` invocation
+
+[23:19:11.0504] <bakkot>
+I guess it's possible to have a third kind of thing, like an autobinding getter... not sure that's better though
+
+[23:19:33.0642] <bakkot>
+the thing where subclasses also inherit _static_ methods is bonkers to me
+
+[23:20:07.0021] <bakkot>
+(context: I would like to revive the `Set.of`/`Set.from` proposal, maybe)
+
+[23:40:32.0745] <littledan>
+Sounds like maybe you have some other rationale in mind in addition to the above?
+
+[23:41:33.0172] <littledan>
+Oh sorry revive, not remove? Well, my position is: those hazards just aren’t so bad and we shouldn’t worry about them
+
+[00:07:32.0000] <yulia>
+It is up to the TC, but we were doing it yearly (so it would be in december). If there are no changes to either group we do not necessarily need to hold an election
+
+[00:08:09.0477] <yulia>
+It is likely worthwhile to update the tc on any upcoming work, just to keep everyone informed.
+
+[05:29:50.0609] <Ashley Claymore>
+> <@bakkot:matrix.org> ```
+> (0, Array.of)(1); // [1]
+> (0, Promise.resolve)(0) // throws
+> ```
+> which of these is better, do you think
+
+With new methods moving away from checking Symbol.species, static methods not using `this` as the constructor seems inline with that? So if subclasses want their instances to be returned then they need to explicitly override both instance and static methods. A hassle but easier to remember perhaps 
+
+[07:59:52.0102] <bakkot>
+> <@littledan:matrix.org> Oh sorry revive, not remove? Well, my position is: those hazards just aren’t so bad and we shouldn’t worry about them
+
+which hazard are you referring to there? there's two different behaviors currently in the language and I am trying to figure out whether to go with the `Array` one or the `Promise` one
+
+[08:04:44.0075] <bakkot>
+Array is weird in that it's basically `let ctor = this ?? Array`, so if you do `SubclassOfArray.of(x)` you get a `SubclassOfArray` but if you do `(0, SubclassOfArray.of)(x)` you get an `Array` proper, so I guess another option is to do the simpler thing of always using the original constructor and not using `this` at all
+
+[08:10:24.0862] <bakkot>
+anyway I agree none of the downsides is particularly bad, I mostly just want to pick one
+
+[08:10:47.0142] <bakkot>
+leaning towards the Array one I guess
+
+[08:15:17.0811] <Jack Works>
+> <@littledan:matrix.org> Oh sorry revive, not remove? Well, my position is: those hazards just aren’t so bad and we shouldn’t worry about them
+
+but which one is hazard
+
+[09:12:38.0642] <Michael Ficarra>
+> <@yulia:mozilla.org> It is up to the TC, but we were doing it yearly (so it would be in december). If there are no changes to either group we do not necessarily need to hold an election
+
+it'd still be nice to reserve time for discussion to make sure everyone is happy with how things are going with the current members
+
+[15:03:53.0900] <littledan>
+Oh yeah sorry I lean towards picking Array semantics or just ignoring this
+
+
+2022-09-29
+[03:15:56.0128] <littledan>
+ * Oh yeah sorry I lean towards picking Array semantics or just ignoring `this`
+
+[11:37:03.0115] <TabAtkins>
+Same here - feels odd for statics to rely on receiver, imo.
+
+
+2022-09-30
+[18:22:03.0151] <Domenic>
+Statics relying on receiver has always felt nice to me, as a personal fan of [type II subclassing](https://github.com/tc39/proposal-rm-builtin-subclassing#type-ii-subclass-instance-creation-in-built-in-methods) (but no further!). However web platform classes don't support it in general and I was never able to muster much interest in improving that.
+
+[18:22:23.0654] <Domenic>
+I think the Array.of behavior is bad though, either bite the bullet and be `this`-dependent, or hard-code something. Don't waffle between them.
+
+[04:26:53.0930] <nicolo-ribaudo>
+Being able to use the method without a receiver is nice though, because I can do `const { of } = Array` and then directly use it (for the people that don't trust "other code" to not mess with built-ins)
+
+[04:27:29.0461] <littledan>
+yes, this was a popular thing to do with earlier Promise libraries which ES6 took away...
+
+[04:29:45.0006] <yulia>
+not sure we can remove type two anyway.. 
+
+[04:30:17.0177] <littledan>
+I guess the question locally isn't what to do about existing things but what we should do going forward
+
+[14:54:45.0854] <TabAtkins>
+Looking over the Yulia/Domenic document, yeah, I support Type I in general for future stuff.
+
+[14:55:13.0123] <TabAtkins>
+aka zero magic, just the most basic "you can subclass this and call super()" behavior
+
+[14:56:30.0728] <TabAtkins>
+And that, in particular, supports the `const {of} = Array` use-case without any extra effort, since the implementation would just be hardcoding the constructor to use anyway and doesn't care about the receiver.
+

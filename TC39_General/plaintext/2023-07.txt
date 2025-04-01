@@ -1,0 +1,240 @@
+2023-07-01
+[01:40:03.0482] <Jack Works>
+https://devblogs.microsoft.com/typescript/announcing-typescript-5-2-beta/
+
+[01:40:49.0121] <Jack Works>
+```js
+Symbol.dispose ??= Symbol("Symbol.dispose");
+Symbol.asyncDispose ??= Symbol("Symbol.asyncDispose");
+```
+
+rather than this, I'd suggest using Symbol.for for cross-realm, and use Object.defineProperty instead of `??=`
+
+[06:07:26.0848] <Mathieu Hofman>
+Well known symbols are unfortunately not registered. Unfortunately a shim /app that cares about spec compliance and cross realm values matching would have to arrange using the same unique symbol value.
+
+
+2023-07-03
+[01:22:33.0467] <Andreu Botella>
+are there no unhandled rejection tests, in either test262 or WPT?
+
+[01:30:40.0313] <Domenic>
+There are a bunch in WPT, I wrote them
+
+[01:31:00.0552] <Domenic>
+https://github.com/web-platform-tests/wpt/tree/master/html/webappapis/scripting/processing-model-2/unhandled-promise-rejections
+
+[01:32:02.0659] <Domenic>
+Wow those are pretty old, before modern .any.js and stuff
+
+[01:32:51.0986] <Andreu Botella>
+I guess I suck at grep 😅
+
+
+2023-07-04
+[07:25:43.0859] <annevk>
+Where is the discussion for [Stop Coercing Things](https://docs.google.com/presentation/d/1m5R5J98W6adegghgkAlbSuFgAYJDT52yyFVdAqLjm00/edit)? I'm pretty sure most web platform APIs do coerce undefined.
+
+[07:27:00.0259] <annevk>
+Though perhaps this is mainly about required vs optional arguments in which case I could see where the comparison comes in, but that's a lot narrower.
+
+[07:28:58.0054] <annevk>
+Also, this should come with some kind of Web IDL story I think.
+
+[09:04:20.0606] <bakkot>
+annevk: No discussion for it yet, since it hasn't been presented
+
+[09:05:08.0614] <bakkot>
+and yes it's intended to be about required vs optional, though also I thought web platform guidance was that `undefined` should be treated exactly like not passing an argument?
+
+[09:05:16.0460] <bakkot>
+ * and yes it's intended to be about required vs optional, though also I thought web platform guidance was that passing `undefined` explicitly should be treated exactly like not passing an argument?
+
+[09:05:24.0411] <bakkot>
+ * and yes it's intended to be mostly about required vs optional, though also I thought web platform guidance was that passing `undefined` explicitly should be treated exactly like not passing an argument?
+
+[09:05:53.0123] <bakkot>
+certainly that's how almost all ES functions work
+
+[09:08:43.0053] <bakkot>
+or to put it a different way: ES already has the principle that passing an explicit `undefined` should be treated like leaving out an argument, in general, and if we additionally adopt the web-platform behavior of throwing when missing a required argument, that gets us all the way to "stop coercing undefined"
+
+[09:25:52.0051] <bakkot>
+updated the slides to make the claim about the web platform more correct
+
+[09:41:07.0169] <annevk>
+bakkot: undefined will be coerced when the argument is required, which is also the case for setters for instances
+
+[09:42:13.0670] <annevk>
+bakkot: so what you're asserting above is not how required arguments behave when undefined is passed to them
+
+[09:46:34.0606] <bakkot>
+gotcha
+
+[09:46:45.0852] <bakkot>
+ did not realize web platform made a distinction between explicit `undefined` and missing argument
+
+[09:46:51.0407] <bakkot>
+seems bad, hopefully we can change that too going forward
+
+[10:06:48.0460] <annevk>
+bakkot: it might be an argument you cannot omit, such as that of a setter or when there's multiple required arguments
+
+[10:13:45.0711] <bakkot>
+annevk: what I mean is, I would generally expect passing an explicit `undefined` to be treated exactly like omitting the argument; as such if the behavior when omitting an argument which you cannot emit is to throw, that's the behavior I'd expect when passing an explicit `undefined`
+
+[10:14:31.0312] <bakkot>
+this is how almost everything in the language itself works, though in the other direction (even omitting nominally "required" arguments doesn't usually throw)
+
+[10:14:47.0404] <bakkot>
+ * annevk: what I mean is, I would generally expect passing an explicit `undefined` to be treated exactly like omitting the argument; as such if the behavior when omitting an argument which you cannot omit is to throw, that's the behavior I'd expect when passing an explicit `undefined`
+
+[10:16:21.0087] <bakkot>
+what I am hoping is that in new APIs in JS and the web platform we can take the intersection of the two behaviors: treat `undefined` exactly like missing argument, as JS does, and throw when missing a required argument, as the web platform does; as a consequence we would also also throw when passing an explicit `undefined`
+
+
+2023-07-05
+[17:14:47.0806] <littledan>
+> <@annevk:matrix.org> Also, this should come with some kind of Web IDL story I think.
+
+Yes, I agree with this; maybe we should open a parallel bug in WebIDL to discuss. I think on both ends, the annoying thing is, what do we do with the new world and the old world coexisting, if we try to move in this direction? Should we continue the cautious way that we've been doing with Temporal, or do something more drastic as the title implies?
+
+[18:18:15.0372] <Domenic>
+In most cases on the web platform / Web IDL undefined is treated the same as missing. There are two exceptions that I know of, neither of which I'm very happy about:(One exception is 
+
+- Complex overloads: https://github.com/whatwg/webidl/issues/581
+- required arguments are checked via arguments.length, e.g. see the footnote in https://github.com/whatwg/webidl/pull/1179#issuecomment-1242568486 .
+
+[18:18:24.0755] <Domenic>
+ * In most cases on the web platform / Web IDL undefined is treated the same as missing. There are two exceptions that I know of, neither of which I'm very happy about:
+
+- Complex overloads: https://github.com/whatwg/webidl/issues/581
+- required arguments are checked via arguments.length, e.g. see the footnote in https://github.com/whatwg/webidl/pull/1179#issuecomment-1242568486 .
+
+[18:19:27.0720] <Domenic>
+It looks like both of those might be solved by a normalization step that removes trailing undefineds passed by JS, before they hit the Web IDL layer.
+
+[18:20:12.0241] <Domenic>
+Although a more principled approach might be padding out missing trailing arguments with undefineds, so there's never a "missing" argument.
+
+[18:21:42.0424] <Domenic>
+Anyway, I'm very in favor of unifying undefined and missing wherever possible, in the web and JS. (I'm still pretty sad that JS decided to explicitly differentiate them for error.cause.) Most languages have one level of missing thing (null). It seems fine if JS ends up with two levels: undefined/missing, and null. Making it three-layer (missing, undefined, null) is very unnecessary.
+
+[18:24:08.0166] <Domenic>
+Whether the missing/undefined value is treated as an error, is a separate question, I guess.
+
+[18:30:24.0104] <Domenic>
+ * Whether the missing/undefined value is treated as an error, or coerced, is a separate question, I guess.
+
+[18:32:01.0435] <bakkot>
+In cases where it is clearly the wrong type I am hoping to move us towards being an error. I really don't see much advantage to it being coerced.
+
+[18:32:57.0725] <bakkot>
+`document.createElement(object.someMissingProperty)` giving you `<undefined></undefined>` is not doing anyone any good.
+
+[18:34:40.0316] <bakkot>
+Also I just remembered I have an issue from a couple months ago about this: https://github.com/w3ctag/design-principles/issues/437 though at the time I hadn't realized that my suggestion actually went against webIDL's current conventions
+
+[18:42:55.0418] <bakkot>
+ * In cases where it is clearly the wrong type (for a required argument) I am hoping to move us towards being an error. I really don't see much advantage to it being coerced.
+
+[04:58:04.0055] <littledan>
+> <@domenicdenicola:matrix.org> Although a more principled approach might be padding out missing trailing arguments with undefineds, so there's never a "missing" argument.
+
+Honestly I am not sure WebIDL should weaken this particular thing (well, definitely not without reducing the weak typing around undefined). This sounds like it would reduce error checking in practical ways.
+
+[04:59:06.0285] <littledan>
+> <@domenicdenicola:matrix.org> Anyway, I'm very in favor of unifying undefined and missing wherever possible, in the web and JS. (I'm still pretty sad that JS decided to explicitly differentiate them for error.cause.) Most languages have one level of missing thing (null). It seems fine if JS ends up with two levels: undefined/missing, and null. Making it three-layer (missing, undefined, null) is very unnecessary.
+
+I think the WebIDL unification aspect was missing from our discussion on Error.cause. Let’s see if we can make that happen in the future. Not everyone in TC39 can be a WebIDL expert…
+
+
+2023-07-07
+[11:12:17.0691] <annevk>
+Stumbled across the lack of https://github.com/tc39/proposal-regex-escaping today. Doing any kind of case-insensitive substring search without it seems hard? But reading through it, it also doesn't seem as straightforward as one would hope.
+
+[11:55:05.0272] <bakkot>
+annevk: yeah we had a conversation about it a meeting or two ago - I think just escaping literally every ASCII punctuator, and possibly also whitespace (against a future `x` mode), would be sufficient to address everyone's concerns; we might do that
+
+[11:55:09.0590] <bakkot>
+cc ljharb ^ who was going to pick it up
+
+[11:55:52.0964] <bakkot>
+the alternative is, make a regexp builder template tag, that does context-sensitive escaping for interpolation. which is what template tags are for, but is not really the thing people want here.
+
+
+2023-07-08
+[07:40:24.0408] <voidhedron>
+> <@bakkot:matrix.org> annevk: yeah we had a conversation about it a meeting or two ago - I think just escaping literally every ASCII punctuator, and possibly also whitespace (against a future `x` mode), would be sufficient to address everyone's concerns; we might do that
+
+`u` and `v` flagged regexes left the chat
+
+
+2023-07-13
+[03:38:16.0322] <Igor «InoY» Zviagintsev>
+Hi everyone! I don't sure it is a right place for that but I don't know another place for. Today I found functions parseInt and parseFloat is not locale aware. I mean a code parseFloat('1.2') with dot as decimal separator (North America style) returns 1.2 but parseFloat('1,2') (Eastern Europe style) return 1. Also parseInt('1_000_000') return 1 but the string 1_000_000 is correct string for numbers since ES6 (ES7?) 
+
+[04:12:48.0730] <bakkot>
+Igor «InoY» Zviagintsev: yup, that is an accurate observation
+
+[04:13:37.0078] <bakkot>
+it's not going to change though - many people rely on the behavior of `parseInt` being what it is
+
+[04:15:15.0663] <bakkot>
+and localized parsing is extremely fraught; see e.g. https://blog.sffc.xyz/post/190943794505/why-you-should-not-parse-localized-strings
+
+[04:15:51.0746] <bakkot>
+see also https://github.com/tc39/ecma402/issues/1 and the several linked issues
+
+[05:37:16.0667] <jmdyck>
+urgh. Is there some way to disable threads in the element web app?
+
+[05:37:41.0505] <bakkot>
+not afaik
+
+[05:41:17.0238] <eemeli>
+No.
+
+[06:12:25.0990] <Chris de Almeida>
+there is a client, I forget which, that has the threads in the main chat, but I don't recall which or how it works
+
+[06:36:22.0245] <littledan>
+I'm fine with threads, I just want to clear all the "unread" stuff
+
+[07:11:44.0733] <shu>
+i hate the threading in element too
+
+[07:11:57.0937] <shu>
+anything in a thread is "im happy for you tho, or sorry that it happened" for me
+
+[10:45:57.0639] <Chris de Almeida>
+https://cinny.in/
+
+Cinny is the client that displays thread inline, in the same way as if they were just regular replies
+
+[10:46:04.0144] <Chris de Almeida>
+ * https://cinny.in/
+
+[10:46:07.0002] <Chris de Almeida>
+Cinny is the client that displays thread inline, in the same way as if they were just regular replies
+
+[10:46:16.0213] <Chris de Almeida>
+ * Cinny is the client that displays threads inline, in the same way as if they were just regular replies
+
+[10:47:38.0771] <Chris de Almeida>
+example ☝️
+
+[10:54:20.0447] <Andreu Botella>
+I'm pretty sure older versions of Element also do that
+
+[10:55:02.0253] <Andreu Botella>
+I think threads are represented as replies to the previous message in the thread with extra metadata
+
+[10:57:42.0646] <Andreu Botella>
+ * I think thread messages are represented as replies to the previous message in the thread with extra metadata
+
+
+2023-07-28
+[02:21:41.0556] <voidhedron>
+What was/is the reasoning for https://tc39.es/ecma262/multipage/text-processing.html#table-nonbinary-unicode-properties only having those 3 nonbinary properties? I'm pretty sure all implementers that support unicode regex already use ICU for those 3 and the binary properties anyway, so having the remainder of the non-binary ones shouldn't be any hurdle from implementers side, so what other rationale is there to purposefully do this? I couldn't find any reasoning on the unicode regex related proposals that added the current properties.
+

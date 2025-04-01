@@ -1,0 +1,3615 @@
+2022-11-02
+[15:56:33.0083] <bakkot>
+PSA: we just landed a commit on ecma262 which tweaks the formatting, which is the sort of thing which causes a lot of merge conflicts. if you have an in-flight PR and you're rebasing on main, you can avoid manually applying the formatting by using the following series of commands:
+
+```
+git rebase -i 0090daf^ # 0090daf is the commit where the formatter is applied
+git rebase -X theirs 0090daf --exec "npm i && npm run format && git commit --amend -a --no-edit"
+git rebase -i main
+```
+this splits up the rebase into 1) everything before the formatter was applied, 2) the formatter, which will be done for you, 3) everything after the formatter. any conflicts in parts 1 and 3 you will need to handle manually, just like you would in the absence of the formatter (or feel free to ask the editors for help)
+
+
+2022-11-07
+[10:21:20.0830] <shu>
+yulia: are we unshipping `group`?
+
+[10:21:26.0878] <shu>
+ * yulia: are we unshipping `group`?
+
+[10:49:02.0930] <ljharb>
+oof, i hope not - let's at least see if we can fix lastpass first
+
+[10:50:46.0642] <shu>
+hm, even if we can i'm still leaning towards unshipping in chrome
+
+[10:51:07.0420] <shu>
+because i assume it'll take a while for lastpass's fix to deploy to a large enough % of its customers
+
+[10:53:40.0259] <ljharb>
+i'd still want to know what code was breaking on it
+
+[10:54:32.0347] <shu>
++1, the bugzilla comment reads to me as a suspicion, i want to hear it confirmed first
+
+[10:54:53.0377] <shu>
+(i mean it sounds likely, but still)
+
+[10:57:37.0180] <yulia>
+There is a risk that this may be very hard to catch in codebases, but maybe we just got unlucky with this
+
+[10:58:10.0911] <yulia>
+Since chrome is about to ship I didn't think it would be wise to wait on notifying you
+
+[10:58:53.0815] <shu>
+indeed, we have a window of a week until i need to request stable respins, which is not good
+
+[10:59:13.0750] <shu>
+so much appreciated there
+
+[11:00:29.0058] <shu>
+maybe this is the chance to get `groop` after all
+
+[12:12:05.0246] <yulia>
+shu: ljharb it... isn't looking good. Two more regressions: https://github.com/tc39/proposal-array-grouping/issues/44
+
+[12:19:51.0959] <Justin Ridgewell>
+😭
+
+[12:20:58.0470] <Justin Ridgewell>
+Is this the same as that Lego site’s using an array as a hash map?
+
+[12:59:00.0192] <bakkot>
+the cloud.ibm.com one appears to be, though it's different code
+
+[13:41:05.0245] <shu>
+yulia: thanks!
+
+[13:41:13.0432] <shu>
+alas, i am unshipping this
+
+[14:27:57.0824] <bakkot>
+sigh
+
+[14:28:19.0179] <bakkot>
+that was the only good other name
+
+[14:30:35.0401] <Michael Ficarra>
+there's always `smoosh`
+
+[14:30:49.0364] <shu>
+what about `bucket`
+
+[14:30:56.0867] <shu>
+or the more provocative `buckit`
+
+[14:31:22.0927] <Michael Ficarra>
+`smooshIntoBuckets`
+
+[14:31:25.0190] <shu>
+buck it, we're doing 5 groups
+
+[14:33:20.0146] <Kris Kowal>
+I has a bucket.
+
+[14:33:57.0715] <shu>
+the array-as-hash-table use case makes name picking pretty unpredictable
+
+[14:34:01.0969] <shu>
+who knows what keys they're using
+
+[15:56:51.0447] <Justin Ridgewell>
+Let's introduce a new meta-object protocol called `getAndApply`, and update `Array.p.group` to:
+1. Returned undefined for `get` where the receiver is an array instance
+2. Return the function for `get` where the receiver is `Array.prototype`
+3. Invokes the method when doing `[].group()` (`getAndApply`)
+
+[15:57:17.0188] <Justin Ridgewell>
+Then any new array methods can just be hidden from these terrible sites.
+
+
+2022-11-08
+[16:04:49.0314] <Michael Ficarra>
+or.... we just choose a different name
+
+[16:05:09.0039] <Michael Ficarra>
+and eventually stop trying to put new things on `Array.prototype`
+
+[16:05:27.0416] <Michael Ficarra>
+hopefully one day we can have built-in modules or something and then build out a nice stdlib
+
+[16:05:35.0171] <shu>
+yeah i do not think we should introduce a new MOP protocol for this
+
+[16:06:15.0885] <Kris Kowal>
+Symbol.facetious
+
+[16:06:23.0783] <bakkot>
+quite right, we should use the existing `document.all` protocol
+
+[16:06:59.0102] <Michael Ficarra>
+I was waiting for someone to bring up `IsHTMLDDA`
+
+[16:27:02.0402] <Justin Ridgewell>
+We pre-scan the source text to see if the word “group” appears anywhere, and if so, we do not install the method. Group is only accessible through computed property access were the key is not literally the string “group”.
+
+[18:16:00.0900] <Jack Works>
+> <@shuyuguo:matrix.org> who knows what keys they're using
+
+maybe the engine need to record names that added to the array happens in Web
+
+[18:18:17.0779] <Jack Works>
+> <@jridgewell:matrix.org> We pre-scan the source text to see if the word “group” appears anywhere, and if so, we do not install the method. Group is only accessible through computed property access were the key is not literally the string “group”.
+
+and developers need to use it by `array["gro" + "up"]()` right
+
+[18:30:07.0994] <shu>
+> <@jackworks:matrix.org> maybe the engine need to record names that added to the array happens in Web
+
+that sounds way too expensive to be feasible
+
+[18:30:12.0909] <shu>
+also privacy and fingerprinting concerns?
+
+[00:58:26.0471] <Jack Works>
+> <@shuyuguo:matrix.org> that sounds way too expensive to be feasible
+
+I thought the engine was already doing that today, e.g. metrics of Web API usage
+
+[08:07:13.0378] <shu>
+those are known counters, they aren't tracking new strings
+
+[12:32:43.0376] <shu>
+yulia: is Nightly shipping change-array-by-copy?
+
+[12:33:23.0528] <shu>
+`toSorted`, `toSpliced`, and `toReversed` seem unlikely to be used as keys
+
+[12:33:29.0034] <shu>
+but i am not so sure about `with`
+
+[12:56:13.0062] <bakkot>
+`with` seems a lot less likely than `group`
+
+[13:00:48.0369] <yulia>
+> <@shuyuguo:matrix.org> yulia: is Nightly shipping change-array-by-copy?
+
+only behind a build time flag
+
+[13:32:32.0830] <shu>
+okay, thanks
+
+[13:32:50.0427] <shu>
+i tried looking for the ibm issue and the other issue on the chromium issue tracker and didn't see anything
+
+[13:34:10.0099] <shu>
+canary population is pretty small, but i wonder if there're biases in play with people not filing issues, which would be unfortunate
+
+[13:34:49.0623] <shu>
+> <@bakkot:matrix.org> `with` seems a lot less likely than `group`
+
+i agree, guess we'll see
+
+
+2022-11-09
+[06:22:58.0899] <rbuckton>
+yulia | 🤕 hopefully back in the afternoon: Do you think either you or someone from your organization would have some time in the next few weeks before plenary to discuss Mozilla's position on the Explicit Resource Management proposal?
+
+[06:23:57.0387] <yulia | 🤕 hopefully back in the afternoon>
+Sure, we discussed before the last presentation. dminor and I can set something up
+
+[06:24:43.0236] <yulia | 🤕 hopefully back in the afternoon>
+before next plenary or? (we will also be in a coruna)
+
+[06:24:50.0387] <rbuckton>
+That's fine. As far as scheduling, I'm on the US east coast now. 
+
+[06:25:17.0165] <rbuckton>
+Before, if possible. I'd like to be able to advance if that's feasible. 
+
+[06:27:07.0255] <yulia>
+ok, i'll set something up
+
+
+2022-11-10
+[17:10:38.0989] <shu>
+anyone interested in running an incubator call for BigInt math (round 2) before the next plenary?
+
+
+2022-11-14
+[14:47:04.0181] <bakkot>
+ljharb: the tc39 calendar has the plenary as 7 hours long, which is presumably a mistake
+
+
+2022-11-15
+[16:04:21.0486] <ljharb>
+fixed i think - since it’s in person tho isn’t that right? 10-5?
+
+[16:04:54.0262] <bakkot>
+I'm just going off of the agenda
+
+[16:05:59.0758] <ljharb>
+ah ok they’re 10-4
+
+[16:10:58.0701] <shu>
+looking forward to falling asleep mid-sentence yall
+
+[11:02:21.0081] <Ashley Claymore>
+Apologies to anyone trying to join the R&T monthly meeting. The zoom link appears to have stopped working.
+new link in the google doc, linked from the tc39 event
+
+
+2022-11-16
+[04:19:58.0054] <Rob Palmer>
+2023 Plenary Schedule is now posted on [the Reflector](https://github.com/tc39/Reflector/issues/453).  There's just one date missing that will be confirmed very soon.
+
+
+2022-11-17
+[17:53:12.0244] <shu>
+ljharb: you've been vocal in the past about coercing arguments in the order in which they appear. is there code that you've seen that actually depends on that ordering?
+
+[17:53:56.0053] <shu>
+i'm thinking of proposing a breaking change to the order of coercion for Atomics methods like `Atomics.store(ta, idx, val)` to coerce idx, val, *then* validate the TA
+
+[17:54:21.0473] <shu>
+with resizable buffers, having to recheck detached/out-of-boundness and reloading the length after each argument coercion is really unfortunate
+
+[17:55:18.0726] <shu>
+it's kind of a bugfarm (sometimes security bugs)
+
+[18:31:23.0879] <ljharb>
+no code i think the committee would respect, I’d guess. why is it a bug farm?
+
+[18:31:39.0838] <ljharb>
+I’m confused about the problem it’d be solving
+
+[18:35:48.0758] <Jack Works>
+Agree with shu. Don't think coerce order will break anything 
+
+[18:45:03.0984] <shu>
+it's a bug farm because it's easy to forget that coercing `idx` and `val` can detach `ta`
+
+[18:45:15.0655] <shu>
+(and with resizable buffers, can resize `ta`)
+
+[18:46:03.0551] <shu>
+TA detachment and resizing is a qualitatively worse kind of user code than other arbitrary user code, because code that forget to recheck for detachedness after each argument coercion can end up reading out-of-bounds into the buffer, depending on the implementation
+
+[18:46:12.0006] <shu>
+ * TA detachment and resizing is a qualitatively worse kind of user code than other arbitrary user code, because code that forget to recheck for detachedness after each argument coercion can end up reading out-of-bounds into the buffer, depending on the implementation
+
+[18:46:20.0487] <Jack Works>
+"easy to forget" do you mean when v8 is optimizing code? 
+
+[18:46:41.0711] <shu>
+that, and i also mean engineers or spec authors actually forgetting even when implementing the slow path
+
+[18:46:55.0241] <shu>
+i personally missed a bunch of these in the resizable buffers spec draft
+
+[18:48:26.0482] <shu>
+TA and Atomics methods depend on the TA being in a valid state, life will just be a lot easier if we can rework these methods to 1) validate once instead of multiple times and 2) after validation, check that no user code can ever be called again until method exit
+
+[18:48:59.0753] <shu>
+ * TA and Atomics methods depend on the TA being in a valid state, life will just be a lot easier if we can rework these methods to 1) validate once instead of multiple times and 2) after validation, check that no user code can ever be called again until method exit
+
+[18:50:00.0631] <shu>
+> <@ljharb:matrix.org> I’m confused about the problem it’d be solving
+
+what i'm solving for is "increasing likelihood of correct implementation, where incorrect implementation is often a security bug and not just misbehavior"
+
+[18:51:52.0837] <shu>
+to be clear, user code re-entrancy is a general problem. i'm singling out TAs because TA bugs result in more, and more serious, security bugs
+
+[18:54:07.0978] <Jack Works>
+So the ideal order is: idx check, val check, (no user code now), TA check, Atomics.store, (user code again)?
+
+[18:54:37.0225] <shu>
+it's a little trickier than that unfortunately, because `val` coercion depends on looking at whether `ta` is a BigInt TA or a non-BigInt TA
+
+[18:55:02.0921] <shu>
+so i think the ideal order is: coerce *but not validate* left-to-right, then validate left-to-right
+
+[18:55:54.0505] <Jack Works>
+lgtm
+
+[18:55:56.0734] <shu>
+so the order is: 1) ensure `ta` has the right internal slots, 2) coerce `idx`, 3) coerce `val`, (no user code after this point) 4) validate `ta`, 5) validate `idx` (if needed for atomic access)
+
+[18:56:08.0694] <shu>
+ * so the order is: 1) ensure `ta` has the right internal slots, 2) coerce `idx`, 3) coerce `val`, (no user code after this point) 4) validate `ta`, 5) validate `idx\` (if needed for atomic access)
+
+[18:56:17.0296] <shu>
+ * so the order is: 1) ensure `ta` has the right internal slots, 2) coerce `idx`, 3) coerce `val`, (no user code after this point) 4) validate `ta`, 5) validate `idx` (if needed for atomic access)
+
+[19:45:31.0834] <ljharb>
+in general, does anything validate besides TAs and Proxy?
+
+[19:45:40.0016] <ljharb>
+* in general, does anything validate besides TAs and Proxy?
+
+[22:50:18.0463] <Richard Gibson>
+ljharb: I think that depends upon your definition of "validate". For example, there are six opportunities for [String.prototype.split](https://tc39.es/ecma262/multipage/text-processing.html#sec-string.prototype.split) to throw an exception (and also observably checks arguments out-of-order)—does that count?
+
+[06:52:58.0584] <ljharb>
+im trying to understand she’s mental model here; it’s probably fine if TA/Proxy is “special” but i still don’t understand why it’s not easier to implement correctly if you fully process args left to right
+
+[07:02:48.0197] <Ashley Claymore>
+because processing later args can invalidate previous validations
+
+[07:02:55.0893] <Ashley Claymore>
+ * because processing later args can invalidate previous validations
+
+[07:30:39.0760] <shu>
+ljharb: yeah what Ashley Claymore said. fully left-to-right means you validate `ta`, then validate `idx`, then validate `val`, then need to validate `ta` *again*
+
+[07:31:52.0767] <ljharb>
+ahhhhh ok
+
+[07:32:06.0151] <shu>
+cause of, you know, `valueOf` and whatnot
+
+[07:32:11.0621] <ljharb>
+thanks, that makes sense now, let me think about it
+
+[07:33:17.0256] <shu>
+actually in the resizable case it's even dumber
+
+[07:33:36.0960] <shu>
+it's validate `ta`, validate `idx`, validate `val`, re-validate `ta`, then also re-validate `idx` because `ta` might not be out of bounds but just shrunk a little bit
+
+[07:34:38.0561] <Ashley Claymore>
+`while (somethingCouldChange) validateArgs(...args)`
+
+[08:32:27.0243] <yulia>
+rbuckton: just checking, did you see my invite for today?
+
+[08:33:45.0873] <rbuckton>
+I did not, no.
+
+[11:34:21.0193] <ljharb>
+shu: so, generally i think of "processing" arguments left to right - not necessarily validating them. meaning, i'd maybe expect something like:
+1. ensure `ta` is a Typed Array
+2. coerce `idx` to a number
+3. coerce `val` to whatever it needs to be, if any
+4. throw if TA is out of bounds or detached or whatever
+5. if needed, validate `val`
+
+thoughts on that?
+
+[11:53:00.0201] <shu>
+yes that seems to match what i said above about an "ideal order"
+
+[11:53:11.0321] <shu>
+coerce left-to-right, then validate left-to-right
+
+[11:53:18.0486] <shu>
+where "coerce" is the phase that can call user code
+
+[11:53:33.0964] <shu>
+right now we don't have such a distinction, and we do both at the same time
+
+[11:58:21.0079] <ljharb>
+right. my earlier question is because i suspect most things don't actually need to "validate" (or at least, don't need to validate something that could be changed by user code post-coercion), so it doesn't come up often
+
+[12:00:51.0057] <shu>
+yeah
+
+[12:01:16.0203] <shu>
+so it sounds like you're amenable to having distinct phases like that?
+
+[12:01:20.0671] <shu>
+(if web compatible, of course)
+
+[12:03:12.0560] <ljharb>
+tentatively yes, i'd just want to make sure there's no weird cases that would arise from applying that rule universally (which might be fine ofc, but it's hard to know in advance)
+
+[12:03:27.0957] <ljharb>
+ * tentatively yes, i'd just want to make sure there's no weird cases that would arise from applying that rule universally (which might be fine ofc, but it's hard to know in advance)
+
+[12:11:35.0350] <shu>
+i wasn't planning on applying it universally
+
+[12:12:03.0409] <shu>
+though i suspect you are right that basically only TAs (and DataViews) and proxies even have a sense of "valid state" at all
+
+[12:12:23.0110] <shu>
+but i only really care about TAs and DataViews
+
+
+2022-11-18
+[10:35:02.0136] <Mathieu Hofman>
+I was thinking of changing my attendance to the upcoming plenary from remote to in-person. Is it too late to make such a change? Is there still any space at the recommended hotels? And would there be office space on Friday ?
+
+[10:40:18.0412] <nicolo-ribaudo>
+There is still space in Hotel Avenida, which is one of the recommended hotels.
+
+For the other questions, ryzokuken
+
+[11:39:10.0147] <ryzokuken>
+> <@mhofman:matrix.org> I was thinking of changing my attendance to the upcoming plenary from remote to in-person. Is it too late to make such a change? Is there still any space at the recommended hotels? And would there be office space on Friday ?
+
+I believe we have space. I'll confirm from my colleagues and ping you.
+
+[11:57:50.0648] <Rob Palmer>
+Yes, please come in person! There are always no-shows so it would be great to see you Mathieu Hofman 
+
+[13:34:18.0166] <Mathieu Hofman>
+Ok great I'll fill up the in person form. 
+
+[13:37:20.0158] <Mathieu Hofman>
+ * Ok great I'll fill up the in person form. Should I book the hotel directly or does Igalia facilitates anything?
+
+[13:39:50.0117] <littledan>
+ryzokuken: ^
+
+[13:45:09.0484] <ryzokuken>
+> <@mhofman:matrix.org> Ok great I'll fill up the in person form. Should I book the hotel directly or does Igalia facilitates anything?
+
+Yeah, we can take care of it for you. I'll reach out via DM
+
+[13:49:08.0620] <Rob Palmer>
+@ryzokuken do we have capacity for others who still wish to sign up? 
+
+[13:50:00.0685] <ryzokuken>
+Yeah, I'm discussing with Mathieu Hofman right now.
+
+[13:50:18.0432] <littledan>
+ryzokuken: I think the question as about further additional people beyond Mathieu
+
+[13:50:30.0029] <ryzokuken>
+Oh, well, I'll have to ask.
+
+[13:51:45.0218] <ryzokuken>
+Rob Palmer: i think it should be doable but I'll confirm with my colleagues CET morning.
+
+[13:59:39.0508] <Rob Palmer>
+Thank you. I hope we can maximize the number of folk who get to try out Spanish food.
+
+[14:00:00.0757] <ryzokuken>
+> <@robpalme:matrix.org> Thank you. I hope we can maximize the number of folk who get to try out Spanish food.
+
+As long as they can keep up with Spanish meal timings 🙈
+
+
+2022-11-19
+[14:59:52.0287] <ljharb>
+does anyone know how i could detach an arraybuffer in an env without postMessage or structuredClone? (non-latest node, essentially)
+
+[15:28:35.0002] <Ashley Claymore>
+Maybe via webassembly APIs? Or is that also too new? https://developer.mozilla.org/en-US/docs/WebAssembly/JavaScript_interface/Memory/grow
+
+
+2022-11-20
+[17:48:03.0099] <bakkot>
+ljharb: node has supported postMessage for a long time; how old a node are you talking?
+
+[17:54:06.0956] <bakkot>
+(there isn't anything in the language itself, so it'll depend on what exactly your host provides)
+
+[20:38:54.0241] <ljharb>
+um, even node 19 doesn't have postMessage?
+
+[20:39:46.0947] <ljharb>
+ * um, even node 19 doesn't have postMessage?
+
+[20:40:14.0621] <ljharb>
+i mean, atm i have no solution in node at all, so wasm would be something
+
+[20:40:59.0689] <ljharb>
+node 0.5 has ArrayBuffer at least, so, as old as possible :-)
+
+[00:23:58.0059] <bakkot>
+ljharb: ah, sorry, it does but it's hard to get to
+
+[00:24:02.0586] <bakkot>
+`(new (require('worker_threads').MessageChannel)).port1.postMessage(null, [y.buffer])`
+
+[00:26:35.0286] <bakkot>
+works in 12 but not 10, but there might be a different way of getting at MessageChannel on older versions
+
+[00:30:56.0060] <bakkot>
+hm, no, nothing else I can see from a quick glance at https://nodejs.org/docs/latest-v10.x/api/all.html
+
+[00:31:03.0376] <bakkot>
+so might not be something you can do in nodes older than 12
+
+[00:31:15.0468] <bakkot>
+(or 10 with --experimental-workers)
+
+[09:30:51.0371] <ljharb>
+thanks tho, that still helps a lot
+
+[09:31:00.0972] <ljharb>
+otherwise i was gonna have to write wasm
+
+
+2022-11-22
+[16:02:37.0888] <Michael Ficarra>
+> <@ljharb:matrix.org> otherwise i was gonna have to write wasm
+
+you mean otherwise you were gonna *get* to write wasm
+
+[17:54:18.0889] <rkirsling>
+another thing that got reported to every browser individually:
+https://bugzilla.mozilla.org/show_bug.cgi?id=1800062
+https://bugs.chromium.org/p/v8/issues/detail?id=13469
+
+[17:54:59.0320] <rkirsling>
+those should be closable; there might be a web reality bug there but I'm not even certain of that because engine262 matches JSC/V8/SM
+
+[18:05:06.0381] <bakkot>
+rkirsling: that's https://github.com/tc39/ecma262/issues/2659
+
+[18:10:10.0478] <rkirsling>
+nice
+
+[18:11:26.0381] <rkirsling>
+thanks
+
+
+2022-11-23
+[11:26:29.0223] <TabAtkins>
+FYI: I've had to delete another abusive comment from Aaron Adams (@aadamsx on GitHub) in the pipeline repo. I'm not specifically seeking any action, because I don't want to bother, just noting it for posterity if they decide to become active again and I need to ask for a ban.
+
+[15:32:33.0283] <ljharb>
+delete, not just hide?
+
+[15:32:39.0221] <ljharb>
+we generally don't delete things
+
+
+2022-11-26
+[04:06:09.0636] <rkirsling>
+seems like it was really good that I presented at JSConf JP; there were a number of people afterwards who were just really excited to get to talk to somebody in TC39 and ask all sorts of questions
+
+[04:06:40.0241] <rkirsling>
+hopefully the Japanese JS community will have more chances for that in future :)
+
+[04:26:06.0191] <Rob Palmer>
+There is at least one trip planned for next year. September 26-28 is the Tokyo plenary. So far we do not have a community event planned. If you have contacts, that would be helpful.
+
+
+2022-11-27
+[18:04:27.0552] <rkirsling>
+indeed! Yosuke Furukawa is the main organizer for JSConf JP so I think he may be able to help us (IIRC littledan was even talking with him pre-pandemic about community outreach)
+
+
+2022-11-28
+[00:50:55.0757] <Rob Palmer>
+This week's plenary meeting will be very busy. It is also on CEST (Madrid time) which is super early for US timezone folk.
+
+We have more content than time available. Please consider if you think any agenda items you own could use less time, or could be deprioritized, and then PR the agenda accordingly.
+
+[06:24:43.0626] <Alex Vincent>
+FWIW, I _have_ thought about it.  (I'm still basically a newbie here.)  I had requested 30 minutes: 10 for my talk and 20 for discussion, as I hope for advancing my Mass Proxy Revocation proposal to stage 1.  I don't have a feel for how these votes go.  Even if I gave up half the discussion time, that really wouldn't buy very much.
+
+[06:26:32.0256] <Alex Vincent>
+ * FWIW, I _have_ thought about it.  (I'm still basically a newbie here.)  I had requested 30 minutes: 10 for my talk and 20 for discussion, as I hope for advancing my Mass Proxy Revocation proposal to stage 1.  I don't have a feel for how these votes go.  Even if I gave up half the discussion time, that really wouldn't buy very much.
+
+[13:23:38.0394] <bakkot>
+Kris Kowal: 20 minutes for the Module Harmony discussion seems wildly optimistic
+
+[13:23:47.0824] <bakkot>
+looking forward to it though
+
+[13:40:39.0258] <Rob Palmer>
+Hey all, we have an unusually large number of personal scheduling constraints for this meeting. This is making it hard to create a viable schedule. The chairs will be reaching out to those affected. 
+
+If you are able to relax your constraints, please do so. It also helps if you can clarify where something is a *weak*preference vs a hard constraint by PRing the agenda.
+
+[14:45:40.0543] <Andrew Brown>
+Just to confirm since it's my first time attending: this channel will have a Jitsi URL posted somewhere once the meeting starts tomorrow?
+
+[14:46:00.0042] <ryzokuken>
+Andrew Brown: there's a sign-up form for the call link
+
+[14:46:17.0351] <Andrew Brown>
+Can you point me to it?
+
+[14:50:01.0273] <ryzokuken>
+you're right, there is indeed no link yet in the reflector
+
+[14:50:15.0144] <ryzokuken>
+we will send a link to the sign-up form before the meeting
+
+[15:03:38.0111] <ryzokuken>
+draft schedule is up! link in the reflector.
+
+
+2022-11-29
+[00:26:47.0914] <littledan>
+Are we getting the video conference signup link?
+
+[00:27:49.0101] <littledan>
+I take it the meeting starts in half an hour. I don’t see it on the Reflector
+
+[00:40:38.0502] <Rob Palmer>
+It was posted on the Reflector 30mins ago.  Please refresh.
+
+[00:44:11.0167] <Rob Palmer>
+We are now admitting people to the Google Meet.  Please use Incognito/Private browsing mode - because that will allow you to specify your name.  So you can call yourself "Name (Affiliation)".
+
+[00:59:00.0140] <Rob Palmer>
+We will begin the meeting in one minute!
+
+[00:59:21.0130] <Rob Palmer>
+If anyone has any troubles dialling in, please say here.
+
+[01:00:10.0351] <yulia>
+Is tcq not working for anyone else?
+
+[01:00:14.0457] <yulia>
+I get meeting not available
+
+[01:00:33.0478] <Alex Vincent>
+try reloading the page - that worked for me yulia
+
+[01:01:34.0132] <yulia>
+I still get meeting not found. should it be TKTK or is the meeting id different?
+
+[01:01:45.0693] <Rob Palmer>
+The signin form is available on the Reflector - please can all in-person attendees fill it out too:  https://github.com/tc39/Reflector/issues/446
+
+[01:02:41.0463] <Rob Palmer>
+I just fixed the TCQ link on the draft schedule
+
+[01:02:50.0593] <Alex Vincent>
+hm, maybe I'd opened it as a fresh link from the Reflector issue
+
+[01:03:00.0879] <rkirsling>
+is it an obligation for the host to have a second CoC in play? obviously not a problem if they do have one, but somehow I don't have a recollection of that before
+
+[01:03:04.0405] <yulia>
+Found it -- the link is different than the text
+
+[01:03:18.0271] <Robert Pamely>
+Is it viable to turn off the lights above the projection screen?
+
+[01:03:28.0929] <Robert Pamely>
+Are those lights independent?
+
+[01:03:40.0980] <rkirsling>
+ * is it an obligation for the host to have a second CoC in play? obviously not a problem if they do have one, but somehow I don't have a recollection of that before
+
+[01:05:38.0645] <Rob Palmer>
+Romulo Cintra: Can you help with lights?
+
+[01:07:01.0825] <Rob Palmer>
+Thank you Jason and Ashley and Kevin for volunteering for notes!
+
+[01:07:20.0538] <bakkot>
+btw the bot is using a new language model, which hopefully is better
+
+[01:07:22.0404] <bakkot>
+we'll see though
+
+[01:07:28.0603] <Romulo Cintra>
+> <@robpalme:matrix.org> Romulo Cintra: Can you help with lights?
+
+?
+
+[01:08:06.0157] <Christian Ulbrich>
+Romulo Cintra: Thx!
+
+[01:08:06.0852] <Robert Pamely>
+Thank you
+
+[01:08:07.0861] <jasew>
+That's much better
+
+[01:08:22.0269] <Rob Palmer>
+The room is now is dark mode, which helps us to see the projector screen.
+
+[01:09:03.0415] <Romulo Cintra>
+🌓
+
+[01:09:11.0385] <nicolo-ribaudo>
+Why is the "attendees" section in the notes only for remote people? Having the abbreviations there helps also for in-person attendees
+
+[01:09:23.0534] <Rob Palmer>
+it should be for both
+
+[01:10:16.0214] <msaboff>
+Please add your name, abbreviation and organization to the attendees section of the notes (each day).
+
+[01:12:06.0207] <Justin Ridgewell>
+Rob Palmer: I can't find the sign in form for remote attendees
+
+[01:12:17.0823] <Justin Ridgewell>
+Only the in person form
+
+[01:12:20.0710] <ryzokuken>
+Justin Ridgewell: it's on the reflector
+
+[01:12:24.0321] <ryzokuken>
+please refresh
+
+[01:12:37.0698] <Justin Ridgewell>
+I did...
+
+[01:12:41.0617] <ryzokuken>
+it was added a short while ago, you might have the old page loaded
+
+[01:13:02.0412] <Rob Palmer>
+It's in the video link section
+
+[01:13:22.0226] <Justin Ridgewell>
+Ahh, got it
+
+[01:13:30.0800] <Justin Ridgewell>
+It's tooooooo early.
+
+[01:14:04.0252] <pipobscure>
+BTW TCQ seems to still be on the Welcome/Intro
+
+[01:14:52.0711] <jasew>
+ryzokuken
+
+[01:15:06.0217] <jasew>
+Thanks
+
+[01:16:32.0661] <rkirsling>
+> <@jridgewell:matrix.org> It's tooooooo early.
+
+don't you mean late
+
+[01:16:57.0796] <Justin Ridgewell>
+4am in NYC. I just woke up
+
+[01:17:04.0724] <rkirsling>
+ohhh right whoops
+
+[01:17:22.0228] <rkirsling>
+true dedication
+
+[01:17:40.0359] <msaboff>
+> <@jridgewell:matrix.org> 4am in NYC. I just woke up
+
+1am in California!
+
+[01:17:55.0750] <shu>
+i went to sleep at 8:30
+
+[01:17:56.0213] <Rob Palmer>
+Thank you for your dedication!
+
+[01:18:21.0329] <msaboff>
+> <@shuyuguo:matrix.org> i went to sleep at 8:30
+
+That is about when I went to sleep.
+
+[01:18:25.0986] <shu>
+i don't want to be dedicated i want to be asleep
+
+[01:20:22.0963] <rkirsling>
+> <@shuyuguo:matrix.org> i don't want to be dedicated i want to be asleep
+
+eternal mood
+
+[01:20:40.0763] <rkirsling>
+except that it's 6pm in Tokyo for this meeting
+
+[01:20:50.0766] <rkirsling>
+I'm now doomed for US meetings instead lol
+
+[01:28:34.0991] <Rob Palmer>
+Slides:  https://docs.google.com/presentation/d/1sWm_ynPyH_4XHUVwRuGIB6McALQHZXdENncu7BD1q9Y/
+
+[01:42:46.0509] <Rob Palmer>
+If anyone struggles with screen-sharing, please just post a link to your slides here and someone helpful can screenshare on your behalf.
+
+[01:47:10.0309] <rkirsling>
+> <@rkirsling:matrix.org> is it an obligation for the host to have a second CoC in play? obviously not a problem if they do have one, but somehow I don't have a recollection of that before
+
+this was a non-rhetorical question re: hosting, btw
+
+[01:48:19.0575] <waldemar>
+Is there a list of in-person attendees that the remote folks can see?
+
+[01:48:31.0819] <waldemar>
+I can't tell who is in the room at the moment
+
+[01:49:12.0029] <Rob Palmer>
+Waldermar, I'll update the notes doc to ensure in-person attendees are listed
+
+[01:50:14.0648] <rbuckton>
+I think we actually skipped the "traditional" in-person introductions at the start of the meeting, though that's understandable given how packed the agenda is.
+
+[01:51:15.0044] <Rob Palmer>
+we did a quick names-only runaround in the room before the meeting started - I will ensure this goes in the notes
+
+[01:53:42.0548] <Luca Casonato>
+waldemar: we have added "in-person" and "remote" labels to the attendee list in the notes
+
+[01:55:38.0344] <rkirsling>
+> <@rkirsling:matrix.org> is it an obligation for the host to have a second CoC in play? obviously not a problem if they do have one, but somehow I don't have a recollection of that before
+
+ * this was a non-rhetorical question re: hosting, btw (am I just forgetful/unobservant?)
+
+[01:56:19.0970] <ryzokuken>
+> <@rkirsling:matrix.org> this was a non-rhetorical question re: hosting, btw (am I just forgetful/unobservant?)
+
+apologies if you were taken by surprise, I tried to give a heads up in the reflector post
+
+[01:56:51.0052] <rkirsling>
+no need for apology, just was curious about it
+
+[01:56:54.0673] <ryzokuken>
+this was basically a request by the Igalia CoC committee and the chair group decided to respect it, I'm not sure if a second CoC has been applied in the past.
+
+[02:13:23.0195] <littledan>
+What does STR mean?
+
+[02:13:35.0545] <ryzokuken>
+it was answered in #tc39-beginners:matrix.org 
+
+[02:13:40.0676] <nicolo-ribaudo>
+Steps to reproduce 
+
+[02:13:50.0239] <littledan>
+Oh thanks
+
+[02:14:05.0000] <bakkot>
+someone want to PR the glossary with that? seems useful
+
+[02:18:26.0580] <Luca Casonato>
+> <@bakkot:matrix.org> someone want to PR the glossary with that? seems useful
+
+ill do it
+
+[02:20:43.0998] <rkirsling>
+is it used enough to justify? seems like we all shared the same confusion, so it might not be encourageable?
+
+[02:20:52.0544] <rkirsling>
+ * is it used enough to justify? seems like we all shared the same confusion, so it might not be encourageable?
+
+[02:21:31.0256] <littledan>
+We often say “test case” for this sort of thing
+
+[02:27:48.0410] <Luca Casonato>
+https://github.com/tc39/how-we-work/pull/124 <- PR, if we want to merge it.
+
+[02:30:20.0947] <littledan>
+“groupedBy”
+
+[02:34:57.0568] <littledan>
+Three options or two?
+
+[02:35:08.0670] <rbuckton>
+A static method results in a pretty bad developer experience though. I've had some of the same issues with some of the Temporal APIs
+
+[02:35:44.0532] <rkirsling>
+which do you mean?
+
+[02:35:49.0591] <Rob Palmer>
+https://github.com/tc39/how-we-work/blob/main/presenting.md#temperature-checks
+
+[02:37:37.0472] <rbuckton>
+I discussed this awhile back about the poor DX around things like `Temporal.Duration.compare` being static only, though I haven't followed up. Until something like pipeline advances, it breaks left-to-right reading order.
+
+[02:37:44.0490] <rkirsling>
+tbh I feel like this is about more than just the method at hand is the thing
+
+[02:38:19.0875] <rkirsling>
+given the difficulty of adding methods to Array in general
+
+[02:38:54.0529] <rbuckton>
+I agree there, its disheartening that `Array` is constantly so difficult to extend.
+
+[02:39:05.0424] <Michael Ficarra>
+should we consider just pursuing this as an iterator helper method?
+
+[02:40:54.0963] <rbuckton>
+Its unfortunate because I believe this is something that belongs on Array.prototype. And this won't be the last time we run into this.
+
+[02:43:51.0620] <Robert Pamely>
+What is it that the static methods is consistent with? Object groupBy?
+
+[02:43:57.0409] <rbuckton>
+Another way to approach this might have been a `.collect(collector)` a. la. Java collectors (https://docs.oracle.com/javase/8/docs/api/java/util/stream/Collectors.html), but that's a completely different proposal
+
+[02:44:38.0590] <rbuckton>
+(i.e., `array.collect(Collector.groupBy(keySelector))`)
+
+[02:44:47.0120] <nicolo-ribaudo>
+> <@rpamely:matrix.org> What is it that the static methods is consistent with? Object groupBy?
+
+Object.fromEntries, which produces an object given an array
+
+[02:45:01.0169] <Robert Pamely>
+Oh I see ok
+
+[02:45:49.0851] <Robert Pamely>
+I see that as quite a different helper from groupBy
+
+[02:46:12.0038] <yulia>
+did i miss the bit where we had bathroom explainations? cc ryzokuken 
+
+[02:46:16.0019] <Kris Kowal>
+I like the suggestion for `Object.groupBy` and `Map.groupBy`, where you select the return type with the constructor.
+
+[02:46:24.0655] <ryzokuken>
+> <@yulia:mozilla.org> did i miss the bit where we had bathroom explainations? cc ryzokuken
+
+oops, sorry
+
+[02:46:25.0127] <Robert Pamely>
+"Entries" are an array representation of an object. groupBy is an operation on an array.
+
+[02:46:42.0290] <ryzokuken>
+I could do that right after this item
+
+[02:46:50.0022] <yulia>
+> <@rpamely:matrix.org> "Entries" are an array representation of an object. groupBy is an operation on an array.
+
+couldn't the same argument be made about entries?
+
+[02:47:09.0528] <Robert Pamely>
+Entries have to have a specific shape though
+
+[02:47:43.0387] <Robert Pamely>
+groupBy is more like reduce than fromEntries
+
+[02:47:48.0643] <rbuckton>
+> <@kriskowal:matrix.org> I like the suggestion for `Object.groupBy` and `Map.groupBy`, where you select the return type with the constructor.
+
+I'm not entirely against it, but I'd again rather see something like a formal collector API that those statics could be built off of.
+
+[02:47:51.0246] <Kris Kowal>
+> <@rpamely:matrix.org> "Entries" are an array representation of an object. groupBy is an operation on an array.
+
+Of a map (and by implication objects-as-dictionaries, which are map-alike)
+
+[02:48:32.0148] <Kris Kowal>
+> <@rbuckton:matrix.org> I'm not entirely against it, but I'd again rather see something like a formal collector API that those statics could be built off of.
+
+Generators-as-collectors come to mind.
+
+[02:48:32.0251] <Robert Pamely>
+> <@kriskowal:matrix.org> Of a map (and by implication objects-as-dictionaries, which are map-alike)
+
+Yes I guess specifically Entries are a representation of key-value pairs, which objects and Maps can represent
+
+[02:48:46.0781] <jasew>
+> <@kriskowal:matrix.org> I like the suggestion for `Object.groupBy` and `Map.groupBy`, where you select the return type with the constructor.
+
+My understanding is this proposal only adds a static to Array right? Is there an addition to Object and Map also and i missed that?
+
+[02:48:58.0933] <bakkot>
+> <@kriskowal:matrix.org> Of a map (and by implication objects-as-dictionaries, which are map-alike)
+
+what is this "of" attached to?
+
+[02:49:18.0927] <bakkot>
+> <@jasew:matrix.org> My understanding is this proposal only adds a static to Array right? Is there an addition to Object and Map also and i missed that?
+
+I think it would only add statics to Object and Map, not to Array at all
+
+[02:49:46.0110] <jasew>
+I see
+
+[02:50:03.0246] <Robert Pamely>
+Given users are used to finding helpers like `reduce` on the array prototype, I don't think it will be obvious to look for these on Object and Map
+
+[02:50:03.0759] <Kris Kowal>
+Yes, I believe yulia suggested using Object and Map constructors as receivers _instead of_ Array.
+
+[02:50:16.0462] <yulia>
+yeah i think that was just a mistake in the slides
+
+[02:51:38.0919] <Justin Ridgewell>
+Yes, it was a typo to have `Array.groupBy` and `Tuple.groupBy`
+
+[02:51:43.0461] <Kris Kowal>
+In any case, `X.of` is the good precedent for `X.groupBy`. Both return instances of `X` and have an open range for values of `X`.
+
+[02:51:59.0132] <Justin Ridgewell>
+It should just be `Object.groupBy`, `Map.groupBy` (and `WeakMap`), and possibly `Record.groupBy`
+
+[02:52:17.0762] <Kris Kowal>
+That is, provides clear guidance for a library `SortedMap.groupBy`
+
+[02:52:18.0285] <jasew>
+This makes more sense to me now, thanks for clarifying 
+
+[02:52:24.0871] <jasew>
+ * This makes more sense to me now, thanks for clarifying 
+
+[02:52:55.0334] <yulia>
+> <@rpamely:matrix.org> Given users are used to finding helpers like `reduce` on the array prototype, I don't think it will be obvious to look for these on Object and Map
+
+Object.entries can be created from a map. There we don't have entriesToObject on the map prototype or array prototype, so I think we have precedent for this. That said, i do understand where you are coming from, I am just agreeing with eemeli that we have similar patterns already
+
+[02:53:24.0027] <bakkot>
+`groupBy` is kind of a weird name if this is a static
+
+[02:53:30.0489] <bakkot>
+though I don't have a better one
+
+[02:54:35.0546] <jasew>
+fromGrouped? like fromEntries? I don't have a better name either
+
+[02:54:53.0506] <Robert Pamely>
+> <@jasew:matrix.org> fromGrouped? like fromEntries? I don't have a better name either
+
+The input is not grouped
+
+[02:55:01.0014] <rbuckton>
+The Java grouping collector is `groupingBy`, which was one of the options listed as an alternative for the .prototype version, if we're going to change the name anyways
+
+[02:55:30.0163] <bakkot>
+if we're ok with `groupingBy` it can probably still be on Array.prototype
+
+[02:55:41.0776] <bakkot>
+I doubt that will have conflicts like `group` and `groupBy` did
+
+[02:55:55.0449] <rbuckton>
+> <@bakkot:matrix.org> if we're ok with `groupingBy` it can probably still be on Array.prototype
+
+That would be my preference, though I'd lean more towards `.groupedBy` in that case.
+
+[02:56:03.0708] <bakkot>
+though `groupingByToMap` is... not... a great name
+
+[02:56:21.0741] <bakkot>
+yeah I think I like `groupedBy` personally
+
+[02:56:23.0978] <yulia>
+if we continue to go with the prototype, then I don't think we can again just implement it and hope for bugs if there are problems
+
+[02:56:33.0365] <yulia>
+is there a more robust way we can test this name?
+
+[02:56:36.0629] <bakkot>
+yulia: even with a really weird name like `groupingBy`?
+
+[02:57:01.0758] <rbuckton>
+`groupingBy` indicates something that produces a thing will do the grouping (i.e., Java's `Collectors.groupingBy`), where as `groupedBy` indicates something that produces the grouped result.
+
+[02:57:07.0829] <bakkot>
+conflicts with `group` and `groupBy` are not too surprising because those are natural names that people might use
+
+[02:57:10.0092] <yulia>
+groupingBy and groupToObject is probably safe... but is this really better than it being a static if we are looking for really weird anmes?
+
+[02:57:11.0166] <rkirsling>
+Object.groupsFromArray?
+
+[02:57:27.0716] <bakkot>
+> but is this really better than it being a static
+
+eh, personally I think so
+
+[02:57:36.0328] <yulia>
+Object.toCategories?
+
+[02:57:49.0383] <yulia>
+idk
+
+[02:57:51.0684] <bakkot>
+statics are quite strange for this
+
+[02:57:51.0909] <jasew>
+Something with `from` in the name often implies one type (input) to another (usually the same as the reciever)
+
+[02:57:56.0361] <Robert Pamely>
+> <@yulia:mozilla.org> groupingBy and groupToObject is probably safe... but is this really better than it being a static if we are looking for really weird anmes?
+
+One concern with static is chaining too. Without pipeline you lose the ability to easily chain at the end of array operations.
+
+[02:58:20.0847] <yulia>
+> <@rpamely:matrix.org> One concern with static is chaining too. Without pipeline you lose the ability to easily chain at the end of array operations.
+
+you would not be chaining array methods anyway
+
+[02:58:31.0337] <bakkot>
+sure you would
+
+[02:58:32.0534] <rkirsling>
+> <@yulia:mozilla.org> Object.toCategories?
+
+the FP community will surely have our heads 😂
+
+[02:58:34.0012] <rbuckton>
+As I mentioned earlier, I wonder if a comprehensive check for a more general-purpose `Array.prototype.collect` method would make sense, plus a formalized Collector API.
+
+[02:58:45.0742] <bakkot>
+`x.filter().groupBy()` is a pretty common thing to want
+
+[02:59:00.0457] <yulia>
+but you would have an object after groupBy
+
+[02:59:00.0795] <Robert Pamely>
+`Object.groupBy(arr.filter().map())` vs `arr.filter().map().groupedBy()`
+
+[02:59:06.0116] <rbuckton>
+> <@bakkot:matrix.org> `x.filter().groupBy()` is a pretty common thing to want
+
+Yes, I use this pattern all the time with my own libraries.
+
+[02:59:07.0535] <yulia>
+ah i see what you folks mean
+
+[02:59:29.0165] <yulia>
+thats fair
+
+[02:59:38.0299] <rkirsling>
+`groop`
+
+[02:59:45.0801] <bakkot>
+> <@rbuckton:matrix.org> As I mentioned earlier, I wonder if a comprehensive check for a more general-purpose `Array.prototype.collect` method would make sense, plus a formalized Collector API.
+
+I am not necessarily opposed to such a thing, but I have a hard time imagining it being as convenient as `groupBy`. `.collect(Collectors.groupBy)` is much worse than `groupedBy`.
+
+[03:00:09.0358] <Robert Pamely>
+> <@rkirsling:matrix.org> `groop`
+
+it's called the JS language for a reason
+
+[03:00:36.0122] <yulia>
+i mean, we can't even decide on a name for the language so ;)
+
+[03:00:51.0403] <yulia>
+officially its ECMAScript, which is the only still-capitalized thing for Ecma international
+
+[03:01:13.0274] <rbuckton>
+> <@yulia:mozilla.org> but you would have an object after groupBy
+
+That depends on the implementation. A query/sequence-like `groupBy` would produce an array of groupings (i.e., key/values pairs)
+
+[03:01:13.0628] <Kris Kowal>
+Using `groupBy` will be good for discovery.
+
+[03:01:18.0447] <yulia>
+so i prefer to think that its still European Computer Manufacturer's Association Script, or, per the sporting world, soccer script
+
+[03:01:25.0508] <yulia>
+ill show myself out
+
+[03:01:44.0575] <rkirsling>
+has anyone ever tried to align the capitalization of ECMAScript? haha
+
+[03:02:10.0138] <rkirsling>
+clearly a task worthy of time and effort 🙄
+
+[03:02:11.0508] <shu>
+you know that's not the OG ecma
+
+[03:02:13.0481] <Robert Pamely>
+> <@kriskowal:matrix.org> Using `groupBy` will be good for discovery.
+
+In what sense? Searching docs?
+
+[03:02:16.0966] <shu>
+the OG ecma is carton manufacturers
+
+[03:02:21.0993] <shu>
+https://www.ecma.org/
+
+[03:02:42.0960] <Kris Kowal>
+> <@rpamely:matrix.org> In what sense? Searching docs?
+
+Googling “mdn groupBy” on a lark and finding useful results.
+
+[03:02:43.0399] <rbuckton>
+> <@bakkot:matrix.org> I am not necessarily opposed to such a thing, but I have a hard time imagining it being as convenient as `groupBy`. `.collect(Collectors.groupBy)` is much worse than `groupedBy`.
+
+Yes, but if we're considering statics anyways, a `.collect` would preserve LTR reading/method chaining
+
+[03:03:10.0380] <rbuckton>
+i.e., `.collect(Map.groupingBy)` for example
+
+[03:03:31.0315] <Robert Pamely>
+> <@kriskowal:matrix.org> Googling “mdn groupBy” on a lark and finding useful results.
+
+True, but "mdn group array" is a likely search too
+
+[03:03:37.0343] <bakkot>
+well, `.collect(Map,groupingBy, fn)`, really
+
+[03:03:51.0174] <Robert Pamely>
+where any solution would be found hopefully..
+
+[03:03:56.0199] <Kris Kowal>
+> <@shuyuguo:matrix.org> the OG ecma is carton manufacturers
+
+Carton: the language formerly known as variously ECMAScript and JavaScript.
+
+[03:04:10.0907] <rbuckton>
+> <@bakkot:matrix.org> well, `.collect(Map,groupingBy, fn)`, really
+
+Well, if you follow the Java design, `.collect(Map.groupingBy(fn))`
+
+[03:04:25.0096] <bakkot>
+> <@kriskowal:matrix.org> Googling “mdn groupBy” on a lark and finding useful results.
+
+no matter what option we do "groupBy" should be mentioned in the docs
+
+[03:04:29.0680] <rbuckton>
+> <@kriskowal:matrix.org> Carton: the language formerly known as variously ECMAScript and JavaScript.
+
+That's actually kinda catchy
+
+[03:04:32.0473] <Robert Pamely>
+These full on Java suggestions are hurting my eyes
+
+[03:04:44.0618] <bakkot>
+re: discoverability, I'm more worried about people being able to do `x.gr...` in the console and get autocomplete which suggests the thing they wanted
+
+[03:04:47.0240] <Rob Palmer>
+We will resume the meeting in 56 mins at 13:00 local time.
+
+[03:04:50.0399] <bakkot>
+ * re: discoverability, I'm more worried about people being able to do `x.gr...` in the console and get autocomplete which suggests the thing they wanted
+
+[03:04:55.0159] <bakkot>
+which only works for proto methods, not static
+
+[03:04:59.0531] <nicolo-ribaudo>
+> <@bakkot:matrix.org> well, `.collect(Map,groupingBy, fn)`, really
+
+`.collect(Map, fn)` would also work, with a collectors protocol
+
+[03:08:42.0903] <rkirsling>
+> <@kriskowal:matrix.org> Carton: the language formerly known as variously ECMAScript and JavaScript.
+
+cool devs in 2030 only use Carbon and Carton
+
+[03:09:15.0805] <Justin Ridgewell>
+Are we changing our mind on static methods?
+
+[03:09:38.0399] <bakkot>
+different people always had different opinions I think
+
+[03:09:42.0240] <Justin Ridgewell>
+I'm just kinda exhausted with seeing naming conflicts with the ecosystem.
+
+[03:09:49.0515] <bakkot>
+I don't have that firm of an opinion at the moment
+
+[03:09:50.0826] <Justin Ridgewell>
+`group` was impossible to query for
+
+[03:09:51.0998] <bakkot>
+need to think about it more
+
+[03:10:20.0593] <rbuckton>
+We could seriously consider something like F#'s computation expressions (something jschoi was looking into) to create query DSLs:
+
+```js
+// computation expression example using decorators and do-expression syntax:
+const array = ...;
+const result = @query do {
+  for x in array
+  groupBy x.name into y
+  select y
+};
+```
+
+[03:10:33.0137] <rbuckton>
+ * We could seriously consider something like F#'s computation expressions (something jschoi was looking into) to create query DSLs:
+
+```js
+// computation expression example using decorators and do-expression syntax:
+const array = ...;
+const result = @query do {
+  for x in array
+  groupBy x.name into y
+  select y
+};
+```
+
+[03:10:48.0734] <rkirsling>
+> <@jridgewell:matrix.org> I'm just kinda exhausted with seeing naming conflicts with the ecosystem.
+
+this is what I'm saying; what I want is a solution that we can also apply to the next time this happens
+
+[03:11:19.0213] <bakkot>
+> <@rbuckton:matrix.org> We could seriously consider something like F#'s computation expressions (something jschoi was looking into) to create query DSLs:
+> 
+> ```js
+> // computation expression example using decorators and do-expression syntax:
+> const array = ...;
+> const result = @query do {
+>   for x in array
+>   groupBy x.name into y
+>   select y
+> };
+> ```
+
+that is too many things
+
+[03:11:23.0359] <bakkot>
+JS does not have room for that
+
+[03:11:26.0114] <bakkot>
+ * this language does not have room for that
+
+[03:11:29.0021] <bakkot>
+ * JS does not have room for that
+
+[03:12:55.0466] <bakkot>
+if any of us had large twitter followings we could poll the community on `Object.groupBy` vs `[].groupedBy`
+
+[03:13:13.0152] <bakkot>
+just don't put a joking "break the web" option in or people will take it seriously and get mad that we don't
+
+[03:13:42.0138] <rbuckton>
+> <@bakkot:matrix.org> if any of us had large twitter followings we could poll the community on `Object.groupBy` vs `[].groupedBy`
+
+I'm less convinced of the efficacy of twitter polls given the mass exodus of many in the tech community off of that platform and onto platforms like Mastodon.
+
+[03:14:40.0015] <Kris Kowal>
+> <@rbuckton:matrix.org> I'm less convinced of the efficacy of twitter polls given the mass exodus of many in the tech community off of that platform and onto platforms like Mastodon.
+
+Or, as we like to call it, the Lemmer Web.
+
+[03:15:02.0367] <Kris Kowal>
+(for Christine Lemmer-Webber, one of the authors of ActivityPub)
+
+[03:15:11.0955] <rbuckton>
+> <@bakkot:matrix.org> JS does not have room for that
+
+I'm not so sure. `async do {}` is not so far off from what `@async do {}` might be in terms of how `async {}` works in F#.
+
+[03:15:37.0749] <rbuckton>
+But even if it is viable, its a long way off.
+
+[03:17:28.0932] <bakkot>
+> <@rbuckton:matrix.org> I'm less convinced of the efficacy of twitter polls given the mass exodus of many in the tech community off of that platform and onto platforms like Mastodon.
+
+eh, well, you can run it and see what results you get
+
+[03:17:43.0911] <bakkot>
+seems like there are still enough people around to get a decent sample size
+
+[03:18:06.0817] <Justin Ridgewell>
+We need scoped prototype methods
+
+[03:18:17.0012] <bakkot>
+if we could get decent sample size in the first place, anyway
+
+[03:18:42.0546] <Justin Ridgewell>
+```js
+{
+  "use groupBy";
+  [].groupBy; // => function
+}
+[].groupBy; // => undefined
+```
+
+
+[03:19:00.0397] <littledan>
+> <@jridgewell:matrix.org> We need scoped prototype methods
+
+Jake was talking about this too, but how would it work?
+
+[03:19:02.0411] <rbuckton>
+> <@jridgewell:matrix.org> We need scoped prototype methods
+
+You mean like https://github.com/tc39/proposal-extensions?
+
+[03:19:31.0508] <Justin Ridgewell>
+Similar, but access would still use `.` instead of `::`
+
+[03:19:34.0201] <littledan>
+> <@bakkot:matrix.org> if we could get decent sample size in the first place, anyway
+
+Anyway we can do a parallel Mastodon poll!
+
+[03:19:37.0545] <Justin Ridgewell>
+Else it's just a pipe.
+
+[03:19:56.0391] <rbuckton>
+> <@jridgewell:matrix.org> Else it's just a pipe.
+
+That is the way
+
+[03:20:55.0095] <rbuckton>
+If only we could do something like C#'s extension methods, but that requires runtime typing
+
+[03:21:51.0608] <Justin Ridgewell>
+> <@littledan:matrix.org> Jake was talking about this too, but how would it work?
+
+Roughly, don't we already have similar tracking for strict property access?
+
+[03:22:04.0879] <Justin Ridgewell>
+Just need to track prototype scopes now, for every property access...
+
+[03:22:20.0538] <Justin Ridgewell>
+/me runs away
+
+[03:26:40.0726] <rbuckton>
+> <@rbuckton:matrix.org> That is the way
+
+
+We really do need to get pipeline to move forward, and then maybe we could just do this:
+
+```js
+import { groupBy } from "std:array";
+
+const result = ar.filter(...) |> groupBy(%, ...);
+```
+
+[03:26:53.0088] <littledan>
+@bterlson @robpalme @ujjwal Is it too late for me to defer my next topic down the agenda? There is so much good stuff that we might not get a chance to discuss; consensus procedures can wait until next meeting
+
+[03:27:13.0888] <littledan>
+Apologies for not marking it as such earlier 
+
+[04:00:13.0284] <rkirsling>
+that didn't sound like an ñ to me 😛
+
+[04:00:35.0123] <rkirsling>
+just teasin' ya
+
+[04:06:34.0855] <Justin Ridgewell>
+Have we restarted? I'm waiting to be admitted
+
+[04:06:50.0962] <rbuckton>
+Yes, they started up again.
+
+[04:06:58.0723] <ryzokuken>
+apologies, you're in
+
+[04:09:21.0201] <bakkot>
+I am trying a new language model for the bot, and it's definitely better, but it's slow enough that it gets behind sometimes, and that tradeoff isn't worth it :(
+
+[04:10:19.0443] <bakkot>
+it's google's speech-to-text service, so I'm surprised they have it lag instead of having it run on better hardware and charge more
+
+[04:11:14.0666] <Ashley Claymore>
+> <@bakkot:matrix.org> I am trying a new language model for the bot, and it's definitely better, but it's slow enough that it gets behind sometimes, and that tradeoff isn't worth it :(
+
+ah that explains what I was seeing in the first half
+
+[04:11:50.0510] <Ashley Claymore>
+hopefully the lag will improve, as the model does seem much better as you say
+
+[04:13:29.0404] <bakkot>
+I wish they'd just publish the model so I could rent myself a faster GPU
+
+[04:13:30.0668] <bakkot>
+but alas
+
+[04:13:43.0477] <bakkot>
+I guess at some point I should try other services
+
+[04:14:36.0736] <Michael Ficarra>
+I didn't see deferred evaluation mentioned in Kris Kowal's slides
+
+[04:16:26.0347] <Rob Palmer>
+Richard slides:  https://docs.google.com/presentation/d/1vyp3FZ5OIiN1xzKV_y7FZauBMdGow0CW2es4qbOQtgw/edit
+
+[04:16:27.0036] <Kris Kowal>
+Indeed, I didn’t touch on deferred evaluation. Briefly, that’s motivated by the ability to easily avoid executing the body of unused modules, which is possible and relied upon in practice with CommonJS.
+
+[04:16:35.0709] <Anthony Bullard>
+Sorry, I'm running a bit late, could someone admit me when they get a chance?
+
+[04:17:45.0675] <Michael Ficarra>
+Kris Kowal: I'm thinking there's overlap between reflection and deferred evaluation anyway
+
+[04:17:56.0376] <Michael Ficarra>
+I guess I'll talk about that more when we discuss reflection at this meeting
+
+[04:18:01.0856] <yulia>
+Anthony Bullard: are you joining the call?
+
+[04:18:05.0125] <Rob Palmer>
+If anyone needs to be admitted to the meeting, please notify ryzokuken here
+
+[04:18:36.0219] <Kris Kowal>
+> <@michaelficarra:matrix.org> I guess I'll talk about that more when we discuss reflection at this meeting
+
+I thought this as well, but yulia’s deferred evaluation goes farther than deferred import.
+
+[04:19:07.0685] <yulia>
+yes, Guy and I have been working together on this, but deferred import eval won't be solved just by reflection
+
+[04:19:18.0542] <Kris Kowal>
+I think the uses of import reflection for deferring execution are more closely related to the code splitting use case than Yulia’s proposal, having learned more about the latter since I last presented.
+
+[04:20:33.0589] <yulia>
+deferred evaluation explicitly seeks to avoid the async tick by preloading and initializing the module. You can think of it as a dynamic import without the fetch. any async work is done up front as part of the module loading / linking stage
+
+[04:24:29.0498] <Justin Ridgewell>
+Bradford Smith: Re your iterable suggestion for groupBy, I think we could actually do that. `Iterator` needs special contiguous-run behavior, but that could be special to `Iterator.groupBy` (pending the Iterator helpers proposal)
+
+[04:25:12.0705] <Rob Palmer>
+In the room I have a black leather wallet that was handed in. Let me know if it is yours.
+
+[04:26:02.0842] <Alex Vincent>
+Is this potentially a "reserved properties" situation, like the reserved keywords of 262?
+
+[04:26:04.0205] <Michael Ficarra>
+Justin Ridgewell: it doesn't *need* to be that way, there's just pretty strong precedent from other languages for groupBy on a representation of a (possibly) infinite sequence to have that behaviour
+
+[04:26:34.0009] <Anthony Bullard>
+> <@yulia:mozilla.org> Anthony Bullard: are you joining the call?
+
+I have joined
+
+[04:27:20.0797] <Robert Pamely>
+> <@jridgewell:matrix.org> Bradford Smith: Re your iterable suggestion for groupBy, I think we could actually do that. `Iterator` needs special contiguous-run behavior, but that could be special to `Iterator.groupBy` (pending the Iterator helpers proposal)
+
+What does contiguous-run behaviour mean?
+
+[04:27:54.0662] <Christian Ulbrich>
+Robert Pamely: Its mine.
+
+[04:28:20.0405] <Robert Pamely>
+> <@christianulbrich:matrix.org> Robert Pamely: Its mine.
+
+Guessing you meant to tag Rob Palmer 
+
+[04:28:52.0077] <ryzokuken>
+it's right in front of me and rob on the table
+
+[04:28:53.0331] <Justin Ridgewell>
+`[1, 2, 1, 1]` in by default groups to a single `{ 1 => [1, 1, 1], 2 => [2] }`, but in infinite iterables it's not possible to collect all values into a key. So instead, you return an iterable `[ [1, [1, 1]], [2, [2]], [1, [1]] ]` grouping contiguous runs of the same key
+
+[04:28:59.0630] <Christian Ulbrich>
+Rob Palmer: Exactly :)
+
+[04:29:13.0759] <yulia>
+Rob Palmer -- i think waldemar is next?
+
+[04:29:24.0701] <yulia>
+he had a topic "factored spec"
+
+[04:29:40.0193] <Rob Palmer>
+we messed up the queue by double advancing
+
+[04:29:53.0071] <Justin Ridgewell>
+ * `[1, 2, 1, 1]` in by default groups to a single `{ 1 => [1, 1, 1], 2 => [2] }`, but in infinite iterables it's not possible to collect all values into a key. So instead, you return an iterable `[ [1, [1, 1]], [2, [2]], [1, [1]] ]` grouping contiguous runs of the same key
+
+[04:30:15.0807] <Robert Pamely>
+> <@jridgewell:matrix.org> `[1, 2, 1, 1]` in by default groups to a single `{ 1 => [1, 1, 1], 2 => [2] }`, but in infinite iterables it's not possible to collect all values into a key. So instead, you return an iterable `[ [1, [1, 1]], [2, [2]], [1, [1]] ]` grouping contiguous runs of the same key
+
+I see thanks for clarifying
+
+[04:31:07.0807] <Justin Ridgewell>
+ * `[1, 2, 1, 1]` in by default groups to a single `{ 1 => [1, 1, 1], 2 => [2] }`, but in infinite iterables it's not possible to collect all values into a key. So instead, you return an iterable `[ [1, [1]], [2, [2]], [1, [1, 1]] ]` grouping contiguous runs of the same key
+
+[04:31:56.0498] <rbuckton>
+> <@jridgewell:matrix.org> `[1, 2, 1, 1]` in by default groups to a single `{ 1 => [1, 1, 1], 2 => [2] }`, but in infinite iterables it's not possible to collect all values into a key. So instead, you return an iterable `[ [1, [1]], [2, [2]], [1, [1, 1]] ]` grouping contiguous runs of the same key
+
+grouping only contiguous runs seems like a different operation though, needing a different name to indicate the difference in behavior.
+
+[04:32:00.0245] <nicolo-ribaudo>
+Wishlist:
+- kevin's bot should replace "40 to" with 402
+(where can I open a PR for that?)
+
+[04:32:07.0439] <nicolo-ribaudo>
+ * Wishlist:
+- kevin's bot should replace "40 to" with 402
+(where can I open a PR for that?)
+
+[04:33:29.0942] <Robert Pamely>
+> <@rbuckton:matrix.org> grouping only contiguous runs seems like a different operation though, needing a different name to indicate the difference in behavior.
+
+I agree. It feels more like batching the same values or something.
+
+[04:34:06.0350] <jasew>
+> Wishlist:
+> 
+> - kevin's bot should replace "40 to" with 402
+> (where can I open a PR for that?)
+
+bakkot has an exception list somewhere, so pinging him usually
+
+[04:34:57.0536] <Michael Ficarra>
+jasew: nicolo-ribaudo https://github.com/bakkot/transcribe-to-gdocs/blob/master/replacements.js
+
+[04:35:03.0820] <rbuckton>
+> <@rpamely:matrix.org> I agree. It feels more like batching the same values or something.
+
+Inside the TypeScript compiler we have a `groupBy` function that maps the input into discrete groups by key, and a `spanMap` function that maps contiguous sequences by key.
+
+[04:35:53.0454] <Robert Pamely>
+As it turns out, this has the unfortunate correction in google to "Spain map"
+
+[04:36:39.0416] <rbuckton>
+I also called that operation `spanMap` in `@esfx/iter-fn`: https://esfx.js.org/esfx/api/iter-fn.html#_esfx_iter_fn_spanMap_function_1_
+
+[04:36:50.0786] <Christian Ulbrich>
+This sounds convincing to me. ECMA262 should be able to be implemented w/o _any_ stuff related to 402.
+
+[04:37:50.0523] <ryzokuken>
+`isLeapDay`
+
+[04:37:55.0401] <ryzokuken>
+😬
+
+[04:38:56.0951] <Michael Ficarra>
+rbuckton: I know `span` as the like "single step" version of `group`: https://hackage.haskell.org/package/base-4.17.0.0/docs/Prelude.html#v:span
+
+[04:39:38.0784] <rbuckton>
+Yeah, I have the same concept in `@esfx/iter-fn` as well: https://esfx.js.org/esfx/api/iter-fn.html#_esfx_iter_fn_span_function_4_
+
+[04:40:20.0949] <littledan>
+Wait, everything goes through plenary, regardless of outcome here
+
+[04:40:33.0985] <Michael Ficarra>
+rbuckton:  I think using "span" in the names of both of those operations is weird
+
+[04:40:42.0842] <Michael Ficarra>
+ * rbuckton:  I think using "span" in the names of both of those operations is weird
+
+[04:41:36.0803] <rbuckton>
+They both operate on contiguous sequences, e.g., a "span"
+
+[04:41:44.0964] <Robert Pamely>
+To clarify, why is it necessary to have a different group algorithm on iterators anyway? There are already operations like `every` that would never end on infinite iterators right?
+
+[04:42:28.0023] <Michael Ficarra>
+wouldn't we have already run into this issue with `String.prototype.toLocaleLowerCase` and likewise if they hadn't already been in 262 for historical reasons?
+
+[04:42:44.0094] <shu>
+littledan: you're right, sorry for being imprecise
+
+[04:42:48.0034] <littledan>
+In the web world, extensions are often used specifically to be able to act in cases where one spec wants to add a feature to another without working with all of those people (eg because maybe there isn’t an active WG). But other times just for factoring as here.
+
+[04:42:53.0337] <Michael Ficarra>
+Robert Pamely: it's not necessary, there's just precedent
+
+[04:42:53.0514] <rbuckton>
+And many other languages/library implement `.groupBy` over potentially infinite iterables assuming they are finite.
+
+[04:43:36.0989] <shu>
+littledan: i really do not see any advantage to requiring extra deliberation for this stuff in 262
+
+[04:43:46.0163] <bakkot>
+> <@michaelficarra:matrix.org> jasew: nicolo-ribaudo https://github.com/bakkot/transcribe-to-gdocs/blob/master/replacements.js
+
+that's the file but yes pinging me is correct, rather than a PR
+
+[04:43:58.0521] <rbuckton>
+> <@rpamely:matrix.org> To clarify, why is it necessary to have a different group algorithm on iterators anyway? There are already operations like `every` that would never end on infinite iterators right?
+
+ * And many other languages/library implement `.groupBy` over potentially infinite iterables assuming they are finite.
+
+[04:46:59.0628] <shu>
+i don't understand what the conclusion was
+
+[04:47:04.0411] <Michael Ficarra>
+was anyone other than Mark in the "no" camp?
+
+[04:47:06.0424] <shu>
+is the "narrow yes" non-normative notes?
+
+[04:47:07.0430] <bakkot>
+> <@rbuckton:matrix.org> grouping only contiguous runs seems like a different operation though, needing a different name to indicate the difference in behavior.
+
+I agree that calling this operation "groupBy" is bad. unfortunately, though, that's the behavior that `groupBy` has for infinite iterators in languages like python and haskell - https://docs.python.org/3/library/itertools.html#itertools.groupby / https://hackage.haskell.org/package/groupBy-0.1.0.0/docs/Data-List-GroupBy.html
+
+I wouldn't want a thing called "groupBy" on Iterator.prototype which does something other than what the groupBy from python's itertools does
+
+[04:47:36.0075] <ryzokuken>
+> <@shuyuguo:matrix.org> is the "narrow yes" non-normative notes?
+
+non-normative notes backreferencing 402
+
+[04:47:47.0241] <ryzokuken>
+like we do for the `toLocaleString` methods
+
+[04:47:49.0052] <shu>
+sgtm, thanks
+
+[04:48:20.0040] <shu>
+well not exactly like those i hope?
+
+[04:48:22.0306] <bakkot>
+can someone capture that in the notes
+
+[04:48:33.0225] <Michael Ficarra>
+yeah not quite like those
+
+[04:48:39.0887] <ryzokuken>
+in the same vein, I suppose
+
+[04:48:42.0571] <shu>
+`toLocaleString` is like, "this does something, who knows? but really, look at 402"
+
+[04:48:51.0563] <shu>
+i hope this is more like "this is added by 402, look at that"
+
+[04:48:56.0282] <Michael Ficarra>
+those are mandatory whether or not 402 is implemented, they just have a different behaviour
+
+[04:48:58.0904] <shu>
+right
+
+[04:49:03.0851] <ryzokuken>
+yeah that's because the stubs exist for toLocaleString
+
+[04:49:05.0130] <Michael Ficarra>
+shu: yeah that is my understanding
+
+[04:49:34.0272] <ryzokuken>
+so in this case we'll say "these classes might have additional properties that are defined here"
+
+[04:50:06.0249] <shu>
+okay i would characterize that as in fact not at all like `toLocaleString`
+
+[04:50:39.0285] <ryzokuken>
+hm, perhaps I misunderstood something thing. Richard Gibson could you clarify?
+
+[04:51:00.0302] <bakkot>
+> `NOTE: For historical reasons, the strings *"true"* and *"false"* are treated the same as the boolean value *true*.`
+
+[04:51:07.0443] <bakkot>
+ah yes, javascript
+
+[04:51:09.0619] <shu>
+hell yeah brother
+
+[04:51:59.0396] <ryzokuken>
+`"false" === true`
+
+[04:52:05.0480] <bakkot>
+I guess I wrote that sentence
+
+[04:52:28.0973] <bakkot>
+well, `!!"false" === true`
+
+[04:52:49.0694] <HE Shi-Jun>
+I don't have time to comment last topic. I don't have strong opinion on whether 402 could extend 262, i just want to mention in this specific case, it not only an impl choose to impl 402 or not but also which calendars they want to support. for example, if support japanese calendar, it will have era field, if support chinese year calendar, it could have animal field (in the future?), if support both, it will have both fields... So the shape of the prototype may have many varieties.
+
+[04:54:09.0029] <Michael Ficarra>
+HE Shi-Jun: why would 402 make individual fields present only when certain locale data is present?
+
+[04:54:18.0783] <Michael Ficarra>
+I imagine the data would change but the shapes would be fixed
+
+[04:55:14.0610] <HE Shi-Jun>
+Actually I have seen some modifications on such data so only have specific locale to make the binary small.
+
+[04:55:46.0002] <Michael Ficarra>
+yes, it is normal to not have some locale data
+
+[04:55:57.0500] <Michael Ficarra>
+it would not be okay for 402 to say that the shape of the object changes based on that though
+
+[04:56:25.0896] <Michael Ficarra>
+like, I don't think that would pass the TG1 review
+
+[04:56:42.0817] <HE Shi-Jun>
+So you mean even an impl do not support japanese year calendar, it should still have era field?
+
+[04:56:57.0143] <Michael Ficarra>
+yes
+
+[04:57:39.0321] <HE Shi-Jun>
+I'm ok with that, hope 402 have clear spec text for it.
+
+[04:58:00.0302] <ryzokuken>
+HE Shi-Jun: we're working out the exact details for this
+
+[04:58:07.0152] <ryzokuken>
+check Frank's recent proposal for this
+
+[04:58:08.0607] <rbuckton>
+> <@michaelficarra:matrix.org> like, I don't think that would pass the TG1 review
+
+Yeah, I'd lean towards something like a `.getCalendarField("era")`, etc. instead, so that the shape remains stable.
+
+[04:59:12.0233] <HE Shi-Jun>
+> <@rbuckton:matrix.org> Yeah, I'd lean towards something like a `.getCalendarField("era")`, etc. instead, so that the shape remains stable.
+
+stable, but not very ergonomics 😅
+
+[04:59:43.0958] <bakkot>
+in fairness getting the era is not a particularly common operation
+
+[04:59:54.0314] <bakkot>
+i expect, anyway
+
+[05:00:14.0660] <rbuckton>
+> <@haxjs:matrix.org> stable, but not very ergonomics 😅
+
+True, but it also avoids needing to add more properties in the future that are potentially unused based on the locale/calendar in use.
+
+[05:00:26.0496] <Michael Ficarra>
+interesting, is era ever placed anywhere other than the end of the date?
+
+[05:01:00.0989] <rbuckton>
+It also could be `.calendarData.era`, where `.calendarData` is spec'd as a getter that just returns an empty object by default.
+
+[05:01:13.0613] <shu>
+> <@michaelficarra:matrix.org> interesting, is era ever placed anywhere other than the end of the date?
+
+is stardate real
+
+[05:01:18.0582] <HE Shi-Jun>
+> <@rbuckton:matrix.org> True, but it also avoids needing to add more properties in the future that are potentially unused based on the locale/calendar in use.
+
+I agree. I just think the original idea to add era is for ergonomics. 
+
+[05:04:10.0062] <Richard Gibson>
+> <@usharma:igalia.com> hm, perhaps I misunderstood something thing. Richard Gibson could you clarify?
+
+my understanding of the conclusion is a general self-imposed constraint to not extend ECMA-262 intrinsics in ECMA-402 without an indication of such within ECMA-262. For `Temporal.….prototype` specifically, I think it will take the form of text like "_An ECMAScript implementation that includes the ECMA-402 Internationalization API may provide additional properties of the <type> prototype object as defined in the ECMA-402 specification._".
+
+[05:04:42.0253] <Andreu Botella>
+I wonder whether hiding the era name if it matches the current era by default would work well with the Japanese calendar
+
+[05:06:25.0607] <Michael Ficarra>
+Andreu Botella: I didn't think Japanese era provided any kind of disambiguation like gregorian era
+
+[05:08:03.0841] <rkirsling>
+era can't be omitted just because it's current, if I understood the idea correctly
+
+[05:08:18.0648] <rkirsling>
+like the current year is either 2022 or R4, but not "4"
+
+[05:08:37.0157] <rkirsling>
+ * like the current year is either 2022 or R4, but not "4"
+
+[05:36:49.0657] <sffc>
+rkirsling: can you post your experience here on https://github.com/tc39/proposal-intl-eradisplay/issues?
+
+[05:39:59.0736] <msaboff>
+@shu Did V8 implement RAB.transfer() returning a fixed array?
+
+[05:40:51.0443] <shu>
+msaboff: we did, but not shipped
+
+[05:41:20.0620] <shu>
+the only implementation that shipped AFAIK is Moddable, and they are supportive of changing the behavior to preserve resizability
+
+[05:42:04.0942] <shu>
+msaboff: further, very recently we split out `transfer` to be gated by its own feature flag in anticipation of this change
+
+[05:44:17.0521] <msaboff>
+shu: Our implementation is only available in STP.  We'll retract .transfer() before shipping to customers awaiting a resolution.
+
+[05:44:27.0592] <shu>
+msaboff: tyvm
+
+[05:48:08.0256] <rkirsling>
+> <@sffc:mozilla.org> rkirsling: can you post your experience here on https://github.com/tc39/proposal-intl-eradisplay/issues?
+
+er can I add it to #7? seems to be the relevant thing, probably
+
+[06:00:22.0743] <rkirsling>
+lack of fast paths for ISO8601 calendar has been a huge pain point as a Temporal implementer so I'm excited to see this progress
+
+[06:09:50.0987] <pipobscure>
+> <@rkirsling:matrix.org> lack of fast paths for ISO8601 calendar has been a huge pain point as a Temporal implementer so I'm excited to see this progress
+
+You have been heard 😀 
+
+[06:10:35.0017] <rkirsling>
+sorry if any of my comments have come off as more annoyed than justifiable
+
+[06:11:00.0529] <pipobscure>
+No!!!! They are exactly what we want and need!
+
+[06:11:02.0058] <rkirsling>
+I'm certainly not upset with the champion group though I did get pretty frustrated while implementing stuff recently
+
+[06:12:16.0512] <pipobscure>
+It’s exactly what we need to ever get to “ready to ship”. Also without implementors, nothing ever gets done. So pick up a beer (for any value of beer) from me at your earliest convenience.
+
+[06:12:51.0890] <rkirsling>
+I will also be hugely excited to actually ship this thing
+
+[06:13:16.0270] <pipobscure>
+If we could get it done for the Seattle meeting next year, we should have cake and a party 😀
+
+[06:13:42.0581] <pipobscure>
+(It would be easy to get veterans there. Elsewhere it would require more effort)
+
+[06:14:56.0951] <Michael Ficarra>
+landing in smaller parts would be SO nice!
+
+[06:15:13.0328] <Michael Ficarra>
+it's probably a lot of work for the champions though 🙁
+
+[06:15:37.0778] <ryzokuken>
+throwback to that time when frank pointed out that the temporal proposal is larger than the entire 402 spec 😅
+
+[06:21:39.0117] <rkirsling>
+> <@sffc:mozilla.org> rkirsling: Your feedback about the japanese calendar behavior would be best in its own issue; thanks!
+
+oh okay, I just didn't actually follow the context properly so I posed it as a comment against the topic of that issue
+
+[06:37:33.0172] <Michael Ficarra>
+I like this new trend of RangeErrors instead of silent conversion to 0/NaN and things like that
+
+[06:38:24.0788] <rkirsling>
+the "silence is golden" era of JS appears to be well past
+
+[06:39:01.0053] <Michael Ficarra>
+good riddance
+
+[06:39:20.0331] <Richard Gibson>
+henceforth, silence is considered radioactive
+
+[06:42:34.0653] <Andreu Botella>
+<del>could you have times before the Big Bang?</del>
+
+[06:45:17.0176] <rkirsling>
+yes but they're all `undefined`
+
+[06:45:20.0387] <ryzokuken>
+depends, which calendar? 😛 
+
+[06:45:48.0958] <Andreu Botella>
+instants
+
+[06:49:16.0639] <Christian Ulbrich>
+As a developer I strongly support `yearOfWeek`, to me it is pretty obvious that having this sugar method not in the API would then warrant additional libs, that Temporal actually wants to replace.
+
+[06:50:44.0326] <rkirsling>
+that's a fair statement
+
+[06:50:46.0865] <rkirsling>
+also like
+
+[06:51:07.0406] <rkirsling>
+being clear that we're not close to done with impls shouldn't be taken as more negative that it is
+
+[06:51:19.0176] <rkirsling>
+this is a huge spec
+
+[06:51:22.0775] <rkirsling>
+but it is a beautiful feature
+
+[06:51:31.0492] <rkirsling>
+and it takes a ton of time
+
+[06:51:36.0064] <rkirsling>
+but it will be worth it
+
+[06:52:02.0368] <Christian Ulbrich>
+I think so too. I am looking forward to it!
+
+[06:52:33.0440] <bakkot>
+I understand Frank's frustration, but I disagree; it is more important to get things right than to minimize changes in stage 3
+
+[06:52:59.0264] <bakkot>
+ideally we wouldn't go to stage 3 unless there were no further changes to be made but this proposal was genuinely too large for that to happen
+
+[06:53:11.0123] <rkirsling>
+absolutely
+
+[06:53:26.0620] <rkirsling>
+this proposal is equivalent to shipping all of Intl in one fell swoop
+
+[06:53:42.0563] <ryzokuken>
+if not more 🙈
+
+[06:54:29.0780] <rkirsling>
+ * but it is a beautiful feature
+
+[06:54:38.0669] <shu>
+bakkot: i don't think frank is saying to optimize for minimizing changes in stage 3, it's to do it before stage 3
+
+[06:55:06.0529] <shu>
+this is why i want a postmortem, i think our process cannot handle this level of project well
+
+[06:55:25.0782] <rkirsling>
+I agree with _that_—that our process is not designed for this
+
+[06:55:50.0457] <rkirsling>
+
+but I don't agree that we've misused the process that we have
+
+[06:56:00.0507] <shu>
+enough non-technical incentives caused it to advance to stage 3 to keep momentum to get implementers in the loop, so on and so forth
+
+[06:56:08.0388] <rkirsling>
+implementer feedback is just such a massive force
+
+[06:56:29.0870] <rkirsling>
+that's true even in the smallest proposal, it's just that the total time and effort isn't that great
+
+[06:56:31.0277] <bakkot>
+my understanding is that most of the changes which have been made were a result of implementation feedback, with a few others being a result of user feedback once people started actually treating the library as being close enough to done to be worth worrying about
+
+[06:57:19.0748] <bakkot>
+and I'm not really sure how to start getting either kind of feedback without calling it stage 3, or something functionally equivalent (module ready-to-ship bit)
+
+[06:58:14.0296] <shu>
+there are alternative ways to do standards development that aren't our staging model of "design up front, then throw over to implementers to get feedback"
+
+[06:58:25.0775] <shu>
+there are tradeoffs, of course
+
+[06:58:30.0502] <rkirsling>
+yes
+
+[06:58:49.0524] <bakkot>
+I mean the assumption is that implementers are giving feedback during design as well
+
+[06:58:54.0282] <rkirsling>
+we should discuss that and arguably we should've discussed it more in preparation for Temporal
+
+[06:58:54.0447] <ryzokuken>
+I don't understand, changes based on implementer and user feedback is literally the definition of Stage 3
+
+[06:58:58.0314] <shu>
+if it were a "normal" software project you'd have a much tighter feedback loop from the implementers and maybe even users at the start
+
+[06:59:12.0655] <shu>
+right, but the point here is culturally, stage 3 is a "throw it over the wall" point
+
+[06:59:18.0838] <shu>
+we give feedback during stage 3
+
+[06:59:31.0596] <shu>
+but the culture is not (and shouldn't be, by default) to try to implement for real before then
+
+[06:59:41.0396] <shu>
+we give feedback based on our experience and best guesses, which is often wrong
+
+[07:00:36.0358] <shu>
+ * we give feedback based on our experience and best guesses before stage 3, which is often wrong
+
+[07:00:40.0419] <rkirsling>
+I feel like all feedback is shades of educated guesswork until you try implementing the thing 😅
+
+[07:00:53.0963] <rkirsling>
+ * I feel like all feedback is shades of educated guesswork until you try implementing the thing 😅
+
+[07:00:55.0642] <rbuckton>
+This goes more to the postponed discussion on "ready to ship", but several years ago we had a discussion about the meanings of Stage 3 and Stage 4. Prior to that discussion, my impression was that Stage 3 was a time for implementers to implement the proposal and provide feedback, and that Stage 4 meant "ok this is ready to ship". However, in that discussion it was put forth that "Stage 3 means shipping", which somewhat lessened the impact of Stage 4, leaving very little room for handling implementation feedback within the staging process.
+
+[07:01:03.0976] <shu>
+right, which, i don't think any of us disagree on, was needed earlier for proposals of the scale of temporal
+
+[07:01:22.0858] <shu>
+pointing to "this is what stage 3 is defined as" is missing the point. we define our own working mode...
+
+[07:02:13.0861] <shu>
+i see this as echoes of the failure mode of ES6, which was a much bigger failure of "design and throw over the wall to implementers"
+
+[07:02:31.0639] <rkirsling>
+at least we're sure to not end up with another TCO though
+
+[07:02:46.0598] <rkirsling>
+er PTC, whatever
+
+[07:03:03.0206] <shu>
+to me the root thing to address is to move away from the "design up front" culture for proposals like temporal
+
+[07:03:44.0188] <rkirsling>
+agile shu
+
+[07:04:36.0797] <shu>
+the tradeoff is that, then, big ambitious things might never happen because it's even harder to convince implementers to put in the time before designing has been done
+
+[07:04:54.0149] <rbuckton>
+I'm not entirely sure an agile `Temporal` design would have been coherent, though I could see a more layered approach working.
+
+[07:05:35.0611] <bakkot>
+the vast majority of the proposal design work hasn't changed
+
+[07:05:47.0734] <bakkot>
+it's mostly details about how you read options bags and stuff
+
+[07:06:55.0797] <shu>
+pretty sure frank would disagree with that characterization
+
+[07:07:23.0875] <rkirsling>
+look
+
+[07:07:55.0640] <rkirsling>
+I myself got sufficiently angry (not at anyone! just emotional state) while doing Temporal impl work
+
+[07:08:03.0798] <rkirsling>
+but
+
+[07:08:19.0452] <rkirsling>
+I can't claim that somebody did something wrong or in bad faith or anything
+
+[07:08:20.0971] <rkirsling>
+it's just a BIG thing.
+
+[07:08:27.0110] <rkirsling>
+ * it's just a BIG thing.
+
+[07:10:03.0085] <rbuckton>
+The issues we're seeing with temporal now are only the result of really digging in to the implementation, and many proposals don't get that kind of feedback until they are well into Stage 3.
+
+[07:17:48.0514] <shu>
+but like it's our choice to not give that kind of feedback until well into stage 3, because we don't really dig into implementation until well into stage 3
+
+[07:18:22.0900] <shu>
+but we could maybe just... do something else for proposals that we know will frustrate if we wait till well into stage 3 to do that, and for which we're all already convinced should happen?
+
+[07:26:30.0953] <rkirsling>
+my point is merely that like
+
+[07:26:41.0837] <rkirsling>
+I don't think it's an issue with existing stage definitions
+
+[07:27:16.0505] <rkirsling>
+the process doesn't really make any accommodations for a proposal of this size, but
+
+[07:27:30.0460] <shu>
+i think i agree? to the extent i don't think we need to change the existing staging process for the vast majority of proposals
+
+[07:27:37.0435] <rkirsling>
+I don't exactly know what that implies wrt what "should have happened"
+
+[07:28:58.0484] <shu>
+oh, nothing
+
+[07:29:05.0351] <shu>
+there is no lamenting in what i'm saying
+
+[07:29:11.0971] <shu>
+just thinking about what to do next time
+
+[09:51:33.0817] <ljharb>
+what is in igalia's CoC that isn't covered by ours? that seems important to highlight broadly
+
+[09:56:37.0595] <ljharb>
+we still wouldn't have builtin modules; that's stalled for many other reasons
+
+[10:09:54.0343] <ljharb>
+can someone elaborate on what "narrow yes" means re 402/262?
+
+[10:10:41.0753] <nicolo-ribaudo>
+We clarified that at the end of the meeting, if you haven't read that part of the notes yet
+
+[10:31:47.0784] <littledan>
+> <@shuyuguo:matrix.org> but we could maybe just... do something else for proposals that we know will frustrate if we wait till well into stage 3 to do that, and for which we're all already convinced should happen?
+
+I don't really know what champions should do to get the committee to review proposals in more detail before everyone agrees to Stage 3. This is the core challenge. Apparently talking about the proposal in committee frequently, having regular open meetings outside of plenary, and documenting design processes in detail on GitHub are insufficient to attract sufficiently detailed review before everyone agrees to Stage 3, knowing that Stage 3 implies stability and implementation. This is totally understandable since everyone is busy; it just means that things will come up during implementation, requiring iteration.
+
+[10:32:09.0360] <littledan>
+it's not like Temporal went to Stage 3 quickly
+
+[10:58:47.0769] <ljharb>
+nicolo-ribaudo: ok so if i'm reading it right, it's that anything specified in 262 can't be modified unless there's an explicit note about it?
+
+[11:01:48.0288] <nicolo-ribaudo>
+Nothing can be modified _by 402_ unless there is the note, or at least that's my understanding 
+
+[11:03:24.0503] <ljharb>
+ah ok, gotcha
+
+[11:04:24.0817] <ljharb>
+to be fair, there was a lot of pressure for it to go to stage 3 without a long stretch of time passing without normative changes
+
+[12:09:45.0807] <littledan>
+ljharb: You've suggested this sort of waiting period for stability idea before, but I'm not sure if it would've helped in Temporal's case. The changes were driven by things discovered later, mostly based on implementation experience. Maybe we could make an agenda item in a future meeting if you have an idea for when champions should wait for what sort of stretch of time before proposing advancement?
+
+[12:11:00.0984] <littledan>
+I'm not at all opposed to the idea in principle, especially for Stage 3, but I think it should be laid out in advance as guidance for champions, rather than only a critique afterwards
+
+[12:14:40.0110] <littledan>
+do we think a waiting period would motivate people to do more detailed reviews before Stage 3?
+
+[12:41:11.0858] <ljharb>
+in general i'm not really sure. there's very few proposals where this is ever a problem in practice - temporal is a bit of an anomaly
+
+[12:44:18.0459] <Kris Kowal>
+> <@ljharb:matrix.org> in general i'm not really sure. there's very few proposals where this is ever a problem in practice - temporal is a bit of an anomaly
+
+“temporal anomaly” sounds about right. it did disrupt the spacetime continuum.
+
+
+2022-11-30
+[17:28:53.0108] <rkirsling>
+hmm, I will likely be absent during the R&T timeblock; here's hoping discussion about toString doesn't get too heated
+
+[17:33:53.0567] <rkirsling>
+(or maybe we're beyond that now?)
+
+[17:41:13.0690] <rkirsling>
+also, anytime folks are looking for a JSC logo for slides: we do have a mascot called Squirrelfish 😆
+https://webkit.org/wp-content/themes/webkit/images/squirrelfish-lives.svg
+
+[17:44:13.0774] <rkirsling>
+ * also, anytime folks are looking for a JSC logo for slides: we do have a mascot called Squirrelfish 😆
+https://webkit.org/wp-content/themes/webkit/images/squirrelfish-lives.svg
+
+[00:36:17.0430] <Rob Palmer>
+good morning, all
+
+[00:37:06.0572] <Rob Palmer>
+Thanks to Luca we've made some minor schedule adjustments to better accommodate folks' time constraints
+
+[00:44:21.0672] <Rob Palmer>
+This means we have _**Record & Tuple**_ in the first morning session today, and have pushed out _**Intl.DurationFormat**_ & _**LibJS**_ to tomorrow.  This makes way for Guy's topics (_**Import Reflection, Defer Eval**_) at the end of today.
+
+[00:44:56.0591] <Rob Palmer>
+ * This means we have _**Record & Tuple**_ in the first morning session today, and have pushed out _**Intl.DurationFormat**_ & _**LibJS**_ to tomorrow.  This makes way for Guy's topics (_**Import Reflection, Defer Eval**_) at the end of today.
+
+[00:47:15.0075] <Alex Vincent>
+Rob Palmer: I've come to realize my time constraint no longer holds.  I'm still in the overflow section, but if a slot opens up, please ignore my posted constraint.
+
+[00:48:59.0097] <Rob Palmer>
+Thanks for the update.  We will strive to bring overflow items in, as and when extra time frees up.
+
+[00:52:39.0672] <Rob Palmer>
+The Google Meet room is up.  Please join us.  We will begin in 7 minutes.
+
+[00:52:51.0453] <bakkot>
+Rob Palmer and other chairs: for my item (Set methods) I want to have the option of using the full 45 minute time box if it's needed, but I'm hoping that it ends up being uncontroversial, in which case it might be as short as 10 minutes
+
+[01:02:35.0682] <Rob Palmer>
+Thanks bakkot I have tagged it as such.
+
+[01:04:19.0413] <Michael Ficarra>
+oooohhh I like this history slide a lot
+
+[01:04:41.0947] <Michael Ficarra>
+definitely going to steal that for my proposal slides from now on
+
+[01:05:08.0897] <Ashley Claymore>
+> <@michaelficarra:matrix.org> oooohhh I like this history slide a lot
+
+If you like history slides I've got some good news for you!
+
+[01:05:50.0284] <Michael Ficarra>
+if you can fit it all on one slide, I'll be impressed
+
+[01:06:40.0702] <littledan>
+It would be surprising if Node and Deno really continue to not support this when Chrome does 
+
+[01:11:07.0481] <Rob Palmer>
+Hey all, as Michael says, please ensure your attendance is logged in the Notes doc.
+
+[01:11:35.0552] <Rob Palmer>
+(I deleted the URL because we link everything from [the main Reflector post](https://github.com/tc39/Reflector/issues/446))
+
+[01:11:57.0615] <Rob Palmer>
+(I deleted Michael Ficarra's comment accidentally)
+
+[01:14:02.0912] <Luca Casonato>
+> <@littledan:matrix.org> It would be surprising if Node and Deno really continue to not support this when Chrome does
+
+Deno does support it - I think the BCD data that MDN uses has not been updated yet. I'll get it updated.
+
+[01:15:19.0546] <Michael Ficarra>
+Rob Palmer: that was Saboff, not me
+
+[01:15:35.0437] <ryzokuken>
+> <@robpalme:matrix.org> (I deleted Michael Ficarra's comment accidentally)
+
+^
+
+[01:16:00.0884] <Michael Ficarra>
+oohhh I see
+
+[01:16:15.0973] <Michael Ficarra>
+too early
+
+[01:24:50.0158] <bakkot>
+for the notes, who is speaking other than frank?
+
+[01:24:59.0995] <Ashley Claymore>
+MAH
+
+[01:27:40.0229] <ryzokuken>
+given how many ongoing API proposals could benefit from R&T, shouldn't we be really prioritizing it?
+
+[01:28:09.0438] <ryzokuken>
+like... ideally every single `Intl` constructor should take a record options bag 
+
+[01:33:17.0239] <HE Shi-Jun>
+The problem is how long we need to wait for r&t 😂
+
+[01:33:25.0949] <bakkot>
+I don't think we should start making APIs return records and tuples even when their result is immutable, as convenient as it is
+
+[01:33:31.0659] <bakkot>
+everything else is already objects
+
+[01:34:24.0358] <HE Shi-Jun>
+So we add r&t but our APIs do not use it, only userland use it?
+
+[01:34:27.0195] <shu>
+i'm not even convinced that the different identity thing is that big a problem
+
+[01:34:43.0339] <shu>
+caching is good for this, function is good for this
+
+[01:34:56.0303] <bakkot>
+> so we add r&t but our APIs do not use it, only userland use it?
+
+yeah basically
+
+[01:35:00.0344] <bakkot>
+ * > so we add r&t but our APIs do not use it, only userland use it?
+
+yeah basically
+
+[02:05:56.0250] <bakkot>
+wait temporal has non-symmetric equality
+
+[02:05:58.0679] <bakkot>
+I had not realized that
+
+[02:06:06.0272] <bakkot>
+seems... not great?
+
+[02:07:25.0653] <shu>
+really?
+
+[02:07:32.0103] <shu>
+how can it not be symmetric...?
+
+[02:07:36.0840] <bakkot>
+that was the claim made in this presentation
+
+[02:07:46.0946] <bakkot>
+not literal `===` equality but equality methods
+
+[02:08:48.0736] <Kris Kowal>
+Or as etymologists would call it, anametric equality.
+
+[02:09:21.0922] <Alex Vincent>
+page 16 of the notes for the transcript where this was mentioned
+
+[02:13:23.0549] <yulia>
+could we take a short break before getting into the queue Rob Palmer ryzokuken 
+
+[02:14:51.0120] <Rob Palmer>
+yes, we'll do a 10 min intermission as soon as Ashley finishes the presentation part
+
+[02:15:18.0238] <Michael Ficarra>
+"ecosystem challenges" and "subtlety" are way too hand-wavey for me to understand what is meant
+
+[02:15:37.0456] <Michael Ficarra>
+like what is the concrete thing that those objections refer to?
+
+[02:16:27.0483] <shu>
+i have thoughts but my brain
+
+[02:16:28.0914] <shu>
+so slow
+
+[02:16:36.0120] <shu>
+does not bode well for tomorrow
+
+[02:30:13.0172] <ryzokuken>
+> <@bakkot:matrix.org> not literal `===` equality but equality methods
+
+this
+
+[02:30:19.0913] <ryzokuken>
+it's the `compare` methods
+
+[02:30:54.0412] <ryzokuken>
+basically, since `compare` accepts plain objects, any superset temporal instances could work as long as they're the argument
+
+[02:31:05.0709] <ryzokuken>
+but if the receiver is the superset, it won't work
+
+[02:31:21.0275] <ryzokuken>
+(because it will lack certain properties)
+
+[02:31:57.0003] <ryzokuken>
+actually, nvm me, the `compare` methods are static
+
+[02:32:25.0537] <ryzokuken>
+so basically as long as the arguments are of types which are supersets of the type whose compare function is called, it will work
+
+[02:32:36.0761] <ryzokuken>
+ * so basically as long as the arguments are of types which are supersets of the type whose compare function is called, it will work
+
+[02:35:36.0309] <littledan>
+Note, in Romance languages, discuss means argue against, so I think Patrick meant we don’t argue against the goal of immutability 
+
+[02:37:50.0567] <jasew>
+nicolo-ribaudo: we struggle to hear yulia on this side of the room
+
+[02:41:43.0017] <rbuckton>
+I've long been in favor of the introduction of user-defined value types, and it was one of my goals for structs
+
+[02:42:32.0572] <rbuckton>
+IIRC, equality has always been a top-level goal?
+
+[02:44:06.0426] <ryzokuken>
+another quick reminder, I've settled on a better workflow to admit people into the call ASAP but please feel free to ping me here if you're waiting to be allowed in since Meet doesn't notify me about people waiting to be admitted.
+
+[02:44:18.0844] <nicolo-ribaudo>
+> <@rbuckton:matrix.org> IIRC, equality has always been a top-level goal?
+
+Yes, but different champions have been highlighting different goals more so depending on who you asked to it might not have been the first answer 
+
+[02:44:24.0747] <rbuckton>
+> <@rbuckton:matrix.org> I've long been in favor of the introduction of user-defined value types, and it was one of my goals for structs
+
+As part of this, I had considered `#[]` and `#{}` as essentially being to value types the equivalent of `[]` and `{}` to reference types, though with the added property of immutability.
+
+[02:45:12.0494] <rbuckton>
+If `struct` had come before R&T, I would have pushed more for R&T to be designed in terms of structs.
+
+[02:47:19.0837] <bakkot>
+fwiw I think there's probably a way to get maps and sets which support multiple keys without going full user-defined equality
+
+[02:47:26.0306] <rbuckton>
+What I _wanted_ was `struct` + value types + operator overloading, with flexibility in `struct` to support mutability/immutability and shareability/transferability/copiability.
+
+[02:47:27.0819] <bakkot>
+there was even a proposal for that
+
+[02:47:56.0617] <Ashley Claymore>
+rekey + compositekey
+
+[02:48:09.0011] <bakkot>
+and we might want that even in a world with R&T given that sometimes you want to key off of objects
+
+[02:48:18.0039] <shu>
+i don't see a realistic path in doing value types with operator overloading
+
+[02:48:21.0685] <bakkot>
+though I guess symbols as weakmap keys make that less necessary
+
+[02:48:24.0651] <shu>
+(for performance)
+
+[02:50:02.0152] <rbuckton>
+> <@bakkot:matrix.org> fwiw I think there's probably a way to get maps and sets which support multiple keys without going full user-defined equality
+
+I've been considering proposing customizable equality/hashing for Map/Set and built-in support for hash code/identity hash acquisition.
+
+[02:50:12.0787] <rbuckton>
+> <@bakkot:matrix.org> fwiw I think there's probably a way to get maps and sets which support multiple keys without going full user-defined equality
+
+ * I've been considering proposing customizable equality/hashing for Map/Set and built-in support for hash code/identity hash acquisition for several years now.
+
+[02:50:53.0155] <rbuckton>
+I'm less interested in multi-key maps, and more interested in creating a `Map<URL, ...>` or `Map<Point, ...>`, etc.
+
+[02:51:02.0559] <yulia>
+I think when we drop equality, the argument for value types is weaker
+
+[02:51:29.0748] <Alex Vincent>
+I am very interested in multi-key maps... 
+
+[02:51:41.0746] <nicolo-ribaudo>
+> <@yulia:mozilla.org> I think when we drop equality, the argument for value types is weaker
+
+Aren't they just not value types if we drop equality?
+
+[02:52:16.0608] <yulia>
+there is also the realms behavior that benefits, but that can be solved in a way similar to shared structs
+
+[02:52:18.0463] <HE Shi-Jun>
+I don't understand op overloading argument, I remember op overloading proposal do not allow overload === ?
+
+[02:52:22.0261] <rbuckton>
+> <@alex.vincent:matrix.org> I am very interested in multi-key maps...
+
+I'm not saying I have no interest, but overriding equality/hash for Map/Set is a much higher priority to me.
+
+[02:52:39.0400] <pipobscure>
+Without === there is little value add; as in just use immutable.js and be done with it. 
+
+[02:52:40.0464] <yulia>
+Operator overloading here is not user defined
+
+[02:53:04.0018] <littledan>
+> <@yulia:mozilla.org> I think when we drop equality, the argument for value types is weaker
+
+It wouldn’t be value types without equality, if by value types we are referencing TC39’s historical investigations 
+
+[02:53:36.0023] <Andreu Botella>
+That's not really operator overloading then, right? It's just (in theory, regardless of implementation) value types with a === that makes sense for the type
+
+[02:54:03.0942] <HE Shi-Jun>
+> <@yulia:mozilla.org> Operator overloading here is not user defined
+
+but === already be overloaded by different primitive types and objects?
+
+[02:55:00.0416] <littledan>
+> <@pipobscure:matrix.org> Without === there is little value add; as in just use immutable.js and be done with it. 
+
+I disagree. It would be valuable, just less so.
+
+[02:55:17.0560] <nicolo-ribaudo>
+> <@haxjs:matrix.org> but === already be overloaded by different primitive types and objects?
+
+I guess it depends on how you see R&T. If you say "R&T are like objects", then giving them a different equality feels different from how other primitives have their own equality
+
+[02:57:25.0440] <bakkot>
+i still think we should explore making Array.prototype and Object.prototype reject numeric properties
+
+[02:57:28.0313] <HE Shi-Jun>
+> <@nicolo-ribaudo:matrix.org> I guess it depends on how you see R&T. If you say "R&T are like objects", then giving them a different equality feels different from how other primitives have their own equality
+
+Are we talking about user problems or impl complexcity?
+
+[02:57:49.0771] <nicolo-ribaudo>
+Implementation complexity 
+
+[02:58:52.0618] <HE Shi-Jun>
+so I don't fully understand that, i just feel R&T is just another primitive and their equal operation.
+
+[02:59:36.0470] <nicolo-ribaudo>
+shu: What does AI mean? I assume you are not proposing we should let artificial intelligence design the proposal
+
+[03:00:15.0650] <shu>
+sorry, "Action Item"
+
+[03:00:17.0730] <HE Shi-Jun>
+Anyway, we have many use cases of deep equality, so without that we just throw the heavy tasks to developers.
+
+[03:07:40.0470] <ryzokuken>
+I wonder if we'd benefit from some design principles, perhaps as invariants.
+
+[03:07:43.0703] <ryzokuken>
+Something like https://www.w3.org/TR/html-design-principles/#priority-of-constituencies
+
+[03:07:53.0528] <ryzokuken>
+it's unclear what the priority is here
+
+[03:08:01.0660] <Alex Vincent>
+rbuckton: ok - I wasn't offering a critique, just a statement of my interest in multi-key maps. 😄
+
+[03:08:14.0321] <HE Shi-Jun>
+The real problem is who can represent developers.
+
+[03:08:26.0280] <ryzokuken>
+that's a problem indeed
+
+[03:08:27.0175] <Rob Palmer>
+we resume at the top of the hour 1pm local time, which is in 52mins
+
+[03:08:37.0918] <ryzokuken>
+but even in the presence of a representative, do we care?
+
+[03:09:00.0436] <rbuckton>
+littledan: I've been thinking about the "dynamic comparison in Map/Set" thing for awhile, and started working on a draft of a proposal awhile ago. 
+
+[03:09:09.0319] <nicolo-ribaudo>
+> <@haxjs:matrix.org> The real problem is who can represent developers.
+
+We have many delegates that are JavaScript developers and not just standard/engine engineers 
+
+[03:09:49.0230] <rbuckton>
+> <@rbuckton:matrix.org> littledan: I've been thinking about the "dynamic comparison in Map/Set" thing for awhile, and started working on a draft of a proposal awhile ago.
+
+https://gist.github.com/rbuckton/f8c2ac278b796324a06410e59c56eb10 (4 years old at this point)
+
+[03:10:00.0540] <HE Shi-Jun>
+> <@nicolo-ribaudo:matrix.org> We have many delegates that are JavaScript developers and not just standard/engine engineers
+
+yeah, but who can say " I represent the majority of developers"?
+
+[03:10:03.0157] <waldemar>
+I don't quite understand what alternative Yulia has in mind, and I'd like to know what it is.
+
+[03:12:07.0447] <rbuckton>
+Plus something like `Equaler` would have value in other APIs like `.includes` and `.groupByToMap`
+
+[03:27:40.0169] <littledan>
+> <@waldemarh:matrix.org> I don't quite understand what alternative Yulia has in mind, and I'd like to know what it is.
+
+Me too
+
+[03:27:58.0727] <littledan>
+> <@rbuckton:matrix.org> https://gist.github.com/rbuckton/f8c2ac278b796324a06410e59c56eb10 (4 years old at this point)
+
+Thanks for sharing this!
+
+[03:29:07.0495] <rbuckton>
+> <@littledan:matrix.org> Thanks for sharing this!
+
+I also have https://esfx.js.org/esfx/api/equatable.html?tabs=ts as an example implementation that I'm heavily using in a few projects, along with https://esfx.js.org/esfx/api/collections-hashmap.html?tabs=ts
+
+[03:55:26.0149] <yulia>
+I was cryptic in my "i don't have much time" -- I'm not dying but ill be taking a break in march. We have some great folks from mozilla taking over though
+
+[03:56:50.0570] <yulia>
+> <@waldemarh:matrix.org> I don't quite understand what alternative Yulia has in mind, and I'd like to know what it is.
+
+I don't have 100% a full solution, I would like to see an investigation of building this on top of shared structs or a clear problem statement. so far it is usually a compound description of the constraints that lead us to a primitive, but many of them are issues i see more broadly in the language and i think would be beneficial if expanded
+
+[03:58:06.0468] <littledan>
+> <@yulia:mozilla.org> I don't have 100% a full solution, I would like to see an investigation of building this on top of shared structs or a clear problem statement. so far it is usually a compound description of the constraints that lead us to a primitive, but many of them are issues i see more broadly in the language and i think would be beneficial if expanded
+
+I think the goals have been shared lots of times; I honestly don’t know what kind of answer would work better for you.
+
+[03:58:41.0505] <littledan>
+The presentation had a slide shown twice with three high-level goals, and went into detail about how they are related
+
+[03:59:00.0236] <Rob Palmer>
+We are restarting plenary in 1 minute.
+
+[03:59:18.0644] <shu>
+Ashley Claymore shared with me an sketch of building on top of shared structs, could you also share it with yulia if you didn't already?
+
+[04:00:12.0959] <littledan>
+Fwiw here is another gist around an alternative, trying to draw out how there really is a spectrum of options https://gist.github.com/littledan/4b9c797f3e70d3531fcf32decc6e9754
+
+[04:00:42.0179] <littledan>
+> <@littledan:matrix.org> Fwiw here is another gist around an alternative, trying to draw out how there really is a spectrum of options https://gist.github.com/littledan/4b9c797f3e70d3531fcf32decc6e9754
+
+I believe this matches what something around “shared structs” would be
+
+[04:01:24.0707] <yulia>
+I think i outlined a couple of things that might work? and also the conditions that would resolve our concerns. I am not sure what you are asking
+
+[04:01:28.0334] <littledan>
+(There aren’t all that many observable properties that you derive from trying to align with shared structs. Seems like typeof, ===, not sure what else)
+
+[04:01:45.0275] <yulia>
+its another thing if you don't like the solution, I still consider them valid and the implementer concerns are significant. I wouldn't bring this up otherwise
+
+[04:01:57.0623] <Rob Palmer>
+Thanks to Ashley and Linus and Andreu for note taking!
+
+[04:02:58.0033] <littledan>
+> <@yulia:mozilla.org> I think i outlined a couple of things that might work? and also the conditions that would resolve our concerns. I am not sure what you are asking
+
+I mean, it is Ok to disagree with the goals but I think they were stated. This was actually the focus of the presentation.
+
+[04:03:42.0625] <yulia>
+right and what I said was that the goals that are being addressed are broader issues within the language. they are not limited to just value types
+
+[04:04:25.0017] <littledan>
+> <@yulia:mozilla.org> its another thing if you don't like the solution, I still consider them valid and the implementer concerns are significant. I wouldn't bring this up otherwise
+
+Implementer feedback is definitely good. I think it is worth thinking about R&T as objects as well. If you have ideas about details of an alternative, it will be great to discuss them offline. I can see lots of options, as I went into in the gist linked above.
+
+[04:05:10.0156] <yulia>
+yes, thank you for doing that, and i was sort of referencing it because I know this isn't the ideal version of the proposal as you see it. I just think it should be seriously considered
+
+[04:05:34.0991] <yulia>
+for now, id like to focus on the module layer zero proposal and we can come back to this, but i think we are pretty much on the same page in terms of where things are right now
+
+[04:05:44.0325] <littledan>
+Maybe next time we discuss R&T we should go over various options in more detail to discuss pros and cons 
+
+[04:06:33.0534] <yulia>
+In part the goal today was to also bring the concerns we have already discussed among champions and implementers to the broader committee, so we are sort of going over ground a second time -- what I am saying now is not substantially different from our prior meetings
+
+[04:06:51.0731] <yulia>
+just to clarify, in case it seemed like i was asking for something new
+
+[04:07:23.0362] <littledan>
+> <@yulia:mozilla.org> In part the goal today was to also bring the concerns we have already discussed among champions and implementers to the broader committee, so we are sort of going over ground a second time -- what I am saying now is not substantially different from our prior meetings
+
+Yes, I really appreciate that you shared that with everyone 
+
+[04:19:40.0255] <yulia>
+what does "kicker" mean here?
+
+[04:21:06.0366] <Mathieu Hofman>
+> <@bakkot:matrix.org> though I guess symbols as weakmap keys make that less necessary
+
+Not really, being able to create a composite key from multiple unique symbols is still extremely valuable. But it does go into the ephemeron complexities that Shu mentioned earlier
+
+[04:22:59.0781] <nicolo-ribaudo>
+> <@yulia:mozilla.org> what does "kicker" mean here?
+
+Something that starts the loading/linking/evaluating process
+
+[04:23:15.0994] <yulia>
+thanks
+
+[04:23:40.0471] <Mathieu Hofman>
+> <@rbuckton:matrix.org> I'm not saying I have no interest, but overriding equality/hash for Map/Set is a much higher priority to me.
+
+To clarify, how is this different than a rekey/identity configuration for the Map/Set? I don't think there is a safe way to make the equality semantics controlled by the target key, unless the key is born immutable.
+
+[04:25:51.0277] <eemeli>
+As discussed earlier today re `Intl.Locale`, I wonder if this is true?
+```
+const src = ...
+new Module(src).source === new Module(src).source // ???
+```
+
+[04:26:06.0470] <Michael Ficarra>
+module source is no more of a new form of eval than importing a data URI which you can do today
+
+[04:26:57.0948] <nicolo-ribaudo>
+> <@eemeli:mozilla.org> As discussed earlier today re `Intl.Locale`, I wonder if this is true?
+> ```
+> const src = ...
+> new Module(src).source === new Module(src).source // ???
+> ```
+
+I would expect yes, it should be `new Module(src).source === src`
+
+[04:28:22.0441] <ljharb>
+Kris Kowal: re the queue, can you help me understand the use cases for having ModuleSource instead of just passing a string to Module?
+
+[04:28:35.0845] <Luca Casonato>
+shu: Yes, the import hook is shallow
+
+[04:28:54.0105] <rbuckton>
+Equality semantics aren't necessarily controlled by the target key, but by the provided `Equaler`. The gist from 4 years ago is a little weaker in that regard, and so is the `@esfx/equatable` implementation I mentioned earlier. "rekey" assumes you can convert the key into something with an equivalent identity but that can significantly increase the complexity of user code (i.e., needing to introduce a WeakMap/FinalizationRegistry and roll your own identity generation). Equality and hashing is often easier and generally only involves math and a built-in mechanism to acquire an identity hash for objects.
+
+[04:28:57.0838] <shu>
+Luca Casonato: okay, just to make sure i understand
+
+[04:29:16.0594] <rbuckton>
+The `Equaler` approach also mirrors what many implementations are already doing internally.
+
+[04:29:19.0957] <shu>
+Luca Casonato: to have it be deep, the importhook itself needs to return `Module` instances that are themselves passed the import hook
+
+[04:29:27.0060] <Luca Casonato>
+yes
+
+[04:30:09.0369] <Michael Ficarra>
+bakkot: it's not a new kind of eval, import is the evaluator here
+
+[04:31:52.0468] <bakkot>
+it's a new kind of eval, you can't use dynamic eval to evaluate an arbitrary string
+
+[04:31:59.0136] <nicolo-ribaudo>
+Can we try giving 1 minute each for the replies to this topic?
+
+[04:32:31.0805] <Michael Ficarra>
+bakkot: data URIs
+
+[04:32:41.0151] <Luca Casonato>
+and blob urls
+
+[04:32:51.0904] <bakkot>
+those aren't in 262 and have different CSP rules than eval does
+
+[04:33:17.0091] <rbuckton>
+> <@bakkot:matrix.org> it's a new kind of eval, you can't use dynamic eval to evaluate an arbitrary string
+
+"dynamic eval" or "dynamic import"?
+
+[04:33:24.0949] <bakkot>
+and also just because it's possible to use something obscure to accomplish a thing does not mean that we should be providing a first class way of doing it
+
+[04:36:07.0534] <ljharb>
+imo Module is the same as Function and friends
+
+[04:36:09.0362] <Luca Casonato>
+bakkot: Are you opposed to dynamic instantiation of module instances in general, or only from arbitrary text?
+
+[04:36:28.0538] <ljharb>
+it's a constructor to create invokeable code you can pass around. so far, all of those take a string of source
+
+[04:36:33.0717] <ljharb>
+ * it's a constructor to create invokeable code you can pass around. so far, all of those take a string of source
+
+[04:36:45.0371] <bakkot>
+Luca Casonato: I don't know what "dynamic instantiation" means if not "from arbitrary text"
+
+[04:36:54.0632] <bakkot>
+but it's the "arbitrary text" I have a problem with, yes
+
+[04:36:56.0114] <ljharb>
+nobody objected to AsyncFunction etc taking a string, why would Module not?
+
+[04:37:12.0557] <bakkot>
+Function already existed, AsyncFunction is not that different from it
+
+[04:37:14.0409] <Luca Casonato>
+import reflection: `import module foo from "./foo.js"; await import(foo)`
+
+[04:37:16.0759] <bakkot>
+Module is quite different
+
+[04:37:30.0492] <bakkot>
+Luca Casonato: totally fine with that
+
+[04:37:50.0851] <ljharb>
+as dan said on the queue, i can ```eval(`module { ${source} }`)``` anyways, how is that different from passing `source` in directly?
+
+[04:37:56.0108] <ljharb>
+ * as dan said on the queue, i can ```eval(`module { ${source} }`)``` anyways, how is that different from passing `source` in directly?
+
+[04:38:19.0121] <bakkot>
+everyone knows `eval` is evil
+
+[04:38:31.0435] <bakkot>
+"I can already do this by using `eval`" is not a reason to add a feature
+
+[04:38:38.0195] <littledan>
+> <@ljharb:matrix.org> as dan said on the queue, i can ```eval(`module { ${source} }`)``` anyways, how is that different from passing `source` in directly?
+
+As Kris said, this is about making eval deniable
+
+[04:38:38.0519] <bakkot>
+ * "I can already do this by using `eval`" is not a reason to add a feature
+
+[04:38:54.0510] <littledan>
+Not just through CSP but by deleting the property
+
+[04:38:55.0636] <ljharb>
+oh sure in this case i meant "via ModuleSource"
+
+[04:39:30.0261] <ljharb>
+(i don't think it's clear that deniability is a sufficient motivation to create an entire class, but that's a separate discussion)
+
+[04:39:58.0281] <littledan>
+I share bakkot’s concern generically and was persuaded by the eval injection risk
+
+[04:40:09.0497] <Luca Casonato>
+bakkot: are you ok with:
+
+```
+import module foo from "./foo.js";
+const newMod = new Module(foo.source);
+await import(newMod);
+```
+
+[04:40:19.0085] <rbuckton>
+Though you will now also need to deny `ModuleSource`, since `await import(new Module(new ModuleSource(code)))` is just indirect eval.
+
+[04:40:31.0015] <bakkot>
+Luca Casonato: assuming `foo.source` is opaque, yes, I think so
+
+[04:40:35.0760] <rbuckton>
+> <@littledan:matrix.org> As Kris said, this is about making eval deniable
+
+ * Though you will now also need to deny `ModuleSource`, since `await import(new Module(new ModuleSource(code)))` is just indirect eval.
+
+[04:41:42.0614] <Luca Casonato>
+> <@bakkot:matrix.org> Luca Casonato: assuming `foo.source` is opaque, yes, I think so
+
+Yes, `foo.source` is a `ModuleSource` instance. There is no access to the module source text.
+
+[04:42:07.0914] <bakkot>
+though, I should say, I also don't understand the need for that
+
+[04:42:54.0949] <littledan>
+> <@bakkot:matrix.org> though, I should say, I also don't understand the need for that
+
+This lets you relink dependencies (eg for testing) which is interesting 
+
+[04:43:18.0203] <bakkot>
+yeah, the testing case is interesting, but not compelling to me on its own
+
+[04:43:37.0269] <bakkot>
+I am very reluctant to add features which are only motivated by testing
+
+[04:44:01.0068] <ljharb>
+what about feature-detection? like "is TLA supported"
+
+[04:44:16.0206] <yulia>
+im sort of swayed by hot reloading as a use case, in particular having no-reload updates
+
+[04:44:34.0317] <rbuckton>
+I find the testing case compelling, but there are potential issues there as well. If you can't remove modules from the module cache, re-importing the same module with different dependencies in a test runner will just continuously grow the module cache until you OOM.
+
+[04:44:37.0732] <yulia>
+so, similar to erlang behavior for swapping out running code is something i sometimes wistfully think about. 
+
+[04:44:38.0401] <Luca Casonato>
+> <@ljharb:matrix.org> what about feature-detection? like "is TLA supported"
+
+`new ModuleSource` would synchronously throw on syntax errors
+
+[04:44:40.0098] <eemeli>
+I get the sense that this first proposal is including ModuleSource in order to use it esp. for the introspection stuff that's coming in a later proposal. Could we not have a first proposal that has the source as a string and leaves out `module.source`, and then a follow-on proposal that modifies this proposal before it reaches stage-4 with the ModuleSource features that are in it now?
+
+[04:44:46.0231] <Mathieu Hofman>
+Right but engines can guarantee the stability of this, where delegating to the program, I don't see how it can
+
+[04:45:37.0935] <ljharb>
+right, but how could i detect it if i can't make a module from a string
+
+[04:45:44.0552] <rbuckton>
+> <@mhofman:matrix.org> Right but engines can guarantee the stability of this, where delegating to the program, I don't see how it can
+
+How important is that stability when you are opting into the behavior by providing a custom equaler?
+
+[04:45:44.0562] <ljharb>
+> <@lucacasonato:matrix.org> `new ModuleSource` would synchronously throw on syntax errors
+
+ * right, but how could i detect it if i can't make a module from a string
+
+[04:45:48.0869] <Luca Casonato>
+> <@ljharb:matrix.org> right, but how could i detect it if i can't make a module from a string
+
+yeah, exactly
+
+[04:45:51.0781] <yulia>
+cc bakkot in case this is possibly interesting
+
+[04:45:57.0669] <bakkot>
+> <@ljharb:matrix.org> what about feature-detection? like "is TLA supported"
+
+I don't see offhand why that would be important enough but am open to being convinced
+
+[04:46:36.0978] <shu>
+Kris Kowal: thanks the developer - production split is a helpful framing
+
+[04:46:46.0564] <ljharb>
+eg i want to know if it's worth trying to import a module that i know requires TLA support, and i support envs that lack it, and i don't want to even bother making the network request if it lacks it
+
+[04:46:52.0137] <nicolo-ribaudo>
+I had in on the queue but didn't get to it, but ModuleSource is to JavaScript what WebAssembly.Module is to WASM.
+
+A `new Module` could also take, for example, a `WebAssembly.Module`
+
+[04:47:07.0256] <shu>
+let me think on that, but sounds like a starting point to how to think about getting ahead of performance footguns and how to message it
+
+[04:47:22.0997] <nicolo-ribaudo>
+Because `WebAssembly.Module` is the representation of the wasm source, and it is stateless
+
+[04:47:41.0317] <bakkot>
+ljharb well, nothing is going to have ModuleSource but not TLA, so presumably you're imagining some other syntax?
+
+[04:48:00.0868] <nicolo-ribaudo>
+ * Because `WebAssembly.Module` is the representation of the wasm source, and it is stateless
+
+[04:48:01.0318] <rbuckton>
+> <@ljharb:matrix.org> eg i want to know if it's worth trying to import a module that i know requires TLA support, and i support envs that lack it, and i don't want to even bother making the network request if it lacks it
+
+Would you not generally know this up front, given that its usually unsafe to eval code you don't control anyways?
+
+[04:48:58.0176] <Luca Casonato>
+> <@nicolo-ribaudo:matrix.org> Because `WebAssembly.Module` is the representation of the wasm source, and it is stateless
+
+It is the compiled module source, that you can also use to get the list of imported specifiers, and list of exported binding identifiers. ModuleSource could provide the same for JS modules. Ie `ModuleSource#imports` and `ModuleSource#exports`
+
+[04:49:32.0946] <ljharb>
+> <@rbuckton:matrix.org> Would you not generally know this up front, given that its usually unsafe to eval code you don't control anyways?
+
+i'd know that the code i'm importing has TLA, of course - but i don't know what *the env* supports
+
+[04:49:54.0793] <ljharb>
+> <@bakkot:matrix.org> ljharb well, nothing is going to have ModuleSource but not TLA, so presumably you're imagining some other syntax?
+
+ha, true, so yes, swap TLA for "any future module-only syntax we add"
+
+[04:50:22.0002] <Luca Casonato>
+> <@nicolo-ribaudo:matrix.org> Because `WebAssembly.Module` is the representation of the wasm source, and it is stateless
+
+ * It is the compiled module source, that you can also use to get the list of imported specifiers, and list of exported binding identifiers. ModuleSource could provide the same for JS modules. Ie `ModuleSource#imports` and `ModuleSource#exports`
+
+See also https://github.com/tc39/proposal-compartments/blob/master/1-static-analysis.md
+
+[04:50:25.0071] <ljharb>
+(altho ModuleSource can probably be polyfilled since every engine has a way to create ESM from a string, despite it not being in 262)
+
+[04:50:40.0562] <ljharb>
+ * (altho ModuleSource can probably be polyfilled since every engine has a way to create ESM from a string, despite it not being in 262)
+
+[04:50:50.0861] <Luca Casonato>
+> <@ljharb:matrix.org> (altho ModuleSource can probably be polyfilled since every engine has a way to create ESM from a string, despite it not being in 262)
+
+do browsers have a synchronous way to do this? I thought not
+
+[04:51:07.0054] <ljharb>
+oh true, no, only async
+
+[04:51:29.0827] <nicolo-ribaudo>
+> <@lucacasonato:matrix.org> do browsers have a synchronous way to do this? I thought not
+
+You replace the `ModuleSource` global with `ModuleSource`+`Babel`, generating an object that `toString`s to a data url?
+
+[04:51:33.0182] <rbuckton>
+> <@ljharb:matrix.org> i'd know that the code i'm importing has TLA, of course - but i don't know what *the env* supports
+
+This still seems more like an infrastructure issue. If you know what the code you're going to send needs, you can feature test the env early, before you send any code across the wire.
+
+[04:51:53.0113] <ljharb>
+rbuckton: exactly. how can i feature-test the env without the ability to make a module from a string?
+
+[04:52:23.0099] <rbuckton>
+`package.json: { "engines": { "node": "^19" } }`?
+
+[04:52:39.0252] <ljharb>
+that covers node, but not browsers or node-like things
+
+[04:52:41.0993] <nicolo-ribaudo>
+That's very specific to a single env
+
+[04:52:57.0831] <nicolo-ribaudo>
+Not even to an env, but to package managers
+
+[04:52:59.0506] <ljharb>
+and there could also be a fallback, so i wouldn't need to artificially restrict compat
+
+[04:53:12.0753] <linusg>
+bakkot: "D denting" -> "dedenting" replacement would be nice
+
+[04:53:30.0790] <bakkot>
+done
+
+[04:54:03.0389] <rbuckton>
+True, but you're not just sending code to a random environment. I assume there's *some* setup/handshake between you and the remote. That's when I'd perform feature testing or inform the client what the remote supports. 
+
+[04:55:29.0504] <rbuckton>
+And even if there isn't, if you have ensured the minimum level of support for sending a module over the wire, you can send one that performs the necessary feature tests in advance (i.e., send a `module { some new syntax }` over the wire during handshake and see if that fails)
+
+[04:55:56.0514] <Mathieu Hofman>
+I assumed implementations would care as it would allow user code to execute in the middle of internal Map/Set implementations. This is also a problem for the Map user if the equality somehow further delegates to the objects themselves.
+
+[04:58:29.0060] <rbuckton>
+> <@mhofman:matrix.org> I assumed implementations would care as it would allow user code to execute in the middle of internal Map/Set implementations. This is also a problem for the Map user if the equality somehow further delegates to the objects themselves.
+
+This came up in a discussion over the complexity of introducing a value type with unique `===` semantics. The question would be whether implementers would find the necessary changes to handle runtime comparisons would be a less complex alternative.
+
+[04:59:43.0813] <rbuckton>
+I agree it would add complexity, and the justification for that added complexity would be to avoid worse complexity elsewhere.
+
+[04:59:51.0597] <ljharb>
+yes i agree, but i'm saying that you can not perform that feature testing in the first place without this capability
+
+[04:59:53.0508] <rbuckton>
+ * I agree it would add complexity, and the justification for that added complexity would be to avoid worse complexity elsewhere.
+
+[04:59:55.0269] <ljharb>
+at any time
+
+[05:00:00.0947] <Kris Kowal>
+(@bakkot Regarding new paths to eval, to restate @littledan from the queue, `eval('module {}')` is equivalent but worse, because injection.)
+
+[05:00:45.0667] <bakkot>
+Kris Kowal right but people know not to use eval
+
+[05:00:50.0781] <bakkot>
+we shouldn't be encouraging them to do equivalent things
+
+[05:02:37.0268] <rbuckton>
+> <@ljharb:matrix.org> yes i agree, but i'm saying that you can not perform that feature testing in the first place without this capability
+
+If you have `module {}`, then you can. You don't *need* `ModuleSource(text)` or source-text access to define those feature tests. To be clear, I'm not opposed to `ModuleSource(text)`, I just don't find this to be a compelling example.
+
+[05:04:19.0550] <rbuckton>
+In fact, in a discussion with my team it was asked why JS should even have `module {}` if it could just have 
+```
+javascript` /*module body*/ `
+```
+Though I fully see the CSP concerns as being a major reason for a syntactic alternative.
+
+[05:08:15.0507] <Kris Kowal>
+> <@bakkot:matrix.org> we shouldn't be encouraging them to do equivalent things
+
+My point is not that we should encourage such things, but that we cannot prevent them by eliding ModuleSource from the language. We _can_ prevent ModuleSource from being useful in places where it shouldn’t be useful using CSP, but having ModuleSource is necessary to parse-and-not-execute safely and accurately.
+
+[05:14:20.0022] <ljharb>
+hm, could you do isSubsetOf with a `WeakSet` that has a `size` own data property set to `Infinity`?
+
+[05:26:54.0928] <Mathieu Hofman>
+Regarding the feature detection, I fail to see how this is a problem specific to the modules proposals, or that the module proposals should solve. This is a broader ecosystem issue. Every new syntax we add has the same problem, and it's impossible to for a publisher to feature test what syntax the target environment might support. This is the case for servers sending modules to web clients, but also for library authors not knowing anything about the environment of the consumers.
+
+IMO, this is not something the language can solve, but that needs some kind of holistic approach. One thing I've been pondering is whether authors could somehow document which syntax features their code is using, and have better ways to know which syntax is supported by target environments, so that tooling (servers, transpilers, etc.) could do impedance matching.
+
+[05:28:25.0104] <Rob Palmer>
+We resume 14:40 (11mins time)
+
+[05:28:43.0316] <rbuckton>
+Hopefully back in 10 min, dogs need a walk.
+
+[05:28:53.0080] <Ashley Claymore>
+🎉 So excited this got stage 3. Lovely proposal
+
+[05:30:28.0659] <ljharb>
+the difference is that modules, like functions, are first-class values that have stored code that can be executed
+
+[05:31:20.0956] <Justin Ridgewell>
+Rob Palmer:  If possible, I'd love to come back to String.dedent later in the meeting.
+
+[05:31:34.0237] <Justin Ridgewell>
+ * Rob Palmer:  If possible, I'd love to come back to String.dedent later in the meeting.
+
+[05:34:50.0912] <Michael Ficarra>
+Justin Ridgewell: any reason why the caching issue can't be worked out on the issue tracker or in an incubator call? does it still need the whole committee's attention?
+
+[05:35:29.0971] <Justin Ridgewell>
+Because I'd like to get Stage 3
+
+[05:35:44.0020] <Michael Ficarra>
+oh, has the naming issue been worked out already?
+
+[05:36:03.0639] <Justin Ridgewell>
+If we can agree on the caching behavior in issue tracker, I'd like to finalize it and ask for advancement.
+
+[05:36:08.0904] <Justin Ridgewell>
+Naming issue?
+
+[05:36:59.0403] <bakkot>
+> hm, could you do isSubsetOf with a WeakSet that has a size own data property set to Infinity?
+
+yes, and more generally you can make fake wrappers which will let you pretend to be a set for a lot of cases. like, to union with array: `let fakeSet = arr => ({ size: arr.length, keys: () => arr.values(), has: () => { throw 'not reached' } }); let result = foo.union(fakeSet([0, 1, 2]))`
+
+[05:37:33.0547] <bakkot>
+ * > hm, could you do isSubsetOf with a WeakSet that has a size own data property set to Infinity?
+
+yes, and more generally you can make fake wrappers which will let you pretend to be a set for a lot of cases. like, to union with array: `let fakeSet = arr => ({ size: arr.length, keys: () => arr.values(), has: () => { throw 'not reached' } }); let result = foo.union(fakeSet([0, 1, 2]))`
+
+[05:38:12.0690] <Michael Ficarra>
+Justin Ridgewell: oops, I was mixing dedent and groupBy together, sorry
+
+[05:38:39.0815] <Michael Ficarra>
+wow it's amazing how dumb I am when tired
+
+[05:39:00.0227] <Michael Ficarra>
+can't wait to give the iterator helpers presentation on day 3 right after waking up :-)
+
+[05:39:28.0471] <Justin Ridgewell>
+Lol, my ability to explain talk during the presentation isn't great either. Too sleepy
+
+[05:40:05.0097] <shu>
+i'm no longer sleepy
+
+[05:40:14.0761] <shu>
+i'm at the my head feels detached state
+
+[05:41:20.0277] <Kris Kowal>
+same + toddler woke up, ready for another energy-filled day
+
+[05:44:49.0312] <Michael Ficarra>
+that was fast :-)
+
+[05:54:05.0904] <shu>
+not as fast as the inner loop of an optimized IsWellFormed optimization
+
+[05:54:57.0461] <Michael Ficarra>
+shu: you better hope so
+
+[05:55:19.0727] <Michael Ficarra>
+I want constant time, make it happen
+
+[05:55:31.0767] <rbuckton>
+I'm finding the fact `module` importing a `ModuleSource` and not a `Module` slightly confusing from the perspective that the keyword isn't quite aligned to the type.
+
+[05:56:05.0594] <apaprocki>
+> <@michaelficarra:matrix.org> I want constant time, make it happen
+
+see TDZ... #define JSCHAR_IS_JUST_CHAR IsWellFormed=>return true;
+
+[05:56:36.0244] <Michael Ficarra>
+apaprocki: not a joke, we should be able to make it constant time (amortized)
+
+[05:56:41.0282] <Robert Pamely>
+> <@rbuckton:matrix.org> I'm finding the fact `module` importing a `ModuleSource` and not a `Module` slightly confusing from the perspective that the keyword isn't quite aligned to the type.
+
+Perhaps it's confusing because it is still using the import keyword
+
+[05:56:41.0441] <Christian Ulbrich>
+FWIW, TS also used a similar syntax for _type imports_ :`import type {...}`
+
+[05:56:43.0129] <ljharb>
+> <@rbuckton:matrix.org> I'm finding the fact `module` importing a `ModuleSource` and not a `Module` slightly confusing from the perspective that the keyword isn't quite aligned to the type.
+
+that's the same complaint i have about `reflect: 'module'`
+
+[05:57:30.0057] <Kris Kowal>
+> <@rbuckton:matrix.org> I'm finding the fact `module` importing a `ModuleSource` and not a `Module` slightly confusing from the perspective that the keyword isn't quite aligned to the type.
+
+I am encouraging a return to the consideration of `import moduleSource from './example' with { reflect: true }` to mirror the proposed dynamic import. This is consistent with a need to confine dynamic import and washes back from that.
+
+[05:57:53.0891] <Mathieu Hofman>
+exactly, this is already a problem for `Function` and `eval`, so why would `Module` be subject to different requirements
+
+[05:58:04.0693] <ljharb>
+that seems like it would allow `with` to be expanded in unforseeable ways in the future, which sounds like a downside to me
+
+[05:58:11.0039] <ljharb>
+ * that seems like it would allow `with` to be expanded in unforseeable ways in the future, which sounds like a downside to me
+
+[05:58:31.0370] <ljharb>
+i agree it should have the same requirements as Function - which includes that it takes a string of source code
+
+[05:58:36.0588] <ljharb>
+ * i agree it should have the same requirements as Function - which includes that it takes a string of source code
+
+[05:58:37.0519] <rbuckton>
+> <@kriskowal:matrix.org> I am encouraging a return to the consideration of `import moduleSource from './example' with { reflect: true }` to mirror the proposed dynamic import. This is consistent with a need to confine dynamic import and washes back from that.
+
+It's more that it seems like renaming `ModuleSource->Module` and `Module->somethingelse` would be clearer. Especially since the `ModuleSource` equivalent in WASM is `WebAssembly.Module`.
+
+[05:58:40.0271] <Kris Kowal>
+I’d previously encouraged `import module` to mirror `import.module` for static vs dynamic variants, but I have retracted that.
+
+[05:59:09.0277] <Kris Kowal>
+I’d be excited to entertain ideas for somethingelse.
+
+[05:59:20.0331] <Kris Kowal>
+I have none.
+
+[05:59:30.0324] <Mathieu Hofman>
+I thought we had settled that a level of indirection through ModuleSource was not a meaningful difference.
+
+[05:59:34.0956] <bakkot>
+it is surprising to me that `import module` does not actually evaluate the module, so I am also supportive of `import moduleSource` or something
+
+[05:59:48.0605] <Kris Kowal>
+Though, it’s a constrained problem… `module {} instanceof Module` makes much sense.
+
+[05:59:58.0834] <bakkot>
+like I think of the regular `import` statement as importing a module
+
+[06:00:04.0414] <yulia>
+my preference would be something like `with`
+
+[06:00:05.0646] <bakkot>
+so "import module" is confusing
+
+[06:00:17.0149] <Kris Kowal>
+I agree.
+
+[06:00:36.0595] <Kris Kowal>
+And suggest that `import moduleSource from 'example' with { reflect: true }` should address that concern.
+
+[06:01:19.0016] <Kris Kowal>
+> <@bakkot:matrix.org> like I think of the regular `import` statement as importing a module
+
+That’s very reasonable, though it doesn’t provide any reflection of that module.
+
+[06:01:24.0503] <Christian Ulbrich>
+I tend to also agree, because there is a certain overlap in naming; `import` is about _importing_ modules...
+
+[06:01:28.0307] <yulia>
+I feel like that also works well with dynamic import
+
+[06:01:48.0831] <bakkot>
+> <@kriskowal:matrix.org> That’s very reasonable, though it doesn’t provide any reflection of that module.
+
+well, the `import * as` form does, arguably
+
+[06:01:53.0274] <bakkot>
+but yes
+
+[06:02:01.0836] <Kris Kowal>
+Right, I agree and also suggest `const moduleSource = await import('example', { reflect: true})` to pair.
+
+[06:02:14.0753] <ljharb>
+i really don't like the "with" object, or any object form. are there long term, concrete, viable plans to add something else to the object?
+
+[06:02:49.0564] <Kris Kowal>
+Note `(module {}).source instanceof ModuleSource` intentionally reads correctly.
+
+[06:02:55.0156] <ljharb>
+ * i really don't like the "with" object, or any object form. are there long term, concrete, viable plans to add something else to the object?
+
+[06:03:24.0277] <Kris Kowal>
+> <@ljharb:matrix.org> i really don't like the "with" object, or any object form. are there long term, concrete, viable plans to add something else to the object?
+
+`with { phase: 'linked' }` would be a reasonable extension.
+
+[06:03:47.0142] <yulia>
+`with { lazy: true } ` would also be a path
+
+[06:03:51.0481] <yulia>
+rather than adding arbitrary new syntax
+
+[06:04:22.0741] <ljharb>
+i'd love to understand more about how those proposals would work
+
+[06:04:23.0943] <Kris Kowal>
+`with` also pairs well with dynamic import options bag, as opposed to variadic args.
+
+[06:04:45.0235] <ljharb>
+sure, but dynamic import can accept a similar-but-different form in its options bad
+
+[06:04:50.0056] <Kris Kowal>
+Yulia will be talking about lazy in this meeting.
+
+[06:04:53.0738] <ljharb>
+`import module` and `{ module: true }` is perfectly sensible
+
+[06:05:08.0065] <ljharb>
+if i'm awake for that, that's great, but timezones make that hard
+
+[06:05:17.0947] <ljharb>
+ * sure, but dynamic import can accept a similar-but-different form in its options bag
+
+[06:08:12.0532] <Michael Ficarra>
+okay I think I finally understand why this doesn't solve deferred evaluation: the deferred eval use case still wants to load the whole module graph eagerly, right? just not start evaluating?
+
+[06:08:16.0163] <Kris Kowal>
+This is a strawman: As for `phase: 'linked'`, the goal state of `import` is implicitly is _executed_ whereas with `import module` (by whatever syntax) has a goal state of _shallowly_ loaded. `phase` would provide an avenue for targetting an intermediate phase, like `linked`, which would ensure the transitive dependencies have loaded (or loading this module will fail). This is useful for communicating to bundlers and runtimes different performance profiles for application startup, like code splitting.
+
+[06:08:28.0658] <Kris Kowal>
+> <@michaelficarra:matrix.org> okay I think I finally understand why this doesn't solve deferred evaluation: the deferred eval use case still wants to load the whole module graph eagerly, right? just not start evaluating?
+
+Correct.
+
+[06:08:42.0014] <yulia>
+> <@michaelficarra:matrix.org> okay I think I finally understand why this doesn't solve deferred evaluation: the deferred eval use case still wants to load the whole module graph eagerly, right? just not start evaluating?
+
+yes thats right
+
+[06:09:45.0322] <Michael Ficarra>
+thanks 🙂
+
+[06:12:05.0283] <nicolo-ribaudo>
+Maybe `ModuleInstance`&`ModuleSource`, and the syntax could be `import instance` or `import source`
+
+[06:12:07.0272] <Christian Ulbrich>
+yulia: Exactly. I also see this confusion.
+
+[06:12:31.0479] <yulia>
+import source may work if we go in that direction, and it may be the closest to what is happening now
+
+[06:12:51.0391] <yulia>
+instance is also an overloaded term as developers may think that this gets around module singleton-ness
+
+[06:12:53.0625] <Robert Pamely>
+isn't `import instance` just `import`?
+
+[06:13:02.0865] <yulia>
+^ also that confusion is likely
+
+[06:13:08.0324] <nicolo-ribaudo>
+`import instance` would give you a `ModuleInstance` object
+
+[06:13:13.0237] <nicolo-ribaudo>
+> <@rpamely:matrix.org> isn't `import instance` just `import`?
+
+ * `import instance` would give you a `ModuleInstance` object
+
+[06:13:13.0652] <eemeli>
+I think I like `import source`.
+
+[06:15:16.0411] <ljharb>
+`import` is like "import instance and extract bindings", maybe?
+
+[06:15:53.0752] <ljharb>
+ * `import` is like "import instance and extract bindings", maybe?
+
+[06:16:07.0505] <yulia>
+import is import and execute a module -- instance, in this case, means something different and can still be executed
+
+[06:16:14.0231] <yulia>
+ * import is import and execute a module -- instance, in this case, means something different and can still be executed
+
+[06:16:33.0099] <yulia>
+thats why you can `await import` it
+
+[06:16:49.0006] <yulia>
+its more like module record maybe is what i shoud say?
+
+[06:17:10.0732] <nicolo-ribaudo>
+Yes an instance is exactly a module record, just exposed to JS as an object
+
+[06:17:39.0284] <Rob Palmer>
+Has this topic been discussed with bundlers on the TC39 Tools call?
+
+[06:17:42.0675] <eemeli>
+I don't see why we'd need more than two statements here; something like `import` + `import source` would also allow for an instance to be constructed from the latter.
+
+[06:19:51.0681] <shu>
+nicolo-ribaudo: wait, doesn't omitting the handler get you what's equivalent to the host?
+
+[06:20:05.0510] <Kris Kowal>
+> <@shuyuguo:matrix.org> nicolo-ribaudo: wait, doesn't omitting the handler get you what's equivalent to the host?
+
+Yes.
+
+[06:20:28.0488] <Kris Kowal>
+In this sense, import reflection simply defers the phases past load.
+
+[06:20:33.0291] <nicolo-ribaudo>
+Yes *but* `Module` instances don't have the [[HostDefined]] slot provided by the host
+
+[06:20:52.0260] <shu>
+which `Module` instances?
+
+[06:21:08.0050] <nicolo-ribaudo>
+Created by `new Module`
+
+[06:21:21.0184] <shu>
+gotcha, but `import module` returning module instances can have [[HostDefined]]
+
+[06:21:27.0929] <Luca Casonato>
+`import reflect foo from "./foo.js"; foo instanceof Module; // true`
+
+[06:21:28.0888] <nicolo-ribaudo>
+`ModuleSource` lacks the referrer URL, which is stored in the [[HostDefined]] slot of Module Records
+
+[06:21:31.0328] <ljharb>
+chairs, the queue isn't advanced properly
+
+[06:21:48.0334] <nicolo-ribaudo>
+[[HostDefined]] belongs to `Module` and not `ModuleSource`, because it contains data specific to that instantiation
+
+[06:22:46.0448] <nicolo-ribaudo>
+So if `import *keyword*` returns a `Module` object, it has all the data necessary to resolve the dependencies when later imported. If it returns a `ModuleSource`, `new Module(thatThing)` doesn't have the necessary data
+
+[06:23:05.0215] <shu>
+Kris Kowal: why isn't it the case that a `new Module` that have the host default handler get the [[HostDefined]] slot?
+
+[06:23:08.0765] <nicolo-ribaudo>
+i.e. the base URL, + maybe what HTML calls "fetch options"
+
+[06:23:25.0718] <nicolo-ribaudo>
+> <@shuyuguo:matrix.org> Kris Kowal: why isn't it the case that a `new Module` that have the host default handler get the [[HostDefined]] slot?
+
+Even if we had that, the host wouldn't know which base URL to put in that slot
+
+[06:23:29.0892] <ljharb>
+so is the queue now for the previous topic?
+
+[06:23:38.0313] <Kris Kowal>
+Nicolò of course is the authority on the proposed spec text, but the intent is that the `Module` carries host-defined import behavior and `ModuleSource` carries host-defined origin information and those are separate concerns. The latter would prevent `import` in a no-unsafe-eval for a ModuleSource constructed from text. The former defines link behavior.
+
+[06:23:49.0177] <shu>
+oh sorry, i thought you wrote that spec
+
+[06:23:56.0364] <shu>
+hm i see
+
+[06:24:05.0312] <shu>
+okay that seems like a good argument for returning Module instance
+
+[06:24:16.0685] <nicolo-ribaudo>
+Caridy wrote it, I then PRed to rebase it on top of the refactor changing much of the loading logic
+
+[06:24:23.0168] <nicolo-ribaudo>
+> <@shuyuguo:matrix.org> oh sorry, i thought you wrote that spec
+
+ * Caridy wrote it, I then PRed to rebase it on top of the refactor changing much of the loading logic
+
+[06:24:24.0288] <shu>
+but i think my brainpower has degraded from small child to golden retriever
+
+[06:24:31.0523] <shu>
+is this the last item
+
+[06:24:52.0971] <ryzokuken>
+we might bring something forward
+
+[06:25:54.0961] <Rob Palmer>
+something delicious and entertaining
+
+[06:26:52.0666] <Alex Vincent>
+I admit to being ready with my presentation if called upon.
+
+[06:27:07.0659] <nicolo-ribaudo>
+> <@shuyuguo:matrix.org> is this the last item
+
+Probably we'll also have "An introduction to the LibJS JavaScript engine"
+
+[06:31:12.0655] <littledan>
+> <@kriskowal:matrix.org> Nicolò of course is the authority on the proposed spec text, but the intent is that the `Module` carries host-defined import behavior and `ModuleSource` carries host-defined origin information and those are separate concerns. The latter would prevent `import` in a no-unsafe-eval for a ModuleSource constructed from text. The former defines link behavior.
+
+Right, I didn’t explain this clearly but to be able to use ModuleSource we would need it to be accompanied by all sorts of other meta information 
+
+[06:31:44.0682] <littledan>
+I think this is what Guy was imagining, and that it would live in WebAssembly.Module
+
+[06:32:06.0612] <littledan>
+(We may still want to propagate some of that information there)
+
+[06:32:41.0507] <nicolo-ribaudo>
+I with we had "TC39 meeting: modules edition" :P
+
+[06:33:12.0972] <Kris Kowal>
+Like Shark Week
+
+[06:44:23.0157] <rkirsling>
+live every week like modules week
+
+[06:48:00.0764] <ryzokuken>
+if we have a few more days this intense, I'll need a glucose drip
+
+[06:48:46.0101] <bakkot>
+are any of the other engines using bleeding-edge C++?
+
+[06:48:59.0638] <bakkot>
+I haven't been paying attention to the C++ world much in the last... uh, decade or so, I guess
+
+[06:49:20.0162] <yulia>
+i think we technically have c++20?
+
+[06:49:28.0529] <yulia>
+whether we use it fully or not is another question
+
+[06:49:29.0528] <apaprocki>
+mfbt has a lot of newish stuff used by sm
+
+[06:54:56.0152] <rkirsling>
+I'm not certain if "full C++20" is a reasonable state at the moment? but I think WK is "17 with a small selection of 20 things"
+
+[06:56:07.0472] <shu>
+i don't even know how to read bleeding edge C++
+
+[06:56:33.0700] <apaprocki>
+there's so many useful things in 20
+
+[06:57:35.0603] <apaprocki>
+we add lots of the useful library bits in our stl so we get them even in +03 
+
+[06:57:43.0678] <shu>
+"signed integers are 2's complement"
+
+[06:57:46.0814] <shu>
+for real
+
+[06:57:57.0185] <apaprocki>
+ostringstream::view() ftw
+
+[07:11:47.0082] <shu>
+wait what's the timebox for this
+
+[07:11:55.0403] <shu>
+does today go past 7?
+
+[07:12:23.0016] <Rob Palmer>
+the meeting ended 12 mins ago  - apologies for the overrun
+
+[07:12:34.0708] <ljharb>
+snek: can you add libjs to esvu?
+
+[07:13:20.0336] <snek>
+ljharb: didn't I already do that?
+
+[07:13:29.0207] <Christian Ulbrich>
+linus said so :)
+
+[07:13:33.0544] <ljharb>
+oh hm, maybe i just need to update esvu
+
+[07:13:46.0656] <ljharb>
+`npx esvu --engines` doesn't list it for me
+
+[07:13:50.0792] <snek>
+https://github.com/devsnek/esvu/blob/master/src/engines/libjs.js
+
+[07:14:11.0016] <ljharb>
+how do i list all the available engines?
+
+[07:15:05.0519] <littledan>
+That was a very satisfying closing topic
+
+[07:15:19.0111] <littledan>
+So exciting 
+
+[07:15:37.0580] <snek>
+what was the closing topic?
+
+[07:15:46.0760] <snek>
+I missed the whole meeting 😭
+
+[07:15:46.0835] <apaprocki>
+libjs
+
+[07:15:54.0499] <snek>
+oh nice yeah
+
+[07:15:59.0839] <Ashley Claymore>
+100% - LibJS found spec typos in the change-array-by-copy proposal. Very thankful for the issues they raised
+
+[07:16:04.0470] <Ashley Claymore>
+ * 100% - LibJS found spec typos in the change-array-by-copy proposal. Very thankful for the issues they raised
+
+[07:16:44.0821] <snek>
+now if you had implemented change-array-by-copy in engine262... :P
+
+[07:17:00.0274] <ljharb>
+hmm, `Error: LibJS does not have binary builds for darwin-x64` - can i not install it on a mac?
+
+[07:17:12.0499] <snek>
+I think it's Linux x64 only
+
+[07:17:18.0350] <snek>
+they'd need to expand their CI
+
+[07:17:25.0765] <Christian Ulbrich>
+Use a x86 shell...
+
+[07:18:38.0078] <ljharb>
+oof
+
+[07:18:51.0078] <ljharb>
+linusg: any chance of making a binary for mac? :-)
+
+[07:20:29.0600] <linusg>
+I think the main problem with that is that the build is done when test262 runs, which we have a dedicated (Ubuntu) CI runner for - maybe it can cross compile for macOS though, I'll ask around :)
+
+[07:20:43.0371] <linusg>
+ * I think the main problem with that is that the build is done when test262 runs, which we have a dedicated (Ubuntu) CI runner for - maybe it can cross compile for macOS though, I'll ask around :)
+
+[07:25:47.0046] <snek>
+GitHub actions has mac instances
+
+[07:25:57.0190] <snek>
+* GitHub actions has mac instances
+
+[11:24:04.0151] <Ashley Claymore>
+> <@devsnek:matrix.org> now if you had implemented change-array-by-copy in engine262... :P
+
+I did start to look into this, they beat me to it 😆
+

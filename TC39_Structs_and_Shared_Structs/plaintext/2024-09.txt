@@ -1,0 +1,875 @@
+2024-09-01
+[15:59:44.0179] <shu>
+> <@littledan:matrix.org> Didn't V8 also initially consider banning shared to local edges? Do we know more about what led V8 to change their minds?
+
+there are two things you get out of banning *all* shared->local edges:
+
+1. language-level correctness/safety
+2. independent GCs of separate threads
+
+[16:02:30.0693] <shu>
+as we experimented more, we realized that 2) wasn't possible. as part of the shared WasmGC proposal, it's very clear from the partner feedback that we can't get away with banning *all* shared->local edges. Flutter, among a bunch of other Google partners, have been clear that they need either thread-bound (i.e. a shared struct can hold a reference to some unshared thing, but it is an error to access that reference from another thread), or thread-local data
+
+[16:03:08.0524] <shu>
+implementing support for thread-bound or thread-local data in almost all cases, boil down to the same work required in the GC as implementing support for shared things as keys in WeakMaps
+
+[16:03:53.0571] <shu>
+the WeakMap itself isn't shared and is local to a particular thread, so you still have the correctness property (1) above. but it asks extra complexity of the GC because you now have a local things whose liveness depends on a shared thing
+
+[16:04:25.0721] <shu>
+the bulk of this discussion has been happening on the Wasm side
+
+[16:07:47.0267] <shu>
+the high-level recap for folks here is that the difficulty in the GC is in collecting cycles that span multiple threads. if you have a reference cycle T1 -> T2 -> T1, nobody's GC is set up to detect and collect that without significant work.
+
+the main counterproposal is to say, don't support shared structs as WeakMap keys. instead let the toolchains and compilers figure it out. my counterargument to that counterproposal is, that means toolchains will use strong Maps, which means in practice applications will leak *everything*. that seems strictly worse to me than supporting shared structs as WeakMap keys, but leak the cycles in the meantime until the GC work can be done
+
+[16:08:22.0731] <shu>
+there is also another counteproposal which is to push manual memory management to the user: some kind of `dispose()` or `drop()` or whatever to manually break cycles
+
+[16:08:54.0933] <shu>
+ * the high-level recap for folks here is that the difficulty in the GC is in collecting cycles that span multiple threads. if you have a reference cycle T1 -> T2 -> T1, nobody's GC is set up to detect and collect that without significant work.
+
+the main counterproposal is to say, don't support shared structs as WeakMap keys. instead let the toolchains and compilers figure it out. my counterargument to that counterproposal is, that means toolchains will use strong Maps, which means in practice applications will leak _everything_. that seems strictly worse to me than supporting shared structs as WeakMap keys, but leak the cycles in the meantime until the GC work can be done. acyclic entries can be collected without additional work
+
+[16:09:58.0166] <shu>
+i gave a presentation of this like a year ago in TC39
+
+[16:10:02.0262] <shu>
+but i don't think people were paying attention
+
+[16:11:15.0788] <shu>
+the highest order bit here i think is, from the shared WasmGC side, WeakMap support is a hard requirement from our partners
+
+[16:12:17.0828] <shu>
+debates about language feature compositionality and implementation difficulty are both downstream from that
+
+[16:13:03.0424] <shu>
+that is, arguments against WeakMap support without an alternative that the partners can live with won't be compelling
+
+[16:15:08.0232] <shu>
+> <@iain:mozilla.org> I am not convinced that it makes incremental adoption so much harder that it outweighs the benefit of being able to ship something sooner.
+
+it's not even incremental adoption, it's initial adoption
+
+[16:15:47.0349] <shu>
+perhaps incremental in the JS space, but "initial" when taking both JS+WasmGC into account given what i said above
+
+[16:18:01.0681] <shu>
+i think that's why we were talking past each other about the shipping timeline
+
+[16:18:42.0931] <shu>
+if this is the thing that delays shipping, then... yeah, it's gonna have to, because the folks the V8 team have been talking to who're most interested in the feature need it even for the MVP
+
+[16:27:04.0898] <shu>
+i think the takeaway here is "please wait for more implementation experience from V8", because it's certainly hard for us too but we have some ideas of threading the needle
+
+
+2024-09-02
+[03:39:11.0592] <nicolo-ribaudo>
+Hey I have a question
+
+[03:39:27.0312] <nicolo-ribaudo>
+Can a shared struct store a SharedArrayBuffer in one of its fields?
+
+[03:40:03.0085] <nicolo-ribaudo>
+I was originally assuming yes, because a SharedArrayBuffer is shareable, however I'm now having doubts because the value of the field would actually be the object wrapper around the shared buffer
+
+[06:43:29.0361] <rbuckton>
+Unfortunately, no, due to how a SAB is a regular JS object. The proposal adds a SharedArray, but it's not quite the same. 
+
+[07:13:25.0960] <shu>
+> <@nicolo-ribaudo:matrix.org> I was originally assuming yes, because a SharedArrayBuffer is shareable, however I'm now having doubts because the value of the field would actually be the object wrapper around the shared buffer
+
+no, not unless we introduce a SharedArrayBuffer2ThatsActuallySharedHaha or something
+
+[07:13:37.0356] <shu>
+which, i mean, we could
+
+[07:14:40.0893] <shu>
+like the easiest intermediate solution is probably a `SAB.token` that returns some opaque, shareable thing that can be passed back into a SAB constructor. this is not great because it encourages multiple wrappers, but that's already how SABs are
+
+[07:16:47.0158] <nicolo-ribaudo>
+If typed array constructors accept that opaque thing as a parameter, then probably we are good
+
+[07:17:13.0694] <nicolo-ribaudo>
+Since most uses of a SharedArrayBuffer is to just pass it to a TypedArray constructor
+
+[09:06:33.0044] <littledan (PTO until September 16)>
+shu: Can you give us any more information about the partner use cases?
+
+[13:18:55.0035] <shu>
+> <@littledan:matrix.org> shu: Can you give us any more information about the partner use cases?
+
+flutter's is the easiest to explain, i think. they will be compiling Dart to shared WasmGC. they associate DOM nodes with Dart objects that represent app state, including event listener callbacks. Dart objects themselves will be shareable across threads, but the event listener will only be accessible on the main thread (what we're calling thread-bound data). event listener callbacks close over the DOM node (in the main thread heap), the DOM node references the Dart object (in the shared heap), forming a cross-heap cycle
+
+[13:19:31.0385] <shu>
+the simplest implementation technique for thread-bound data is a per-thread ephemeron map internally keyed by shared objects
+
+[13:19:45.0850] <shu>
+so the GC work needed to support that use case boils down to the same work as supporting shared objects as weakmap keys (if you want to collect cycles)
+
+[13:20:26.0110] <shu>
+does that help?
+
+[13:21:37.0606] <shu>
+> <@nicolo-ribaudo:matrix.org> If typed array constructors accept that opaque thing as a parameter, then probably we are good
+
+yeah, that's what i'm thinking
+
+[13:21:52.0978] <shu>
+i'm not proposing it in this proposal though, since it's large enough. easy to tack on as a separate proposal
+
+[13:26:57.0688] <shu>
+> <@littledan:matrix.org> shu: Can you give us any more information about the partner use cases?
+
+my suspicion is the event listener pattern will be responsible for the lion's share of actual use cases for cross-heap cycles. the interesting property there is that those really **only** concern cycles between the main thread (since the DOM only exists there) and the shared heap. V8's current prototyping plans (as an FYI, not as a promise) is to see if it's sufficient for memory use if we can only collect main thread cycles like that, not arbitrary cycles. the idea is that the main thread is already very special on the web, so, if we trace through the shared heap at the same time as a main thread major GC, that might be good enough. and indeed, for a full multithreaded GC we'd need actual workload data to determine how to tune / architect anyway
+
+[13:29:18.0109] <shu>
+and to bring it full circle, that's where we are in the "please wait for V8 impl experience" takeaway i said above
+
+
+2024-09-06
+[13:44:26.0744] <kriskowal>
+I’ve made a rig to improve my understanding of the `primitive.prototypeMethod()` behavior empirically. My assumption proved false and that makes me more optimistic that a lexically scoped shared struct prototype registry could possibly maintain evaluator isolation https://gist.github.com/kriskowal/cd07cfcd93d79c1224c7036ca1e6c776
+
+[13:47:42.0320] <kriskowal>
+That is, there could be a hook on a `Module(source, hooks)` constructor that would provide the prototype for a struct, like `prototypeOf(source, keysOfSomeKind)`.
+
+[13:47:50.0131] <kriskowal>
+ * That is, there could be a hook on a `Module(source, hooks)` constructor that would provide the prototype for a struct, like `prototypeOf(source, keyOfSomeKind)`.
+
+[13:48:09.0696] <kriskowal>
+I believe nicolo-ribaudo was driving at that, and now I understand that it’s viable.
+
+[14:01:06.0961] <nicolo-ribaudo>
+I think that being able to completely virtualize that prototype attachment (i.e. have a hook for it) is neither needed nor desiderabile, but I'm happy to discuss it further :)
+
+[14:01:51.0669] <nicolo-ribaudo>
+By "not needed" I mean "not needed to maintain isolation"
+
+
+2024-09-24
+[12:18:53.0353] <kriskowal>
+> <@nicolo-ribaudo:matrix.org> I think that being able to completely virtualize that prototype attachment (i.e. have a hook for it) is neither needed nor desiderabile, but I'm happy to discuss it further :)
+
+For the record, Nicolò convinced me of this last time we met. By introducing some opaque token for a cohort of disjoint prototypes, we can have the `Module`, `Evaluators`, and/or `Compartment` constructors designate which cohort of shared structs prototypes will be used in their lexical scope. I had already convinced myself that the mechanism for looking up the prototype was already lexical, so this mechanism would work fine for isolation.
+
+
+2024-09-26
+[14:56:20.0833] <Mathieu Hofman>
+Can someone remind me, why is disallowing Reflect.get / Reflect.set from accessing shared struct fields not acceptable? Aka always triggering the `[[Get]]` behavior? Also have proxies implement an `[[UnsafeGet]]` that triggers the `get` trap as is (no extra arg)? From what I gather it would just prevent using proxies or reflect to access shared fields on shared structs, but not prevent access to non-shared behavior. Is that really unacceptable?
+
+[15:30:43.0132] <rbuckton>
+Inside of an `unsafe` block, *every* get is an `[[UnsafeGet]]`. Otherwise implementations would need to check the type of the object on every get/set, which would slow down *every* get/set operation even outside of an `unsafe {}` block. This was deemed an unacceptable performance regression.
+
+[15:32:53.0468] <rbuckton>
+(though I've refactored `[[UnsafeGet]]` and `[[UnsafeSet]]` out now, so its just an `unsafe` parameter passed to `[[Get]]`).
+
+[15:52:49.0533] <shu>
+well, IIRC the idea is that inside `unsafe {}`, we compile `.` and `[ ]` to a different bytecode (say, `UnsafeGet` vs `Get`)
+
+[15:53:02.0159] <shu>
+that should be orthogonal to what API calls do
+
+[15:53:32.0182] <shu>
+if `Reflect.get` wants to always be equivalent to a `Get` i don't think that slows down anything
+
+[15:54:00.0290] <shu>
+for proxies i'm not entirely clear, since the `.` access in an `unsafe {}` gotta do _somethign_
+
+[15:54:06.0167] <shu>
+ * for proxies i'm not entirely clear, since the `.` access in an `unsafe {}` gotta do _something_
+
+[15:55:01.0479] <Mathieu Hofman>
+> <@rbuckton:matrix.org> Inside of an `unsafe` block, *every* get is an `[[UnsafeGet]]`. Otherwise implementations would need to check the type of the object on every get/set, which would slow down *every* get/set operation even outside of an `unsafe {}` block. This was deemed an unacceptable performance regression.
+
+I don't see how that's relevant to the question I asked. Afaik, the default `[[UnsafeGet]]` behavior is to execute the `[[Get]]` steps, no ?
+
+[15:55:32.0943] <shu>
+i feel like the degree to which `Reflect.get` is always [[Get]] is unacceptable comes down to language compositionality concerns
+
+[15:55:41.0632] <rbuckton>
+Not quite. It carries the `[[UnsafeGet]]` down through the prototype walk in case you have someone who did `Object.create(sharedStructInstance)`.
+
+[15:56:18.0695] <shu>
+but that's still like, internal MOP operations
+
+[15:56:22.0292] <Mathieu Hofman>
+> <@shuyuguo:matrix.org> for proxies i'm not entirely clear, since the `.` access in an `unsafe {}` gotta do _something_
+
+I'm suggesting it would just trigger the `get` trap as normal, which wouldn't be able to access the target's field unless the get trap uses syntax and an unsafe block
+
+[15:56:54.0156] <Mathieu Hofman>
+so yeah a proxy would break that "carry through"
+
+[15:57:17.0387] <rbuckton>
+As to why disallowing Reflect.get/set on shared structs, I'd like to be able to benefit from Reflect.get/set's prototype walking behavior and suppot for a receiver when working with objects. 
+
+[15:57:33.0087] <rbuckton>
+We do expect shared structs will have prototypes, so I'd like for this to work.
+
+[15:57:51.0296] <rbuckton>
+ * As to why disallowing Reflect.get/set on shared structs, I'd like to be able to benefit from Reflect.get/set's prototype walking behavior and support for a receiver when working with objects. 
+
+[15:58:06.0843] <shu>
+i don't think that slows anything down AFAICT, but it's a sharp corner and i'd rather avoid because (unless i'm still missing something, Ron seems to have thought much more about this):
+
+- Atomics methods are always [[UnsafeGet]]
+- so if Reflect methods and Proxy methods are always [[Get]]...
+
+that just feels non-compositional and bad? like you're just gonna have to memorize some API entry points are unsafe, some are safe?
+
+[15:58:25.0780] <Mathieu Hofman>
+> <@rbuckton:matrix.org> We do expect shared structs will have prototypes, so I'd like for this to work.
+
+do we expect shared structs to be used as prototypes is the question
+
+[15:58:43.0044] <shu>
+probably not the common case but i don't see why not
+
+[15:59:23.0933] <shu>
+if you prohibit shared structs from being usable as prototypes that's really introducing a big new prohibition to work around a niche API
+
+[15:59:36.0199] <shu>
+like what objects can't be used as prototypes?
+
+[15:59:42.0205] <rbuckton>
+Yes. We've even discussed shared prototypes in the past as well, and would likely want them if we ever have shared functions.
+
+[16:00:27.0518] <shu>
+again, this is not an airtight defense against racy access because SABs exist
+
+[16:00:29.0267] <shu>
+don't rathole
+
+[16:01:34.0654] <Mathieu Hofman>
+Btw, I forgot to mention this morning, but yesterday some people were under the impression that shared struct could somehow be primitives. I think because of their "only contain other shared structs", and the time when this was presented, it somehow got confused with records/tuples. Just an FYI for your presentation, making clear these are mutable objects.
+
+[16:01:48.0522] <shu>
+thanks for the heads up
+
+[16:01:56.0001] <shu>
+who was confused?
+
+[16:02:01.0766] <Mathieu Hofman>
+Jordan
+
+[16:03:32.0947] <shu>
+rbuckton: help me understand the cons of making `Reflect.get()` always [[Get]], and adding `Reflect.unsafeGet` as always [[UnsafeGet]]
+
+[16:03:51.0156] <shu>
+that doesn't reproduce the coloring problem does it?
+
+[16:04:39.0913] <rbuckton>
+If a Proxy cannot trap an unsafeGet, then it cannot realistically know whether it should forward on the operation via `Reflect.get` or `Reflect.unsafeGet`.
+
+[16:04:53.0873] <shu>
+is that the only downside?
+
+[16:05:00.0255] <rbuckton>
+no
+
+[16:05:27.0290] <rbuckton>
+Also, committee reticence for having any methods on Reflect that aren't related to the proxy traps.
+
+[16:05:33.0000] <shu>
+the proxy downside sounds to me like "you can't proxy shared structs and be aware of `unsafe {}` blocks"
+
+[16:06:23.0088] <ljharb>
+> <@rbuckton:matrix.org> Also, committee reticence for having any methods on Reflect that aren't related to the proxy traps.
+
+this is no longer the case, as we explicitly decided last year wrt getIntrinsic and the symbol predicates
+
+[16:06:39.0853] <ljharb>
+> <@rbuckton:matrix.org> Also, committee reticence for having any methods on Reflect that aren't related to the proxy traps.
+
+ * fwiw this is no longer the case, as we explicitly decided last year wrt getIntrinsic and the symbol predicates
+
+[16:06:47.0319] <shu>
+ljharb: so no these aren't new primitives, they're exotic objects
+
+[16:07:08.0762] <rbuckton>
+If a Proxy *can* trap `unsafeGet` and we always forward GetValue through unsafe get inside of an `unsafe` block, then Proxies stop working for regular objects inside of `unsafe`.
+
+[16:07:11.0291] <ljharb>
+yeah i had some picture in my mind of them as immutable one-shit-init structs
+
+[16:07:16.0666] <ljharb>
+ * yeah i had some picture in my mind of them as immutable one-shot-init structs
+
+[16:07:24.0983] <ljharb>
+ * yeah i had some picture in my mind of them as immutable one-shot-init structs that can only contain primitives
+
+[16:07:29.0451] <shu>
+they are one-shot-init `sealed` objects
+
+[16:07:31.0785] <ljharb>
+but i guess that's what Records are
+
+[16:07:39.0885] <shu>
+yeah
+
+[16:08:03.0279] <rbuckton>
+Structs aren't immutable, no. That's half the point.
+
+[16:09:37.0576] <shu>
+rbuckton: so i can live with proxy traps passing a bool i think?
+
+[16:09:42.0832] <shu>
+like that'd solve everyone's problems wouldn't it?
+
+[16:09:52.0051] <shu>
+i don't feel like that actually slows down anything either?
+
+[16:10:00.0552] <rbuckton>
+> <@ljharb:matrix.org> fwiw this is no longer the case, as we explicitly decided last year wrt getIntrinsic and the symbol predicates
+
+In the call today it was mentioned that some people do `new Proxy(obj, { ...Reflect, <whatever traps> })` for some reason, and IMO that seems like a very bad practice
+
+[16:10:13.0065] <shu>
+ * rbuckton: so i can live with proxy traps passing a bool i think and Reflect.get/set taking a bool?
+
+[16:10:19.0188] <ljharb>
+it is, and it's fine if new additions break them, but i also don't think "extra" handler methods would throw?
+
+[16:10:21.0159] <rbuckton>
+> <@shuyuguo:matrix.org> rbuckton: so i can live with proxy traps passing a bool i think and Reflect.get/set taking a bool?
+
+I mean, that's one of the three options we discussed, yes.
+
+[16:10:28.0645] <shu>
+yeah i think that seems doable
+
+[16:10:37.0569] <ljharb>
+(btw presumably there's a way to brand-check both kinds of structs?)
+
+[16:10:52.0877] <shu>
+there's no way to brand-check non-shared structs
+
+[16:10:56.0450] <shu>
+because they are "just" sealed objects
+
+[16:11:07.0768] <shu>
+so i don't know why you'd want to brand check them
+
+[16:11:34.0101] <shu>
+for shared structs, the spec draft doesn't have a predicate but you can actually write one that's kinda funny
+
+[16:12:56.0204] <rbuckton>
+1. `Proxy`/`Reflect` is permissive: treats all get/set as if in `unsafe {}`
+2. `Proxy`/`Reflect` is restrictive: treats all get/set as if outside of `unsafe {}`, so they don't work in `unsafe {}` at all
+3. `Proxy`/`Reflect` accept/pass an `unsafe` boolean argument: Existing implementations will continue to work in `unsafe {}` with normal objects, need to opt in to work with shared structs.
+
+[16:13:28.0338] <shu>
+`shared struct Tester { field; }; function IsSharedStruct(x) { let tester = new Tester(); try { unsafe { tester.field = x; } } catch (e) { return false; } return typeof x === 'object'; }`
+
+[16:13:49.0218] <rbuckton>
+> <@shuyuguo:matrix.org> for shared structs, the spec draft doesn't have a predicate but you can actually write one that's kinda funny
+
+Spec draft doesn't have one, but we did need to add one in the dev trial so we should probably add it.
+
+[16:14:06.0022] <shu>
+i dunno where to put it
+
+[16:14:10.0067] <Mathieu Hofman>
+> <@rbuckton:matrix.org> If a Proxy *can* trap `unsafeGet` and we always forward GetValue through unsafe get inside of an `unsafe` block, then Proxies stop working for regular objects inside of `unsafe`.
+
+Unless we specify the behavior of a missing `unsafeGet` trap to call the `get` trap and its target `[[Get]]` fallback (instead of falling back on the target's `[[UnsafeGet]]`)
+
+[16:14:21.0848] <rbuckton>
+On `Reflect` or `Atomics`, I suppose.
+
+[16:14:40.0364] <shu>
+hm yeah maybe `Reflect.canBeSharedAcrossAgents`?
+
+[16:14:46.0557] <rbuckton>
+> <@mhofman:matrix.org> Unless we specify the behavior of a missing `unsafeGet` trap to call the `get` trap and its target `[[Get]]` fallback (instead of falling back on the target's `[[UnsafeGet]]`)
+
+That again breaks the prototype walk behavior of [[Get]] if you have a shared struct prototype
+
+[16:14:47.0349] <shu>
+and then you can use that in conjunction with typeof == object?
+
+[16:15:57.0699] <Mathieu Hofman>
+> <@rbuckton:matrix.org> That again breaks the prototype walk behavior of [[Get]] if you have a shared struct prototype
+
+I think there is no case where supporting existing proxies that implement a `get` trap can transparently forward to the unsafe behavior up the prototype chain. You just need to update your proxy implementation
+
+[16:16:18.0081] <Mathieu Hofman>
+> <@rbuckton:matrix.org> That again breaks the prototype walk behavior of [[Get]] if you have a shared struct prototype
+
+ * I think there is no case where supporting existing proxies that implement a `get` trap can transparently forward to the unsafe behavior up the prototype chain is possible. You just need to update your proxy implementation
+
+[16:16:31.0383] <rbuckton>
+> <@mhofman:matrix.org> I think there is no case where supporting existing proxies that implement a `get` trap can transparently forward to the unsafe behavior up the prototype chain is possible. You just need to update your proxy implementation
+
+Except for option (1) where Proxy/Reflect is permissive
+
+[16:16:46.0128] <ljharb>
+> <@shuyuguo:matrix.org> so i don't know why you'd want to brand check them
+
+fair, altho the "why" is "for debugging", a reason you'd want to brand-check anything
+
+[16:17:11.0831] <ljharb>
+> <@shuyuguo:matrix.org> so i don't know why you'd want to brand check them
+
+ * fair, altho the "why" is "for debugging", a reason you'd want to brand-check anything (not the only reason, but certainly one of them)
+
+[16:17:20.0952] <shu>
+but for this you'd want to brand check if it's an instance of a _particular_ struct declaration
+
+[16:17:26.0102] <shu>
+not that it is a struct
+
+[16:17:32.0358] <Mathieu Hofman>
+> <@rbuckton:matrix.org> Except for option (1) where Proxy/Reflect is permissive
+
+Not really, that's just taking the opposite approach, any access from "safe" code becomes unsafe when going through a proxy
+
+[16:17:39.0757] <shu>
+because an unshared struct has no additional exotic behavior, unlike shared structs
+
+[16:18:22.0335] <shu>
+Mathieu Hofman: rbuckton it sounds like we won't get agreement on either the completely permission (1) or the completely restrictive (2)
+
+[16:18:24.0110] <rbuckton>
+> <@mhofman:matrix.org> Not really, that's just taking the opposite approach, any access from "safe" code becomes unsafe when going through a proxy
+
+regular objects with a regular prototype chain wouldn't care.
+
+[16:18:47.0994] <shu>
+and the only hiccup for a boolean-passing (3) is possibly implementation/performance difficulty, which i personally can't think of right now but maybe one of the other engines have something more concrete
+
+[16:18:53.0642] <shu>
+if that's the case why don't we focus our energy on (3)?
+
+[16:19:03.0175] <shu>
+ * Mathieu Hofman: rbuckton it sounds like we won't get agreement on either the completely permissive (1) or the completely restrictive (2)
+
+[16:20:05.0729] <shu>
+> <@ljharb:matrix.org> fair, altho the "why" is "for debugging", a reason you'd want to brand-check anything (not the only reason, but certainly one of them)
+
+so for brand-checking for instances of a _particular_ struct declaration, struct methods are non-generic, so every method already includes a brand check
+
+[16:20:21.0693] <ljharb>
+ok, that works
+
+[16:20:28.0412] <ljharb>
+ * ok, that kindof works
+
+[16:20:44.0312] <nicolo-ribaudo>
+What if we had [[SafeGet]]/[[Get]] instead of [[Get]]/[[UnsafeGet]], so that Reflect.get can be unsafe and we can add a Reflect.safeGet for when you want to be safe
+
+[16:20:57.0649] <ljharb>
+but yeah i'd want some kind of `isSharedStruct` method or similar for any of them
+
+[16:21:19.0835] <shu>
+> <@ljharb:matrix.org> but yeah i'd want some kind of `isSharedStruct` method or similar for any of them
+
+what about `Reflect.canBeSharedAcrossAgents()` that returns true for shared structs + primitives
+
+[16:21:29.0497] <shu>
+and you'd use that in conjunction with checking for non-primitive to know it's a shared struct
+
+[16:21:31.0634] <ljharb>
+SGTM
+
+[16:21:48.0284] <ljharb>
+not in love with adding the word "agent" to observable JS, but the semantics are fine
+
+[16:21:53.0000] <shu>
+well i mean
+
+[16:21:56.0469] <shu>
+i'd like it to be just canBeShared
+
+[16:22:03.0384] <ljharb>
+better :-)
+
+[16:22:07.0762] <shu>
+i was gonna say maybe "shared" is confusing but maybe not
+
+[16:22:10.0853] <shu>
+since we already call it SharedArrayBuffer
+
+[16:22:25.0003] <rbuckton>
+I think `Reflect.isShareable` is probably good enough. I'm in favor of concise names.
+
+[16:22:41.0453] <rbuckton>
+That `SharedArrayBuffer` isn't shareable is unfortunate
+
+[16:22:42.0322] <shu>
+ehhh ok
+
+[16:22:46.0283] <shu>
+lol right
+
+[16:23:00.0780] <shu>
+i don't think we can win a fight on distinguishing the nuanced meaning between Shareable and Shared
+
+[16:23:46.0941] <rbuckton>
+We do probably want a way to address that, like a shared handle to a `SharedArrayBuffer`.
+
+[16:23:59.0347] <shu>
+right, that came up earlier with nicolo-ribaudo 
+
+[16:24:06.0636] <shu>
+i don't want to expand the scope more here, i want to do that in a separate proposal
+
+[16:24:21.0774] <rbuckton>
+past-tense `isShared` seems like it would indicate whether the struct is actually shared between two agens.
+
+[16:24:31.0279] <rbuckton>
+ * past-tense `isShared` seems like it would indicate whether the struct is actually shared between two agents.
+
+[16:24:33.0343] <shu>
+agreed, that's why i had "can be"
+
+[16:26:08.0513] <shu>
+all right let me add this real quick to the spec draft
+
+[16:26:25.0310] <Mathieu Hofman>
+> <@shuyuguo:matrix.org> if that's the case why don't we focus our energy on (3)?
+
+Agreed, I was just trying to point out that a boolean passing also does not satisfy the requirement of "automatically work for existing proxy which have a shared struct somewhere on their chain", which IMO I think is fine
+
+[16:26:50.0970] <shu>
+ah, gotcha
+
+[16:28:14.0723] <Mathieu Hofman>
+Btw, is there a reason `getOwnPropertyDescriptor` cannot return `{value: undefined}` (or maybe even a missing `value` field) for shared structs ? Also what is the expected behavior of `defineOwnProperty` on shared struct (aka does it ignore the define) ?
+
+[16:28:46.0997] <shu>
+i don't understand the `getOwnPropertyDescriptor` question. it does return a property descriptor for properties that exist
+
+[16:28:56.0886] <shu>
+oh, you're asking why it shouldn't just always return value: undefined?
+
+[16:29:03.0012] <shu>
+because that seems like... lying?
+
+[16:29:03.0312] <Mathieu Hofman>
+correct
+
+[16:29:19.0078] <Mathieu Hofman>
+it's exotic behavior that I believe is legal
+
+[16:29:23.0091] <rbuckton>
+for all of this discussion we should keep in mind. The distinction as to whether a get/set is safe or unsafe is a purely manufactured restriction. What we're trying to determine is how far we feel we need to push that restriction. IMO, stepping into `Proxy`/`Reflect` land is already complex behavior.
+
+[16:29:29.0023] <shu>
+sure, but it seems incredibly confusing
+
+[16:29:33.0451] <rbuckton>
+ * For all of this discussion we should keep in mind that the distinction as to whether a get/set is safe or unsafe is a purely manufactured restriction. What we're trying to determine is how far we feel we need to push that restriction. IMO, stepping into `Proxy`/`Reflect` land is already complex behavior.
+
+[16:29:36.0531] <shu>
+why would i strive to make it confusing
+
+[16:29:48.0582] <shu>
+> <@rbuckton:matrix.org> For all of this discussion we should keep in mind that the distinction as to whether a get/set is safe or unsafe is a purely manufactured restriction. What we're trying to determine is how far we feel we need to push that restriction. IMO, stepping into `Proxy`/`Reflect` land is already complex behavior.
+
+big +1 to this
+
+[16:29:52.0903] <shu>
+it's about reducing the likelihood
+
+[16:30:00.0919] <shu>
+there is such a thing as diminishing returns
+
+[16:31:00.0983] <shu>
+> <@mhofman:matrix.org> Btw, is there a reason `getOwnPropertyDescriptor` cannot return `{value: undefined}` (or maybe even a missing `value` field) for shared structs ? Also what is the expected behavior of `defineOwnProperty` on shared struct (aka does it ignore the define) ?
+
+the behavior of defineOwnProperty mirrors that of ordinary defineOwnProperty. if all the the property descriptor's fields match except the value, it writes the value
+
+[16:31:04.0004] <shu>
+otherwise it returns false
+
+[16:31:04.0742] <rbuckton>
+IMO, any API call like Object.gOPD is far enough away from guarding simple `x.y` access. 
+
+[16:31:07.0723] <Mathieu Hofman>
+ok let's start with the `defineOwnProperty` case and go from there, what is the expected behavior? Does it do a "set" of the value?
+
+[16:31:39.0530] <shu>
+yes, if enumerable, writable, configurable match
+
+[16:31:58.0613] <shu>
+(and if it exists, of course)
+
+[16:32:09.0780] <rbuckton>
+I'm also really hesitant to manufacture an entire bifurcated reflection API across Reflect and Object just to preserve a manufactured distinction.
+
+[16:32:54.0511] <shu>
+yes, let's keep the use case in sight
+
+[16:33:45.0069] <Mathieu Hofman>
+I mean my undefined / ignore defined value is consistent with the idea that these objects have exotic access behavior, and that you need to use explicit path to access the value
+
+[16:34:42.0814] <shu>
+but why make it more confusing
+
+[16:34:56.0093] <shu>
+the mental model here is "like unshared structs, but with more restrictions"
+
+[16:35:07.0568] <Mathieu Hofman>
+Coming from the "author interacting with objects" that doesn't seem like a bifurcation to me.
+
+[16:35:20.0793] <shu>
+the undefined / ignore defined value moves the needle towards "shared structs are actually a completely different thing"
+
+[16:35:39.0261] <Mathieu Hofman>
+yes and the restriction is you cannot use own prop MOPs to interact with the value of these fields
+
+[16:35:53.0211] <shu>
+i think you should be able to if you want to?
+
+[16:36:29.0363] <Mathieu Hofman>
+how is that different from saying I should be able to "get" those fields from anywhere?
+
+[16:36:57.0526] <shu>
+it's different because i think own prop MOPs and Reflect are already escape hatches
+
+[16:37:52.0840] <Mathieu Hofman>
+they're used a fair amount by libraries 
+
+[16:38:11.0284] <shu>
+does that contradict what i said?
+
+[16:41:46.0638] <shu>
+but also why wouldn't we extend the boolean parameter to gOPD and dOP?
+
+[16:43:54.0722] <Mathieu Hofman>
+I think if we allow access to shared struct field values through own prop MOP, we're opening too wide the door for reasoning about "code will only interact with shared fields in unsafe blocks". A boolean value on `get` is ok because it's an explicit opt-in. The others are not an opt-in of understanding what you're dealing with
+
+[16:44:14.0018] <Mathieu Hofman>
+ * I think if we allow access to shared struct field values through own prop MOP, we're opening too wide the door for reasoning about "code will only interact with shared fields in unsafe aware code". A boolean value on `get` is ok because it's an explicit opt-in. The others are not an opt-in of understanding what you're dealing with
+
+[16:44:40.0772] <shu>
+but why wouldn't we pass the boolean on gOPD?
+
+[16:45:25.0849] <Mathieu Hofman>
+because own prop MOP are meaningless for shared fields: you can't reconfigure them, at best you can make them non-writable
+
+[16:45:36.0114] <shu>
+you can't make them non-writable either
+
+[16:45:44.0859] <shu>
+that would be a mutation on the underlying layout
+
+[16:46:03.0596] <shu>
+well, they're not meaningless, some people use it just to test for existence of an own prop
+
+[16:46:25.0063] <shu>
+define is kind of meaningless, but i suppose some people have code that wants to not trigger setters
+
+[16:46:27.0644] <Mathieu Hofman>
+right, at best was if we can figure out how to do that (I share Ron's view that it'd be great to support non writable fields)
+
+[16:46:51.0753] <shu>
+but they're not _meaningless_, they're not very useful at the moment
+
+[16:46:58.0871] <Mathieu Hofman>
+ah but you can test for the existence, you just can't access the value
+
+[16:47:03.0200] <shu>
+so i don't see the harm in also passing a boolean to getOwnPropDescriptor and defineOwnProperty
+
+[16:47:14.0085] <rbuckton>
+> <@mhofman:matrix.org> right, at best was if we can figure out how to do that (I share Ron's view that it'd be great to support non writable fields)
+
+I'm still noodling on finding a way to do init-only fields, at the very least.
+
+[16:47:53.0382] <shu>
+i want these to be as close as i can get to ordinary objects, and where they differ, the divergence is signaled loud and clear (like throwing, if the boolean is not passed)
+
+[16:48:06.0689] <shu>
+instead of subtly different, like you get a property descriptor back without a value
+
+[16:48:34.0166] <Mathieu Hofman>
+I think a boolean to gOPD / dOP is not sufficiently motivated, I don't think authors have any need to access the value of the field through them
+
+[16:49:06.0587] <shu>
+i am not understanding the harm
+
+[16:49:14.0497] <shu>
+it doesn't seem like a lot of complexity, it's explained by simple symmetry to get/set
+
+[16:49:48.0551] <rbuckton>
+> <@mhofman:matrix.org> I think a boolean to gOPD / dOP is not sufficiently motivated, I don't think authors have any need to access the value of the field through them
+
+I disagree. Reflection capabilities should be consistently usable for any object. 
+
+[16:49:53.0662] <Mathieu Hofman>
+I suppose however it would work too if you want to avoid the potentially surprising result
+
+[16:50:34.0512] <rbuckton>
+Between `Reflect` and decorators and decorator metadata, I want *more* reflection capabilities in JS, not less.
+
+[16:50:38.0142] <shu>
+right, i want to minimize surprise. i want the actual surprising them to be thrown in their face (it's racy and unsafe)
+
+[16:50:55.0280] <Mathieu Hofman>
+ok so boolean for gOPD / dOP, and if the property is an existing shared struct field, throw if the boolean isn't true ?
+
+[16:50:55.0964] <shu>
+ * right, i want to minimize surprise. i want the actual surprising thing to be thrown in their face (it's racy and unsafe)
+
+[16:51:02.0192] <shu>
+ya
+
+[16:51:16.0591] <shu>
+well that's what i'm thinking at this time, to be worked out pending the feasibility of the boolean in general
+
+[16:51:26.0840] <shu>
+which i am optimistic on to be clear
+
+[16:51:28.0955] <shu>
+but need to do more homework
+
+
+2024-09-27
+[17:04:51.0606] <ljharb>
+i'm confused, so it'd be an object but `Object.getOwnPropertyDescriptor` could *ever* throw on it? that's breaking an existing invariant.
+
+[17:05:39.0227] <rbuckton>
+Not really. `Object.getOwnPropertyDescriptor` on a `Proxy` can throw if they throw in the `getOwnPropertyDescriptor` trap.
+
+[17:07:13.0492] <Mathieu Hofman>
+I still think that no value would be less surprising for existing usages, but throwing is technically legal (but I find that more exotic)
+
+[17:09:01.0515] <shu>
+can't all MOPs throw because of Proxis
+
+[17:09:05.0205] <shu>
+ * can't all MOPs throw because of Proxies
+
+[17:13:19.0261] <shu>
+> <@mhofman:matrix.org> I still think that no value would be less surprising for existing usages, but throwing is technically legal (but I find that more exotic)
+
+look man if you wanna propose to unship Proxies i'm on board!!
+
+[17:15:15.0244] <Mathieu Hofman>
+Oh proxies are definitely opening a lot of can of worms I'd rather not be open
+
+[21:27:35.0136] <ljharb>
+ok well then let’s please not repeat any of the horrific decisions Proxy made
+
+[07:35:38.0118] <snek>
+don't unevaluated module namespaces throw in inconvenient places as well 
+
+[07:37:42.0039] <nicolo-ribaudo>
+> <@devsnek:matrix.org> don't unevaluated module namespaces throw in inconvenient places as well
+
+Only on [[Get]]
+
+[07:37:52.0270] <nicolo-ribaudo>
+> <@devsnek:matrix.org> don't unevaluated module namespaces throw in inconvenient places as well
+
+ * Only on \[\[Get\]\] and [[Delete]]
+
+[07:38:00.0216] <nicolo-ribaudo>
+ * Only on \[\[Get\]\]
+
+[07:38:09.0662] <nicolo-ribaudo>
+Which is annoying but like objects with getters
+
+[07:38:23.0455] <nicolo-ribaudo>
+ * Only on \[\[Get\]\] due to tdz
+
+[07:39:31.0657] <snek>
+but its GetOwnProperty calls Get
+
+[07:40:12.0088] <nicolo-ribaudo>
+Mh yeah
+
+[07:41:41.0228] <snek>
+https://github.com/tc39/ecma262/issues/1209
+
+[10:50:47.0894] <shu>
+> <@ljharb:matrix.org> ok well then let’s please not repeat any of the horrific decisions Proxy made
+
+the horrible decision being that user code is run?
+
+[10:51:12.0213] <shu>
+i mean there's no compelling argument to be made against not throwing because there is no alternative world where you don't have to check for MOPs throwing
+
+[10:51:22.0058] <shu>
+so there's no decision to "repeat", it's not another case of throwing you have to guard against
+
+[10:52:02.0065] <ljharb>
+without proxy Object.getOwnPropertyDescriptor never throws afaik
+
+[10:53:49.0641] <rbuckton>
+> <@ljharb:matrix.org> without proxy Object.getOwnPropertyDescriptor never throws afaik
+
+Except for `null` and `undefined`
+
+[10:54:10.0943] <ljharb>
+lol sorry yes, i meant never throws on an object
+
+[10:55:31.0077] <rbuckton>
+And host objects could potentially throw
+
+[10:56:06.0732] <shu>
+"if we ignore this part of the language, this property holds" is not an invariant...
+
+[10:56:14.0581] <shu>
+ * "if we ignore this part of the language, this property holds" is not a design invariant...
+
+[10:56:39.0880] <rbuckton>
+major host builtins don't but who knows with NAPI
+
+[10:59:05.0679] <rbuckton>
+The only thing we probably could rely on as a basis in the language is that `Object.getOwnPropertyDescriptor` on a `TypedArray` backed by `SharedArrayBuffer` is racy.
+
+[10:59:58.0473] <rbuckton>
+Which is why I argued that reaching for an API means `unsafe` is implied.
+
+
+2024-09-29
+[00:29:47.0136] <ljharb>
+> <@shuyuguo:matrix.org> "if we ignore this part of the language, this property holds" is not a design invariant...
+
+oh sure, i know it's not an invariant now. but it was one prior to Proxy, and altho host objects are permitted to throw i don't think any did post-IE8
+
+[00:36:17.0987] <ljharb>
+> <@shuyuguo:matrix.org> "if we ignore this part of the language, this property holds" is not a design invariant...
+
+ * oh sure, i know it's not an invariant now. but it was one prior to Proxy, and altho host objects are permitted to throw i don't think any did post-IE8. there's also a huge difference between "technically this is allowed, but it's exceedingly rare for anyone to do so, and it'd be very unexpected for users" and "let's bake this in as a normal endorsed part of the language"
+
+[14:27:26.0592] <shu>
+> <@ljharb:matrix.org> oh sure, i know it's not an invariant now. but it was one prior to Proxy, and altho host objects are permitted to throw i don't think any did post-IE8. there's also a huge difference between "technically this is allowed, but it's exceedingly rare for anyone to do so, and it'd be very unexpected for users" and "let's bake this in as a normal endorsed part of the language"
+
+what is your preference here, that unsafe reads be allowed when done via MOP API calls?
+
+[14:27:28.0720] <shu>
+instead of throwing?
+
+
+2024-09-30
+[17:13:25.0425] <ljharb>
+does it have to be a data property? can it be a getter that throws instead? (I’m sure I’m missing some context here)
+
+[18:35:26.0849] <rbuckton>
+They must be fields for a number of reasons: Fixed layout, performance, use with Atomics, etc. 
+
+[18:37:14.0627] <rbuckton>
+Also interop with WASM 
+
+[22:24:27.0919] <ljharb>
+the descriptor could have a fake getter/setter even if the property is a data property under the hood, i suppose
+
+[22:33:14.0478] <Mathieu Hofman>
+that seems extremely exotic
+
+[22:34:21.0240] <Mathieu Hofman>
+what would these fake getter and setters even do when plucked and called explicitly ? Also that means the engine needs to allocate them
+
+[22:35:10.0775] <Mathieu Hofman>
+I'd much rather say that the own prop MOPs don't "work" and all have `undefined` value fields
+
+[07:39:49.0658] <shu>
+agreed, fake getters sounds terrible
+

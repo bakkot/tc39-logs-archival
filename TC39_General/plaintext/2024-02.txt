@@ -1,0 +1,385 @@
+2024-02-01
+[14:55:10.0151] <snek>
+idea that popped into my head a few minutes ago while looking at some debugging tooling that someone made... what if you could attach metadata to stack traces to identify specific function invocations?
+for example lets say you have something like an event emitter, you could do something like
+```js
+class Emitter {
+  emit(name, data) {
+    System.setStackMetadata(name);
+    // ...
+  }
+}
+```
+and then in a stack trace, it would be identified as `emit (event name)` instead of just `emit`
+
+
+[14:58:11.0346] <Chris de Almeida>
+/me cries in stalled `error stacks` proposal
+
+[15:04:06.0792] <Ashley Claymore>
+> <@devsnek:matrix.org> idea that popped into my head a few minutes ago while looking at some debugging tooling that someone made... what if you could attach metadata to stack traces to identify specific function invocations?
+> for example lets say you have something like an event emitter, you could do something like
+> ```js
+> class Emitter {
+>   emit(name, data) {
+>     System.setStackMetadata(name);
+>     // ...
+>   }
+> }
+> ```
+> and then in a stack trace, it would be identified as `emit (event name)` instead of just `emit`
+> 
+
+I've wanted that for some stuff too!
+
+[15:04:21.0246] <snek>
+error stacks proposal would be nice
+
+[15:04:32.0053] <snek>
+ljharb: what was the holdup on that
+
+[15:07:43.0003] <Chris de Almeida>
+> <@devsnek:matrix.org> ljharb: what was the holdup on that
+
+I think web platform folks asked for the ocean to be boiled
+
+
+2024-02-02
+[16:29:01.0893] <ljharb>
+i wanted to specify just the format, and leave the contents for a follow-on, and i was blocked until i can specify the contents too
+
+[16:50:20.0313] <snek>
+> <@ljharb:matrix.org> i wanted to specify just the format, and leave the contents for a follow-on, and i was blocked until i can specify the contents too
+
+the contents as in the stringification?
+
+[16:50:36.0460] <snek>
+isn't the point of the proposal to provide structured data so that stringification doesn't need to be relied on 🤔
+
+[17:08:43.0825] <ljharb>
+yes.
+
+[17:09:14.0575] <ljharb>
+as in the exact wording of the stack trace. Which i guess would have to be in English despite the spec not specifying prose messaging.
+
+[17:09:56.0215] <ljharb>
+it certainly felt unreasonable and demotivating :-) . if folks feel like i could still come back and specify structure only, then I’d be happy to do that.
+
+[17:15:25.0656] <ljharb>
+* it certainly _felt_ unreasonable and demotivating :-) . if folks feel like i could still come back and specify structure only, then I’d be happy to do that.
+
+[18:04:43.0831] <Jessidhia>
+> <@kriskowal:matrix.org> Use of _ I’ve encountered is not as a black hole (void) but as a readable reference to the last thing bound. 
+
+this reminded me of $_ in Perl
+
+[19:48:58.0692] <Jack Works>
+> <@devsnek:matrix.org> idea that popped into my head a few minutes ago while looking at some debugging tooling that someone made... what if you could attach metadata to stack traces to identify specific function invocations?
+> for example lets say you have something like an event emitter, you could do something like
+> ```js
+> class Emitter {
+>   emit(name, data) {
+>     System.setStackMetadata(name);
+>     // ...
+>   }
+> }
+> ```
+> and then in a stack trace, it would be identified as `emit (event name)` instead of just `emit`
+
+you may want to know console.createTask
+
+[19:52:33.0045] <snek>
+thats cool
+
+[21:11:27.0360] <Kris Kowal>
+> <@jessidhia:matrix.org> this reminded me of $_ in Perl
+
+My sincerest apologies.
+
+[22:59:10.0147] <snek>
+> <@devsnek:matrix.org> thats cool
+
+seems to be limited to devtools though, doesn't modify the actual stack trace
+
+[04:55:35.0807] <annevk>
+> I think web platform folks asked for the ocean to be boiled
+
+Pointer?
+
+[09:58:34.0744] <ljharb>
+> <@annevk:matrix.org> > I think web platform folks asked for the ocean to be boiled
+> 
+> Pointer?
+
+https://github.com/tc39/notes/blob/e338ef708f553b03cf5b74dfb5a585e532991100/meetings/2019-03/mar-28.md?plain=1#L136
+
+[10:09:22.0861] <annevk>
+ljharb: that doesn't seem like web platform folks asking for boiling an ocean?
+
+[10:10:44.0070] <ljharb>
+i was explicitly asked to specify the exact text content of all stack traces
+
+[10:11:02.0267] <ljharb>
+what the proposal already had at that point was 100% specifying the format/structure, without locking down the contents
+
+[10:11:42.0828] <annevk>
+Maybe we have a different definition of "web platform folks"
+
+[10:12:42.0475] <littledan>
+I guess the two people in that conversation were Mathias Bynens and Till Schneidereit, who were working in JS engines at the time (but neither has that role today, so it's worth checking in with the current people)
+
+[10:14:10.0449] <littledan>
+but I would have expected browsers to ask for flexibility in how the stack trace is presented (e.g., to enable async stack traces, as Mathias mentioned)
+
+[10:14:45.0440] <ljharb>
+maybe i linked the wrong notes; as i recall it was DD and folks from v8/chrome that had the primary block
+
+[10:15:26.0210] <littledan>
+oh I see, he was there
+
+[10:15:35.0859] <ljharb>
+but the history isn't quite as important; what i stated that was agreed with was `1) do the legwork to figure out what browsers do in terms of the contents of the stack. 2) explicitly enumerate the similarities and the differences. 3) to attempt to write a spec algorithm that can allow them all and mandate one of them. 4) potentially Create a brand new structure including a preferred output. 5) ask browsers and engines that would need to make changes, what changes they may need to make.`
+
+[10:15:41.0857] <ljharb>
+and that list is definitely boiling an ocean
+
+[10:16:08.0783] <ljharb>
+whereas if i were able to standardize the structure, the way would be paved for someone more motivated than i to do that list
+
+[10:16:38.0190] <littledan>
+what would standardizing the structure mean?
+
+[10:17:38.0677] <Chris de Almeida>
+apologies if I mischaracterized or misattributed any positions re: ocean boiling
+
+[10:19:31.0581] <annevk>
+To be fair, those five points do make a lot of sense. There is often a desire to replace the old with the new, but as the old has to be maintained forever understanding it fully is essential.
+
+[10:19:46.0179] <annevk>
+ * To be fair, those five points do make a lot of sense. There is often a desire to replace the old with the new, but as the old has to be maintained forever, understanding it fully is essential.
+
+[10:22:10.0035] <ljharb>
+oh sure
+
+[10:22:29.0015] <ljharb>
+i think that's the right path forward overall. i just think the best way to get there is iteratively, and instead i was told "all or nothing"
+
+[10:22:55.0855] <ljharb>
+i would vastly prefer to return to the iterative approach and unblock work on those 5 points
+
+
+2024-02-03
+[22:27:40.0677] <Domenic>
+If "the iterative approach" means "do one of those steps at a time", then that's good. If "the iterative approach" means "spec something new nobody is doing, possibly with a new API nobody ships currently", then that's bad.
+
+[00:03:08.0983] <ljharb>
+the structure i've had in the proposal since 2019 is exactly what everyone's already doing. it does add some new APIs nobody ships as well (whose implementation basically matches what everyone's already doing), but i'm not sure why that would be bad, that's just what almost every proposal is.
+
+[00:03:13.0338] <ljharb>
+ * the structure i've had in the proposal since 2019 is exactly what everyone's already doing. it does add some new APIs nobody ships as well (whose implementation basically matches what everyone's already doing), but i'm not sure why that would be bad, that's just what almost every proposal is (adding a new thing).
+
+[00:09:49.0993] <littledan>
+Yeah I agree that it would be good to start this project with finding what JS implementations put in their stack traces and comparing them. Just doing that without the subsequent steps would be an interesting and meaningful report, helping any future stack trace API effort
+
+[08:14:58.0975] <snek>
+i think all of the error stringification should be removed from this proposal
+
+[08:15:53.0981] <snek>
+or at *most*, say that `Error.prototype.stack` and `"string"` are both the result of some implementer defined AO 
+
+[12:51:34.0086] <ljharb>
+that wouldn't constrain the format/structure tho, so what would be the value
+
+
+2024-02-04
+[17:36:30.0376] <snek>
+wdym? do you think there's some value in .stack matching in all impls? I feel like it only needs to match if it's the only way to get data, but if there's a whole array of data, there's no reason to care about the strkng.
+
+[17:40:43.0756] <snek>
+* wdym? do you think there's some value in .stack matching in all impls? I feel like it only needs to match if it's the only way to get data, but if there's a whole array of data, there's no reason to care about the string.
+
+[19:39:55.0007] <ljharb>
+the string part would just be to lock down what’s there. Certainly nobody should be using the string once the structure is available.
+
+[19:40:20.0872] <ljharb>
+.stack can’t ever not be a string tho, that wouldn’t be web compat
+
+
+2024-02-05
+[19:20:13.0985] <littledan>
+Two things can be true at once: it may be that any API which unifies implementations is new (Mozilla’s experience makes this very likely, if I understand it correctly), but it could also be necessary to have a very detailed understanding of the current state of the world to be able to formulate such a unified API.
+
+[19:22:10.0516] <littledan>
+Starting with developing the understanding helps keep our feet on the ground. Design of a new API can be an important part of the process without being able to proceed on its own. (IMO it isn’t bad to jump the gun and sketch out something early, as long as the next steps are well-understood)
+
+[19:24:20.0223] <littledan>
+(I mean, as long as it is understood that the implementation research is next)
+
+
+2024-02-08
+[11:38:35.0336] <Rob Palmer>
+For anyone in the San Diego area, please come and hang out with TC39 this evening from 5pm at the ServiceNow office for talks, activities, food and drink.
+
+https://www.meetup.com/sandiegojs/events/298709070/
+
+
+2024-02-09
+[21:25:04.0696] <sirisian>
+2 years later I remembered to type this up. Was thinking someone else was going to. Is there any issues with adding optional chaining to the LHS for statements as presented here: https://github.com/sirisian/optional-operators It does take up a lot of syntax so I kind of get why it wasn't considered early on. I'll make a post on es discourse if there's nothing obvious like parsing ambiguities.
+
+[21:55:40.0295] <Justin Ridgewell>
+> <@sirisian:matrix.org> 2 years later I remembered to type this up. Was thinking someone else was going to. Is there any issues with adding optional chaining to the LHS for statements as presented here: https://github.com/sirisian/optional-operators It does take up a lot of syntax so I kind of get why it wasn't considered early on. I'll make a post on es discourse if there's nothing obvious like parsing ambiguities.
+
+There’s a Stage 1 proposal for that: https://github.com/tc39/proposal-optional-chaining-assignment
+
+[21:56:47.0216] <sirisian>
+I told myself to go check the stage 1 and figured there wasn't one. That's awesome to see.
+
+[23:29:22.0453] <Jack Works>
+I feel very excited about function decorators. It can improve DX when I write React.
+
+I used to write components like this (because function declaration has no evaluation step in the debugger) `export function C() {}`, but when I need to `memo` it, I had to rewrite it to `export const C = () => {}`.
+
+If we have this, I can attach `@memo` before the declaration and all things done
+
+[23:29:43.0663] <Jack Works>
+ * I feel very excited about function decorators. It can improve DX when I write React.
+
+I used to write components like this (because function declaration has no evaluation step in the debugger) `export function C() {}`, but when I needed to `memo` it, I had to rewrite it to `export const C = () => {}` then `export const C = memo(() => {})`.
+
+If we have this, I can attach `@memo` before the declaration, and all things done
+
+[23:29:54.0146] <Jack Works>
+ * I feel very excited about function decorators. It can improve DX when I write React.
+
+I used to write components like this (because function declaration has no evaluation step in the debugger) `export function C() {}`, but when I needed to `memo` it, I had to rewrite it to `export const C = () => {}` then `export const C = memo(() => {})`.
+
+If we have this, I can attach `export @memo function C() {}` before the declaration, and all things done
+
+[23:30:04.0015] <Jack Works>
+ * I feel very excited about function decorators. It can improve DX when I write React.
+
+I used to write components like this (because function declaration has no evaluation step in the debugger) `export function C() {}`, but when I needed to `memo` it, I had to rewrite it to `export const C = () => {}` then `export const C = memo(() => {})`.
+
+If we have this, I can do this `export @memo function C() {}`
+
+[13:41:19.0784] <sirisian>
+nicolo-ribaudo: When you were working on the LHS optional chaining did having optional operators come up? (As a separate proposal). a.b ?+= 1 behavior where if b is undefined or null the nothing happens.
+
+[13:41:30.0097] <littledan>
+> <@jackworks:matrix.org> I feel very excited about function decorators. It can improve DX when I write React.
+> 
+> I used to write components like this (because function declaration has no evaluation step in the debugger) `export function C() {}`, but when I needed to `memo` it, I had to rewrite it to `export const C = () => {}` then `export const C = memo(() => {})`.
+> 
+> If we have this, I can do this `export @memo function C() {}`
+
+Can you elaborate on why this is better?
+
+[14:48:48.0410] <Ashley Claymore>
+One thing that is annoying with currently needing to do `export const Button = React.memo((props => { ... });` is that the function becomes anonymous.
+
+being able to do
+
+```
+@React.memo
+export function Button(props) { ... }
+```
+
+is easier to keep the name, and didn't need to rearrange the code to add the wrapper 
+
+[15:09:27.0901] <nicolo-ribaudo>
+No, the optionality was only ever for property access
+
+[15:25:00.0017] <Jack Works>
+> <@littledan:matrix.org> Can you elaborate on why this is better?
+
+I can add @memo directly, without having to convert function declaration into lexical declaration + function expression manually
+
+[15:26:36.0753] <Jack Works>
+(although I can do `C = memo(C)` but typescript won't be happy, I think `export function C` should not be reassigned)
+
+
+2024-02-23
+[16:18:47.0914] <ptomato>
+is there generally accepted JS jargon for what I've been calling "user code calls"? that is, when some innocuous-looking JS code that doesn't obviously call a function, does actually call a function that may be defined somewhere else in the code (like `+value` may end up calling `value[Symbol.toPrimitive]()`, etc.)
+
+[16:48:58.0181] <Jack Works>
+I don't know. I call it "trigger user code"
+
+[17:07:56.0245] <shu>
+yeah i think it's that or "can call user code" is what the spec's u mode does
+
+[17:08:03.0638] <shu>
+ * yeah i think it's that or "can call user code" is what the spec's u mode says
+
+[17:19:34.0497] <ptomato>
+I think it's confusing who the "user" actually is
+
+[19:18:06.0342] <Jack Works>
+when we work as a framework/spec/library/engine developer, the user actually means other developer but using this term is strange I agree
+
+[10:28:47.0866] <shu>
+"user code" is code not under your control, so it's relative
+
+[10:29:30.0803] <shu>
+i don't think it's confusing in practice, since the frame of reference is usually pretty clear, whether it's a spec or a framework
+
+
+2024-02-24
+[20:30:12.0065] <Kris Kowal>
+This all flows from the terms kernel mode and user mode. As Shu says, it’s relative, it’s an analogy. 
+
+[07:26:00.0324] <Richard Gibson>
+Ring 2.62
+
+
+2024-02-27
+[23:57:56.0077] <rkirsling>
+...of hell?
+
+
+2024-02-29
+[22:37:53.0253] <sffc>
+Is it better to return null or undefined for a Rust API that returns Option?
+https://github.com/rust-diplomat/diplomat/pull/435
+
+[22:38:18.0226] <sffc>
+* In JS/TS, is it better to return null or undefined for a Rust API that returns Option?
+https://github.com/rust-diplomat/diplomat/pull/435
+
+[22:38:56.0511] <sffc>
+* In JS/TS, is it better to return null or undefined for a Rust API that returns Option? Trying to decide the default behavior in ICU4X.
+https://github.com/rust-diplomat/diplomat/pull/435
+
+[23:05:51.0803] <ljharb>
+sadly we don't have an Option type (alternatively, a sync Promise), and there's no ecosystem consensus on that kind of thing. some people only use one or the other and hate the one they don't use, some people don't care. i don't have a hard rule for myself either, it's more of a "i usually know which one it should be when i see it"
+
+[23:06:48.0910] <ljharb>
+if it's representing an options object, then i'd say undefined, because then that'll trigger arg defaulting if it's passed elsewhere
+
+[09:21:24.0493] <bakkot>
+sffc: personally I would use `null`, but the precedent here is firmly set by wasm-bindgen / wasm-pack, and it uses `undefined`
+
+[09:22:19.0175] <bakkot>
+ * sffc: personally I would use `null` if I were doing this without consideration of precedent, but the precedent here is firmly set by wasm-bindgen / wasm-pack, and it uses `undefined`
+
+[09:23:49.0302] <bakkot>
+https://github.com/rustwasm/wasm-bindgen/pull/3245 contains a recent discussion of that decision
+
+[09:24:08.0558] <bakkot>
+relevantly to you:
+
+> But, although I agree that mapping `None` to `null` makes more sense, I think it'll break people's code that relies on the current behaviour of it getting mapped to undefined. So, I'm not going to merge this, but I'll leave it open so that it can get merged if/when wasm-bindgen makes a breaking release.
+
+[11:06:27.0146] <TabAtkins>
+I fairly strongly feel that using `undefined` works better, because it triggers argument defaulting. JS having two nulls has always been weird.
+
+[13:52:02.0632] <littledan>
+This argument cuts both ways—you can recover the defaulting with ?? !
+
+[15:30:30.0187] <ljharb>
+you'd have to do `?? undefined` tho, if you wanted to then trigger the defaulting somewhere else, which is weird and unergonomic and uncommon to know you need to do it
+
+[15:53:54.0619] <TabAtkins>
+In general, JS's precedent is for `undefined` anyway - see `Map.prototype.get()`. (DOM goes the opposite way in precedent, due to its unfortunate early flirtation with Java, tho.)
+

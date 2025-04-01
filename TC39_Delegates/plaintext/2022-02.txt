@@ -1,0 +1,704 @@
+2022-02-02
+[09:21:16.0351] <ljharb>
+bakkot: i wonder if it might be web compatible to remove the add/set calling in the Set/Map constructors, considering that anyone trying to override those in their subclass would throw (`class X extends Set { #x = []; add(v) { this.#x.push(v); } } new X(['a'])` throws, eg)
+
+[09:26:45.0276] <Ashley Claymore>
+I should of added unit tests to the deck https://docs.google.com/presentation/d/1-Hp4Qd0mmdufYCwI9fTdCxgt4xEHqE1mPfqRxzuzMvc/edit#slide=id.g10d8b1925be_0_0
+
+[09:28:47.0347] <bakkot>
+ljharb: possibly; michael and I looked into it and even people who are subclassing Map usually also override the ctor
+
+[09:29:10.0415] <ljharb>
+seems like it'd be a win for normal collection usage as well as potential future methods/subclassing
+
+[09:29:43.0786] <bakkot>
+and it's not just private fields; even in plain es6 style, if your `add` method depends on fields added by the constructor it's not going to work
+
+[09:29:52.0124] <bakkot>
+no idea why we thought this was a good idea
+
+[09:38:58.0057] <Ashley Claymore>
+https://twitter.com/basarat/status/557680386042765312
+
+[09:42:32.0151] <Ashley Claymore>
+I upset shu when I found out about this https://twitter.com/_shu/status/1362579124246646784
+
+[09:45:41.0002] <Ashley Claymore>
+ * I upset shu when I found out about this https://twitter.com/_shu/status/1362579124246646784 😅
+
+[10:43:19.0691] <bakkot>
+> even people who are subclassing Map usually also override the ctor
+
+just to back that up, here's
+- a WPT test: https://github.com/chromium/chromium/blob/596d50e6bfa4ec7824664645fc5422728092658e/third_party/blink/web_tests/external/wpt/webrtc/RTCPeerConnection-helper.js#L661
+- some code from w3c (respec): https://github.com/w3c/respec/blob/971a29796becb27759bd958c89aedba08ac2e222/src/core/utils.js#L725-L730
+
+and conversely, here's various bits of code which are _currently_ broken because of this behavior
+- in Firefox: https://github.com/mozilla/gecko-dev/blob/489e82dcc1e5afbe691ff3b1c982382914637e38/toolkit/components/extensions/ExtensionUtils.jsm#L142-L168
+- in moodle: https://github.com/moodle/moodle/blob/8885e22a0b56f503b685313d0ae3e581ecf0665b/lib/amd/src/local/reactive/statemanager.js#L673-L702
+- https://github.com/cowlicks/privacypossum/blob/a328104217e6bebc35ee48f9561255ef83c51c41/src/js/fakes.js#L7-L29
+
+and here's some which have explicitly had to work around it:
+- https://github.com/Katello/katello/blob/438351af3352088f3a8347ed1aaaf84dc3d2ae69/webpack/components/Table/TableHooks.js#L8-L9
+- https://github.com/Mintnoii/Vue-MintShop/blob/8f98a5258658c953d92d03ace4b0c199bd763b72/mintshop-server/node_modules/_mongoose%405.4.22%40mongoose/lib/types/map.js#L42-L50
+- https://github.com/peer-base/peer-base/blob/35166484f71e67c668f39982a8333099f2fd1b9e/src/common/peer-set.js#L4-L13
+
+[10:43:54.0939] <bakkot>
+that said, this doesn't mean it would necessarily be web-compat to change the behavior at this point, since you _can_ make something which depends on it (e.g. a Set subclass which just filters out a particular kind of value)
+
+[10:56:20.0731] <Michael Ficarra>
+btw we looked through examples of subclassing Set/Map for probably like 3 hours and I don't think we found a single example where the default constructor behaviour was useful
+
+[11:09:22.0626] <bakkot>
+the first two links above are places it _would_ have been useful, they just didn't know it existed so they re-implemented it
+
+
+2022-02-03
+[18:53:53.0096] <bakkot>
+shu: you should put https://github.com/tc39/ecma262/pull/2646 on the agenda probably
+
+[18:53:58.0617] <bakkot>
+for I guess march, wow
+
+[18:54:06.0663] <bakkot>
+lots of time to get stuff ready for the next meeting
+
+[11:20:50.0849] <shu>
+bakkot: yes, i was planning on it
+
+[11:21:12.0098] <shu>
+i was just going to do a batch later since end of march is still a ways away
+
+
+2022-02-05
+[16:53:15.0552] <jschoi>
+What would be the best repository to publish last month’s post-plenary ad-hoc dataflow meeting’s notes in? tc39/notes, tc39/incubator-agendas, or somewhere else…?
+
+[16:53:27.0038] <jschoi>
+* What would be the best repository to publish last month’s post-plenary ad-hoc dataflow meeting’s notes in? tc39/notes, tc39/incubator-agendas, or somewhere else…?
+
+[16:58:11.0476] <shu>
+hm, could do incubator-agendas since it was explicitly not part of plenary
+
+[16:58:15.0627] <shu>
+feel free to PR
+
+[13:55:11.0510] <jschoi>
+Someone named Liu Tao from Bytedance left their attendance in the notes for that ad-hoc meeting…but I can’t find their abbreviation in https://github.com/tc39/notes/blob/master/delegates.txt. What is Liu Tao’s abbreviation? (HE Shi-Jun, would you happen to know?)
+
+[13:55:19.0976] <jschoi>
+ * Someone named Liu Tao from Bytedance left their attendance in the notes for that ad-hoc meeting…but I can’t find their abbreviation in https://github.com/tc39/notes/blob/master/delegates.txt. What is Liu Tao’s abbreviation? (HE Shi-Jun, would you happen to know?)
+
+
+2022-02-06
+[21:09:24.0650] <Jack Works>
+reviewing accessor in the decorator proposal
+
+[21:10:15.0424] <Jack Works>
+I have a question. In the `@logged accessor x` example, is it possible to use `this.#x`  to access the derived private field to bypass the decorated accessor and access the original value?
+
+[22:56:10.0469] <ljharb>
+it should not be possible to access a private field inside the class body that was declared by the decorator
+
+[22:56:18.0721] <ljharb>
+iow, `this.#x` should only work if the class body declares `#x`, statically
+
+[23:06:32.0661] <Jack Works>
+Then what happened if I write: `#x; @logged accessor x = 1`
+
+[01:45:50.0721] <nicolo-ribaudo>
+The accessor uses a different private name; `#x` is a name chosen just to show that they are related in the example.
+
+[02:32:18.0899] <Jack Works>
+> <@nicolo-ribaudo:matrix.org> The accessor uses a different private name; `#x` is a name chosen just to show that they are related in the example.
+
+this is good /
+
+[08:57:49.0767] <devsnek>
+decorators on functions when 😭
+
+[09:58:25.0465] <ljharb>
+indeed, like symbols, each #x is a different one
+
+[10:40:42.0165] <rbuckton>
+> <@devsnek:matrix.org> decorators on functions when 😭
+
+There's a proposal for function expressions/arrows already
+
+[10:42:30.0124] <rbuckton>
+Function decls is trickier since decorating a function decl probably means that function isn't hoisted. 
+
+[11:34:13.0260] <devsnek>
+imo that doesn't matter in practice but if we get function expressions that's good enough i suppose :(
+
+[12:07:16.0274] <Ashley Claymore>
+decorators on nested destructures  bindings could be handy
+
+[12:43:16.0408] <rbuckton>
+> <@devsnek:matrix.org> imo that doesn't matter in practice but if we get function expressions that's good enough i suppose :(
+
+It would matter to the TS code base, at least (that is, if we wanted to decorate a function). Quite a bit of the code base is structured like this:
+
+```js
+function f() {
+  return {
+   g,
+   h,
+  }
+  function g() {}
+  function h() {}
+}
+```
+
+
+[12:43:27.0775] <rbuckton>
+> <@aclaymore:matrix.org> decorators on nested destructures  bindings could be handy
+
+For what purpose? 
+
+[12:44:18.0554] <devsnek>
+> <@rbuckton:matrix.org> It would matter to the TS code base, at least (that is, if we wanted to decorate a function). Quite a bit of the code base is structured like this:
+> 
+> ```js
+> function f() {
+>   return {
+>    g,
+>    h,
+>   }
+>   function g() {}
+>   function h() {}
+> }
+> ```
+
+they aren't decorated though
+
+[12:44:33.0118] <devsnek>
+its opt in, that's the nice part
+
+[12:44:54.0032] <devsnek>
+anyway i don't wanna get into an argument about it, expressions sound "good enough" probably
+
+[12:45:04.0863] <devsnek>
+although you'd have to opt into expressions too
+
+[12:49:57.0154] <rbuckton>
+> <@devsnek:matrix.org> its opt in, that's the nice part
+
+My point is that opting in would require breaking from an established convention. In a few small places that's fine, but if it happens more and more often then it's likely the convention would need to change. That leads to huge code moves to conform and would then complicate git history operations like blame, bisect, etc. 
+
+[12:50:22.0040] <devsnek>
+sure but you need the same changes to use it with expressions 🤷
+
+[12:50:43.0624] <rbuckton>
+That's probably a big enough reason we *wouldn't* use function decorators if they were available
+
+[12:51:05.0111] <rbuckton>
+> <@devsnek:matrix.org> sure but you need the same changes to use it with expressions 🤷
+
+Or we just don't use them. 
+
+[12:52:19.0696] <rbuckton>
+My point is that, while breaking hoisting seems like a sensible choice on the surface, there's a lot more to the iceberg
+
+[12:53:28.0574] <devsnek>
+i don't see the difference, both turn the function into a tdz
+
+[12:54:17.0243] <devsnek>
+same iceberg 
+
+[13:35:07.0596] <Ashley Claymore>
+> <@rbuckton:matrix.org> For what purpose? 
+
+I was thinking of a niche case, but will try and find a more mainstream use case for when this pattern:
+
+```
+const { x: { _a }, _b } = y;
+const a = f(_a);
+const b = f(_b);
+```
+
+Would benefit from this style:
+
+```
+const {
+  x: { @f a }, @f b
+} = y;
+```
+
+[13:49:46.0356] <devsnek>
+> <@aclaymore:matrix.org> I was thinking of a niche case, but will try and find a more mainstream use case for when this pattern:
+> 
+> ```
+> const { x: { _a }, _b } = y;
+> const a = f(_a);
+> const b = f(_b);
+> ```
+> 
+> Would benefit from this style:
+> 
+> ```
+> const {
+>   x: { @f a }, @f b
+> } = y;
+> ```
+
+`const { @debounce(500) a } = y;`
+
+[14:58:08.0835] <Ashley Claymore>
+* > <@rbuckton:matrix.org> For what purpose? 
+
+I was thinking of a niche case, but will try and find a more mainstream use case for when this pattern:
+
+```
+const { x: { a: _a }, b: _b } = y;
+const a = f(_a);
+const b = f(_b);
+```
+
+Would benefit from this style:
+
+```
+const {
+  x: { @f a }, @f b
+} = y;
+```
+
+
+2022-02-07
+[17:42:34.0688] <Jack Works>
+I think the powerful follow on is the decorated block
+
+[18:42:03.0457] <rbuckton>
+I have been considering proposing something like Scala's extractor objects to pair with ADT enums. That would let you invoke logic during destructuring:
+
+```js
+const obj = Option.Some(1);
+const Option.Some(x) = obj;
+```
+
+Also, 
+```js
+const { extractor(x) } = obj;
+```
+
+[18:44:02.0774] <rbuckton>
+Rough outline here: https://gist.github.com/rbuckton/ae46b33f383ba69880c7138c49b5e799
+
+[10:00:49.0772] <shu>
+bakkot: Michael Ficarra the usage of Symbol.species in https://tc39.es/ecma262/#sec-initializetypedarrayfromtypedarray was pointed out to me to be very strange
+
+[10:01:56.0075] <shu>
+what the hell is going on there? we get `@@species` for the underlying ArrayBuffer, but then don't ever call `Construct` on it, instead only pulling the prototype off via `OrdinaryCreateFromConstructor`
+
+[10:02:23.0545] <shu>
+i don't remember the history here, but if that's not a bug, that's gotta be the worst usage of `@@species` in the spec
+
+[10:25:11.0000] <bakkot>
+that's pretty weird, yes
+
+[10:27:29.0944] <bakkot>
+that _has_ to be possible to rip out
+
+[10:27:46.0777] <bakkot>
+i will be so sad if someone is actually depending on that in a serious way
+
+[10:28:03.0085] <bakkot>
+(by "that" I mean the use of species in TypedArrays and ArrayBuffers)
+
+[10:32:05.0269] <bakkot>
+this definitely seems like a bug, though not one I'm inclined to try to fix
+
+[11:01:18.0333] <shu>
+i agree, this has to be possible to rip out
+
+[11:01:21.0694] <shu>
+i have to believe
+
+
+2022-02-08
+[07:34:05.0259] <Jack Works>
+hello I have a question
+
+[07:34:38.0299] <Jack Works>
+In section 13.15. https://tc39.es/ecma262/multipage/ecmascript-language-expressions.html#sec-assignment-operators-runtime-semantics-evaluation
+
+[07:34:54.0137] <Jack Works>
+it writes: "Let lref be the result of evaluating LeftHandSideExpression."
+
+[07:35:55.0198] <Jack Works>
+but why it doesn't trigger my code when evaluating LHS?
+
+[07:36:10.0754] <Jack Works>
+what does it mean by "evaluating"?
+
+[07:57:36.0191] <bakkot>
+"evaluating" means "invoking the Evaluation abstract operation"
+
+[07:58:36.0736] <bakkot>
+the Evaluation semantics for `a.x` are here: https://tc39.es/ecma262/multipage/ecmascript-language-expressions.html#sec-property-accessors-runtime-semantics-evaluation 
+
+[07:59:00.0429] <bakkot>
+you will note that it returns a Reference Record
+
+[07:59:26.0335] <bakkot>
+which just holds a reference to the property; it does not actually trigger getters/setters
+
+[08:00:18.0842] <bakkot>
+accessors get triggered by GetValue or PutValue, depending on whether you're reading or writing the property
+
+[08:01:18.0504] <bakkot>
+that is, GetValue and PutValue actually unwrap the reference record and call [[Get]] or [[Set]] respectively. but that happens as part of evaluating the thing containing `a.x`, and depends on whether `a.x` is on the left-hand side of a `=` or not.
+
+[08:13:47.0711] <Jack Works>
+> <@rbuckton:matrix.org> Rough outline here: https://gist.github.com/rbuckton/ae46b33f383ba69880c7138c49b5e799
+
+I love this
+
+[08:15:20.0365] <Jack Works>
+> <@bakkot:matrix.org> that is, GetValue and PutValue actually unwrap the reference record and call [[Get]] or [[Set]] respectively. but that happens as part of evaluating the thing containing `a.x`, and depends on whether `a.x` is on the left-hand side of a `=` or not.
+
+thanks I understand it now
+
+[13:22:30.0666] <leobalter>
+bakkot: do you already have any opened issue for the extending built-ins? I don't have any concerns but the 120min timebox caught my attention.
+
+[13:56:45.0752] <bakkot>
+leobalter: no; we're going to put something together in the next couple weeks
+
+[13:57:04.0611] <leobalter>
+thanks! I'm looking forward to see it!
+
+
+2022-02-09
+[15:37:49.0788] <Michael Ficarra>
+leobalter: you will probably remember some earlier discussions around extending built-ins, particularly during the Set.prototype.{union,intersection,difference,etc} proposal
+
+[15:39:32.0585] <Michael Ficarra>
+the question is essentially: do we have these new methods defer (via virtual calls) to the existing methods so that existing subclasses do not break, or do we have the new methods reach into the internal slots directly?
+
+[15:40:34.0992] <Michael Ficarra>
+there are possibly also other design strategies, but we need to pick one, and it will have a large impact on how people subclass built-ins in a forward-compatible way (if they can at all)
+
+[15:41:13.0885] <Michael Ficarra>
+we're hoping we can actually make this decision as a committee and unblock the proposals that are currently blocked on it
+
+[15:59:42.0201] <shu>
+virtual stuff increases security risk, so maybe put it on the security TG's agenda as well?
+
+
+2022-02-10
+[16:38:52.0421] <Michael Ficarra>
+do we want to just talk about all the virtual calls in built-ins?
+
+[16:39:56.0128] <shu>
+i figured you'd want to talk about future designs informed by past experience. i suppose we can also talk about mitigation of existing stuff but i think that's less interesting
+
+[16:40:18.0982] <Michael Ficarra>
+one of my favourites is Array.prototype.toString (https://tc39.es/ecma262/#sec-array.prototype.tostring) calls "join" virtually, meaning replacing Array.prototype.join changes Array.prototype.toString behaviour
+
+[16:46:30.0809] <Michael Ficarra>
+shu: I started a thread for TG3 folks here: https://github.com/tc39/security/issues/7
+
+[16:46:44.0756] <Michael Ficarra>
+I don't personally think it's of much concern, but I'm open to hearing from others who do
+
+[16:49:37.0026] <shu>
+it's the same shape of risk as adding extra hook points, which as a general category has been responsible for security bugs due optimizing JITs making incorrect assumptions
+
+[02:35:15.0347] <Ashley Claymore>
+Looks like there is an issue with: https://tc39.es/ - getting "github page not found"
+
+[02:59:26.0777] <yulia>
+Ashley Claymore: hmm that happened 2 days ago and then it went up again..
+
+[02:59:43.0118] <yulia>
+we keep getting invalid domain name for it
+
+[02:59:43.0720] <yulia>
+https://www.whois.com/whois/www.tc39.es
+
+[03:00:25.0396] <yulia>
+i am not sure why it is doing this. might be an issue with our dns provider
+
+[03:02:18.0978] <yulia>
+I wrote the chairs, hopefully we can figure out what is going on
+
+[03:02:29.0247] <Ashley Claymore>
+thank you!
+
+[03:05:44.0193] <yulia>
+this is up though: https://tc39.github.io/
+
+[03:08:59.0779] <Ashley Claymore>
+ah good point, direct to source. good idea
+
+[04:24:12.0733] <Jack Works>
+https://tc39.es/ecma262/ is 404
+
+[04:24:39.0881] <ryzokuken>
+Jack Works: on it 👍️
+
+[04:37:29.0652] <ryzokuken>
+Ashley Claymore: Jack Works it's fixed
+
+[04:37:59.0386] <Jack Works>
+thanks
+
+[09:54:41.0408] <leobalter>
+> <@michaelficarra:matrix.org> we're hoping we can actually make this decision as a committee and unblock the proposals that are currently blocked on it
+
+Thanks for the info! I'm +1 to unblock with a pragmatic decision, as you seen to be working on it.
+
+I'm interested in learning more about the topic.
+
+[09:56:48.0454] <leobalter>
+I'm glad this topic is being brought to the security team. I'll ping my team to have eyes on it as well.
+
+[15:13:59.0522] <bakkot>
+in `null[{ toString: () => { console.log('hit') } }] += 1`, does it hit the `toString` or not? SM and ChakraCore think yes; JSC, V8, and engine262 think no
+
+[15:14:20.0155] <bakkot>
+I am pretty sure this changed in https://github.com/tc39/ecma262/pull/2267, but test262 still has tests for the old behavior
+
+[15:18:14.0161] <bakkot>
+test262 test e.g. https://github.com/tc39/test262/blob/df873eed1a717bb59ac8b40f20cf23f19bafb429/test/language/expressions/compound-assignment/S11.13.2_A7.4_T1.js
+
+[15:19:27.0715] <bakkot>
+same question for `null[{ toString: () => { console.log('hit') } }]++`
+
+[15:19:50.0819] <bakkot>
+except in that case SM agrees with everyone else in not evaluating the property
+
+[15:20:37.0210] <bakkot>
+or, for that matter, just a plain `null[{ toString: () => { console.log('hit') } }]`, with no assignment at all
+
+[15:22:57.0936] <bakkot>
+the RequireObjectCoercible happens at the GetValue, which happens only when actually trying to get the value, whereas the ToString happens during the Evaluation semantics of `a[b]`: https://tc39.es/ecma262/multipage/ecmascript-language-expressions.html#sec-property-accessors-runtime-semantics-evaluation
+
+[15:32:26.0704] <bakkot>
+opened an issue on test262 about this: https://github.com/tc39/test262/issues/3407
+
+[15:36:59.0821] <bakkot>
+and ecma262 I guess: https://github.com/tc39/ecma262/issues/2659
+
+
+2022-02-11
+[10:02:50.0291] <justingrant>
+When proposing a new built-in method that returns a list of things, what's the latest guidance about when the list should be an array vs. an iterator? Iterators seem obviously better in the cases where the results can be a long list and/or where the result comes from an async/streaming source. But if the result is short and comes from an immutable native array that's already in memory, then is it OK to return an array to get better ergonomics (`filter`/`map`, `[0]`, etc.) ?  Context: https://github.com/tc39/ecma402/issues/598#issuecomment-1035916876
+
+[10:04:20.0069] <bakkot>
+there is no guidance, we're just gonna fight about it every time probably
+
+[10:06:47.0096] <bakkot>
+though I think for short collections people are happy with arrays, generally
+
+[10:07:17.0129] <bakkot>
+temporal has a couple new array-returning methods, e.g.
+
+[10:07:55.0780] <bakkot>
+it only really makes sense to have an iterator when you might have a lot of elements
+
+[10:10:13.0696] <ptomato>
+I think all the Temporal methods were changed to return iterators as a result of pre-stage3 review
+
+[10:13:12.0888] <TabAtkins>
+We are probably gonna fight about it, but yes, return arrays when the values are short and/or fast to produce. Nothing wrong with them, lots right with them. The web platform uses arrays all over the place.
+
+[10:14:19.0953] <jschoi>
+> <@tabatkins:matrix.org> We are probably gonna fight about it, but yes, return arrays when the values are short and/or fast to produce. Nothing wrong with them, lots right with them. The web platform uses arrays all over the place.
+
+Imagine when tuples get standardized and we need to talk about whether to return tuples.
+
+[10:14:51.0296] <TabAtkins>
+I'm annoyed every time Python returns a tuple rather than a list, so yeah, I anticipate those being fun.
+
+[10:22:54.0877] <bakkot>
+> I think all the Temporal methods were changed to return iterators as a result of pre-stage3 review
+
+pretty sure nothing in the temporal spec right now returns an iterator and both `Temporal.Calendar.prototype.fields` and `Temporal.TimeZone.prototype.getPossibleInstantsFor` return arrays
+
+[10:23:04.0709] <bakkot>
+unless the rendered spec is out of date
+
+[10:23:14.0396] <bakkot>
+lots of things _consume_ iterables, which is right and proper
+
+[10:24:38.0490] <ptomato>
+oh, you're right, I was thinking of changing things to consume iterables
+
+[10:24:40.0650] <ptomato>
+carry on then
+
+[10:25:54.0481] <TabAtkins>
+ah yeah anything that takes an array should take an iterator, definitely. (webidl makes this automatic with the `sequence<>` argument type, but I guess you have to be a little more explicit in JS specs)
+
+[12:20:46.0186] <justingrant>
+> though I think for short collections people are happy with arrays, generally
+
+Cool. Sounds like the guidance is:
+1. Input parameters that are lists should be`Iterable`
+2. Return values that are long lists or are lists populated from an async or streaming source should be`Iterable`
+3. Return values that are short lists from a synchronous source should be`Array`
+
+Is that right?
+
+FWIW, Temporal has an interesting corner case for (1) above: the `CalendarProtocol.fields` method currently accepts an `Iterable<string>`, as must the equivalent method in the builtin `Temporal.Calendar` class that implements that protocol. But the only callers of that method pass a <10-element array of static, immutable values. We've gotten implementer feedback that using an Iterable here makes the implementation harder. 
+
+What's the benefit of accepting an `Iterable` in this case if the only callers of this method are expected to come from inside ECMAScript where we can guarantee that only `Array` is passed?  FYI https://github.com/tc39/proposal-temporal/issues/2053
+
+[12:21:22.0606] <justingrant>
+ * > though I think for short collections people are happy with arrays, generally
+
+Cool. Sounds like the guidance is:
+1. Input parameters that are lists should be`Iterable`
+2. Return values that are long lists or are lists populated from an async or streaming source should be`Iterable`
+3. Return values that are short lists from a synchronous source should be`Array`
+
+Is that right?
+
+FWIW, Temporal has an interesting corner case for (1) above: the `CalendarProtocol.fields` method currently accepts an `Iterable<string>`, as must the equivalent method in the builtin `Temporal.Calendar` class that implements that protocol. But the only callers of that method pass a <10-element array of static, immutable values. We've gotten implementer feedback that using an Iterable here makes the implementation harder. 
+
+What's the benefit of accepting an `Iterable` in this case if the only callers of this method are expected to come from inside ECMAScript where we can guarantee that only `Array` is passed?  FYI https://github.com/tc39/proposal-temporal/issues/2053
+
+[12:23:15.0554] <ptomato>
+I think we had gotten the feedback during stage 3 review that we should accept an iterable there because a userland implemenation of fields() might want to return one?
+
+[12:25:24.0369] <bakkot>
+If it's actually only supposed to be called internally then it shouldn't be exposed
+
+[12:25:43.0601] <bakkot>
+if it's exposed then you have to design it as if it's going to be used
+
+[12:26:47.0928] <bakkot>
+anyway for that specific question see https://github.com/tc39/proposal-temporal/issues/1610
+
+[12:27:01.0262] <bakkot>
+this was also discussed in plenary IIRC so you can probably find it in the notes as well
+
+[12:32:57.0788] <ptomato>
+it's exposed because it's necessary for writing a custom calendar, so indeed we have to assume it's going to be used
+
+[12:43:46.0198] <jschoi>
+Let’s say I have a syntax-directed operation associated with the production ConditionalExpression : ShortCircuitExpression `?` AssignmentExpression `:` AssignmentExpression.
+
+How do I refer in the algorithm to either particular AssignmentExpression, since |AssignmentExpression| is ambiguous?
+
+[12:43:55.0439] <jschoi>
+ * Let’s say I have a syntax-directed operation associated with the production ConditionalExpression : ShortCircuitExpression `?` AssignmentExpression `:` AssignmentExpression.
+
+How do I refer in the algorithm to either particular AssignmentExpression, since |AssignmentExpression| is ambiguous?
+
+[12:45:46.0377] <bakkot>
+`the first |AssignmentExpression|`
+
+
+2022-02-13
+[07:40:38.0255] <Jack Works>
+> <@bakkot:matrix.org> there is no guidance, we're just gonna fight about it every time probably
+
+* and it even blocks the proposal from moving 😭
+
+
+2022-02-14
+[10:58:32.0831] <TabAtkins>
+justingrant: More specifically for inputs, they should not only be iterators but should *eagerly consume* those inputs, in argument order, unless there's a good reason to not do so (like the iterator combinators). Again, WebIDL has a nice consistent model here so all web platform APIs get consistency for free.
+
+[10:59:41.0598] <TabAtkins>
+Curious that you have impl feedback that accepting an iterator in one part makes impl harder, since literally every single array-accepting function defined in webidl does it.
+
+[12:34:05.0206] <justingrant>
+> <@tabatkins:matrix.org> Curious that you have impl feedback that accepting an iterator in one part makes impl harder, since literally every single array-accepting function defined in webidl does it.
+
+Yep, I don't have context about the reason, just forwarding what I heard from Frank: 
+
+> It is much more complex to implement a function which take an iterable than take an arraylike, at least in v8.
+
+[13:22:20.0887] <TabAtkins>
+I mean I'm sure it is more complicated, it's just also omnipresent among web APIs already
+
+
+2022-02-21
+[10:38:37.0782] <bakkot>
+ljharb: random q, what's the status of https://github.com/tc39/proposal-regex-escaping?
+
+[10:38:49.0568] <bakkot>
+I ask because I wanted it today and remembered there was a proposal for it
+
+[10:39:56.0698] <bakkot>
+michael had the thing about wanting the result to work in character classes also, which I think is straightforward enough, cf https://github.com/tc39/proposal-regex-escaping/issues/48#issuecomment-769450691
+
+[11:13:10.0168] <ljharb>
+bakkot: i mean, basically nothing's changed. there continues to be an overwhelming need in the ecosystem for a naive RegExp.escape, and virtually zero appetite outside the committee for a template tag, nor any shared concern about the potential hazards of escaping pieces of regexes
+
+[11:13:42.0365] <ljharb>
+so at some point we need to come back to the committee with a presentation that will convince those who offered pushback before
+
+[11:20:42.0631] <bakkot>
+the only concerns I recall were a.) mark wants a template tag and b.) michael wants it the result to work in character classes
+
+[11:20:54.0674] <bakkot>
+I suspect Mark can be convinced and Michael's concern is easy to address/meet
+
+[11:21:05.0221] <bakkot>
+ * I suspect Mark can be convinced and Michael's concern is easy to address/meet
+
+[11:21:19.0106] <bakkot>
+I'd offer to help but I have too many things going on
+
+[11:21:26.0335] <bakkot>
+will make a note though
+
+[11:21:43.0374] <bakkot>
+might be something to bring up with Mark in the hallway track next meeting
+
+[12:13:45.0797] <ljharb>
+yeah that sounds like a good idea
+
+
+2022-02-24
+[22:21:19.0582] <ablert_>
+Hi, where can I subscribe to the event calendar?
+
+[23:38:56.0366] <legendecas>
+Do you mean this one? https://github.com/tc39/Reflector/issues/290
+
+[23:41:42.0428] <ryzokuken>
+Perhaps it should be on the README of the Reflector? 
+
+[05:49:02.0849] <ablert_>
+Yes, thanks!
+
+[09:17:54.0830] <Michael Ficarra>
+see https://github.com/tc39/how-we-work/issues/94
+
+[10:41:51.0253] <shu>
+i've found some time to finally schedule an incubation call. linking here for added visibility for folks interested in function helper functions: https://github.com/tc39/Reflector/issues/421
+
+[11:43:23.0096] <Michael Ficarra>
+@shu does it have to be March 7?
+
+[11:43:46.0272] <Michael Ficarra>
+I ask because it's a day off for F5, which employs 2/5 of the listed stakeholders
+
+[13:25:43.0841] <shu>
+Michael Ficarra: there is a doodle
+
+[13:26:16.0820] <shu>
+i've listed the 7th, 8th, and 10th as dates that i can facilitate: https://docs.google.com/spreadsheets/d/1Mz9iif1XkVPhAQR7zl9o1yGTvKwFRAONvLKIobuDt-k/edit#gid=0
+
+[13:26:26.0878] <shu>
+note the topic says "week of the 7th"
+
+[14:36:54.0456] <shu>
+lol @ matrix trying to generate preview for sheets by listing out cell values
+
+
+2022-02-25
+[16:50:12.0889] <devsnek>
+> <@shuyuguo:matrix.org> lol @ matrix trying to generate preview for sheets by listing out cell values
+
+that one is on google sheets actually, its just the og:description lol
+
+[10:52:07.0439] <shu>
+devsnek: lol amazing
+

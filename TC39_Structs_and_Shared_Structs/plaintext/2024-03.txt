@@ -1,0 +1,220 @@
+2024-03-03
+[14:36:08.0504] <Mathieu Hofman>
+Hey shu,  tomorrow is actually not a great time for Mark and I. I know it's last minute but maybe Thursday would work for everyone?
+
+[14:39:06.0529] <Mathieu Hofman>
+We also need to discuss a little more between him and I to make this follow up discussion more productive, and I was too tired after my travels last week to catch up with him.
+
+
+2024-03-04
+[10:10:26.0848] <shu>
+Mathieu Hofman: at the same time slot i have a conflict
+
+[10:10:51.0817] <shu>
+could you please send out an email to the people on the call asking for a time change? what time works for you on thursday?
+
+[10:11:14.0013] <shu>
+didn't see this till now, i don't check for messages on weekends
+
+[10:11:26.0572] <shu>
+actually guess i'll send out the email
+
+[10:45:57.0443] <shu>
+@room the meeting is moved to Thursday, 11am-12pm PT
+
+[10:46:03.0987] <shu>
+okay maybe @room doesn't work
+
+[10:46:10.0632] <shu>
+Mathieu Hofman: rbuckton ^
+
+[10:46:38.0766] <rbuckton>
+I saw, thanks
+
+[11:08:51.0508] <snek>
+I can confirm that room works 
+
+[11:09:13.0568] <snek>
+element delivers pushes very slowly though 
+
+[11:15:25.0256] <Mathieu Hofman>
+Sorry I was driving. Yes Thursday 11am works for us. Thanks!
+
+
+2024-03-05
+[09:45:56.0344] <Mathieu Hofman>
+Chatting with Mark yesterday, we realized that the wasm shared everything thread is pretty strict about shared stuff not being able to access non shared stuff. Which brings the question, are there no use cases where shared funcs need to "call" a host function (which I assume is non-shared?). How would that work?
+
+[09:46:09.0249] <Mathieu Hofman>
+ * Chatting with Mark yesterday, we realized that the wasm shared everything thread proposal is pretty strict about shared stuff not being able to access non shared stuff. Which brings the question, are there no use cases where shared funcs need to "call" a host function (which I assume is non-shared?). How would that work?
+
+[09:52:00.0245] <shu>
+that is a required use case, in fact
+
+[09:52:19.0599] <shu>
+that's what all the thread-local storage, thread-bound storage, and discussions of that nature orbit around
+
+[09:52:40.0553] <shu>
+i talked about this in the update talk as the "syscall table"
+
+[09:52:42.0976] <Mathieu Hofman>
+right but what I'm reading is that TLS only stored shared things?
+
+[09:52:55.0517] <shu>
+TLS is a table that stores unshared things
+
+[09:53:00.0054] <shu>
+the _storage_ is local
+
+[09:53:04.0516] <shu>
+err
+
+[09:53:09.0624] <shu>
+ * the _storage_ is thread-local
+
+[09:53:17.0522] <shu>
+you can put e.g. web API JSFunctions inside them
+
+[09:53:31.0027] <shu>
+the JS proposal also has the no shared->unshared edges restriction (at runtime)
+
+[09:54:22.0687] <Mathieu Hofman>
+In https://github.com/WebAssembly/shared-everything-threads/blob/main/proposals/shared-everything-threads/Overview.md#thread-local-storage-tls it says:
+> We don't allow non-shared references in thread-local globals because then they would not be able to be accessed from shared functions
+
+That's why I'm confused
+
+[09:54:48.0350] <shu>
+oh that's a wasm type systems quirk, i was also confused by that
+
+[09:55:18.0264] <shu>
+iirc that's resolved by thread-local functions created on the Wasm/JS API layer via WebAssembly.Function(..., { thread-local: true }) showing up as shared extern refs
+
+[09:55:41.0694] <shu>
+"non-shared references" should be read as "references with non-shared types in the type system"
+
+[09:56:11.0420] <Mathieu Hofman>
+ok so a thread local function is considered "shared"
+
+[09:56:20.0571] <shu>
+yeah
+
+[09:57:47.0289] <Mathieu Hofman>
+that's weird, what happens if you get a reference to it not from TLS 
+
+[09:58:16.0300] <Mathieu Hofman>
+aka if you attempt to call a thread-local func from a different thread
+
+[09:58:21.0687] <shu>
+it's thread-local
+
+[09:58:39.0257] <shu>
+so it's safe to access it from a different thread, it'll call whatever function that TLS "box" is bound to in the other thread
+
+[09:58:46.0090] <shu>
+if it's thread-_bound_, it'll trap from other threads
+
+[09:58:57.0165] <Mathieu Hofman>
+right but it materializes in wasm as just a shared func ref, no ?
+
+[09:59:06.0478] <shu>
+a shared externref
+
+[09:59:09.0585] <shu>
+i think?
+
+[09:59:22.0265] <shu>
+like are you saying it's weird it'll trap when called?
+
+[10:00:03.0877] <Mathieu Hofman>
+I'm just trying to understand the shared / unshared integration for now
+
+[10:00:26.0188] <shu>
+at the type system, thread-local things show up as "shared"
+
+[10:04:21.0350] <Mathieu Hofman>
+what slightly surprises me is that the type system doesn't seem to have a distinction between thread local and shared, which means you can end up having shared refs which are really only valid locally without a way to know 
+
+[10:05:57.0115] <shu>
+ah
+
+[10:06:01.0365] <shu>
+that's a fair question
+
+[10:06:06.0943] <shu>
+i have no idea why not and the trade-off space there
+
+[10:06:20.0697] <shu>
+as an observer there's a certain deference to toolchain complexity that guides design
+
+[10:06:33.0521] <shu>
+you're best redirecting that question to the wasmcg folks themselves
+
+[10:07:12.0199] <Mathieu Hofman>
+yeah, do you know where I can ask such questions?
+
+[10:08:57.0880] <shu>
+https://github.com/WebAssembly/shared-everything-threads/discussions i think?
+
+[10:09:06.0671] <shu>
+there's certainly a lot of activity there
+
+[10:09:29.0252] <Mathieu Hofman>
+ah didn't realize they use GH discussion. Sorry pretty new to wasm things
+
+[10:10:33.0604] <shu>
+i don't like discussions
+
+[10:10:42.0972] <shu>
+it's just such a bizarre UI
+
+[10:30:32.0107] <shu>
+my favorite is that you see a reply box, and start replying
+
+[10:30:42.0217] <shu>
+but wait! you actually just started a new thread within the same discussion topic
+
+[10:30:55.0326] <shu>
+so you delete the new thread and copy over your reply to the original thread
+
+[10:31:02.0251] <shu>
+but wait! someone else already replied to the new thread because they were also confused
+
+[11:13:12.0531] <littledan>
+it's awesome to see so much advancing on the shared-everything-threads side. This should be a good basis for future JS development.
+
+
+2024-03-07
+[11:02:20.0848] <rbuckton>
+Are we still meeting today?
+
+[11:03:53.0790] <Mathieu Hofman>
+I'm in the waiting room
+
+[11:04:00.0541] <Mathieu Hofman>
+maybe Shu is looking for a room
+
+[11:05:07.0696] <shu>
+no we're already in the room
+
+[11:05:14.0795] <shu>
+i don't see any people waiting to be admitted
+
+[11:05:15.0523] <shu>
+hmm
+
+[11:05:20.0596] <shu>
+let me DM you the code
+
+[12:24:55.0353] <rbuckton>
+It occurred to me that we don't necessarily need thread local prototypes for shared structs, per se, if we're willing to live with the prototypes themselves leaking (i.e., remaining resident in memory until the app/thread shuts down). Back when I was exploring constructor/prototype correlation via handshake, those prototypes would have leaked anyways. Lets assume a given shared struct instance is tagged with a type identity representing the constructor that produced it and that type identity is itself shared across threads. Maintaining a per-agent registry of prototypes associated with those type identities is not unlike the idea of a thread-local WASM syscall table. Within a given agent we could have [[GetPrototypeOf]] look up the prototype associated with a struct instance's type identity not unlike how we look up the prototype for `1` or `"foo"`. That, at least, would be enough to experiment with attached behavior without requiring additional GC complexity.
+
+[12:34:02.0355] <rbuckton>
+On a separate note, one of the concerns I have with not having anything in JS until after this ships in WASM is that we stand to lose the ability to control how WASM shared structs interact with JS. Maybe opaque values help, but I think its entirely likely that someone like emscripten or wasm-bindgen just generates glue code that wraps opaque objects with proxies and getters/setters that call back into WASM to expose this information. I think there's an opportunity to think about how JS might actually want to leverage shared memory and come up with a cohesive story. For instance, a few months back I was exploring pick notation (i.e., the monocle-mustache operator `.{`) as a possible mechanism for performing atomic reads and writes of a chunk of an object. There's also the possibility we could enforce locking semantics on struct instances such that they must be owned by a Mutex/SharedMutex for which you have a lock before you can read or write to them. 
+
+[12:35:06.0048] <rbuckton>
+These are all capabilities that require native support in JS to leverage efficiently and couldn't be employed after-the-fact without breaking the web.
+
+[12:35:28.0551] <rbuckton>
+ * These are all capabilities that require native support in JS to leverage efficiently and couldn't be employed after-the-fact without potentially breaking anyone using shared structs from WASM.
+

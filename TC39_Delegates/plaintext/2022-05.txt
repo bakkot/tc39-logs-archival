@@ -1,0 +1,1333 @@
+2022-05-02
+[13:10:48.0779] <shu>
+jschoi: does May 6 8:00 - 9:00 PT work for you for the incubator call?
+
+[13:47:17.0269] <jschoi>
+> <@shuyuguo:matrix.org> jschoi: does May 6 8:00 - 9:00 PT work for you for the incubator call?
+
+This time works for me, thank you.
+
+[13:47:33.0680] <jschoi>
+I will try to have an agenda ready by tomorrow.
+
+[14:42:10.0269] <shu>
+excellent, thank you
+
+[15:13:51.0547] <shu>
+jschoi: argh, oops, i misread the doodle
+
+[15:14:09.0676] <shu>
+i meant May 6 9:00 - 10:00 PT, 1 hour later
+
+
+2022-05-03
+[06:11:35.0580] <jschoi>
+> <@shuyuguo:matrix.org> i meant May 6 9:00 - 10:00 PT, 1 hour later
+
+No worries; I can make that too. Thanks for arranging!
+
+[15:14:50.0385] <ljharb>
+`Array(Math.pow(2, 32) - 1).concat(1)` throws a RangeError about "too large" in node; in Safari it throws an OOM RangeError; in FF it seems to just hang. the spec seems to say it should throw a TypeError (https://tc39.es/ecma262/#sec-array.prototype.concat step 5.b.iii). am i reading it right? if so i can make a test262 test for it.
+
+[15:22:50.0245] <shu>
+that's not my reading
+
+[15:23:21.0508] <shu>
+OOMs are implementation-defined and can really happen anywhere. the spec says a `TypeError` should be thrown for lengths that exceed that length, even without an implementation-defined OOM error
+
+[15:23:34.0576] <shu>
+so Safari is certainly allowed to throw an OOM
+
+[15:23:58.0652] <shu>
+as for FF hanging, that's fine too, i think, from a compliance perspective
+
+[15:24:19.0213] <shu>
+it might be undesirable to hang, but i don't think that's breaking compliance with the spec
+
+[15:25:12.0997] <shu>
+a test262 here test can test that either a TypeError or an OOM RangeError is thrown, i'd think
+
+[15:25:41.0992] <shu>
+actually i'm not sure implementation-defined OOM errors are required to be `RangeError`s or can be anything
+
+[15:25:48.0949] <shu>
+so maybe the test is just that it must throw _something_
+
+[15:27:55.0264] <shu>
+ * OOMs are implementation-defined and can really happen anywhere. the spec says a `TypeError` should be thrown for lengths that exceed that value, even without an implementation-defined OOM error
+
+[15:33:46.0983] <ljharb>
+oh the OOM part and the hanging part yes, ofc
+
+[15:34:05.0824] <ljharb>
+but chrome/node doesn't throw an OOM - it throws a RangeError with a message. but the spec says it should be a TypeError
+
+[15:34:23.0074] <ljharb>
+thinking about it, it should really just be a RangeError anyways. so maybe it'd be a better web reality change to change the spec?
+
+[15:34:40.0960] <shu>
+hm, maybe, agreed that it feels like a rangeerror
+
+[15:35:05.0887] <shu>
+i feel like OOMs and resource limit-related errors are usually Range, not Type
+
+[15:40:03.0602] <shu>
+seems like all the array methods throw `TypeError` for `> 2^53 - 1`
+
+[15:40:36.0787] <shu>
+but ljharb, V8/node does throw an OOM
+
+[15:40:53.0551] <ljharb>
+hm
+
+[15:40:56.0745] <shu>
+it's throwing on trying to create an array with length `> 2^32 - 1`
+
+[15:41:02.0830] <shu>
+not throwing on a length `> 2^53 - 1`
+
+[15:41:13.0623] <ljharb>
+in node 18 i get `Uncaught RangeError: Invalid array length`
+
+[15:41:16.0734] <shu>
+yeah
+
+[15:41:18.0780] <ljharb>
+ohhh i see what you mean
+
+[15:41:40.0184] <shu>
+it throws before it gets to the check for typeerror
+
+[15:41:54.0472] <ljharb>
+`[1].concat({ length: Math.pow(2, 53) - 1, [Symbol.isConcatSpreadable]: true })` indeed does throw a TypeError
+
+[15:41:54.0684] <shu>
+or, no, it just doesn't hit that
+
+[15:41:59.0964] <shu>
+yeah
+
+[15:42:06.0757] <ljharb>
+thanks, that clears it up
+
+
+2022-05-05
+[12:15:05.0406] <bakkot>
+TabAtkins: the way you've written https://webidl.spec.whatwg.org/#es-map-iterator implies that `(new Map)[Symbol.iterator]().next.call(webIdlMapLike)` would work, which is... maybe not a thing you intended?
+
+[12:15:28.0329] <bakkot>
+I don't know where webidl map-likes are used though
+
+[12:16:25.0165] <TabAtkins>
+Hmmmmm, I dunno if that's a problem?
+
+[12:16:31.0586] <TabAtkins>
+(For an example usage, see https://tabatkins.github.io/css-toggle/#dom)
+
+[12:18:19.0163] <bakkot>
+I think that is... probably not desirable, at least for implementations?
+
+[12:18:31.0726] <TabAtkins>
+.next() isn't usable directly on a Map, right? You'd still have to actually extract an iterator, which has .next() from its proto.
+
+[12:19:14.0420] <bakkot>
+oh, yeah, so `(new Map)[Symbol.iterator]().next.call(webIdlMapLike[Symbol.iterator]())` 
+
+[12:19:23.0224] <bakkot>
+I think you probably do not want to require that that work
+
+[12:19:47.0525] <TabAtkins>
+Why not? Making it not work would presumably require us to *not* use MapIteratorPrototype at all, right?
+
+[12:20:11.0481] <bakkot>
+oh, I missed that you are intending to use MapIteratorPrototype
+
+[12:20:16.0569] <TabAtkins>
+(That was already required before my edits, btw.)
+
+[12:21:01.0917] <TabAtkins>
+Yeah we're manually reproducing Map's proto methods by hand, but there's no reason for us to do the same for its iterator.
+
+[12:22:28.0421] <bakkot>
+it's conceptually kind of weird? a "real" map iterator uses the [[MapData]] internal slot
+
+[12:23:15.0411] <bakkot>
+I don't think it's going to cause problems for users (or even be noticed), but it might trip up implementations
+
+[12:23:48.0185] <bakkot>
+when we wrote https://github.com/tc39/ecma262/pull/2045 the thinking was that brands would be single-use
+
+[12:24:17.0083] <TabAtkins>
+If that's problematic, the spec shouldn't be written in a way that implies it's pluggable. ^_^
+
+[12:24:41.0416] <bakkot>
+the spec is not an API
+
+[12:24:51.0176] <TabAtkins>
+what's this about brands?
+
+[12:25:10.0913] <bakkot>
+the string argument to CreateIteratorFromClosure is a brand
+
+[12:25:32.0501] <bakkot>
+which is intended to prevent users from using `.next` from one kind of iterator with a different kind of iterator
+
+[12:25:53.0638] <bakkot>
+ * which is intended to prevent users from using `.next` from one kind of iterator with a different kind of iterator
+
+[12:26:01.0600] <TabAtkins>
+Oh, if that's the issue we can change that.
+
+[12:26:15.0081] <TabAtkins>
+It didn't look like something I *needed* to change, is all.
+
+[12:26:34.0426] <bakkot>
+if you change it you'll also need a new prototype, though
+
+[12:27:12.0935] <bakkot>
+the way it works is, `CreateIteratorFromClosure` specifies a brand, which is stored on the iterator, and then the various `.next` methods check that brand
+
+[12:27:50.0381] <ljharb>
+please do not reuse MapIteratorPrototype on something that's not a Map, that's not right
+
+[12:28:31.0292] <bakkot>
+so `CreateMapIterator` and `%MapIteratorPrototype%.next ( )` both specify the `"%MapIteratorPrototype%"` brand, which is how we achieve that only the MapIterator `.next` works with map iterators
+
+[12:29:16.0512] <ljharb>
+and it would be a bug if that brand check passed on something that wasn't a Map instance
+
+[12:29:46.0362] <bakkot>
+ljharb: the brand check is only for Map _iterators_, not Map instances
+
+[12:30:05.0796] <ljharb>
+oh right sorry
+
+[12:30:12.0551] <ljharb>
+ok, Map iterator instance then :-p
+
+[12:30:25.0351] <ljharb>
+(obv that's way less important to brand check)
+
+[12:31:20.0080] <bakkot>
+TabAtkins: anyway, if you want to avoid re-implementing stuff, while also not pretending to be an _actual_ Map iterator, I think the simplest thing would be to pretend to be a userland generator - i.e. inherit from `Generator` rather than `MapIterator`, and use `~empty~` as the brand
+
+[12:31:53.0476] <bakkot>
+this has the bonus that it would allow implementations to implement the iterator as a JS generator
+
+[12:31:58.0474] <bakkot>
+ * this has the bonus that it would allow implementations to implement the iterator as a JS generator
+
+[12:32:20.0775] <TabAtkins>
+Hm, that would mean that future things put on MapIteratorPrototype wouldn't apply then, right?
+
+[12:33:07.0294] <bakkot>
+well, so
+
+[12:33:46.0599] <bakkot>
+as long as MapIteratorPrototype is written as a spec generator, it can't really have more things put on it - the state is all internal to the closure created in CreateMapIterator
+
+[12:34:11.0858] <bakkot>
+so if we wanted to add more stuff, we'd have to revert the change from https://github.com/tc39/ecma262/pull/2045 anyway
+
+[12:34:39.0355] <bakkot>
+and go back to using specialized slots on the iterator instance to store the state of the iterator
+
+[12:34:48.0567] <bakkot>
+which would break this part of webidl anyway
+
+[12:35:32.0962] <ljharb>
+why would MapIteratorPrototype ever get something added to it? iterator helpers would be on a superclass, and generator-made iterators would have those too, i think
+
+[12:35:47.0855] <bakkot>
+java's iterators have a `remove` method which is occasionally handy, e.g.
+
+[12:35:56.0252] <bakkot>
+I don't think we'd want to add it but we conceptually could
+
+[12:36:06.0986] <bakkot>
+for iterators for collections in particular, and not for arbitrary generators/iterators
+
+[12:36:18.0452] <TabAtkins>
+Right, I was thinking about iterator helpers. But if they'll all show up on something that all userland generators get too, then I suppose my concern is moot.
+
+[12:36:25.0370] <ljharb>
+`it.remove()` as a shorthand for "get the key and remove it directly from the collection"?
+
+[12:36:37.0175] <ljharb>
+ * `it.remove()` as a shorthand for "get the key and remove it directly from the collection"?
+
+[12:36:43.0750] <bakkot>
+yup, iterator helpers add things to the root iterator prototype, which is shared by MapIterator and also the iterators produced by userland generators
+
+[12:37:12.0949] <bakkot>
+ljharb: in java it means "remove the last thing yielded"
+
+[12:37:27.0027] <bakkot>
+ * yup, iterator helpers add things to the root iterator prototype, which is shared by MapIterator and also the iterators produced by userland generators
+
+[12:37:46.0173] <ljharb>
+weird, ok
+
+[12:37:50.0216] <TabAtkins>
+def weird
+
+[12:38:06.0725] <bakkot>
+TabAtkins: actually wait, forget my suggestion about inheriting from generator, though
+
+[12:38:16.0990] <bakkot>
+that would have other consequences which are bad
+
+[12:38:42.0599] <bakkot>
+because generators also have `.return` which injects a return completion at the current `yeild`, which is... not a thing you want, almost certainly
+
+[12:40:08.0636] <TabAtkins>
+I mean, userland generators have to deal with that too, right? Is there a simple way I can, like, intercept and either ignore it or bail or something?
+
+[12:40:53.0978] <TabAtkins>
+(I'm willing to do a lot if it means (a) I don't have to redefine the entire interator infrastructure from ES and (b) iterator helpers will still work.)
+
+[12:41:19.0602] <ljharb>
+i think you probably should just make your own iterator thing that inherits from Iterator.prototype (which will make helpers work), just like map/string/set/etc are their own thing
+
+[12:41:19.0867] <bakkot>
+userland generators do have to deal with it but the problem is that you have to think about it at all
+
+[12:41:24.0781] <bakkot>
+`.return` just doesn't exist on map iterators
+
+[12:41:32.0163] <bakkot>
+anyway yeah, I think I would just add a new iterator prototype, like MapIteratorPrototype. that's what the language would do at least.
+
+[12:42:16.0820] <bakkot>
+you can copy-paste the whole of the MapIteratorPrototype clause; it's actually quite short now
+
+[12:42:30.0302] <TabAtkins>
+yeah, https://tc39.es/ecma262/#sec-%mapiteratorprototype%-object is doable
+
+[12:42:51.0511] <TabAtkins>
+okay, sigh, thought i was done with this edit but back into the breach
+
+[12:45:15.0813] <bakkot>
+apologies
+
+[12:52:50.0521] <TabAtkins>
+So just to be clear, the overriding issue here is that, in practice, the second and third arguments to CreateIteratorFromClosure (giving the brand and prototype) should be unique per call site, more or less?
+
+[13:05:16.0569] <bakkot>
+I would put it a different way: if the second and third arguments are _not_ different, you are saying that these two things are actually the same thing, even though they have different behavior, and you should be really sure you want that
+
+
+2022-05-06
+[07:05:43.0364] <jschoi>
+The BigInt Math incubator call (https://github.com/tc39/Reflector/issues/433) is happening in two hours. 
+
+I've just added an agenda (https://github.com/tc39/incubator-agendas/blob/main/2022/05-06.md) and am almost done with the slides (https://docs.google.com/presentation/d/1og0dwgl_0kQiOubsdwgI1X0ug0A7EEZYIJ2qv2ZDqVw/edit#slide=id.g1281fa65b8c_1_67). Hope to see as many people as possible there. : )
+
+[10:27:35.0034] <Rob Palmer>
+hey delegates, a new in-person plenary attendance survey for July 2022 is awaiting your input here:  https://github.com/tc39/Reflector/issues/434
+
+[10:55:03.0045] <shu>
+jschoi: something i didn't comment about during the call
+
+[10:55:32.0297] <shu>
+why are you doing `Math.abs` on timestamps? are there no monotonic timestamps available?
+
+[10:55:41.0773] <shu>
+both `performance.now()` and `Date.now()` are monotonic afaik
+
+[11:07:12.0330] <ptomato>
+happily, `Temporal.Duration` would be good for that use case, and it has an `abs()` method
+
+[11:31:07.0310] <jschoi>
+> <@shuyuguo:matrix.org> why are you doing `Math.abs` on timestamps? are there no monotonic timestamps available?
+
+It’s been a while since I touched that code, but I believe that I was actually comparing high-resolution time *intervals* to intervals, rather than time instants to instants per se; intervals may be greater or less than each other. The code in the slides was an oversimplification. 
+
+[11:31:16.0943] <jschoi>
+* > <@shuyuguo:matrix.org> why are you doing `Math.abs` on timestamps? are there no monotonic timestamps available?
+
+I believe that I was actually comparing high-resolution time intervals to time intervals; the code in the slides was an oversimplification. 
+
+[11:31:24.0957] <jschoi>
+* > <@shuyuguo:matrix.org> why are you doing `Math.abs` on timestamps? are there no monotonic timestamps available?
+
+It’s been a while, but I believe that I was actually comparing high-resolution time intervals to time intervals; the code in the slides was an oversimplification. 
+
+[11:31:47.0478] <jschoi>
+Afterward, I was formatting the interval differences for display as a fixed-width plain-text table in a CLI’s console output, with the decimal places aligned. I needed to check for the presence of a minus sign in order to make the minus sign not contribute to the table columns’ text alignment.
+
+[11:32:13.0349] <jschoi>
+* I was then formatting them for display as a fixed-width plain-text table in a CLI’s console output.
+
+[11:32:23.0390] <jschoi>
+* > <@shuyuguo:matrix.org> why are you doing `Math.abs` on timestamps? are there no monotonic timestamps available?
+
+It’s been a while since I touched that code, but I believe that I was actually comparing high-resolution time intervals to time intervals; the code in the slides was an oversimplification. 
+
+[11:33:12.0366] <jschoi>
+* > <@shuyuguo:matrix.org> why are you doing `Math.abs` on timestamps? are there no monotonic timestamps available?
+
+It’s been a while since I touched that code, but I believe that I was actually comparing high-resolution time *intervals* to intervals, rather than time instants to instants per se; the code in the slides was an oversimplification. 
+
+[11:33:40.0832] <jschoi>
+* > <@shuyuguo:matrix.org> why are you doing `Math.abs` on timestamps? are there no monotonic timestamps available?
+
+It’s been a while since I touched that code, but I believe that I was actually comparing high-resolution time *intervals* to intervals, rather than time instants to instants per se; intervals may be greater or less than each other. The code in the slides was an oversimplification. 
+
+[11:34:00.0475] <jschoi>
+* Afterward, I was formatting the interval differences for display as a fixed-width plain-text table in a CLI’s console output.
+
+[11:34:53.0160] <jschoi>
+* Afterward, I was formatting the interval differences for display as a fixed-width plain-text table in a CLI’s console output, with the decimal places aligned. I needed to check for the presence of a minus sign in order to make the minus sign not contribute to the table columns’ text alignment.
+
+[11:35:16.0945] <jschoi>
+There was some other BigInt statistical analysis I was doing on those intervals—quartiles, deviations, that sort of thing—which I also was formatting for display in the CLI output’s digit-aligned plain-text table.
+
+[11:35:56.0689] <jschoi>
+* There was some other BigInt statistical analysis I was doing on those intervals—quartiles, deviations, that sort of thing—which I also was formatting for display in the CLI output’s digit-aligned plain-text table.
+
+[11:36:24.0464] <shu>
+i see, thanks
+
+[11:41:56.0426] <shu>
+also what is `clz32` used for?
+
+[11:42:00.0842] <shu>
+and why do you want that to work on bigints...?
+
+[11:42:16.0724] <jschoi>
+I don’t really. Someone on GitHub mentioned it. I have no concrete use cases. I would be happy to remove it.
+
+[11:42:30.0433] <jschoi>
+I think it was about clzN.
+
+[11:42:42.0644] <shu>
+yes, bitLength is a different proposal, and seems appropriate for `BigInt`
+
+[11:42:43.0286] <jschoi>
+Arbitrary bases. Possibly useful in e.g. binary data compression?…
+
+[11:42:47.0722] <shu>
+clz32 does not
+
+[11:42:48.0623] <jschoi>
+Yeah.
+
+[11:42:59.0729] <shu>
+`bitLength` has uses for like, using bigints as arbitrarily large bit vectors
+
+[11:43:08.0397] <shu>
+ * `bitLength` has uses for like, using bigints as arbitrarily large bit vectors
+
+[11:43:47.0771] <jschoi>
+Yes. I myself am trying to compress all Unicode character names into a succinct data structure (for Fun), so I have needed bit lengths (and I *need* bit rank and select).
+
+[11:44:24.0417] <jschoi>
+But those will come later. Well, the Unicode code space fits in Number safe integers anyway, so I guess rank and select aren’t blocked on BigInt Math…
+
+[11:45:50.0090] <jschoi>
+* Yes. I myself am trying to compress all Unicode character names into a succinct lookup data structure (for Fun), so I have needed bit lengths (and I *need* bit rank and select).
+
+[11:46:29.0772] <jschoi>
+…Anyways, Shu, I will remove BigInt clz32 and cbrt from this proposal, since WH isn’t blocking on those.
+
+[11:48:23.0559] <jschoi>
+* But those will come later. Well, the Unicode code space fits in Number safe integers anyway, so I guess my Unicode name needs don’t need BigInts, so I need Numbers rank/select, not BigInt rank/select…
+
+[11:52:03.0732] <jschoi>
+* But those will come later. Well, the Unicode code space fits in Number safe integers anyway, so I guess my Unicode name needs don’t need BigInts, so I Numbers rank/select would work for me, not BigInt rank/select…though BigInt rank/select would certainly make it easier.
+
+
+2022-05-08
+[21:44:08.0148] <Jack Works>
+Is it possible to add a Symbol.unthenable and attach it to the module namespace object? 
+
+[13:45:04.0108] <ljharb>
+> <@jackworks:matrix.org> Is it possible to add a Symbol.unthenable and attach it to the module namespace object?
+
+technically yes, but that exact proposal was basically rejected in 2018 https://github.com/devsnek/proposal-symbol-thenable
+
+[14:52:10.0585] <Justin Ridgewell>
+It sounds like this is the opposite direction. Instead of proactively marking as thenable, you assume thenable and mark as unthenable 
+
+
+2022-05-09
+[19:17:38.0454] <Jack Works>
+Unlucky 
+
+[19:17:39.0125] <Jack Works>
+What's the reason it being rejected? 
+
+[20:28:08.0557] <devsnek>
+it was considered to be adding too much complexity
+
+[20:28:59.0680] <devsnek>
+ultimately i think that was a mistake (i still see people run into the dynamic import problem in the wild) but what can ya do 🤷
+
+[20:30:42.0011] <devsnek>
+hmm here are the notes https://github.com/tc39/notes/blob/main/meetings/2018-05/may-24.md#symbolthenable-for-stage-1-or-2
+
+[21:04:52.0510] <Mathieu Hofman>
+> <@jackworks:matrix.org> Is it possible to add a Symbol.unthenable and attach it to the module namespace object? 
+
+I think unfortunately that ship has definitely sailed. At this point adding such a symbol to the language wouldn't accomplish anything. You can't add such a symbol automatically to all module namespace objects as it'd be Web incompatible. And developers can't add such a symbol themselves (only string identifiers can be exports) before they'd get tripped by a dynamic import.
+
+[00:26:21.0148] <Rob Palmer>
+Just some history... the hazard of dynamic import resolving thenables was known ahead of time.  I tried to point it out but it didn't end up going anywhere as it was framed as yet-another-instance of an existing hazard.
+
+https://github.com/tc39/proposal-dynamic-import/issues/48
+
+[11:59:44.0083] <ljharb>
+> <@mhofman:matrix.org> I think unfortunately that ship has definitely sailed. At this point adding such a symbol to the language wouldn't accomplish anything. You can't add such a symbol automatically to all module namespace objects as it'd be Web incompatible. And developers can't add such a symbol themselves (only string identifiers can be exports) before they'd get tripped by a dynamic import.
+
+why would it be web incompatible? exports can't provide symbols there, specifically so we CAN add a new symbol to module namespace objects at any time.
+
+[12:00:57.0935] <ljharb>
+or do you just mean, making it unthenable would be incompatible
+
+[12:01:00.0266] <Mathieu Hofman>
+I meant adding a symbol such as unthenable by default to all module namespace objects. There are modules in the wild that do expect this thenable behavior
+
+[12:01:33.0999] <ljharb>
+right, true enough. altho probably not a ton, since having a thenable module is broken in node (i forget if it's broken just in the repl, or just not in the repl)
+
+[12:04:41.0932] <Mathieu Hofman>
+It definitely works in the browser, I have personally (ab)used this mechanism
+
+[12:41:42.0955] <Justin Ridgewell>
+Ooo boy, did anyone realize we don't actually follow the Promises A+ spec?
+
+[12:42:04.0166] <Justin Ridgewell>
+We pass the spec's tests, only because it forgot to test a behavior.
+
+[12:42:39.0474] <Justin Ridgewell>
+Step 13-15 of https://tc39.es/ecma262/multipage/control-abstraction-objects.html#sec-promise-resolve-functions
+
+[12:43:13.0625] <Justin Ridgewell>
+We create a new job to handle a thenable passed to `resovle` in `new Promise(res => res(thenable))`
+
+[12:43:19.0495] <Justin Ridgewell>
+That's not correct
+
+[12:43:43.0172] <Justin Ridgewell>
+https://promisesaplus.com/#point-56
+
+[12:44:16.0037] <Justin Ridgewell>
+> If then is a function, call it with x as this, first argument resolvePromise, and second argument rejectPromise, where...
+
+[12:44:26.0925] <Justin Ridgewell>
+It makes no mention of a new job for thenables
+
+[12:44:39.0977] <Justin Ridgewell>
+ * It makes no mention of a new job for thenables
+
+[12:45:06.0223] <Justin Ridgewell>
+This is the root cause of both https://github.com/tc39/ecma262/issues/2770 and https://github.com/tc39/ecma262/issues/1250
+
+[12:47:02.0452] <Justin Ridgewell>
+`thenable.then(resolve)` and `resolve(thenable)` are supposed to take the same number of ticks.
+
+[12:48:05.0217] <Justin Ridgewell>
+But because `resolve(thenable)` creates a new job for doing the `then.call(prom, onFul, onRej)` and the `then` internally creates a new job before calling `onFul`/`onRej`, we get 2 ticks instead of 1.
+
+[12:48:25.0757] <Justin Ridgewell>
+ * But because `resolve(thenable)` creates a new job for doing the `then.call(prom, onFul, onRej)` and the `then` internally creates a new job before calling `onFul`/`onRej`, we get 2 ticks instead of 1.
+
+[13:05:19.0891] <Mathieu Hofman>
+It might be tricky to untangle this. `Promise.resolve()` should most likely not call `.then` in the same tick (It's already unfortunate it does a `[[Get]]` of the `constructor` and `then`). Maybe there is a way to not use a new callback job if we're already inside then callback job? I haven't thought this through yet.
+
+[13:10:10.0351] <Justin Ridgewell>
+Are you thinking about throws?
+
+[13:11:05.0912] <Justin Ridgewell>
+Note that `Promise.resolve` isn't part of A+, so we could diverge and do an tick before invoking the thenable's `then`
+
+[13:11:13.0452] <Mathieu Hofman>
+I'm wondering how you could test this though. The `.then` call would always happen when no user code is on the stack. Maybe the test could create a resolved promise and attach a fulfillment handler (as a "next tick" detection) before returning the test thenable, and ensure that the `.then` is called before the "next tick" ?
+
+[13:14:31.0790] <Justin Ridgewell>
+It's easy, I think:
+```
+new Promise(res => {
+  let sync = true;
+  res({
+    then(onFul) {
+      onFul(called);
+    }
+  });
+  sync = false;
+});
+```
+
+[13:15:07.0036] <Mathieu Hofman>
+ah right, the constructor calls the resolve step, silly me
+
+[13:16:00.0306] <Justin Ridgewell>
+Can you explain why `Promise.resolve(thenable)` shouldn't call `thenable.then` sync?
+
+[13:16:19.0403] <Justin Ridgewell>
+ * Can you explain why `Promise.resolve(thenable)` shouldn't call `thenable.then` sync?
+
+[13:18:24.0675] <Mathieu Hofman>
+It's just a non-obvious reentrancy hazard. Basically the only way to protect yourself from an evil promise is to do `Promise.resolve(() => thenable)`
+
+[13:18:59.0227] <Justin Ridgewell>
+Promise A+ handles reentrancy
+
+[13:19:29.0518] <Mathieu Hofman>
+Which means you're always losing a tick when you don't know where a potential thenable is coming from.
+
+[13:19:59.0591] <Mathieu Hofman>
+I'm talking about user code trying to protect itself from reentrancy induced by evil promises
+
+[13:19:59.0592] <Justin Ridgewell>
+The `onFul` and `onRej` passed to the thenable's `then` are already job deferred callbacks
+
+[13:20:16.0677] <Justin Ridgewell>
+They can only be called once
+
+[13:20:42.0411] <Justin Ridgewell>
+And if `then` throws, then it'll be caught and `onRej` will be called (if neither `onFul` nor `onRej` have already been called)
+
+[13:21:18.0763] <Mathieu Hofman>
+Aye, we're not talking about the same thing.
+
+[13:24:44.0004] <Mathieu Hofman>
+calling `fooResult.then()` can cause synchronous reentrancy in your code if you can't trust where `fooResult` comes from. And there is simply no way to brand check for a native promise without causing similar hazard (`Promise.resolve` will trigger `constructor` and `then` get logic)
+
+[13:25:45.0402] <Justin Ridgewell>
+Sorry, I'm still not getting it
+
+[13:26:35.0463] <Justin Ridgewell>
+If you can't trust `fooResult`, then `Promise.resolve(fooResult)` would give you a trusted promise (and I assume you're already doing this because `fooResult` isn't trusted)
+
+[13:27:01.0842] <Justin Ridgewell>
+So we haven't introduced a new tick?
+
+[13:27:02.0966] <bakkot>
+I don't think code should be trying to protect itself from reentrancy induced by evil promises
+
+[13:27:10.0275] <bakkot>
+except in extremely unusual cases
+
+[13:28:28.0195] <Mathieu Hofman>
+`Promise.resolve({ get then() { doSomethingEvil(); return () => {}; } })` will call `doSomethingEvil` synchronously.
+
+[13:28:52.0969] <Mathieu Hofman>
+> <@bakkot:matrix.org> I don't think code should be trying to protect itself from reentrancy induced by evil promises
+
+Depends on what kind of code you're working on ;)
+
+[13:29:07.0755] <bakkot>
+> except in extremely unusual cases
+
+[13:30:20.0826] <Justin Ridgewell>
+Given `get then() { doSomethingEvil() }`, is sync calling `then() { doSomethingEvil() }` something we need to protect against?
+
+[13:32:18.0674] <Mathieu Hofman>
+Anyway, we're off topic for Justin's topic. I just wish we had a way to brand check native promises so that something like `brandCheck(p) && Reflect.getPrototypeOf(p) === Promise.prototype && !Reflect.getOwnPropertyDescriptor(p)` would be sufficient to know I can safely call `p.then`
+
+[13:33:12.0047] <Mathieu Hofman>
+(given that `Promise.prototype` is frozen of course)
+
+[14:04:10.0499] <ljharb>
+yes, it is, because `Promise.resolve({ then: class {} })` shouldn't throw, it should reject
+
+[14:07:39.0330] <Justin Ridgewell>
+It would still reject with the correct A+ behavior
+
+[14:07:50.0731] <Justin Ridgewell>
+Throws are caught
+
+[15:56:46.0927] <ljharb>
+i'd love a stamp on https://github.com/tc39/notes/pull/197 if someone has a sec
+
+[16:07:34.0240] <rbuckton>
+Rather than adding a symbol to the module, could we allow a user to add a built-in symbol to a function they export named `then` that would indicate it shouldn't be used for Promise fulfillment? Non-native promises might not understand it, but it would still work for imports. 
+
+[16:24:51.0882] <Mathieu Hofman>
+Interesting idea. But that's a protocol that would have to work for every thenable, not just module namespaces. And that means one more lookup during promise resolve.
+
+[16:59:51.0705] <Jack Works>
+> <@mhofman:matrix.org> I think unfortunately that ship has definitely sailed. At this point adding such a symbol to the language wouldn't accomplish anything. You can't add such a symbol automatically to all module namespace objects as it'd be Web incompatible. And developers can't add such a symbol themselves (only string identifiers can be exports) before they'd get tripped by a dynamic import.
+
+What if all modules already have @@thenable: true and you can opt out with
+```js
+import * as self from './file.js'
+self[Symbol.thenable] = false
+```
+
+
+2022-05-10
+[17:02:36.0554] <Jack Works>
+> <@ljharb:matrix.org> right, true enough. altho probably not a ton, since having a thenable module is broken in node (i forget if it's broken just in the repl, or just not in the repl)
+
+ IIRC a machine learning library uses this to emulate TLA, so they don't need to request the user to wait for the Web Assembly to be loaded
+
+[17:06:49.0667] <Jack Works>
+> <@rbuckton:matrix.org> Rather than adding a symbol to the module, could we allow a user to add a built-in symbol to a function they export named `then` that would indicate it shouldn't be used for Promise fulfillment? Non-native promises might not understand it, but it would still work for imports. 
+
+Oh this idea is more interesting, but looks like they don't want to make promises more complex to fix this footgun
+
+[17:11:44.0972] <Mathieu Hofman>
+> <@jackworks:matrix.org> Oh this idea is more interesting, but looks like they don't want to make promises more complex to fix this footgun
+
+Any changes will make promises more complex.
+
+[17:36:37.0318] <Jack Works>
+yeah of course
+
+[17:37:13.0365] <Jack Works>
+that's a tradeoff, some prefer fixing footgun and some prefer simplicity
+
+[17:40:41.0252] <Jack Works>
+https://wintercg.org/work
+
+[00:08:47.0583] <Ashley Claymore>
+What about:
+
+```
+let { _then: then } = import(path, {
+  alias: { then: _then }
+});
+```
+
+
+[01:39:08.0203] <Rob Palmer>
+Reminder: Please fill in the delegate survey to help guide the July plenary that could happen in SF.
+
+https://github.com/tc39/Reflector/issues/434
+
+[11:54:29.0342] <ptomato>
+does anyone know what the difference between `::` and `:::` in ecmarkup grammar signifies? re. https://github.com/tc39/proposal-temporal/issues/2190
+
+[11:59:38.0060] <bakkot>
+`:::` is for the number grammar
+
+[12:00:06.0272] <bakkot>
+ * `:::` is for the grammar used for parsing strings to numbers
+
+[12:01:25.0180] <bakkot>
+in like `+'10'`, I mean, not when parsing actual number literals
+
+[12:01:27.0504] <bakkot>
+it's never used when actually parsing source text
+
+[12:02:10.0106] <bakkot>
+vs, `:` is for translating tokens to parse nodes, `::` is for translating code points to tokens (or regexes, I guess)
+
+[12:02:33.0553] <ptomato>
+I see! thanks
+
+[12:03:07.0280] <bakkot>
+ * vs, `:` is for translating tokens to parse nodes, `::` is for translating code points to tokens (or regexes, I guess)
+
+[12:18:41.0189] <Richard Gibson>
+@bakkot is "never used when actually parsing source text" the distinction between `::` and `:::`?
+
+The latter is also used for the URI grammar at https://tc39.es/ecma262/multipage/global-object.html#sec-uri-syntax-and-semantics , although that grammar does not appear to participate in parsing at all and the only inbound references I see are to |uriReserved| and |uriUnescaped|, the former being a "one of" alternative of 10 static code points and the latter being an alternative of three such single-code-point nonterminals (case-insensitive ASCII letter |uriAlpha|, ASCII digit |DecimalDigit|, and no-escape-required ASCII punctuation |uriMark|).
+
+[12:20:46.0731] <bakkot>
+these decisions all predate my time, and the spec mostly just says _what_ delimiters are used rather than why, in https://tc39.es/ecma262/multipage/notational-conventions.html#sec-syntactic-and-lexical-grammars
+
+[12:21:39.0109] <bakkot>
+but yeah, `:::` is for parsings strings rather than source text seems consistent with the current usages
+
+[12:25:29.0736] <Ashley Claymore>
+* What about:
+
+```
+let { _then: then } = await import(path, {
+  alias: { then: _then }
+});
+```
+
+
+
+2022-05-12
+[04:11:30.0342] <Rob Palmer>
+Here's another reminder:   Please fill in the delegate survey to help guide the July plenary that could happen in SF.  It takes less than one minute.  22 people have completed it so far.
+
+https://github.com/tc39/Reflector/issues/434
+
+[04:12:43.0741] <Rob Palmer>
+Also, we have a proposed date change for the September plenary (originally Sept 13-16) to be Sept 6-9.  Please vote on whether we accept this.
+
+https://github.com/tc39/Reflector/issues/432#issuecomment-1124716392
+
+
+2022-05-16
+[10:43:36.0671] <Ashley Claymore>
+https://es.discourse.group/t/note-in-liveness-section-appears-to-be-normative/1345
+Cross posting question I posted in the forum 🙂
+
+[10:47:59.0264] <shu>
+no, not the intention that it's normative
+
+[10:48:04.0084] <shu>
+liveness is defined on sets of objects
+
+[10:48:04.0164] <annevk>
+Ashley Claymore: that does seem like a bug of sorts; you shouldn't have requirements in notes; notes should be statements of fact, or discuss some context or some such
+
+[10:48:19.0759] <shu>
+the note is clarifying that this clearing operation is on sets of objects, not individual objects
+
+[10:48:58.0800] <shu>
+it's in there because a previous formulation was liveness was buggy in that way
+
+[10:49:03.0335] <Ashley Claymore>
+The bit I’m missing is that there doesn’t seem to be a requirement for what is in the set
+
+[10:49:42.0844] <shu>
+that's defined in liveness, the two bullet points
+
+[10:49:55.0341] <shu>
+there is no requirement on the size of that set
+
+[10:50:15.0651] <shu>
+it is as compliant to never clear any objects as it is to always clear the maximal set of non-live objects
+
+[10:50:16.0528] <annevk>
+shu: I'd rephrase the "must" bits as statements of fact then, this is reading as separate requirements
+
+[10:50:32.0736] <shu>
+annevk: fair
+
+[10:52:13.0281] <shu>
+ * it's in there because a previous formulation of liveness was buggy in that way
+
+[10:52:34.0522] <Ashley Claymore>
+The bit that is tripping me up, is the liveness of a set that only has one object in it: this seems to only refer to the keptAliveList and weakRef-oblivious executions. So it then only clears weakrefs that have that one object as its target. 
+
+[10:52:57.0142] <Ashley Claymore>
+But other weakRefs could allow that object to be reached, without mention of them being cleared
+
+[10:53:03.0636] <Ashley Claymore>
+Apart from in that last note 
+
+[10:53:48.0059] <Ashley Claymore>
+* The bit that is tripping me up, is the liveness of a set that only has one object in it: this seems to only refer to the keptAliveList and weakRef-oblivious executions. So it then only clears weakrefs that have that one object as it’s target. 
+
+[10:54:03.0989] <shu>
+in your example, that set would not be considered live then
+
+[10:54:22.0788] <Ashley Claymore>
+* The bit that is tripping me up, is the liveness of a set that only has one object in it: this seems to only refer to the keptAliveList and weakRef-oblivious executions. So it then only clears weakrefs that have that one object as its target. 
+
+[10:54:29.0061] <shu>
+the WeakRef-oblivious execution part is parametric on this set of objects `S`
+
+[10:54:38.0365] <shu>
+it's not that all derefs for all weakrefs return `undefined`
+
+[10:54:45.0911] <Ashley Claymore>
+Ooo
+
+[10:54:51.0676] <Ashley Claymore>
+That is what I’m missing 
+
+[10:54:51.0772] <shu>
+so if your set `S` has one object in it, but is reachable by a WeakRef that's not in `S`
+
+[10:55:18.0908] <shu>
+the "with respect to `S`" part
+
+[10:55:34.0343] <shu>
+maybe this should be rewritten to be more function-like so it obviously takes `S` as an input or something
+
+[10:55:37.0550] <Ashley Claymore>
+Thanks Shu!
+
+[10:55:51.0737] <shu>
+sure thing, let me think of how to improve the note and this editorially
+
+[10:56:43.0091] <Ashley Claymore>
+I think it is clear, not sure why I didn’t correctly apply that description when reading the other parts 
+
+[10:57:11.0445] <Ashley Claymore>
+If a different way of phrasing it comes to mind I’ll say. 
+
+[10:58:44.0007] <shu>
+ * in your example, that set would be considered live then
+
+[11:06:00.0667] <shu>
+annevk: how would you recommend the "must" be restated as a statement of fact?
+
+[11:06:19.0341] <shu>
+does something like "conformance requires implementations do blah blah" suffice?
+
+[11:25:29.0803] <Ashley Claymore>
+Something like that does sound good to me - "WeakRef-oblivious execution with respect to S" could maybe be "WeakRef\[S\]-oblivious-execution" - though I can see why others may prefer the wordier wording 😆
+
+[11:25:48.0588] <Ashley Claymore>
+> <@shuyuguo:matrix.org> maybe this should be rewritten to be more function-like so it obviously takes `S` as an input or something
+
+ * Something like that does sound good to me - "WeakRef-oblivious execution with respect to S" could maybe be "WeakRef\[S\]-oblivious-execution" - though I can see why others may prefer the wordier wording 😆
+
+
+2022-05-17
+[22:25:55.0519] <annevk>
+shu: requirement: X must be collected when Y happens. statement of fact: When Y happens X is/will be collected. (see also https://ln.hixie.ch/?start=1140242962&count=1)
+
+[22:27:56.0569] <annevk>
+shu: so that's kinda what you're saying, but without providing the context as it's somewhat redundant (i.e., just write "blah blah")
+
+[10:33:23.0121] <bakkot>
+Justin Ridgewell: you going to put https://github.com/tc39/ecma262/pull/2772 on the June agenda?
+
+[10:42:19.0216] <Justin Ridgewell>
+Yes
+
+
+2022-05-18
+[17:16:55.0544] <rbuckton>
+Could a chair assist me? I don't seem to have the correct permissions on https://github.com/tc39/proposal-grouped-and-auto-accessors.
+
+[07:47:09.0204] <ljharb>
+> <@rbuckton:matrix.org> Could a chair assist me? I don't seem to have the correct permissions on https://github.com/tc39/proposal-grouped-and-auto-accessors.
+
+fixed
+
+
+2022-05-19
+[00:59:48.0412] <Rob Palmer>
+Reminder:  The proposed date change for the September Tokyo plenary meeting (to avoid TPAC) is still up for voting.
+
+  Vote here:  https://github.com/tc39/Reflector/issues/432#issuecomment-1124716392
+
+This proposed change brings it a week forwards (was 13-16 Sept) to be 6-9 Sept which is the week that contains Labor Day on Monday 5 Sept.  Meaning if you are travelling to Tokyo your travel plans would likely overlap that Monday.
+
+Currently we have 10 votes in favor of the new date and zero against.  You are welcome to pass feedback privately to the chairs.
+
+
+2022-05-20
+[01:21:46.0156] <yulia>
+I've added a rephrase so that we approach the question a bit differently: many people may be comfortable changing the date but I am worried that I raised the issue and few people will benefit (while some may lose out on family time)
+
+[01:22:02.0014] <yulia>
+ * I've added a rephrase so that we approach the question a bit differently: many people may be comfortable changing the date but I am worried that I raised the issue and few people will benefit (while some may lose out on family time)
+
+[01:34:48.0613] <Rob Palmer>
+Vote here if you would benefit from the date change:
+  https://github.com/tc39/Reflector/issues/432#issuecomment-1132620789
+
+
+2022-05-23
+[09:14:54.0767] <ryzokuken>
+is there a "standard" build flow for proposals?
+
+[09:16:28.0574] <ryzokuken>
+for `Intl.DurationFormat` I went with a in-tree index.html file which simplifies things on one side but on the other it makes it really hard to do anything since every change to the built spec incurs a merge conflict
+
+[09:34:57.0930] <bakkot>
+different people do it different ways. personally I really like ecma262's flow. there's an action on PRs which checks that the build works, and there's a seperate action which runs on commits to main which pushes to gh-pages: https://github.com/tc39/ecma262/blob/main/.github/workflows/deploy.yml
+
+[09:36:15.0356] <bakkot>
+temporal does the same thing but with some random published github action instead of committing a shell script, if you prefer that: https://github.com/tc39/proposal-temporal/blob/bf85d75e95ad5625c30c647d0d12ac32de127931/.github/workflows/deploy.yml
+
+[09:36:57.0919] <snek>
+if you use the template repo
+
+[09:37:00.0873] <snek>
+it has this set up for you already
+
+[09:37:03.0917] <snek>
+https://github.com/tc39/template-for-proposals
+
+[09:38:07.0001] <bakkot>
+the template does not do that
+
+[09:38:22.0983] <bakkot>
+the template pushes to your _main_ branch, which has the merge conflicts problem
+
+[09:38:43.0717] <bakkot>
+personally I dislike committing build artifacts to the main branch, so I do not use the template
+
+[09:41:48.0870] <snek>
+oh i thought it used gh pages
+
+[09:45:04.0743] <bakkot>
+nope
+
+[09:47:43.0551] <ryzokuken>
+> <@bakkot:matrix.org> the template pushes to your _main_ branch, which has the merge conflicts problem
+
+this
+
+[09:47:56.0038] <ryzokuken>
+it wastes time and makes me sad
+
+[09:48:11.0396] <ryzokuken>
+we should probably fix the template to do what ecma262 does?
+
+[09:48:40.0210] <ryzokuken>
+with instructions in the README on what settings to change in order to make it work if needed?
+
+[10:05:10.0166] <bakkot>
+my understanding is that ljharb prefers the thing the template does, and he owns the template. i have not felt strongly enough about this issue to create a competing template thus far but if you are inclined to do so, go for it
+
+[10:05:18.0742] <bakkot>
+or maybe ljharb would be open to changing it?
+
+[10:05:48.0030] <ljharb>
+hm?
+
+[10:06:00.0189] <ljharb>
+what merge conflicts problem are you talking about?
+
+[10:06:49.0008] <ljharb>
+the action in the template should automatically rebase and also force push a commit to PRs and main, that updates the built spec, so any merge conflicts shouldn't last
+
+[10:11:35.0554] <bakkot>
+empirically I don't think it does rebase and force push?
+
+[10:11:39.0024] <bakkot>
+ * empirically I don't think it does rebase and force push?
+
+[10:12:07.0224] <bakkot>
+also I wouldn't want it to; automatically force-pushing to my branch is kind of hostile
+
+[10:15:44.0205] <Justin Ridgewell>
+1. I open a PR, it has an updated index.html
+2. A commit lands on main branch, it’s updated index.html
+3. I pull in main to make updates to my PR
+4. Index.html has a merge conflict
+
+[10:16:00.0195] <Justin Ridgewell>
+I get this constantly
+
+[10:16:03.0250] <bakkot>
+ * empirically I don't think it does rebase and force push? [at least not when the branch is on a fork, which is the common case]
+
+[10:17:15.0114] <Justin Ridgewell>
+I order to fix, I have to build again and `git add index.html` to continue the rebase on my branch
+
+[10:17:48.0436] <Justin Ridgewell>
+And if there are multiple commits that landed in main, I do it for each because there’s always a merge conflict.
+
+[10:18:03.0099] <bakkot>
+yeah it does not seem to do the rebase: https://github.com/bakkot/template-testing/pull/2
+
+[10:19:04.0425] <bakkot>
+though also yeah the problem Justin Ridgewell describes is purely local and is also annoying
+
+[10:19:22.0239] <bakkot>
+ljharb: would you be open to switching the template to do the build on a different branch, instead of committing the build artifact?
+
+[10:22:38.0111] <ryzokuken>
+> <@jridgewell:matrix.org> I order to fix, I have to build again and `git add index.html` to continue the rebase on my branch
+
+Same but it's driving me nuts 
+
+[10:22:53.0316] <ryzokuken>
+* Same but it's driving me nuts 
+
+[10:30:31.0626] <ljharb>
+> <@bakkot:matrix.org> also I wouldn't want it to; automatically force-pushing to my branch is kind of hostile
+
+github etiquette disagrees with this fwiw; once you open a PR you've given control of your branch to the repo maintainers, unless you've unchecked the "allow edits" box
+
+[10:30:49.0631] <ljharb>
+but yeah, i hear what yall are saying re local also
+
+[10:31:15.0602] <ljharb>
+i guess we could switch the template. i did it this way on purpose because it's nice to see, on the same sha, the diff of the input along with the output
+
+[10:31:57.0479] <ljharb>
+if someone wants to make a PR to the template updating all the instructions and actions and stuff, that'd be fine
+
+[10:37:05.0899] <Justin Ridgewell>
+I never need to diff the html, though, I only care to see what the final output is.
+
+[10:37:13.0003] <bakkot>
+> once you open a PR you've given control of your branch to the repo maintainers
+
+I agree with this in general but in practice I am going to be annoyed if I every single time that I commit, push, notice a typo, and re-push, that fails, regardless of whether I have formally given maintainers permission to force-push whenever they want
+
+[10:37:27.0798] <bakkot>
+the ecmarkup output is not currently very optimized for diffs, fwiw
+
+[10:37:41.0035] <bakkot>
+anyway I am happy to make a PR later today if no one else gets to it before me
+
+[11:06:19.0198] <shu>
+is it bad i manually run ecmarkup when i want to update renders of my spec drafts
+
+[11:12:15.0511] <snek>
+yes we're all judging you
+
+[11:12:28.0489] <snek>
+i do that too though
+
+[11:20:43.0859] <shu>
+it's because i don't know how to set up github actions
+
+[14:11:46.0909] <bakkot>
+ljharb: as long as we're tweaking the repo, can we revisit https://github.com/tc39/template-for-proposals/issues/6#issuecomment-343679280 ?
+
+[14:12:15.0068] <bakkot>
+(syntax highlighters don't know about `.emu`, is my main complaint)
+
+[14:12:26.0418] <ljharb>
+i still think "not .html" is the best choice. i'm not attached to ".emu" at all tho
+
+[14:12:49.0417] <bakkot>
+why not `.html`?
+
+[14:12:53.0605] <ljharb>
+is there any way to add an html comment in the outputted file that would kick in a syntax highlighter?
+
+[14:13:03.0953] <ljharb>
+because it's not actually HTML; it won't show up properly in a browser
+
+[14:13:22.0109] <ljharb>
+same reason JSX shouldn't be in a `.js` file :-)
+
+[14:14:11.0237] <bakkot>
+it is actually html
+
+[14:14:17.0032] <bakkot>
+HTML is a very permissive langauge
+
+[14:14:37.0239] <ljharb>
+that it technically is html doesn't change that it's not going to do anything useful in a browser, which is the main use of html
+
+[14:14:39.0561] <bakkot>
+it's true that it won't render correctly but this is true of many html files which don't inline all of their styles and javascript
+
+[14:14:56.0735] <bakkot>
+we still name those files `.html`
+
+[14:15:02.0967] <bakkot>
+mostly so that we get syntax highlighting
+
+[14:15:08.0028] <ljharb>
+those are still destined for the browser
+
+[14:15:10.0177] <ljharb>
+this one isn't
+
+[14:15:28.0602] <bakkot>
+this one is, there's just going to be a preprocessing step first
+
+[14:15:56.0336] <bakkot>
+I don't think this preprocessing step is meaningfully different than including some JS which defines custom elements
+
+[14:16:10.0412] <bakkot>
+like I could, in principle, write a script you could include in the source file which would make it render correctly
+
+[14:16:14.0387] <bakkot>
+I'm just not going to bother doing this
+
+[14:16:33.0771] <ljharb>
+i think that conceptually it's very different
+
+[14:16:40.0200] <bakkot>
+but I still want syntax highlighting
+
+[14:16:42.0836] <bakkot>
+how so?
+
+[14:17:05.0431] <bakkot>
+and, more to the point, why is that conceptual difference more important than syntax highlighting working?
+
+[14:17:11.0814] <ljharb>
+oh, than custom elements. perhaps that's closer, but that's not a compelling use case to me
+
+[14:17:16.0830] <ljharb>
+i agree syntax highlighting is nice
+
+[14:17:26.0671] <ljharb>
+i'm open to a solution that involves the extension not being ".html"
+
+[14:18:16.0352] <bakkot>
+I don't think there is a solution other than making the extension `.html`
+
+[14:19:04.0871] <ljharb>
+what happens if `<!-- language: html -->` is the first line in the file?
+
+[14:22:11.0665] <bakkot>
+nothing in particular happens, most tools do not know about that syntax
+
+[14:23:14.0657] <bakkot>
+the extension is the only thing which is reliably looked at across tools
+
+[14:23:26.0615] <bakkot>
+so we have to choose between reifying the conceptual difference you see or having syntax highlighting supported across tools
+
+[14:31:49.0469] <shu>
+i've always named my spec sources `.html`?
+
+[14:31:55.0108] <shu>
+where does it not use `.html`?
+
+[14:33:49.0228] <bakkot>
+https://github.com/tc39/template-for-proposals/blob/main/spec.emu
+
+[14:34:11.0386] <shu>
+ah, the template
+
+[14:35:11.0369] <shu>
+i mean i don't know what to say other than ecma262's is called `spec.html`, as are all of 402's sources
+
+[14:36:38.0934] <shu>
+if both of the major specs that use ecmarkup do not care about reifying the conceptual difference, it seems like it is not a choice we should make the default for proposal authors
+
+[14:57:18.0416] <ljharb>
+the only reason i didn't change 262's extension a long time ago was git diff/blame/log DX
+
+[14:58:51.0959] <shu>
+isn't that another data point for favoring tooling over conceptual difference here?
+
+[14:59:33.0034] <ljharb>
+the legacy of specific repos? no, i don't think so
+
+[15:00:31.0130] <shu>
+hm git blame has very little to do with the actual tooling benefit being discussed here, true
+
+[15:00:40.0884] <ljharb>
+"syntax highlighting" remains a good point, but that's the only one i've seen so far (still a weighty one)
+
+[15:01:03.0139] <ljharb>
+ * "syntax highlighting" remains a good point, but that's the only one i've seen so far (still a weighty one)
+
+[15:01:04.0404] <shu>
+i don't really understand what's to be gained to have a different extension
+
+[15:01:40.0807] <ljharb>
+fwiw, vscode has a setting that should enable syntax highlighting:
+
+```
+"files.associations": {
+  "*.emu": "html"
+}
+```
+
+[15:01:44.0188] <ljharb>
+ * fwiw, vscode has a setting that should enable syntax highlighting:
+
+```
+"files.associations": {
+  "*.emu": "html"
+}
+```
+
+[15:02:07.0417] <shu>
+of course in isolation it is possible to fix each individual editor
+
+[15:02:20.0306] <shu>
+but that's not really the point?
+
+[15:02:30.0285] <ljharb>
+i know, i'm just exploring options
+
+[15:03:27.0850] <ljharb>
+i wonder if adding `*.emu linguist-language=html` to `.gitattributes` would do it
+
+[15:03:40.0473] <shu>
+what does that do?
+
+[15:03:48.0716] <shu>
+i'm pretty sure my editors don't consult .gitattributes?
+
+[15:04:14.0726] <ljharb>
+i dunno, vscode might
+
+[15:06:45.0965] <bakkot>
+linguist is a github-specific thing
+
+[15:07:15.0088] <bakkot>
+vscode might because it's owned by the same company but I don't think other editors will
+
+[15:07:37.0627] <bakkot>
+(I do not use vscode for ecmarkup, personally.)
+
+[16:26:45.0369] <snek>
+yeah i have a setting in my editor config that tells it to treat emu as html
+
+[16:27:15.0695] <snek>
+`autocmd BufNewFile,BufRead *.emu   set syntax=html`
+
+[16:27:24.0709] <snek>
+also one for `.bs`
+
+[16:29:21.0340] <shu>
+my editor config is an inscrutable artifact frozen in time
+
+
+2022-05-24
+[18:08:20.0856] <rbuckton>
+yulia: I recently added additional information to the explainer for the resource management proposal based on your feedback that some additional context around how this could be integrated into DOM APIs should be included. If you have some time, could you peruse https://github.com/tc39/proposal-explicit-resource-management#relation-to-dom-apis and let me know if that was what you were looking for?
+
+[19:35:26.0712] <rbuckton>
+> <@ljharb:matrix.org> fwiw, vscode has a setting that should enable syntax highlighting:
+> 
+> ```
+> "files.associations": {
+>   "*.emu": "html"
+> }
+> ```
+
+I really need to dust of my ecmarkup vscode extension, I haven't had the time to work in it in a few years now 
+
+[19:36:32.0247] <rbuckton>
+The value in a different extension is in language service functionality that could differ from regular HTML, which can't otherwise be easily distinguished from the content of the file itself. 
+
+[19:37:21.0491] <rbuckton>
+For example, my ecmarkup extension supported go to definition and other features inside of `<emu-grammar>` tags
+
+[19:57:39.0057] <snek>
+ecmarkup language server when
+
+[20:11:17.0326] <bakkot>
+> <@rbuckton:matrix.org> The value in a different extension is in language service functionality that could differ from regular HTML, which can't otherwise be easily distinguished from the content of the file itself.
+
+can you not tell vscode to use a particular language service, the way you can tell it to use a particular syntax?
+
+[20:49:21.0089] <rbuckton>
+> <@devsnek:matrix.org> ecmarkup language server when
+
+There is an old one I wrote several years ago, I started on a new one but have too many other commitments currently. 
+
+[20:50:46.0452] <rbuckton>
+> <@bakkot:matrix.org> can you not tell vscode to use a particular language service, the way you can tell it to use a particular syntax?
+
+That's essentially one and the same, so yes. However, you probably don't want ecmarkup support enabled in every HTML file. 
+
+[21:02:21.0907] <bakkot>
+Oh, sure, reasonable
+
+
+2022-05-26
+[23:25:30.0189] <bakkot>
+ljharb: ping on https://github.com/tc39/template-for-proposals/pull/32
+
+
+2022-05-27
+[00:31:52.0247] <Rob Palmer>
+Reminder:  The stage advancement deadline for the June plenary meeting is today in 8 hours.
+
+[13:03:32.0522] <shu>
+invited experts are delegates for all intents and purposes, right? they can champion proposals?
+
+[13:59:27.0054] <Rob Palmer>
+They can champion proposals, yes. 
+
+
+2022-05-31
+[07:57:24.0852] <pzuraq>
+what's the deadline for adding normative changes for a stage 3 proposal to the agenda?
+
+[08:09:36.0638] <bakkot>
+pzuraq: we haven't established a formal deadline, IIRC, but I know a lot of teams (including mine) do agenda reviews shortly after the deadline for advancement eligibility (which was the 27th), so any changes added after that people are likely not to have had time to review
+
+[08:10:06.0605] <bakkot>
+depending on the scope of the change that may or may not matter
+
+[08:10:24.0677] <bakkot>
+but definitely best to get things in before the deadline for advancement
+
+[08:16:55.0047] <pzuraq>
+for sure, yeah if it's too big of a change we can probably just discuss it and wait until the next meeting to accept it
+

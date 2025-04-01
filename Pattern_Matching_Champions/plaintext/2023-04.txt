@@ -1,0 +1,1298 @@
+2023-04-01
+[17:05:39.0443] <TabAtkins>
+Or the same as an in-progress slides https://docs.google.com/presentation/d/1x5i5nJVwVhbAtQURTCFeezscTNH0Banxgq0_5EgogFY/edit?usp=drivesdk
+
+
+2023-04-03
+[08:01:43.0513] <ljharb>
+reminder i'll be a half hour late
+
+[08:03:07.0291] <TabAtkins>
+kk
+
+[08:06:17.0599] <rbuckton-pto>
+I won't be able to attend today due to moving. 
+
+[10:56:25.0904] <TabAtkins>
+Short notes from today's meeting, we discussed my proposal for matchers-everywhere https://hackmd.io/ubn93HPNT2GCjFwNOPzWCA
+
+[11:00:52.0925] <Jack Works>
+> Somewhat against the extractor syntax, partially due to Scala experience.
+
+[11:01:21.0171] <Jack Works>
+any info of why scala experience is bad?
+
+[11:15:14.0709] <TabAtkins>
+ljharb: ^^^
+
+[12:42:32.0021] <ljharb>
+i'll flesh out the notes again. but mainly that scala is a mess of syntax that means tons of things in different contexts, and it's very unintuitive to me that you can kind of use constructors as extractors
+
+[12:46:21.0848] <ljharb>
+either way it's more that `foo()` syntax imo shouldn't mean anything except invocation, and `foo{}` is just weird
+
+[13:08:45.0954] <mgaudet>
+(Could I get permissions for those notes?)
+
+[13:16:19.0082] <TabAtkins>
+Anyone with the link has permission, you just need to be signed into hackmd
+
+[13:17:39.0514] <TabAtkins>
+re: scala/extractors; I find this syntax fairly appealing here - the constructor/extractor syntax similarity is identical to array/object literals/destructuring.
+
+[13:19:05.0758] <TabAtkins>
+So just like how `let x = [1, {foo: 2}]` constructs some object, and `let [a, {foo: b}] = obj;` deconstructs them, `let x = Foo(1, 2)` constructs an object and `let when Foo(bar, baz) = obj;` deconstructs it.
+
+[13:23:38.0070] <TabAtkins>
+Also the syntax being more compact *is* pretty compelling for stacked cases: `when Foo(a, Baz(b, c))` vs `when ${Foo} with [a, ${Baz} with [b, c]]`
+
+[13:38:06.0689] <TabAtkins>
+Back when I was first reading some Scala code I did find the syntax confusing, because it wasn't clear to me that it *was* basically destructuring, or how it happened, because the unapply methods were created implicitly. (Same with Haskell's similar feature, actually.) But if you have to write them manually in JS I think it's somewhat less of an issue?
+
+[14:05:04.0104] <ljharb>
+`let x = Foo(1, 2)` doesn't construct an object tho, necessarily. only `new Foo(1, 2)` does.
+
+[14:05:34.0726] <TabAtkins>
+You know what I mean :p
+
+[14:05:39.0639] <TabAtkins>
+(worst part of JS syntax imo)
+
+[14:05:56.0110] <ljharb>
+i do, but i still think that's a big issue
+
+[14:06:10.0251] <ljharb>
+function call syntax isn't exclusively, or even mostly, used for constructing objects
+
+[14:06:34.0620] <TabAtkins>
+Sure, but it *is* used for constructing objects.
+
+[14:06:40.0850] <ljharb>
+sometimes, sure.
+
+[14:06:50.0062] <ljharb>
+but only with `new` is that always the case
+
+[14:07:30.0772] <rbuckton-pto>
+Extractors also mirror Rust ADT enum destructuring. 
+
+[14:07:54.0884] <TabAtkins>
+I'm not sure what your objection here is. It parallels object creation, but also just function-calling in general. If you have *any* function that takes two arguments and returns something, you can give it a custom matcher that takes the something and pulls it apart into two arguments.
+
+[14:08:22.0881] <rbuckton-pto>
+This is a conversation I'd love to spend more time discussing, but thst will have to wait until I'm done with my move 😕
+
+[14:08:34.0449] <rbuckton-pto>
+* This is a conversation I'd love to spend more time discussing, but that will have to wait until I'm done with my move 😕
+
+[14:08:36.0081] <ljharb>
+i don't yet have any objection to the need for extractors, but i do object to the two forms of syntax tab showed
+
+[14:08:49.0943] <ljharb>
+object creation is done with `{ }`. *instance* creation is done with `new`
+
+[14:09:04.0513] <TabAtkins>
+Without this syntax, we already *have* extractors (via interpolation patterns). The syntax is the point.
+
+[14:09:16.0008] <ljharb>
+and destructuring of objects is also done with `{ }`. i can't think of anything that would be the inverse of `new` tho
+
+[14:09:20.0878] <ljharb>
+> <@tabatkins:matrix.org> Without this syntax, we already *have* extractors (via interpolation patterns). The syntax is the point.
+
+i'm not sure what you mean?
+
+[14:09:43.0365] <TabAtkins>
+`when Foo(a, b)` is literally identical to `when ${Foo} with [a, b]`. It's *purely* a syntax sugar.
+
+[14:10:15.0328] <ljharb>
+sure, i get that. and i see value in providing sugar for that. but that specific sugar is confusing to me.
+
+[14:10:21.0818] <TabAtkins>
+(and, shitpostily: the opposite of "new" is obviously "wen", which we spell "when".)
+
+[14:10:23.0222] <rbuckton-pto>
+I'm strongly against interpolation patterns, I don't think they're necessary with the right binding syntax, and they will make patterns a mess. 
+
+[14:11:43.0016] <TabAtkins>
+No, interpolations are necessary. `when String()` is *not* identical to `when ${String}`, for instance - the former imposes an addition `with []` constraint.
+
+[14:12:11.0902] <TabAtkins>
+Not to mention being able to reference values for value-comparison (without having to rephrase ident patterns, which would break from destructuring).
+
+[14:13:01.0703] <rbuckton-pto>
+I disagree that they are necessary. 
+
+[14:14:02.0949] <TabAtkins>
+I mean, I just explained why they are. Unless you think it should be *required* that authors handle the return value of a custom matcher, even when they don't need it?
+
+[14:14:18.0114] <rbuckton-pto>
+Pattern matching doesn't need to solve every problem, it needs to solve a specific problem well. Interpolation means we failed to solve the specific problem. 
+
+[14:14:34.0234] <TabAtkins>
+I don't understand that objection.
+
+[14:14:38.0268] <ljharb>
+me neither
+
+[14:14:52.0999] <ljharb>
+certainly anything in particular doesn't need to solve every problem, but solving more problems than intended isn't a failure, it's a bonus
+
+[14:15:18.0903] <rbuckton-pto>
+I've had a long day. like I said, I will need to circle back to this next week when I'm settled in. 
+
+[14:19:06.0939] <rbuckton-pto>
+The gist of what I'm saying is that interpolation makes a very complex syntax infinitely harder to read because you can stuff _anything_ in a pattern. If interpolation is intended to solve a problem, a solution that does not require interpolation will be vastly superior. The only way I would agree to interpolation were for it to be proven it is the only solution to a problem that is worth solving in that design space. I don't think it is. 
+
+[14:19:42.0560] <TabAtkins>
+Even if we move binding patterns to a different syntax, so plain idents can invoke custom matchers, we still need the escape hatch of arbitrary-expressions for *getting* the custom matcher. I'm always super wary of any proposal that suggests we can get by solely with dotted/bracketed ident syntax for referring to things; in practice it always means people having to awkwardly write temp variables somewhere else in their code to store the expression, just so they can provide it via a name later.
+
+[14:19:45.0279] <rbuckton-pto>
+No other pattern matching syntax in prior art requires interpolation, to my knowledge. 
+
+[14:20:10.0382] <TabAtkins>
+Like, `when [a, ${"foo-" + a}]` is a perfectly cromulent thing to want.
+
+[14:20:23.0864] <TabAtkins>
+and the `if() pattern similarly allows escaping to arbitrary-expression syntax.
+
+[14:20:43.0237] <rbuckton-pto>
+> <@tabatkins:matrix.org> Even if we move binding patterns to a different syntax, so plain idents can invoke custom matchers, we still need the escape hatch of arbitrary-expressions for *getting* the custom matcher. I'm always super wary of any proposal that suggests we can get by solely with dotted/bracketed ident syntax for referring to things; in practice it always means people having to awkwardly write temp variables somewhere else in their code to store the expression, just so they can provide it via a name later.
+
+For something as complex as pattern matching, saving things off to another variable far improves readability. 
+
+[14:21:34.0349] <rbuckton-pto>
+> <@tabatkins:matrix.org> Like, `when [a, ${"foo-" + a}]` is a perfectly cromulent thing to want.
+
+You can do that with `if`, which is an acceptable escape hatch
+
+[14:21:40.0334] <TabAtkins>
+In both cases, the arbitrary expression is securely wrapped in some sort of brace construct, so it's clear from a parsing perspective, at least, what the boundaries are between "pattern syntax" and "expression syntax". And should be reasonably clear to readers as well, modulo people's ability to write arbitrarily bad code.
+
+[14:22:16.0680] <ljharb>
+nb, it is very much a goal that you be able to use a match construct in expression position, which means other variables simply aren't an option we should be requiring for anything
+
+[14:23:51.0431] <TabAtkins>
+"`if()` arbitrary expressions are fine, `${}` arbitrary expressions are overly complex" isn't a distinction I can understand right now. 
+
+[14:24:34.0672] <rbuckton-pto>
+> <@ljharb:matrix.org> nb, it is very much a goal that you be able to use a match construct in expression position, which means other variables simply aren't an option we should be requiring for anything
+
+This is a complexity bar that is far too high. I'm sure there is no chance I can convince the committee to allow arbitrary expressions in a RegExp, which is the only existing pattern matching syntax in JS. 
+
+[14:24:58.0789] <ljharb>
+i'm not sure why it would be too high?
+
+[14:25:06.0752] <ljharb>
+regexps are drastically different because they're limited to strings
+
+[14:25:16.0877] <TabAtkins>
+And the regex *itself* isn't composable.
+
+[14:25:20.0134] <ljharb>
+(also they're famously confusing and easy to create vulnerabilities with, which wouldn't apply here)
+
+[14:25:24.0551] <rbuckton-pto>
+> <@tabatkins:matrix.org> "`if()` arbitrary expressions are fine, `${}` arbitrary expressions are overly complex" isn't a distinction I can understand right now. 
+
+`if` in the sense that you can have only one and it comes after the pattern, not in the `if` pattern approach you recently suggested. 
+
+[14:25:43.0344] <rbuckton-pto>
+Because it breaks pattern space from normal expression space. 
+
+[14:25:53.0926] <ljharb>
+i don't think it's reasonable to think of pattern matching in the same terms as regexps; they're just two different beasts
+
+[14:26:13.0168] <rbuckton-pto>
+* `if` in the sense that you can have only one and it comes after the pattern in `match..when`, not in the `if` pattern approach you recently suggested. 
+
+[14:26:17.0051] <TabAtkins>
+(Ron, go continue being on vacation. ^_^)
+
+[14:27:00.0820] <rbuckton-pto>
+> <@ljharb:matrix.org> i don't think it's reasonable to think of pattern matching in the same terms as regexps; they're just two different beasts
+
+They really aren't, but that's a matter of perspective. 
+
+[14:27:04.0693] <ljharb>
+s/vacation/moving, which is nobody's idea of vacation/
+
+[14:27:41.0258] <rbuckton-pto>
+True. And my fridge wasn't delivered today, so I'm making do with this for a week
+
+[14:28:14.0948] <TabAtkins>
+oof
+
+[14:28:44.0834] <ljharb>
+everybody head to ron's for a kegger, bring your own solo cups
+
+[14:29:00.0668] <TabAtkins>
+(my point really tho is just that if you don't have time/energy to interact, it's better to stop interacting rather than partially interact and then have to bow out partway thru)
+
+[14:29:35.0210] <rbuckton-pto>
+That was, in fact, my eldest's mini fridge from their college dorm last year
+
+[14:33:48.0506] <ljharb>
+lol my college mini fridge kept drinks coke outside my parents house for almost 20 years before it broke down, those things are great
+
+[14:37:49.0951] <ljharb>
+ * lol my college mini fridge kept drinks cold outside my parents house for almost 20 years before it broke down, those things are great
+
+
+2023-04-06
+[12:10:29.0739] <littledan>
+If we switched to Tab's "patterns everywhere" proposal as a baseline, and then debated which subset of it to include in the MVP, I'd be happy
+
+[12:11:03.0863] <littledan>
+My <del>toxic trait</del>personal opinion is that all of the contexts for using patterns should be supported.
+
+
+2023-04-07
+[13:06:12.0205] <TabAtkins>
+I'm doing some tweaking of the proposal based on the feedback from last meeting + littledan's private feedback, and littledan had a good idea for the binding syntax, I think.
+
+[13:07:39.0986] <TabAtkins>
+Jordan wanted the ability to drop matchers into destructuring, using the same syntax as what I'm proposing for function args. This sounds great in general, and it means that the `let` and `for` syntaxes no longer become new additions; they're just destructuring that happens to use the first argument form (`when ...` only, no arg name) for the top-level destructuring pattern.
+
+[13:08:21.0925] <TabAtkins>
+So this would mean that adding a matcher to a destructuring pattern like `{a, b: c}` would be spelled like `{a, b: c when ...}`.
+
+[13:09:26.0738] <TabAtkins>
+@littledan suggests that we can use that same syntax *in* matchers as the "naming a chunk of the pattern" syntax - `when [a, b when {prop}]: ...;` to bind the first value to `a`, the second to `b`, and additionally test the second value to make sure it has a `.prop` (and bind that value too, while we're at it).
+
+[13:09:38.0857] <TabAtkins>
+This sounds pretty good to me; I'm gonna rewrite toward that pattern.
+
+
+2023-04-10
+[13:23:48.0083] <rbuckton>
+What are the goals for pattern matching now? It sounds like we're dialing up the complexity of the proposal quite a bit.
+
+[13:25:53.0034] <littledan>
+Well, I think if we added a mechanism for naming, and removed `and`, it could reduce confusion. In my opinion, we should be looking at removing quite a number of features of pattern matching from the initial proposal, but "using in all LHS contexts" and "having some kind of mechanism to handle both naming and matching things" are somewhat core/common across languages (the first more than the second; I could do without the second, but I'd prefer that we don't permit a naming construct in only some contexts but not others)
+
+[13:27:42.0801] <rbuckton>
+I'm not certain what the proposal even looks like currently, I'm getting caught up now.
+
+[13:28:35.0831] <littledan>
+https://gist.github.com/tabatkins/ee6dfe274e81d76b6069c5ed37d3dcbf is what I'm going off of
+
+[13:29:07.0176] <rbuckton>
+I'd honestly hoped the syntax I've been suggesting was both simple as well as more than sufficient to cover the proposal goals.
+
+[13:29:23.0229] <littledan>
+that gist seems to be taking a "yes and" approach to the feedback received--some of the feedback was about missing expressiveness/features, and this adds those. However, much/most of the feedback was about reducing features
+
+[13:29:29.0106] <littledan>
+> <@rbuckton:matrix.org> I'd honestly hoped the syntax I've been suggesting was both simple as well as more than sufficient to cover the proposal goals.
+
+Do you have a writeup of this?
+
+[13:29:59.0909] <rbuckton>
+I don't think special syntax is necessary for `if` or `while`. I don't think interpolation is warranted.
+
+[13:30:00.0995] <littledan>
+Is this the extractors proposal, or something else?
+
+[13:30:26.0097] <rbuckton>
+One moment, I have a meeting.
+
+[13:30:31.0727] <littledan>
+hmm, I don't really understand the argument against `if` and `while`--these seem pretty useful to me, and have precedent way back to SNOBOL
+
+[13:30:33.0601] <littledan>
+(sorry no rush)
+
+[13:33:07.0889] <rbuckton>
+I'm saying that `is` already covers `if` and `while`.
+
+[13:33:14.0892] <rbuckton>
+special syntax isn't necessary.
+
+[13:33:48.0856] <littledan>
+does `is` allow bindings to be created? I think it's pretty useful to conditionally destructure something.
+
+[13:34:10.0806] <rbuckton>
+It does in my version of the syntax.
+
+[13:34:27.0542] <littledan>
+interesting, is it written down somewhere?
+
+[13:37:49.0872] <rbuckton>
+Bits and pieces, in this channel and on GitHub. I'm working on a more comprehensive writeup.
+
+[13:39:57.0900] <littledan>
+great, looking forward
+
+[13:43:47.0654] <rbuckton>
+Here's a summary of my preferred syntax:
+- `is` expressions (`expr is pattern`)
+- `match` expressions
+- literal constant patterns (i.e., `1`, `true`, `null`)
+- qualified name patterns (i.e., `undefined`, `NaN`, `Infinity`, `Option.Some`, etc.)
+- object patterns (i.e., `{ x: 1, y: 2 }`)
+- array patterns (i.e., `[1, 2]`)
+- `and` patterns (conjunctions)
+- `or` patterns (disjunctions)
+- `not` patterns (negation)
+- `let` (`const`/`var`?) patterns (i.e., `let x`)
+- grouping patterns (i.e., `(1 or true)`)
+- extractor patterns (i.e., `Foo({ x: 1, y: 2 })`)
+- relational patterns (i.e., `>= 0`)
+
+[13:44:26.0316] <rbuckton>
+The design is based on C#, Scala, and Rust.
+
+[13:44:58.0260] <rbuckton>
+https://gist.github.com/rbuckton/76a0836b799cedcb882fbccdaac57552#ron-bucktons-pattern-matching-with-extractor-objects-epics-proposal has more details, plus a few extras I don't consider to be MVP.
+
+[13:47:02.0502] <rbuckton>
+In my proposed syntax, you don't need special syntax for `if` or `while`, because it would be handled by `is` expressions and `let` patterns. A `let` pattern introduces a `let` variable in the current scope. If the pattern matches successfully, the variable is initialized. If the pattern does not match, the variable remains unbound (i.e., stays in TDZ).
+
+[13:47:57.0829] <rbuckton>
+So you can easily write:
+```js
+if (value is Point({ x: let x, y: let y })) {
+  console.log(x, y);
+}
+```
+without special syntax for `if`.
+
+[13:48:46.0944] <rbuckton>
+You don't need interpolation, because bindings are explicit. Therefore every free identifier in the pattern is an _IdentifierReference_.
+
+[13:49:20.0469] <rbuckton>
+However, the syntax is relaxed slightly to allow for qualified names (i.e., `a.b.c`) in addition to regular identifiers, much like _DecoratorMemberExpression_.
+
+[13:50:21.0772] <littledan>
+would you allow matching implicitly in assignment expressions, like `[let x, let y] = expr();`
+
+[13:50:47.0481] <littledan>
+or that would be done just by `assert(expr() is [let x, let y])`
+
+[13:50:49.0036] <rbuckton>
+No. That mixes destructuring with pattern matching.
+
+[13:51:06.0725] <littledan>
+Would it work in parameter positions?
+
+[13:51:10.0303] <rbuckton>
+Its possible my proposal could be extended to support that in some way, I haven't really looked into it though.
+
+[13:51:46.0026] <rbuckton>
+> <@littledan:matrix.org> Would it work in parameter positions?
+
+No, not without special syntax. Parameters already support binding patterns.
+
+[13:52:04.0209] <rbuckton>
+I'm also not convinced that makes sense to do.
+
+[13:52:57.0353] <rbuckton>
+I'm not entirely a fan of the idea to use patterns to support some kind of function overloading.
+
+[13:54:22.0038] <rbuckton>
+the phrase "when you have a hammer, every problem looks like a nail" comes to mind. 
+
+[13:54:52.0437] <littledan>
+I'm not talking about function overloading...
+
+[13:55:17.0475] <rbuckton>
+You mentioned parameters though
+
+[13:55:41.0878] <littledan>
+I guess I'm surprised that my intuition that pattern matching should be supported everywhere where we bind things isn't held so widely by others. I can accept it but I don't understand it yet.
+
+[13:55:54.0447] <littledan>
+yeah, this would be purely to fail by throwing
+
+[13:56:05.0124] <rbuckton>
+Binding and assignment are definite. They either happen or an error is thrown. Match patterns are conditional.
+
+[13:56:41.0785] <littledan>
+it's pretty common across languages to reuse match patterns in this definite mode
+
+[13:58:04.0208] <rbuckton>
+The time to do that would have been pre 2015, however. Unless we want to shoehorn pattern matching into destructuring as-is, we already have a "pattern" syntax for assignments and bindings.
+
+[13:58:12.0296] <rbuckton>
+ * The time to do that would have been pre 2015, however. Unless we want to shoehorn pattern matching into destructuring as-is, we already have a "pattern" syntax for definite assignments and bindings.
+
+[13:58:38.0806] <rbuckton>
+By `as-is`, I mean: `const { x: 10, y } = point;`
+
+[13:58:47.0661] <littledan>
+well, I guess Tab's proposal is, you use `when` to switch to the other mode
+
+[13:58:50.0434] <rbuckton>
+ * By "as-is", I mean: `const { x: 10, y } = point;`
+
+[13:59:05.0382] <littledan>
+definitely unfortunate to have a separate mode
+
+[13:59:14.0254] <rbuckton>
+I am not certain we should be flipping back and forth between modes. It will just be confusing.
+
+[13:59:31.0419] <littledan>
+I don't really understand what would be more intuitive--to draw an analogy (usable in similar places) or contrast (use in complementary places)
+
+[13:59:56.0767] <rbuckton>
+We _could_ extend assignment and binding patterns, if we're willing to give up on some of the promises of pattern matching.
+
+[14:00:21.0561] <littledan>
+What I like about the explicit `when` is it makes a contrast clear locally each place pattern matching is used (even if in analogous places).
+
+[14:00:40.0835] <littledan>
+> <@rbuckton:matrix.org> We _could_ extend assignment and binding patterns, if we're willing to give up on some of the promises of pattern matching.
+
+What do you mean by this?
+
+[14:00:41.0914] <rbuckton>
+I'm not entirely partial to just tacking on a `when` keyword everywhere, either. It doesn't read well.
+
+[14:01:02.0813] <rbuckton>
+https://gist.github.com/rbuckton/fca8b4ecc4eb16422b01f2557203082b
+
+[14:01:29.0386] <rbuckton>
+If we extend assignment and binding patterns to be the pattern matching mechanism, we lose out on exhaustiveness.
+
+[14:01:51.0545] <rbuckton>
+It also doesn't work well with free variables.
+
+[14:02:15.0458] <rbuckton>
+i.e., `{ x: Infinity, y } = point` will attempt to overwrite `Infinity` today.
+
+[14:02:24.0969] <rbuckton>
+ * i.e., `({ x: Infinity, y } = point)` will attempt to overwrite `Infinity` today.
+
+[14:03:25.0648] <rbuckton>
+I use C# as prior art for much of my syntax. C# has destructuring, but pattern matching is separate. 
+
+[14:03:34.0040] <littledan>
+Yeah I agree that we can't just extend destructuring to become pattern matching. And we can emphasize the contrast by only allowing them in complementary syntax positions, if we want (possibly with allowances by making a form of extractor available outside patterns too)
+
+[14:03:47.0922] <littledan>
+yeah I should study C# more, and your doc looks interesting, will have to read it
+
+[14:03:53.0803] <rbuckton>
+In C#, you can do `let (x, y) = (10, 20)`, but not `let (10, y) = (10, 20)`.
+
+[14:05:04.0975] <rbuckton>
+In Rust, you can use some patterns in a `let` or `let mut`, but if you actually want conditional patterns, you have to use a `if-let` statement (which is covered by `if..is` in my proposal).
+
+[14:05:51.0748] <rbuckton>
+ * In C#, you can do `var (x, y) = (10, 20)`, but not `let (10, y) = (10, 20)`.
+
+[14:06:03.0038] <rbuckton>
+ * In C#, you can do `var (x, y) = (10, 20)`, but not `var (10, y) = (10, 20)`.
+
+[14:06:17.0527] <littledan>
+OK, I think I'm starting to understand
+
+[14:06:35.0030] <littledan>
+do you think extractors could use the same protocol whether used in pattern or destructuring context?
+
+[14:07:09.0526] <rbuckton>
+If pattern matching is its own thing, separate from destructuring, then you can define a consistent and pure pattern language that is limited to `is` and `match`.
+
+[14:07:39.0135] <littledan>
+huh, pure?
+
+[14:07:47.0108] <rbuckton>
+> <@littledan:matrix.org> do you think extractors could use the same protocol whether used in pattern or destructuring context?
+
+Yes. That's what C# and Scala do.
+
+[14:08:13.0598] <rbuckton>
+By "pure" I mean not polluted with existing destructuring caveats.
+
+[14:08:27.0253] <rbuckton>
+such as exhaustiveness.
+
+[14:09:25.0456] <littledan>
+OK, thanks, I think I see what you're getting at. Will need to think on this a bit more.
+
+[14:10:08.0245] <rbuckton>
+ * By "pure" I mean "not polluted with existing destructuring caveats".
+
+[14:12:23.0020] <littledan>
+yeah I guess then I agree that it'd be valid for us to start with `is` + extractors
+
+[14:12:35.0595] <rbuckton>
+There may be some syntax issues with https://gist.github.com/tabatkins/ee6dfe274e81d76b6069c5ed37d3dcbf too. If `when` is only allowed in a binding pattern, we lose parity with assignment patterns. If `when` is allowed in assignment patterns, then you have a syntax conflict with array patterns.
+
+[14:12:57.0004] <rbuckton>
+i.e., `({ x: when [y] } = value)` is already legal Js.
+
+[14:12:59.0618] <rbuckton>
+ * i.e., `({ x: when [y] } = value)` is already legal JS.
+
+[14:14:02.0246] <rbuckton>
+Since it doesn't provide parity with assignment patterns, I'm not sure "anywhere you have a binding" is viable.
+
+[14:14:06.0734] <TabAtkins>
+> <@rbuckton:matrix.org> What are the goals for pattern matching now? It sounds like we're dialing up the complexity of the proposal quite a bit.
+
+One new goal: integrate patterns more into the language, so it feels more natural rather than a one-off.
+
+[14:14:40.0105] <ljharb>
+`is` creating bindings sounds very unintuitive
+
+[14:15:01.0380] <ljharb>
+it's a test, like `===`, it shouldn't have any side effects
+
+[14:15:24.0664] <littledan>
+> <@ljharb:matrix.org> `is` creating bindings sounds very unintuitive
+
+This is my concern. It would be really nice if it worked! I think it'd be clear a binding is created if there is an explicit `let` or `const` in it, though.
+
+[14:15:27.0579] <rbuckton>
+It has prior art with a fair amount of usage, so its not new.
+
+[14:15:43.0082] <littledan>
+> <@ljharb:matrix.org> `is` creating bindings sounds very unintuitive
+
+ * This is my concern. It would be really nice if it worked! I think it'd be somewhat clear a binding is created if there is an explicit `let` or `const` in it, though.
+
+[14:15:51.0351] <ljharb>
+prior art in other languages is useful to note but doesn't obviate JS idiom and confusion
+
+[14:16:20.0263] <littledan>
+I don't think "variables are usually declared in separate statements" is a JS-specific thing. At least, it doesn't separate JS and C#.
+
+[14:16:23.0238] <rbuckton>
+the way C# added patterns to the language is very similar to how JS is trying to add patterns to the language.
+
+[14:16:44.0412] <littledan>
+still, I haven't fully shaken my surprised-ness at the `x is let y` syntax
+
+[14:16:50.0170] <ljharb>
+that doesn't mean we must, or should, follow all of C#'s choices
+
+[14:17:04.0251] <rbuckton>
+I find all of the `when` extensions to binding patterns far more surprising.
+
+[14:17:29.0292] <ljharb>
+why?
+
+[14:17:43.0139] <ljharb>
+"do this thing" vs "do this thing when X matches"?
+
+[14:18:03.0787] <rbuckton>
+Also, an expression form of `let` is something I've often seen requested, including from Anders Hejlsberg.
+
+[14:18:38.0588] <ljharb>
+we already have an expression form of var, and it's bad. i wouldn't ever want to see an expression form of let or const, personally.
+
+[14:18:57.0478] <ljharb>
+ * we already have an expression form of var, and it's bad. i wouldn't ever want to see an expression form of let or const, personally. (i guess it's assignment, not var, but still)
+
+[14:19:17.0918] <ljharb>
+i don't like conflating "creating bindings" with "expressions", personally.
+
+[14:19:39.0291] <littledan>
+> <@rbuckton:matrix.org> Also, an expression form of `let` is something I've often seen requested, including from Anders Hejlsberg.
+
+I guess I'd expect an expression form of let to have a clear analogy to the statement form. And that's why `is` creating bindings feels a little surprising to me--it reads kinda backwards. OTOH it is *really* nice to have the variables marked this way.
+
+[14:20:05.0811] <rbuckton>
+> <@ljharb:matrix.org> "do this thing" vs "do this thing when X matches"?
+
+The keyword and its position are odd and don't align with the language, reducing readability. It feels more like trying to shove a keyword in to make things work.
+
+[14:20:30.0865] <ljharb>
+what alignment with the language would you prefer to follow?
+
+[14:20:48.0023] <ljharb>
+i'm not sure we really have anything like this already - conditionally doing a thing, statically
+
+[14:21:13.0426] <rbuckton>
+> <@littledan:matrix.org> I guess I'd expect an expression form of let to have a clear analogy to the statement form. And that's why `is` creating bindings feels a little surprising to me--it reads kinda backwards. OTOH it is *really* nice to have the variables marked this way.
+
+C#'s usage also evolved from `out` parameters, i.e.:
+
+```cs
+if (dictionary.TryGetValue(key, out string x))
+{
+  Console.WriteLine(x);
+}
+```
+
+[14:21:44.0209] <ljharb>
+not a compelling inspiration :-/
+
+[14:22:56.0184] <rbuckton>
+> <@ljharb:matrix.org> what alignment with the language would you prefer to follow?
+
+Most of the JS language (and most C-derived languages) tend to follow english-language left-to-right reading order.  
+
+[14:23:15.0810] <ljharb>
+that is true
+
+[14:23:27.0923] <ljharb>
+altho `do x, when y` is pretty naturally english language
+
+[14:23:35.0847] <ljharb>
+much like `do/while` loops
+
+[14:23:42.0921] <ljharb>
+seems aligned to me
+
+[14:23:59.0083] <littledan>
+"what is really natural language-like" is sort of a never-ending rabithole
+
+[14:24:08.0814] <littledan>
+and "left to right" sort of doesn't add anything
+
+[14:24:09.0738] <rbuckton>
+> <@ljharb:matrix.org> altho `do x, when y` is pretty naturally english language
+
+Except the syntax proposed isn't that. its `do when y x`, which makes no sense as a reader.
+
+[14:24:24.0072] <ljharb>
+maybe i'm unclear on what proposed syntax you're looking at
+
+[14:24:29.0116] <ljharb>
+i agree `do when y x` wouldn't make sense
+
+[14:24:32.0001] <littledan>
+like, is f(x) or x.f() more left-to-right?
+
+[14:24:50.0576] <rbuckton>
+`let when 10 = y` is Tab's proposed syntax
+
+[14:24:59.0644] <rbuckton>
+ * `let when y = x` is Tab's proposed syntax
+
+[14:25:03.0462] <ljharb>
+oh. well yeah i'm not a big fan of let when and friends anyways
+
+[14:25:34.0437] <ljharb>
+i think pattern matching's primary value is in the construct, a predicate test, and in arg binding places (fns, catch)
+
+[14:25:50.0638] <rbuckton>
+> <@littledan:matrix.org> like, is f(x) or x.f() more left-to-right?
+
+That's all dependent. `toss(ball)` makes sense, as does `car.Start()`
+
+[14:26:03.0862] <ljharb>
+as does `start(car)` :-p
+
+[14:26:09.0867] <littledan>
+ljharb: Do you like Ron's idea of having extractors in destructuring as well?
+
+[14:26:10.0557] <rbuckton>
+> <@ljharb:matrix.org> i think pattern matching's primary value is in the construct, a predicate test, and in arg binding places (fns, catch)
+
+I agree with `catch`, not with functions though.
+
+[14:26:28.0109] <ljharb>
+the value in functions is that it would throw if the argument didn't match
+
+[14:26:50.0862] <ljharb>
+i'm not sure which idea you're referring to. i'm still unconvinced about extractors in general.
+
+[14:26:59.0424] <littledan>
+> <@ljharb:matrix.org> the value in functions is that it would throw if the argument didn't match
+
+maybe extractors in destructuring would be enough for this?
+
+[14:27:14.0380] <ljharb>
+there is a *lot* of runtime argument typechecking code that matching in function args would help obviate
+
+[14:27:16.0537] <rbuckton>
+`car.Start()` is more like a demand, i.e. "Ron, call your father"
+
+[14:27:38.0187] <rbuckton>
+> <@ljharb:matrix.org> there is a *lot* of runtime argument typechecking code that matching in function args would help obviate
+
+I don't think patterns, destructuring, or extractors are the answer to that.
+
+[14:27:49.0919] <rbuckton>
+I think decorators are better for that.
+
+[14:28:01.0808] <ljharb>
+i agree decorators would also solve it. but i don't think they're a better solution
+
+[14:28:07.0299] <rbuckton>
+Because decorators allow for reflection. Patterns/extractors/etc. will not.
+
+[14:28:11.0673] <ljharb>
+because i'm not decorating an argument. i'm matching against it.
+
+[14:28:24.0648] <rbuckton>
+I don't think you're matching against it either.
+
+[14:28:34.0782] <ljharb>
+and that's part of the benefit - i want less reflection. dynamism makes code harder to read.
+
+[14:28:35.0784] <rbuckton>
+You _bind_ an argument to a parameter.
+
+[14:28:45.0744] <ljharb>
+i don't, the engine does.
+
+[14:28:52.0679] <ljharb>
+i validate it and decide if my function throws or not.
+
+[14:28:58.0451] <rbuckton>
+> <@ljharb:matrix.org> and that's part of the benefit - i want less reflection. dynamism makes code harder to read.
+
+I strongly disagree. JS suffers from a lack of reflective capabilities.
+
+[14:29:08.0793] <ljharb>
+those two statements aren't in conflict
+
+[14:29:39.0566] <ljharb>
+i'm not saying i want to forbid reflection, i'm saying i actively want solutions that disallow it. it's fine if there's *also* solutions that allow it.
+
+[14:30:11.0917] <ljharb>
+i can (and do) use a linter to prevent patterns i don't want in my code. but i want static structural validation of arguments, often.
+
+[14:30:38.0843] <littledan>
+well, to be fair, the right decorator library would validate arguments but also not be reflectable
+
+[14:30:52.0999] <littledan>
+(or, only reflect to certain parties)
+
+[14:34:22.0949] <rbuckton>
+I'm not 100% opposed to finding a way to support patterns on parameters, but I do think having it for a v1 or MVP will significantly delay or kill the proposal as there are too many complexities it introduces.
+
+[14:34:39.0227] <rbuckton>
+Especially if function overloading is on the table.
+
+[14:34:54.0209] <littledan>
+I think we're violently agreeing? since no one is opposing extractors in all destructuring contexts
+
+[14:34:57.0279] <rbuckton>
+However, I'm very motivated by `catch` patterns.
+
+[14:35:08.0794] <rbuckton>
+I want extractors in destructuring and pattern matching.
+
+[14:35:43.0069] <littledan>
+> <@rbuckton:matrix.org> I want extractors in destructuring and pattern matching.
+
+so, even if you think decorators are *better* for the use case, you think extractors should be there as well
+
+[14:35:55.0232] <rbuckton>
+More like, Extractors are an evolution of destructuring, regardless of the status of pattern matching. It only makes sense to include them in pattern matching as well given the parity with `{}` and `[]`.
+
+[14:36:22.0476] <littledan>
+> <@rbuckton:matrix.org> Especially if function overloading is on the table.
+
+I'm not sure if this is the case? Anyway I'd hope function overloading reuses stuff from pattern matching
+
+[14:36:46.0524] <rbuckton>
+> <@littledan:matrix.org> so, even if you think decorators are *better* for the use case, you think extractors should be there as well
+
+Extractors have a different purpose. Yes, there is overlap at the edges, but both features have different targets.
+
+[14:37:22.0746] <littledan>
+> <@rbuckton:matrix.org> More like, Extractors are an evolution of destructuring, regardless of the status of pattern matching. It only makes sense to include them in pattern matching as well given the parity with `{}` and `[]`.
+
+Well, it's not that "it only makes sense", it's that they're essential for some core uses of pattern matching. Anyway as long as extractors are in both function parameters (maybe through destructuring) and in patterns, I think we all agree
+
+[14:37:23.0330] <rbuckton>
+> <@littledan:matrix.org> I'm not sure if this is the case? Anyway I'd hope function overloading reuses stuff from pattern matching
+
+Function overloading and pattern matching will be a huge problem when coupled with generators.
+
+[14:37:44.0682] <rbuckton>
+Due to how argument evaluation occurs for generators.
+
+[14:38:20.0341] <littledan>
+> <@rbuckton:matrix.org> However, I'm very motivated by `catch` patterns.
+
+this will inevitably be tricky given that catch parameters already experience destructuring... but those are already bizarrely special-cased, so maybe that's OK.
+
+[14:38:43.0192] <littledan>
+> <@rbuckton:matrix.org> Due to how argument evaluation occurs for generators.
+
+OK, so the matching happens earlier, what is the issue?
+
+[14:40:01.0086] <rbuckton>
+> <@littledan:matrix.org> OK, so the matching happens earlier, what is the issue?
+
+Sorry, disregard. It seems generators perform argument evaluation early anyways. For some reason I thought argument evaluation didn't occur until after the generator starts.
+
+[14:40:04.0071] <ljharb>
+> <@rbuckton:matrix.org> Especially if function overloading is on the table.
+
+why would that ever be on the table
+
+[14:40:36.0334] <ljharb>
+one of the most confusing parts of C++?
+
+[14:40:38.0501] <rbuckton>
+> <@ljharb:matrix.org> why would that ever be on the table
+
+That was one of the area's Yulia seemed interested in pursuing.
+
+[14:40:42.0062] <ljharb>
+ * one of the more confusing parts of C++?
+
+[14:41:00.0374] <rbuckton>
+> <@ljharb:matrix.org> why would that ever be on the table
+
+ * That was one of the areas Yulia seemed interested in pursuing.
+
+[14:41:03.0751] <ljharb>
+tbh that's something i'd likely object to even stage 1 for. i see no value in that
+
+[14:41:28.0690] <ljharb>
+but imo we don't have to design for something that hasn't been run by the committee *at all* and doesn't also have consensus within the champion group
+
+[14:44:11.0947] <ljharb>
+(i suspect i wouldn't be the only one horrified by the concept)
+
+[14:46:01.0824] <littledan>
+sure but future-proofing for it isn't bad
+
+[14:49:09.0073] <rbuckton>
+> <@ljharb:matrix.org> not a compelling inspiration :-/
+
+(this was regarding C#'s `out` parameters)
+
+I think there is value in something like C#'s `out` and `ref` parameters, or at least the `ref` parameters. Especially as the shared structs proposal evolves. A `ref` parameter might be the only way to support atomic reads and writes of a private field of a `struct`:
+
+```js
+// without `ref`:
+
+// with typed array
+Atomics.load(someUint64Array, 0);
+
+// with a shared struct public field
+Atomics.load(someStruct, "x");
+
+// no way to load a private field...
+ 
+// with `ref`:
+
+// with typed array
+Atomics.load(ref someUint64Array[0]);
+
+// with a shared struct public field
+Atomics.load(ref someStruct.x);
+
+// with a shared struct private field
+Atomics.load(ref someStruct.#y);
+```
+
+See: https://github.com/rbuckton/proposal-refs
+
+[14:51:05.0416] <ljharb>
+sure. but we can't futureproof for something that doesn't have obvious syntax.
+
+[14:54:09.0947] <rbuckton>
+Besides, I much prefer C#'s `if (dictionary.TryGetValue(key, out var value))` to `if (map.has(key)) { let value = map.get(key); ... }` due to the repetition and potential performance issues of querying a key twice.
+
+[14:55:33.0224] <rbuckton>
+Returning multiple values in JS usually means destructuring, which can be inefficient. Multiple `ref`/`out` values is far more efficient because you just assign to the referenced binding. No intermediary object or iterable needed.
+
+[14:56:09.0278] <ljharb>
+efficiency isn't more important than clarity to a reader
+
+[14:56:48.0357] <rbuckton>
+All this is to say, an in-situ `let` binding might be warranted for both pattern matching and shared structs/`ref`.
+
+[14:57:50.0033] <rbuckton>
+I think `ref` (and `out`) is far clearer than `*` and `&` in C++. And _many_ languages have similar constructs, so this is familiar territory for many developers.
+
+[14:58:25.0180] <rbuckton>
+Plus, `ref` doesn't involve pointers, which is a plus.
+
+[14:58:47.0455] <ljharb>
+sure. within the context of a confusing thing, there's definitely clearer ways to express it. but i think the thing itself is confusing, and "it exists in other languages" isn't a compelling argument to me
+
+[15:00:44.0006] <rbuckton>
+"the thing itself" being the idea of "pass a reference to something"? 
+
+[15:00:50.0759] <ljharb>
+yes
+
+[15:01:07.0865] <rbuckton>
+That's all over the ECMAScript spec though. A `ref` is just a Reference.
+
+[15:01:21.0015] <ljharb>
+the spec isn't the language, and is full of massively confusing concepts
+
+[15:01:42.0311] <ljharb>
+our job isn't to port other langs to JS nor is it to expose the spec at runtime :-)
+
+[15:01:50.0191] <ljharb>
+anyways ref stuff we can talk about another time
+
+[15:02:20.0807] <littledan>
+OK, seems like there's a lot to debate here, and I trust you all that you'll do a good job; I'm going to dip out again
+
+[15:11:55.0562] <rbuckton>
+I'll leave this here before moving on. My main reason for initially writing up a spec for `ref` was to resolve an issue with Decorators that the Angular team brought up 8 years ago, now, which is the problem with Decorators and TDZ:
+
+```js
+class A {
+  @Type(B)
+  b;
+}
+
+class B {
+  @Type(A)
+  a;
+}
+```
+
+No matter which way you order `A` and `B`, one of the decorators will throw because of TDZ. Closing over `A` and `B` with an arrow can work, but both an arrow function and a class have a `typeof` of "function", which means you have to close over _everything_, not just functions.
+
+Angular "solved" this by introducing a `forwardRef`, which is a function that encapsulates a function-returning arrow in an object:
+
+```js
+class A {
+}
+```
+
+[15:12:21.0843] <rbuckton>
+ * I'll leave this here before moving on. My main reason for initially writing up a spec for `ref` was to resolve an issue with Decorators that the Angular team brought up 8 years ago, now, which is the problem with Decorators and TDZ:
+
+```js
+class A {
+  @Type(B)
+  b;
+}
+
+class B {
+  @Type(A)
+  a;
+}
+```
+
+No matter which way you order `A` and `B`, one of the decorators will throw because of TDZ. Closing over `A` and `B` with an arrow can work, but both an arrow function and a class have a `typeof` of "function", which means you have to close over _everything_, not just functions.
+
+Angular "solved" this by introducing a `forwardRef`, which is a function that encapsulates a function-returning arrow in an object:
+
+```js
+class A {
+  @dec(fowardRef(() => B))
+  b;
+}
+class B {
+  @dec(A);
+  a;
+}
+```
+
+[15:12:57.0287] <rbuckton>
+`ref` was intended to solve this more simply:
+
+```js
+class A {
+  @dec(ref B)
+  b;
+}
+class B {
+}
+
+[15:13:03.0819] <rbuckton>
+ * `ref` was intended to solve this more simply:
+
+```js
+class A {
+  @dec(ref B)
+  b;
+}
+class B {
+  @dec(ref A)
+  a;
+}
+```
+
+[15:28:13.0783] <ljharb>
+ok - but have you considered an alternative solution, which is that cycles are bad and you shouldn't have them at all?
+
+[15:28:59.0609] <ljharb>
+like that's tongue in cheek but also serious. at some point we shouldn't be trying to make "cycles" easier, you perhaps should indeed have to write terrible code to enable them
+
+
+2023-04-11
+[17:59:12.0534] <rbuckton>
+> <@ljharb:matrix.org> ok - but have you considered an alternative solution, which is that cycles are bad and you shouldn't have them at all?
+
+Its not cycles that is the problem, it's references. I'm not trying to create an `A` that creates a `B` that creates an `A`, etc. I'm just trying to hold a reference. `function` doesn't have this issue, but `class` does and `class` is the thing you more than likely want type information for. The fact that this is even akin to a cycle is a problem with the design of JS and the choices we made to design classes. The things people want to do are reasonable, it's the language design that makes the implementation unreasonable. `ref` would go a long way to addressing this disparity. 
+
+[21:59:42.0829] <ljharb>
+"the things people want to do are reasonable" is, i think, the assumption you may be making here
+
+[03:08:05.0230] <rbuckton>
+No, the kinds of scenarios I'm talking about are reasonable. 
+
+
+2023-04-14
+[15:20:20.0948] <TabAtkins>
+> `({ x: when [y] } = value)` is already legal JS
+
+what. how. what does that parse as
+
+[15:21:14.0058] <TabAtkins>
+mfer is that pulling out the x property and assigning its value to `when[y]`
+
+[15:23:43.0158] <ljharb>
+yep
+
+[15:24:18.0954] <ljharb>
+it's super terrible and i don't understand how the 2015 era committee thought it was acceptable, but here we are
+
+[15:28:32.0911] <TabAtkins>
+clearly we need to swap `when`=>`case` and just call it a day
+
+[15:31:26.0523] <ljharb>
+hard no :-p
+
+[15:32:47.0686] <TabAtkins>
+`while` is reserved and it's basically a synonym for `when`, we can use that. :p
+
+[15:34:04.0428] <ljharb>
+nah it means something different, while implies continuousness while when implies a single occurrence
+
+[15:36:07.0528] <TabAtkins>
+> <@rbuckton:matrix.org> Besides, I much prefer C#'s `if (dictionary.TryGetValue(key, out var value))` to `if (map.has(key)) { let value = map.get(key); ... }` due to the repetition and potential performance issues of querying a key twice.
+
+This is why we can't kill interpolation matchers, fwiw. `when ${Map.get(key)}(val)` is definitely the sort of custom matcher i'd expect to work.
+
+[15:49:48.0296] <rbuckton>
+I don't think we should be mixing expression-space and pattern-space like that. It's too complicated, no other language does this, and it will make patterns so much harder to reason over. 99% of the time you won't need it, and you can just save off the value in a variable when you do. 
+
+[15:50:16.0365] <TabAtkins>
+The message I was quoting from you essentially does that.
+
+[15:50:40.0763] <TabAtkins>
+And the `${}` syntax very explicitly bounds the context-switch, in *precisely* the same way that it does in strings.
+
+[15:52:21.0308] <TabAtkins>
+And generally, allowing someone to refer to *predefined variables* but not things calculated on the fly is a code smell, I find. You end up needing to do this sort of thing infrequently, but when you need it it's pretty annoying to not have it.
+
+[15:54:06.0080] <rbuckton>
+> <@tabatkins:matrix.org> The message I was quoting from you essentially does that.
+
+The message you quoted doesn't involve pattern matching at all? 
+
+[15:55:13.0635] <TabAtkins>
+...right, but the pattern I provided is doing the same thing, and can be used in the same way under my "matchers everywhere" proposal.
+
+[15:55:41.0328] <TabAtkins>
+`if(${Map.get(key)}(val) = mymap) { ...val is visible here...}`
+
+[15:56:08.0083] <rbuckton>
+But patterns are going to be complicated enough on their own. 
+
+[15:56:56.0278] <TabAtkins>
+The fact that you can make arbitrarily complicated patterns if you want to hurt yourself doesn't mean we should artificially restrict what patterns can do when used well.
+
+[15:58:05.0617] <TabAtkins>
+And that precise coding pattern you gave from C# *is* useful, and better than what you have to do in JS, and also is almost *certainly* never going to be something directly in JS. But a matcher *can* do it without stretching the concepts too far.
+
+[15:58:07.0323] <rbuckton>
+> <@tabatkins:matrix.org> The fact that you can make arbitrarily complicated patterns if you want to hurt yourself doesn't mean we should artificially restrict what patterns can do when used well.
+
+What this says to me is "here is a feature you should never use because it makes your patterns arbitrarily complicated."
+
+[15:58:33.0241] <rbuckton>
+> <@tabatkins:matrix.org> And that precise coding pattern you gave from C# *is* useful, and better than what you have to do in JS, and also is almost *certainly* never going to be something directly in JS. But a matcher *can* do it without stretching the concepts too far.
+
+That pattern was still purely expression-space. 
+
+[15:59:30.0080] <TabAtkins>
+"purely expression-space" is... arguable. It's got a binding name in one of its positions, distinct from the function arguments in the other positions. It's a mixture of expression space and a limited assignment expressions.
+
+[16:00:11.0572] <TabAtkins>
+I dunno if C# has destructuring, but if that was in JS it could be a complex destructuring pattern, mixed into the expression as well.
+
+[16:00:21.0415] <rbuckton>
+> <@tabatkins:matrix.org> I dunno if C# has destructuring, but if that was in JS it could be a complex destructuring pattern, mixed into the expression as well.
+
+It does. 
+
+[16:00:51.0262] <TabAtkins>
+then yeah it's not just expression space, it's explicitly a mix of an expression and a destructuring pattern, two distinct syntax spaces.
+
+[16:02:08.0348] <TabAtkins>
+It's just inverted in which it considers primary - the C# starts from expression and then signals a switch into destructuring with the `out` keyword, while my matcher starts in matcher syntax and signals a switch into expression with the `${}` wrapper.
+
+[16:11:30.0262] <rbuckton>
+`out` isn't destructuring. It's roughly analogous to `&` (address of) in C. 
+
+[16:18:59.0885] <rbuckton>
+We *already* have a split syntax between binding/assignment patterns and expression space. And you're proposing two different syntaxes to bounce between all three (binding/assignment, expression, and match). It's too complicated. 
+
+
+2023-04-15
+[21:00:39.0470] <Jack Works>
+> <@tabatkins:matrix.org> mfer is that pulling out the x property and assigning its value to `when[y]`
+
+be like: when I know for (x.y of z) is a thing 
+
+
+2023-04-17
+[08:02:50.0572] <TabAtkins>
+Be in the meeting in a sec, booting up the computer
+
+[08:11:16.0170] <TabAtkins>
+omfg, i hate windows *so much*, no matter what I do startup gradually becomes consumed with Windows-related crap that saturates disk I/O and makes everything unusable
+
+[09:02:28.0831] <rbuckton>
+I'm still working on it, but here's what I discussed earlier: https://gist.github.com/rbuckton/b6a98fd423595b1c6b4162c4f039b6b1
+
+[09:09:33.0812] <rbuckton>
+Also, here is the list of tenets/principles I posted in the Zoom chat in response to Richard: https://gist.github.com/rbuckton/fca8b4ecc4eb16422b01f2557203082b
+
+[09:10:59.0485] <Willian Martins>
+Did you produce any meeting notes for the meeting today? I couldn’t attend today and I’d like to catch up. 
+
+
+2023-04-18
+[08:17:44.0492] <mgaudet>
+If there's no binding on an array rest pattern, is the binding code still required to exhaust the iteration? 
+
+ie. 
+
+```js
+
+let generated = 0;
+function* counting_generator() {
+    generated = 0;
+    for (var i = 0; i < 10; i++) {
+        generated++;
+        yield i;
+    }
+}
+
+match (counting_generator()) {
+    when [a,b,...]: {
+        console.log(generated); // This prints... 3? 10?
+    }
+}
+```
+
+[08:18:43.0617] <mgaudet>
+(if you give a binding to the rest pattern, it of course is exhausted matching array destructuring, but it's unclear what the semantics are for matching 'at least two' ) 
+
+[08:19:50.0843] <mgaudet>
+ * (if you give a binding to the rest pattern, it of course is exhausted, matching array destructuring, but it's unclear what the semantics are for matching 'at least two' ) 
+
+[08:19:59.0465] <mgaudet>
+ * (if you give a binding to the rest pattern, it of course is exhausted, matching array destructuring, but it's unclear what the semantics are for matching 'at least three' ) 
+
+[09:05:59.0334] <ljharb>
+yes, that's the purpose of the lone ellipsis
+
+[09:06:22.0063] <ljharb>
+ * yes, that's the purpose of the lone ellipsis iirc
+
+[09:58:57.0839] <mgaudet>
+My read of the explainer had been that the ellipsis was used to disambiguate between an array with _n_ elements and an array with at least _n+1_ elements -- but you could validly make that distinction without consuming the rest of the iterator 
+
+[10:01:24.0596] <rbuckton>
+> <@ljharb:matrix.org> yes, that's the purpose of the lone ellipsis iirc
+
+My understanding was that it *didn't* exhaust the iterator, but instead calls `return`. 
+
+[10:03:00.0571] <rbuckton>
+> <@mgaudet:mozilla.org> My read of the explainer had been that the ellipsis was used to disambiguate between an array with _n_ elements and an array with at least _n+1_ elements -- but you could validly make that distinction without consuming the rest of the iterator 
+
+I wouldn't expect `...` to test for _n_+1. I would expect both to test for at least _n_, but for a fixed size like `[1, 2]` to test that _n_+1 doesn't exist. 
+
+[10:03:22.0768] <ljharb>
+hm, i might be remembering wrong
+
+[10:03:32.0059] <ljharb>
+let me read up and page it back in :-)
+
+[10:04:39.0171] <rbuckton>
+`[1,2,...]` should be satisfied by `[1,2]`. An ellipsis means "zero or more", which matches assignment/binding patterns
+
+[10:07:42.0024] <ljharb>
+ah ok, so then … is when it doesn't check for a next one
+
+[11:25:57.0995] <TabAtkins>
+Right, `[a, b, ...]` pulls two elements from the iterator and no more.
+
+[12:57:58.0393] <mgaudet>
+So what's the value of `[a,b,...]` vs writing `[a,b]`? 
+
+[12:58:10.0786] <mgaudet>
+apologies if I'm being slow
+
+[13:00:30.0054] <rbuckton>
+`[a, b]` matches exactly two elements, no more, no fewer. `[a, b, ...]` matches at least two elements. 
+
+[13:07:51.0941] <mgaudet>
+Oh... that seems wrong
+
+[13:08:03.0060] <mgaudet>
+(like, from a design / understanding bit)
+
+[13:08:51.0480] <mgaudet>
+because that's not how destructuring works... `let [a,b] = [1,2,3,4,5]`; and I get patterns are not destructuring, but that seems weird to me  
+
+[13:09:05.0957] <mgaudet>
+I'll think on it some more
+
+[13:12:56.0428] <rbuckton>
+Destructuring doesn't require exact matches, patterns do (mostly). 
+
+[13:13:33.0976] <mgaudet>
+And it sort of has to be this way if you want array length checking... 😬 
+
+[13:16:02.0396] <mgaudet>
+So, a parallel question. `when {a, b, ...rest}: { }`; does this match the object destructuring where `...rest` gets all the properties, or just the non-`a,b` properties?
+
+[13:50:45.0670] <TabAtkins>
+Right, it's different from destructuring, but matches *many* pattern-matching features, because the length of an array/iterator is very commonly something you want to select on.
+
+[13:51:12.0745] <TabAtkins>
+(The alternate would be to force people to write something like `when [a, b] and {length: 2}`, which, ugh.)
+
+[13:53:11.0812] <TabAtkins>
+For the object question, hm, I thought destructuring only gave you the non-selected properties and wrote the spec accordingly, but apparently it does indeed just bind all of them. So we should match, there's no particular reason not to.
+
+[13:54:30.0708] <mgaudet>
+(note: I found the destructuring behaviour surprising, but agree probably should match if there's no compelling reason not to) 
+
+[13:55:12.0616] <TabAtkins>
+Yeah we should be matching destructuring in all aspects unless there's a good reason to diverge. No reason to make things arbitrarily different.
+
+[13:56:13.0494] <TabAtkins>
+Destructuring is just so weird. I thought for sure, since `[a, b, ...c]` omits the first two items from c, that surely `{a, b, ...c}` would do the similar thing. Ah well.
+
+[14:00:23.0409] <rbuckton>
+> <@tabatkins:matrix.org> Destructuring is just so weird. I thought for sure, since `[a, b, ...c]` omits the first two items from c, that surely `{a, b, ...c}` would do the similar thing. Ah well.
+
+It omits properties named `a` and `b`, though. I'm not sure what's weird about it. 
+
+[14:01:18.0160] <TabAtkins>
+Oh shoot, I did a boneheaded example for myself and convinced myself of the wrong thing. Indeed you are correct, so the spec as written is correct.
+
+[14:01:49.0724] <TabAtkins>
+So mgaudet I think you're wrong about what object destructuring does, at least from a quick test in the console
+
+[14:02:06.0091] <TabAtkins>
+`var {a, b, ...c} = {a: 1, foo: 2}` gives a c object with `{foo:2}` only
+
+[14:03:31.0502] <rbuckton>
+The difference with match patterns is that most languages agree that list/tuple/array patterns are fixed-length/exhaustive and require a discard syntax to relax, while object patterns aren't exhaustive. 
+
+[14:03:57.0869] <mgaudet>
+... how did I convince myself the other way was true.
+
+
+2023-04-19
+[18:41:58.0009] <mgaudet>
+(I found the bug in my destructuring example which convinced me it worked the other way; some careless editing when working in devtools because of `let` had me thoughtlessly rename the bindings, forgetting that the binding names themselves are the shorthand) 
+
+
+2023-04-26
+[11:34:47.0474] <ljharb>
+I can’t make the meeting next Monday
+
+
+2023-04-27
+[10:55:24.0546] <TabAtkins>
+Me neither, I'll be on vacation
+

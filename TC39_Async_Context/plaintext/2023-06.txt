@@ -1,0 +1,378 @@
+2023-06-08
+[01:25:46.0883] <Andreu Botella>
+My understading was that all of Node.js's `AsyncLocalStorage` could be implemented on top of `AsyncContext`, but I'm looking into reusing some of the Node.js benchmarks for my implementation in V8, and it's not clear to me that `enterWith` is always implementable that way
+
+[01:34:22.0596] <Andreu Botella>
+oh, wait, maybe that's not actually the case
+
+
+2023-06-12
+[13:32:38.0498] <Andreu Botella>
+Tomorrow's AsyncContext meeting is showing in my agenda at both 18 *and* 19 CEST
+
+[13:36:06.0111] <Andreu Botella>
+(16/17 UTC, 9/10 Pacific)
+
+[13:36:13.0640] <Andreu Botella>
+I'm assuming it's the latter
+
+[14:12:09.0188] <Chris de Almeida>
+s/b 17 UTC
+
+
+2023-06-13
+[23:01:23.0354] <Chengzhong Wu>
+it should be 17 UTC
+
+[03:29:25.0383] <littledan>
+Yeah I see the earlier one as “cancelled” but all calendar integration is broken..
+
+[07:22:45.0360] <Sergey Rubanov>
+Hello. Is AsyncContext meeting open for everyone? May I invite my colleague joseph@socketsupply.co?
+
+[08:25:17.0068] <littledan>
+Yes, please do!
+
+[08:25:53.0301] <littledan>
+anyone can make contributions to TC39 things online if they sign https://tc39.es/agreements/contributor/
+
+[09:31:25.0895] <Justin Ridgewell>
+Sergey Rubanov: I added Joseph to the invite, please ensure they sign the IPR agreement before joining
+
+[09:32:04.0116] <Justin Ridgewell>
+See you all in 30min!
+
+[09:41:26.0321] <Sergey Rubanov>
+> <@jridgewell:matrix.org> Sergey Rubanov: I added Joseph to the invite, please ensure they sign the IPR agreement before joining
+
+Thank you, I'll make sure Joe signed it
+
+[11:59:42.0342] <Mathieu Hofman>
+littledan: in the meeting you mentioned you still believe there is a way to fast path task termination with reference counting when snapshots are not in play. While I have to think more about this, I have a few clarifying questions:
+- Do you expect that context termination would be a user exposed API. Aka would there be a callback executing when a task is deemed to be terminated
+- What is the expected behavior of termination in the case of pending promises (or captured snapshots) which are garbage collected, thus preventing any future execution in the context to occur through them. Do we expect the task to be considered terminated in that case (if they were the last related promise / snapshots) ?
+
+[12:36:15.0829] <Mathieu Hofman>
+To clarify, if a program adds a reaction to an unresolved promise, then the program drops the resolvers, there is no way for the pending reaction to ever be called. If that reaction was the last thing that captured the async context, would that async context be deemed terminated?
+
+[12:40:59.0887] <Mathieu Hofman>
+Basically from my point of view, either we explicitly exclude GC from decrementing task termination counters, resulting in "pending" task that are in fact no longer pending (regardless of the usage of snapshot or not), or we admit that task termination is intrinsically tied to GC, thus making the user land process for task termination observation simply be a FinalizationRegistry registration of an object used as context value. If I'm missing something, please correct me.
+
+[13:28:47.0563] <littledan>
+> Do you expect that context termination would be a user exposed API. Aka would there be a callback executing when a task is deemed to be terminated
+
+Yeah that's a possibility. Another possibility is that it's not exposed to JS. I don't see any meaningful change in the implementation work required by these two options, but maybe I'm missing something
+
+[13:30:46.0741] <littledan>
+> in the meeting you mentioned you still believe there is a way to fast path task termination with reference counting when snapshots are not in play.
+
+To be clear, I think this would amount to internal-only snapshot calls leading to the appropriate reference counting operations, and just omitting user calls of snapshot operations. Fundamentally the same thing but maybe less risky because the counts can't be misused/left hanging unless the browser does that. And this would mean that we wouldn't have to muck up the snapshot API with a reference counting concept.
+
+[14:07:36.0488] <Mathieu Hofman>
+As I mentioned above, I think that whether a user API for snapshots is involved or not has no bearing on the problem. If a pending promise with reaction can be collected without the reactions being executed, that means task termination is intrinsically tied to GC. If these resolver-less promise cannot be collected, that means these tasks will leak / never terminate. If task termination is tied to GC, we would be opposed to a user exposed API specific to task termination, as we are invested in keeping gc observability to the existing WeakRef / FinalizationRegistry feature.
+
+[14:27:18.0808] <littledan>
+About the GC tie-in, I completely disagree. If task termination does necessarily tie into GC, then I agree with others that we should keep it far away from AsyncContext and not add it in TC39.
+
+> What is the expected behavior of termination in the case of pending promises (or captured snapshots) which are garbage collected, thus preventing any future execution in the context to occur through them. Do we expect the task to be considered terminated in that case (if they were the last related promise / snapshots) ?
+
+Remember that a Promise captures a snapshot when you .then it, not when the Promise is created. If that promise never resolves... well, then that task is left hanging and never terminates. Maybe there should be some kind of event to notify folks when that happens, but I don't think it's the normal termination event, or should ever be treated as similar to one.
+
+[14:27:56.0894] <littledan>
+Allocating a resolver-less promise doesn't make any particular task hang
+
+[14:28:20.0752] <littledan>
+ * About the GC tie-in, I completely disagree. If task termination does necessarily tie into GC, then I agree with you and others that we should keep it far away from AsyncContext and not add it in TC39.
+
+> What is the expected behavior of termination in the case of pending promises (or captured snapshots) which are garbage collected, thus preventing any future execution in the context to occur through them. Do we expect the task to be considered terminated in that case (if they were the last related promise / snapshots) ?
+
+Remember that a Promise captures a snapshot when you .then it, not when the Promise is created. If that promise never resolves... well, then that task is left hanging and never terminates. Maybe there should be some kind of event to notify folks when that happens, but I don't think it's the normal termination event, or should ever be treated as similar to one.
+
+[14:28:56.0091] <Mathieu Hofman>
+> About the GC tie-in, I completely disagree. If task termination does necessarily tie into GC, then I agree with others that we should keep it far away from AsyncContext and not add it in TC39.
+I guess we agree? I'm saying I don't want a TC39 API for AsyncContext task termination if it would ultimately allow to observe GC
+
+[14:28:58.0747] <littledan>
+I 100% agree about how we should limit GC observability
+
+[14:29:03.0866] <Mathieu Hofman>
+ * > About the GC tie-in, I completely disagree. If task termination does necessarily tie into GC, then I agree with others that we should keep it far away from AsyncContext and not add it in TC39.
+
+I guess we agree? I'm saying I don't want a TC39 API for AsyncContext task termination if it would ultimately allow to observe GC
+
+[14:29:04.0446] <littledan>
+yeah sounds like we agree
+
+[14:29:19.0369] <littledan>
+I'm just disagreeing that we should do anything in particular about GC'd promises
+
+[14:29:24.0621] <littledan>
+or that it'd make any kind of sense to
+
+[14:31:30.0187] <Mathieu Hofman>
+I think my question above was: You create a promise, add a reaction (.then it), then drop the resolvers. What happens to the task captured in the reactions? Is it ok for the task to be considered "pending" forever?
+
+[14:31:47.0680] <littledan>
+yeah, my answer is, "yes, it's pending forever"
+
+[14:32:04.0367] <littledan>
+I had the impression that someone was claiming otherwise, that we'd have to let GC terminate it
+
+[14:32:37.0961] <littledan>
+I think for some applications around saving memory, you *do* want something-or-other with GC around tasks to do something, but this is a distinct problem  from the accurate task termination notification
+
+[14:35:35.0864] <littledan>
+BTW I also wanted to mention: I got a chance to discuss AsyncContext with Anne vK at the Web Engines Hackfest, and explained the problems around what the model is for which snapshot is restored, and how this is non-trivial for events. He was generally not negative about the proposal, just expressing that this needed to be worked out. So I think it will be good for Ms2ger and Yoav to get in touch with Anne at some point, now that he has this basic context.
+
+[14:53:09.0615] <Mathieu Hofman>
+If task termination is strictly about counting the number of reactions added (increment), and executed (decrement), then I am ok with an AsyncContext specific API from a technical pov, however I am doubtful of the usefulness of such a user-land API, and warry of the surprises it will cause (aka question like why is my task never terminated)
+
+[14:53:41.0446] <Mathieu Hofman>
+ * If task termination is strictly about counting the number of reactions added (increment), and executed (decrement), then I am ok with an AsyncContext specific API from a technical pov, however I am doubtful of the usefulness of such a user-land API, and warry of the surprises it would cause (aka question like why is my task never terminated)
+
+[14:55:14.0973] <littledan>
+I'm confused; why do you think this will be a common case?
+
+[14:55:30.0508] <littledan>
+Some use cases for this capability are linked in the top of this document: https://docs.google.com/document/d/1yQy8RNeGXLr99bNpy-7tA1Ch7wN0piekp_-JwxC8FtA/edit
+
+[14:56:03.0587] <Mathieu Hofman>
+well Snapshot for one case. If you create one, basically you can never terminate the task
+
+[14:57:16.0469] <Mathieu Hofman>
+unless we make the snapshot disposable, which would nerf its `.run`
+
+[14:57:28.0871] <littledan>
+right, this would require that we change the snapshot API
+
+[14:57:37.0193] <littledan>
+which is why I think we should think it through right now
+
+[14:58:06.0994] <littledan>
+we could end up deciding against wanting to support this, but it's not a straightforward thing to add later if we build off the current API, for exactly this reason
+
+[14:58:55.0437] <littledan>
+One way it could work: By default, an AsyncContext.snapshot is nerfed in its first `.run`, but you can also allocate a "persistent" one which will stay there until you do Symbol.dispose on it. (Obviously this can cause leaks...)
+
+[15:54:22.0851] <Thomas Nguyen>
+This is a first draft of what I got from the Wiz team. Going to talk to the Angular team tomorrow to see if they have anything else 
+
+[15:54:24.0019] <Thomas Nguyen>
+https://docs.google.com/document/d/1hsGuccEtXiTGW9Xok0jhMPhfPtVCrZz-WaEoL1d8bI0/edit?usp=sharing
+
+[15:57:28.0461] <littledan>
+> <@iteriani:matrix.org> https://docs.google.com/document/d/1hsGuccEtXiTGW9Xok0jhMPhfPtVCrZz-WaEoL1d8bI0/edit?usp=sharing
+
+This is really great! One thing I think we should consider more: If we expect AsyncContext to be used for reactivity tracking (or, React hooks), that is quite a hot path, and it would be good to ensure that this is practical for implementations. Given the advanced progress on a V8 proof-of-concept, I'm hopeful that we can actually experiment here in the next few quarters.
+
+[15:57:45.0852] <littledan>
+> <@iteriani:matrix.org> https://docs.google.com/document/d/1hsGuccEtXiTGW9Xok0jhMPhfPtVCrZz-WaEoL1d8bI0/edit?usp=sharing
+
+ * This is really great! One thing I think we should consider more: If we expect AsyncContext to be used for reactivity tracking (or, React hooks), that is quite a hot path, and it would be good to ensure that this is practical for implementations to meet the implied performance expectations. Given the advanced progress on a V8 proof-of-concept, I'm hopeful that we can actually experiment here in the next few quarters.
+
+[15:59:07.0178] <littledan>
+also: can you open-source Wiz? 🥺
+
+
+2023-06-14
+[10:52:34.0058] <Thomas Nguyen>
+oh
+
+[10:53:05.0848] <Thomas Nguyen>
+Wiz's situation is a little in flux right now xD 
+
+[10:53:28.0821] <Thomas Nguyen>
+we're trying to reimagine it with all the new framework ideas that have been floating around
+
+[11:45:12.0368] <bakkot>
+This seems relevant (forgive me if it has been discussed already; I haven't followed all the discussion): https://groups.google.com/a/chromium.org/g/blink-dev/c/gN2zLde-2jI/m/2et_Mfv3AAAJ
+
+specifically the "The signal inheritance bit [1], however, would need transpilation support to propagate the current signal across async (Promise) boundaries."
+
+[11:49:08.0666] <Justin Ridgewell>
+Yah, this polyfill could be done with an `AsyncContext`
+
+
+2023-06-16
+[10:09:47.0742] <shu>
+i want to repeat a point i made at the last plenary: i wouldn't interpret "other web platforms could be polyfilled" as motivation for building `AsyncContext`
+
+[10:10:07.0486] <shu>
+independently i think there's already a lot of positive signal of developer enthusiasm
+
+[10:28:58.0325] <Kris Kowal>
+> <@shuyuguo:matrix.org> independently i think there's already a lot of positive signal of developer enthusiasm
+
+And the usual dynamic-scope curmudgeons have already been not only appeased, but converted into supporters.
+
+[12:13:17.0623] <shu>
+yall out here being curmudgeonly about well-behaved dynamic scope while PHP has been thriving for 20 years on $$var
+
+[12:33:18.0157] <Kris Kowal>
+bash doesn’t even have gensyms, but bash isn’t interesting.
+
+[12:33:55.0620] <Kris Kowal>
+…or does it, muhahahah
+
+[12:42:55.0433] <littledan>
+> <@shuyuguo:matrix.org> i want to repeat a point i made at the last plenary: i wouldn't interpret "other web platforms could be polyfilled" as motivation for building `AsyncContext`
+
+I think a more relevant thing is: this shows a need in the web platform for multiple independent variables, which is something you were asking about the need for. Rather than polyfilling, I would say that it reveals the use case that you could implement fancier scheduling algorithms (while continuing priority inheritance) than the web platform provides as built-in if AsyncContext is provided to JS rather than just built-in things.
+
+[12:43:44.0224] <littledan>
+(The need for fancier scheduling than postTask provides has been part of its limited uptake, I think)
+
+[12:46:08.0451] <shu>
+does it?
+
+[13:40:50.0702] <littledan>
+Well, yeah, priority and task attribution are parallel, unrelated variables 
+
+[13:41:15.0647] <littledan>
+Blink implements the multiplexing there
+
+[13:41:56.0570] <shu>
+yes, but does it follow from that that we need a user-programmable multiplexing primitive?
+
+[13:42:33.0988] <littledan>
+Well, OK it doesn’t prove that
+
+[13:43:12.0263] <littledan>
+The first sentence was a weaker claim, that the web platform itself needs multiple variables 
+
+[13:43:15.0030] <shu>
+anyway i'm already convinced of developer demand
+
+[13:43:31.0478] <shu>
+i just disagree with the narrower claim that the web APIs we're working on are also evidence of that demand
+
+[13:44:53.0853] <littledan>
+Something something extensible web manifesto? Anyway sounds like I don’t need to make that claim in the first place.
+
+[13:46:11.0871] <littledan>
+My hope is that we will come to understand that AsyncContext can back task attribution and yield priority inheritance, but I think we need to get further in the prototype implementation to prove this out
+
+[13:46:17.0013] <shu>
+yeah something something extensible web manifesto is the right default
+
+[13:46:28.0333] <shu>
+but there are compelling counterexamples, like text shaping
+
+[13:46:38.0260] <shu>
+we've learned you don't actually want to expose primitives for people to build shitty text shapers
+
+[13:46:41.0784] <shu>
+you just want to expose text shaping
+
+[13:46:56.0181] <shu>
+this space is kinda new to me so i don't actually know yet
+
+[13:47:00.0211] <shu>
+maybe it should be extensible
+
+[13:47:24.0821] <littledan>
+PSA: lobby your local browser vendor to support https://github.com/WICG/canvas-formatted-text
+
+[13:48:38.0737] <littledan>
+Anyway I agree with your example and this is why Intl.Segmenter doesn’t support line breaks 
+
+[13:53:39.0376] <bakkot>
+what if instead the text shaper calls a wasm program embedded in the font to do the text shaping
+
+https://github.com/harfbuzz/harfbuzz/blob/main/docs/wasm-shaper.md
+
+[13:55:32.0003] <shu>
+i mean that's probably fine
+
+
+2023-06-20
+[15:01:41.0675] <littledan>
+> <@abotella:igalia.com> My understading was that all of Node.js's `AsyncLocalStorage` could be implemented on top of `AsyncContext`, but I'm looking into reusing some of the Node.js benchmarks for my implementation in V8, and it's not clear to me that `enterWith` is always implementable that way
+
+That's right, the omission of `enterWith` is deliberate. You can also see it excluded from James M Snell 's subset API in https://github.com/wintercg/proposal-common-minimum-api/blob/b0e1bb3fb0ca8b964fe55267696943d1c2d6c94f/asynclocalstorage.md#L4
+
+
+2023-06-23
+[13:16:04.0965] <littledan>
+Are we going to give an update in the next TC39 meeting?
+
+[13:18:53.0489] <littledan>
+some things we might discuss:
+- The additional use cases presented by Google
+- Progress on the implementation design strategies and draft implementation in V8, including explaining the kinds of things that we're trying to prove to get to Stage 3
+- Progress on HTML integration (or at least just laying out the conceptual design space), including explaining what we need to do to get to Stage 3
+- More depth on the layering with task attribution [maybe we should get a better understanding with Yoav first before bringing this to the committee]
+- Some of the answers that we've been reaching in the issue tracker
+
+
+2023-06-27
+[02:10:49.0314] <Yoav Weiss>
+Anything on the agenda for today's call? I'm not sure I can make it..
+
+[02:24:32.0105] <littledan>
+I'll also have a hard time attending today, but I think we maybe should discuss the update for the next meeting.
+
+[02:26:07.0124] <Chengzhong Wu>
+We'll have Stephen from Datadog to talk about Node.js' integration and his latest work https://github.com/nodejs/node/pull/48528 on refactoring AsyncLocalStorage today
+
+[02:26:41.0787] <littledan>
+At some point, I'd like to continue the conversation we were.having about the various layerings between AsyncContext and browser features. I don't have a problem with those web features moving forward without AsyncContext yet, but I feel like I haven't yet explained clearly how they *could* sit on top of it, what that would even mean.
+
+[02:26:51.0131] <Andreu Botella>
+I'm also currently reworking the design doc to address some of the concerns Shu mentioned in a meeting I had with him last 
+
+[02:26:56.0658] <Andreu Botella>
+ * I'm also currently reworking the design doc to address some of the concerns Shu mentioned in a meeting I had with him last month
+
+[02:27:42.0733] <littledan>
+Yoav Weiss: Did you end up having any contact with Ms2ger or annevk on the task attribution html integration?
+
+[08:53:53.0832] <Justin Ridgewell>
+I won't be attending the next plenary
+
+[14:24:49.0734] <littledan>
+Not even remotely?
+
+[15:23:16.0894] <Justin Ridgewell>
+It's at 4am in NYC. Coupled with a tight deadline for a project, I won't be able to make it.
+
+[15:57:53.0402] <shu>
+yeah i ain't waking up at 1am
+
+[15:58:10.0940] <shu>
+maybe i'll attend the afternoon half
+
+
+2023-06-28
+[18:21:46.0854] <littledan>
+Good to know, what topics do you want us to schedule when you will be awake?
+
+[09:12:01.0774] <Andreu Botella>
+re. the conversation about thenable handling in yesterday's call, AFAIU this is not something that the current spec text handles, right?
+
+[09:12:03.0838] <Andreu Botella>
+should it?
+
+[10:37:16.0413] <Andreu Botella>
+oh, I see that this is already handled by the promise job machinery in the spec
+
+[10:37:53.0475] <Mathieu Hofman>
+Yeah afaik thenables are simply adopted into native promises
+
+[10:38:42.0825] <Mathieu Hofman>
+The only case where you'd need special handling is if the code does `thenable.then(onFulfilled)`, but then it's really up to the promise library to adopt AsyncContext internally
+
+[10:38:48.0330] <Andreu Botella>
+/me makes a note to turn Node.js's `test-async-local-storage-thenable.js` into test262 tests
+
+
+2023-06-29
+[06:53:17.0254] <littledan>
+Could someone summarize how the meeting yesterday went?
+
+[06:53:34.0875] <littledan>
+ * Could someone summarize how the recent meeting went?
+
+[08:29:49.0852] <Justin Ridgewell>
+The node team seems to be ok with all of our choices, even if they're incompatible with AsyncLocalStorage
+

@@ -1,0 +1,224 @@
+2025-01-16
+[02:58:59.0404] <Andreu Botella>
+I made some additional changes to the web integration document to clarify certain things
+
+[02:59:02.0176] <Andreu Botella>
+https://github.com/tc39/proposal-async-context/pull/109
+
+
+2025-01-17
+[22:53:42.0133] <Iliasbhal>
+👋 Hello team!
+
+I wrote another polyfill for this feature. 
+It works a bit differently that the current one, it works only by intrumenting the Promise object. 
+
+check it out: https://github.com/iliasbhal/simple-async-context.
+It satifies the test suite in the repo + some extra tests that I added.
+
+Let me know what you think ;) 
+
+[23:15:26.0075] <Iliasbhal>
+Turns out, they work kind of similary. Few differences here and there:
+
+  - On the strategy used to store data in the context. 
+    `simple-async-context` let the garbage collectore reclaim memeory, it won't programmaticaly delete stored data.
+
+  - `simple-async-context` will polyfill timers as well.
+  - The way it instruments Promise is slightly different.
+
+[23:16:31.0499] <Iliasbhal>
+* Turns out, they work kind of similary. Few differences here and there:
+
+- On the strategy used to store data in the context.
+`simple-async-context` let the garbage collectore reclaim memory (hopefully 😆), it won't programmaticaly delete stored data.
+- `simple-async-context` will polyfill timers as well.
+- The way it instruments Promise is slightly different.
+
+[23:40:49.0990] <Iliasbhal>
+Note: We don't programaticaly delete Variable data because otherwise we won't be able access the context from a running timer.
+
+
+2025-01-18
+[09:13:54.0441] <Phil>
+Does this work in Bun, Deno, Node and the Web?
+
+[14:57:36.0791] <Phil>
+I wrote a package that now depends on your package: https://code.foss.global/push.rocks/smartcontext, but it does not seem to work in Chrome? Node works though.
+
+[14:57:48.0477] <Phil>
+I'm getting ReferenceError: setImmediate is not defined
+
+[15:03:12.0398] <Phil>
+https://developer.mozilla.org/en-US/docs/Web/API/Window/setImmediate
+
+[15:03:34.0500] <Phil>
+Seems like it can be replaced with setTimeout?
+
+[15:03:48.0453] <Phil>
+Or are there any caveats for the way AsyncContext works?
+
+[15:04:17.0177] <Phil>
+* Or are there any caveats for the way simple-async-context works?
+
+[15:27:27.0236] <Phil>
+updated it a bit to better reflect the idea of async context.
+
+
+2025-01-20
+[23:06:40.0022] <Iliasbhal>
+it was just bad code, I don’t know where my head was I pushed this 🫠. It’s now patched 🙏
+
+[23:10:19.0462] <Iliasbhal>
+Just don’t forget to transpile the code through babel or anything that will replace async/await with Promises instantiated using the global Promise constructor. 
+
+Otherwise tracking async contexts won’t work, only sync context and the timers will work otherwise.
+
+[07:09:23.0038] <Andreu Botella>
+I see your polyfill patches timers, but not any other web APIs. Is the plan to do that?
+
+[07:10:30.0086] <Andreu Botella>
+See https://github.com/tc39/proposal-async-context/blob/master/WEB-INTEGRATION.md and https://github.com/tc39/proposal-async-context/issues/107 for the current web integration proposal
+
+
+2025-01-22
+[01:48:57.0366] <Iliasbhal>
+Andreu Botella: I just published a new version that polyfills EventTargets 👍️
+
+[02:08:34.0537] <Iliasbhal>
+Sidenote: Would you guys accept a PR for the polyfill?
+
+[02:09:09.0349] <Andreu Botella>
+Justin Ridgewell: 
+
+[02:11:07.0979] <Iliasbhal>
+* Andreu Botella: I just published a new version that polyfills EventTargets 👍️ Feel free to create issues on the repo if you need more API polyfilled.
+
+[02:12:45.0136] <nicolo-ribaudo>
+Probably not, as most proposals don't have polyfills and the few that do have a disclaimer "do not actually use this polyfill, it's just meant to be an example". However, you can open an issue linking to it so that other people can find it
+
+[02:13:43.0287] <Andreu Botella>
+our repo has an existing polyfill, made by Justin, only for the TC39/JS part of it
+
+[02:15:05.0736] <nicolo-ribaudo>
+Oh I didn't notice 😅
+
+[02:16:02.0885] <nicolo-ribaudo>
+Btw Iliasbhal the events handling seems to be wrong, as (if I'm reading the code correctly) you are capturing the context when the .addEventListener call happens rather than when the event is dispatched
+
+[02:16:19.0481] <nicolo-ribaudo>
+Doing it correctly is much more difficult, but it'd would be very great if a polyfill manages to do it!
+
+[02:17:12.0704] <Andreu Botella>
+the semantics of the web integration are explained in https://github.com/tc39/proposal-async-context/blob/master/WEB-INTEGRATION.md
+
+[02:17:39.0791] <nicolo-ribaudo>
+"event is dispatched" means, for example, that if you have a XMLHttpRequest object and you listen to it's "load" event, it gets the context from when you call .send() rather than when you call .addEventListener, since .send() is what eventually causes the event to happen
+
+[02:17:47.0639] <Chengzhong Wu>
+That was for demonstrating the comparison between SyncContext and AsyncContext. I don't think it is intended for real world use
+
+[02:18:40.0154] <Chengzhong Wu>
+* That was for demonstrating the idea and comparison between SyncContext and AsyncContext. I don't think it is intended for real world use
+
+[02:21:07.0026] <Iliasbhal>
+haha! You are reading correctly. But I swear I read the opposite somewhere, or maybe I needed more coffee 🤣 🤦‍♂️  I'll fix that soon 👍️ 
+
+[02:22:01.0794] <Andreu Botella>
+> <@iliasbhal:matrix.org> haha! You are reading correctly. But I swear I read the opposite somewhere, or maybe I needed more coffee 🤣 🤦‍♂️  I'll fix that soon 👍️
+
+we actually went back and forth on this, and an earlier version of the proposed web integration did that, so you might not need more coffee 😅
+
+[03:03:05.0056] <Iliasbhal>
+nicolo-ribaudo: package updated! The event listener now executes within the same context that when the event was trigered. The event listener can be triggered synchronously or asynchronoulsy it doesn't matter. 👍️
+
+[10:39:53.0507] <Iliasbhal>
+Update: I pushed a new version, the way snapshots were collected created memory leak since I was holding strong references to every Async Variables globaly. This prevented them from beeing garbage collected. Even if we never create snapshots.
+
+In this new version, we hold weak references that won't block anything from beeing garbage collected 👍️;
+
+[10:41:33.0127] <Iliasbhal>
+* Update: I pushed a new version, the way snapshots were collected created memory leak since I was holding strong references to every Async Variables globaly. This prevented them from beeing garbage collected. Even if we never create snapshots.
+
+In this new version, I used WeakMaps and WeakSets to hold weak references that won't block anything from beeing garbage collected 👍️
+
+
+2025-01-23
+[11:07:52.0443] <Phil>
+Your latest implementation works without issues in node and the browser, weirdly enough without babel... Or my test is wrong...
+
+
+2025-01-24
+[19:45:33.0353] <Iliasbhal>
+🤯 Can you share your test script? I can double check
+
+[19:51:45.0063] <Iliasbhal>
+* 🤯 Can you share your test script? I can confirm. 
+
+Note: without babel it works with sync contexts, timers and Promises created from JS code ( not native async/await )
+
+[23:56:00.0624] <Ilias Bhallil>
+Wait! you are right! it's working (even in Bun) 🤣. I'll try validating with more tests 🤞 
+
+[00:03:24.0079] <Ilias Bhallil>
+* Wait! you are right! it's working (even in Bun) 🤣. I'll try validating with more tests 🤞 
+Update: all the tests are passing using .js files to ensure that jest is not compiling.
+
+[01:32:38.0897] <Ilias Bhallil>
+Phil: 
+
+Wait! you are right! it's working (even in Bun) 🤣. 
+
+I did some digging. On my side, It's working because of `compilerOptions.target` is set to `ES6` in my `tsconfig.json`. Is is the same in your environement?
+
+[01:43:47.0705] <Ilias Bhallil>
+* Phil:
+
+Wait! you are right! it's working (even in Bun) 🤣.
+
+I did some digging. On my side, It's working because of `compilerOptions.target` is set to `ES6` in my `tsconfig.json`. Is it the same on your side?
+
+[09:05:47.0022] <Ilias Bhallil>
+* Phil:
+
+Wait! you are right! it's working (even in Bun) 🤣.
+
+Are you using typescript? I did some digging and on my side, It's working because of `compilerOptions.target` is set to `ES6` in my `tsconfig.json`. Is it the same on your side?
+
+
+2025-01-25
+[16:21:16.0232] <Phil>
+For me it is working in pure js
+
+[16:21:22.0946] <Phil>
+no TypeScript
+
+[16:21:51.0263] <Phil>
+I had TypeScript before, but compiled everything, and now a simple node test/jstrial.js runs tests ok.
+
+[16:22:29.0265] <Phil>
+code is here: https://code.foss.global/push.rocks/smartcontext
+
+[23:37:41.0699] <Ilias Bhallil>
+I’d like people to know about the existence of the polyfill. I created a PR that will list all available polyfills similar to what I saw on the temporal proposal
+
+https://github.com/tc39/proposal-async-context/pull/112
+
+
+2025-01-26
+[19:18:17.0701] <Ilias Bhallil>
+I think It works because tests are probably using polyfilled timers. 
+
+I tried running some of the most complicated tests in JS and it fails under some usage patterns. So it still needs transpilation unfortunately. 
+
+
+2025-01-30
+[08:11:31.0364] <Andreu Botella>
+Michal Mocny: Steve Hicks Hey, in the end I don't think I will be joining today's WHATNOT. Turns out it conflicts with the CSS face-to-face
+
+[08:11:46.0025] <Andreu Botella>
+I already reached out to Olli to clarify his issues, though, and I'll also reach out to Anne
+
+[08:11:51.0941] <Andreu Botella>
+ * I already reached out to Olli to clarify his issues, though, and I'll also reach out to Anne and Domenic
+

@@ -1,0 +1,593 @@
+2022-04-01
+[07:56:43.0339] <jschoi>
+There are vague future plans for object-literal decorators like `@(d) { x: 0 }`. So:
+```js
+x |> @(d)
+{ x: 0 }
+```
+…also needs to be future proofed with an early error. We presumably should do the same with array literals. (And tuple/record literals when they come.)
+
+Blocks are fine.
+```js
+x |> @(d)
+{ 0 }
+```
+…only has one reasonable interpretation (as `x |> @(d); { 0 }`).
+
+I don’t think there’s anything else on the expression level that might get decorated…Maybe identifiers? Right now there are only plans for parameter identifiers so maybe we also ban this too:
+
+```js
+x |> @(d)
+y
+```
+
+[07:57:23.0986] <jschoi>
+* There are vague future plans for object-literal decorators like `@(d) { x: 0 }`. So:
+```js
+x |> @(d)
+{ x: 0 }
+```
+…also needs to be future proofed with an early error. We presumably should do the same with array literals. (And tuple/record literals when they come. I don’t think there’s anything else on the expression level that might get decorated…Maybe identifiers?)
+
+Blocks are fine.
+```js
+x |> @(d)
+{ 0 }
+```
+…only has one reasonable interpretation (as `x |> @(d); { 0 }`).
+
+[07:58:55.0287] <jschoi>
+* There are vague future plans for object-literal decorators like `@(d) { x: 0 }`. So:
+```js
+x |> @(d)
+{ x: 0 }
+```
+…also needs to be future proofed with an early error. We presumably should do the same with array literals. (And tuple/record literals when they come.)
+
+Blocks are fine.
+```js
+x |> @(d)
+{ 0 }
+```
+…only has one reasonable interpretation (as `x |> @(d); { 0 }`).
+
+I don’t think there’s anything else on the expression level that might get decorated…Maybe identifiers? Right now there are only plans for parameter identifiers so maybe we also ban this too:
+
+```js
+x |> @(d)
+y
+```
+
+[08:00:45.0803] <jschoi>
+* There are vague future plans for object-literal decorators like `@(d) { x: 0 }`. So:
+```js
+x |> @(d)
+{ x: 0 }
+```
+…also needs to be future proofed with an early error. We presumably should do the same with array literals. (And tuple/record literals when they come.)
+
+Blocks are fine.
+```js
+x |> @(d)
+{ 0 }
+```
+…only has one reasonable interpretation (as `x |> @(d); { 0 }`).
+
+I don’t think there’s anything else on the expression level that might get decorated…Maybe identifiers? Right now there are only plans for parameter identifiers so maybe we also ban this too:
+
+```js
+x |> @(d)
+y
+```
+
+…or maybe ban any DecoratorList Expression immediately following `|>`.
+
+[08:01:30.0622] <jschoi>
+So the plan is to use a cover grammar ShortCircuitExpression `|>` CoverPipeBodyOrDecoratedExpression. PipeBody is the usual. DecoratedExpression is something like DecoratorList Expression. It’s an early error if DecoratedExpression covers CoverPipeBodyOrDecoratedExpression.
+
+[08:02:12.0932] <nicolo-ribaudo>
+I have heard about obejct property decorators, but never about decorators for the whole object. It can just be a function call?
+
+[08:02:31.0626] <jschoi>
+Not sure. Take a look at https://github.com/tc39/proposal-decorators/blob/master/EXTENSIONS.md#object-literal-and-property-decorators-and-annotations.
+
+[08:04:00.0411] <pokute>
+It feels a bit that pipeline is taking into account other possible proposals in a way that many other proposals don't.
+
+[08:04:07.0203] <pokute>
+ * It feels a bit that pipeline is taking into account other possible proposals in a way that many other proposals don't.
+
+[08:04:51.0389] <jschoi>
+Since (if?) we’re going with `@` as the topic reference, I think it’s reasonable to try to future proof against any potential future conflict with future decorator extensions. 
+
+[08:05:03.0561] <jschoi>
+It’s only decorators really that pipe has to be careful about.
+
+[08:05:18.0924] <jschoi>
+* The only proposal that that pipe has to be careful about is decorators.
+
+[08:05:39.0221] <pokute>
+It though that we have to be careful about infix operators too.
+
+[08:05:51.0800] <jschoi>
+(…Well, I guess there’s the dataflow stuff in general. Like how pipe will not advance unless bind-this advances. But I’m talking about syntax only.)
+
+[08:06:27.0452] <jschoi>
+> <@pokute:matrix.org> It though that we have to be careful about infix operators too.
+
+I don’t think we have to be careful about future non-identifier infix operators. It’s future infix operators that have to be careful of pipe (or specifically of the `@` topic). And those future proposals will be able to use some simple lookahead rules when they get proposed (https://github.com/tc39/proposal-pipeline-operator/issues/91#issuecomment-1085006912), and it should be fine.
+
+[08:07:06.0821] <jschoi>
+* > <@pokute:matrix.org> It though that we have to be careful about infix operators too.
+
+I don’t think we have to be careful about future non-identifier infix operators. It’s future infix operators that have to be careful of pipe (or specifically of the `@` topic). And those future proposals will be able to use some simple lookahead rules when they get proposed, and it should be fine.
+
+[08:07:28.0152] <jschoi>
+* > <@pokute:matrix.org> It though that we have to be careful about infix operators too.
+
+I don’t think we have to be careful about future non-identifier infix operators. It’s future infix operators that have to be careful of pipe (or specifically of the `@` topic). And those future proposals will be able to use some simple lookahead rules when they get proposed (https://github.com/tc39/proposal-pipeline-operator/issues/91#issuecomment-1085006912), and it should be fine.
+
+[08:07:36.0262] <jschoi>
+* (…Well, I guess there’s the dataflow stuff in general. Like how pipe will not advance unless bind-this advances. But I’m talking about syntax only.)
+
+[08:08:20.0049] <nicolo-ribaudo>
+I wish we could just ban ASI after pipes
+
+[08:08:34.0200] <nicolo-ribaudo>
+If that would be enough
+
+[08:09:09.0392] <jschoi>
+I’ll think about if we can do that instead.
+
+[08:10:04.0608] <jschoi>
+But the problem isn’t that ASI is happening. It’s that developers might expect ASI to happen when it wouldn’t.
+
+
+[08:10:59.0271] <jschoi>
+```js
+x |> @(d)
+class C {}
+```
+Here, ASI would *not* happen. It would be equivalent to:
+```js
+x |> (@(d) class C {})
+```
+But a developer might expect ASI to happen, as if it were:
+```js
+x |> @(d); class C {}
+```
+
+
+[08:11:05.0566] <jschoi>
+* ```js
+x |> @(d)
+class C {}
+```
+Here, ASI would *not* happen. It would be equivalent to:
+```js
+x |> (@(d) class C {})
+```
+But a developer might expect ASI to happen, as if it were:
+```js
+x |> @(d); class C {}
+```
+
+
+[08:11:48.0490] <nicolo-ribaudo>
+Well, that's the same expectation in
+```
+a = b
+[c].map(f)
+```
+
+[08:12:06.0775] <nicolo-ribaudo>
+If you use ASI, learn it and don't complain 🤷
+
+[08:12:11.0478] <jschoi>
+Yes, that is true, heh.
+
+[08:12:26.0206] <jschoi>
+But there is also future-proofing. 
+
+[08:12:36.0907] <jschoi>
+```js
+x |> @(d)
+{ a: 0 }
+```
+
+[08:12:54.0416] <jschoi>
+ASI *does* happen…until object-literal decorators get added.
+
+[08:12:55.0412] <nicolo-ribaudo>
+We could ask to the other delegates if anyone feels like all those decorators extensions are a possibility on the future
+
+[08:14:03.0758] <jschoi>
+I think it’s reasonable to just ban PipeExpression : ShortCircuitExpression `|>` DecoratorList Expression.
+Come to think of it, we probably don’t even need a cover grammar.
+
+[08:14:30.0130] <nicolo-ribaudo>
+That's a great idea
+
+[08:15:21.0531] <pokute>
+That's always a pipe token, never decorator (missing parens I think)
+
+[08:15:29.0456] <pokute>
+ * That's always a pipe token, never decorator (missing parens I think)
+
+[08:16:29.0781] <jschoi>
+> <@jschoi:matrix.org> I think it’s reasonable to just ban PipeExpression : ShortCircuitExpression `|>` DecoratorList Expression.
+> Come to think of it, we probably don’t even need a cover grammar.
+
+```
+PipeExpression :
+  ShortCircuitExpression `|>` PipeBody
+  ShortCircuitExpression `|>` [lookahead ∉ {`class`}] DecoratorList Expression
+```
+It is a Syntax Error if PipeBody covers DecoratorList `class` BindingIdentifier? ClassTail.
+It is a Syntax Error if PipeExpression covers ShortCircuitExpression `|>` DecoratorList Expression.
+
+
+[08:17:20.0003] <jschoi>
+> <@pokute:matrix.org> That's always a pipe token, never decorator (missing parens I think)
+
+It is currently two statements because PipeBody will only parse up to a valid expression, and `@d { a: 0 }` is not a valid expression…until, in the future, they add object-literal decorators. Then `@d { a: 0 }` suddenly becomes a valid expression.
+
+[08:18:09.0199] <pokute>
+> <@jschoi:matrix.org> It is currently two statements because PipeBody will only parse up to a valid expression, and `@d { a: 0 }` is not a valid expression…until, in the future, they add object-literal decorators. Then `@d { a: 0 }` suddenly becomes a valid expression.
+
+Aren't decorators illegal in pipe body unless inside parens?
+
+[08:19:17.0339] <pokute>
+Or did I just mess up everything in my mind? :-)
+
+[08:20:23.0015] <jschoi>
+> <@pokute:matrix.org> Aren't decorators illegal in pipe body unless inside parens?
+
+Right now, the plan is:
+```js
+x |> @(foo) class { x = @ }
+```
+…is illegal.
+```js
+x |> (@(foo) class { x = @ })
+```
+…is legal.
+```js
+x |> (() => @(foo) class { x = @ })
+```
+…is legal.
+```js
+x |> do { @(foo) class { x = @ }; }
+```
+…is legal.
+
+
+[08:20:57.0680] <jschoi>
+The plan is that, if PipeBody covers a decorated class, then it is an early error.
+
+[08:21:43.0594] <jschoi>
+But we also need to cover for future cases that are not yet covered by PipeBody because they are not yet valid expressions (like `@(foo) function () {}` or `@(foo) { a: 0 }`).
+
+[08:21:59.0925] <jschoi>
+* > <@pokute:matrix.org> Aren't decorators illegal in pipe body unless inside parens?
+
+Right now, the plan is:
+```js
+x |> @(foo) class { x = @ }
+```
+…is illegal.
+```js
+x |> (@(foo) class { x = @ })
+```
+…is legal.
+```js
+x |> (() => @(foo) class { x = @ })
+```
+…is legal.
+```js
+x |> do { @(foo) class { x = @ }; }
+```
+…is legal.
+
+
+[08:22:21.0547] <jschoi>
+And, as usual, developers should be discouraged from putting any decorators inside pipe bodies anyway…
+
+[08:24:00.0566] <pokute>
+I would expect that ```x |> (@(d)
+{ a: 0 })``` to be a minimal valid usage.
+
+[08:24:44.0467] <pokute>
+Could we expect that infix operators to always be in `x infixOp y` form and never in `x (infixOp) y`?
+
+[08:24:52.0084] <pokute>
+ * Could we expect that infix operators to always be in `x infixOp y` form and never in `x (infixOp) y`?
+
+[08:25:27.0900] <jschoi>
+> <@pokute:matrix.org> I would expect that ```x |> (@(d)
+> { a: 0 })``` to be a minimal valid usage.
+
+That would also be valid.
+
+[08:25:31.0414] <pokute>
+Parens aren't really needed since you shouldn't ever use expressions as infix operators (IMO)
+
+[08:26:36.0856] <jschoi>
+> <@pokute:matrix.org> Could we expect that infix operators to always be in `x infixOp y` form and never in `x (infixOp) y`?
+
+Even if we added an `infixOp` (where `infixOp` is already a valid identifier), then we could just ban `@ infixOp operand`.
+
+[08:27:46.0231] <jschoi>
+Or, rather, we would make `@ infixOp operand` always mean a decorated operand, not “topic `infixOp` operand”.
+
+[08:31:10.0508] <jschoi>
+* > <@jschoi:matrix.org> I think it’s reasonable to just ban PipeExpression : ShortCircuitExpression `|>` DecoratorList Expression.
+> Come to think of it, we probably don’t even need a cover grammar.
+
+```
+PipeExpression :
+  ShortCircuitExpression `|>` PipeBody
+  ShortCircuitExpression `|>` DecoratorList [lookahead ∉ {`class`}] Expression
+```
+It is a Syntax Error if PipeBody covers DecoratorList `class` BindingIdentifier? ClassTail.
+It is a Syntax Error if PipeExpression covers ShortCircuitExpression `|>` DecoratorList Expression.
+
+
+[08:32:44.0557] <ljharb>
+> <@pokute:matrix.org> It feels a bit that pipeline is taking into account other possible proposals in a way that many other proposals don't.
+
+every proposal should, and I’m not aware of any that knowingly don’t 
+
+[08:32:49.0413] <pokute>
+Ok, here's another wild scenario that I haven't seen mentioned yet: `class foo extends Date |> (@dateDecorator(@)) { ... }`
+
+[08:33:35.0891] <jschoi>
+> <@pokute:matrix.org> Ok, here's another wild scenario that I haven't seen mentioned yet: `class foo extends Date |> (@dateDecorator(@)) { ... }`
+
+That should just be `class foo extends (Date |> (@dateDecorator(@))) { … }`, unless I’m missing something.
+
+[08:33:35.0931] <pokute>
+Should this be possible, any problems?
+
+[08:33:47.0882] <jschoi>
+* > <@pokute:matrix.org> Ok, here's another wild scenario that I haven't seen mentioned yet: `class foo extends Date |> (@dateDecorator(@)) { ... }`
+
+That should just be `class foo extends (Date |> (@dateDecorator(@))) { … }`, unless I’m missing something.
+
+[08:37:44.0110] <pokute>
+I've seen at least one person who's really interested in using pipelines in `extends` part and I don't recall anyone discussing it yet. Now when using `@` topic token, it would be better to probe if anyone can spot any problems arising due to decorators with it.
+
+[08:38:15.0300] <pokute>
+ * I've seen at least one person who's really interested in using pipelines in `extends` part and I don't seem to recall anyone discussing it yet. Now when using `@` topic token, it would be better to probe if anyone can spot any problems arising due to decorators with it.
+
+[08:38:52.0991] <pokute>
+ * I've seen at least one person who's really interested in using pipelines in `extends` part and I don't recall anyone discussing it yet. Now when using `@` topic token, it would be better to probe if anyone can spot any problems arising due to decorators with it.
+
+[08:39:34.0255] <jschoi>
+I don’t think it should be a problem at all, but let us know if you find one.
+
+[08:42:08.0987] <pokute>
+Actually, I think it probably is just impossible. I don't think `Date |> (@dateDecorator(@))` is valid anyway.
+
+[08:42:39.0026] <jschoi>
+Oh wait, I misread your original example.
+
+[08:42:41.0747] <jschoi>
+Yes, that is not valid.
+
+[08:42:54.0678] <pokute>
+Maybe `Date |> dateDecorator(@)` is
+
+[08:42:58.0475] <jschoi>
+Because `@dateDecorator(Date)` is not an expression; it is a decorator.
+
+[08:43:15.0887] <jschoi>
+You would want `@(Date |> dateDecorator(@))`.
+
+[08:48:07.0687] <pokute>
+One possible partial solution would be to never allow decorator extensions from using `@decoratorFun <thing>` for anything where `decoratorFun(<thing>)` works as ergonomically.
+
+[08:48:59.0771] <pokute>
+<thing> that wouldn't support `@decoratorFun` could include object literal likes, arraylikes and functions.
+
+[08:49:27.0118] <pokute>
+ * <thing> that wouldn't support `@decoratorFun` could include object literal likes, arraylikes and functions.
+
+[08:50:04.0383] <pokute>
+While code blocks & do expressions would support `@decoratorFun { return 0; }`
+
+[08:50:34.0721] <pokute>
+ * One possible partial solution would be to never allow decorator extensions proposals from using `@decoratorFun <thing>` for anything where `decoratorFun(<thing>)` works as ergonomically.
+
+[08:51:26.0199] <pokute>
+It might be that `@decoratorFun class ...` is already a precedent that makes this difficult.
+
+[08:51:39.0767] <pokute>
+ * It might be that `@decoratorFun class` is already a precedent that makes this difficult.
+
+[08:51:46.0727] <pokute>
+ * It might be that `@decoratorFun class ...` is already a precedent that makes this difficult.
+
+[08:59:02.0369] <pokute>
+🚎 Maybe we could've forgotten the prefix decorators alltogether and instead have `class A { function b() {} |@> methodDecorator } |@> classDecorator`, but I guess we're too late.
+
+[09:03:20.0922] <pokute>
+Alarmingly, it's starting to make more and more sense to me.
+
+[09:04:59.0613] <jschoi>
+> <@pokute:matrix.org> Ok, here's another wild scenario that I haven't seen mentioned yet: `class foo extends Date |> (@dateDecorator(@)) { ... }`
+
+ * ~~That should just be `class foo extends (Date |> (dateDecorator(@))) { … }`, unless I’m missing something.~~ I misread this example.
+
+[09:46:14.0025] <jschoi>
+FYI: https://github.com/tc39/proposal-pipeline-operator/pull/268
+
+[09:50:41.0558] <rbuckton (OOF thru Apr. 1st)>
+> <@pokute:matrix.org> One possible partial solution would be to never allow decorator extensions proposals from using `@decoratorFun <thing>` for anything where `decoratorFun(<thing>)` works as ergonomically.
+
+`@dec` and `@dec()` aren't synonymous. The 1st is a decorator, the 2nd is a decorator factory
+
+[09:52:12.0339] <rbuckton (OOF thru Apr. 1st)>
+> <@pokute:matrix.org> 🚎 Maybe we could've forgotten the prefix decorators alltogether and instead have `class A { function b() {} |@> methodDecorator } |@> classDecorator`, but I guess we're too late.
+
+Please no
+
+[09:56:35.0762] <rbuckton (OOF thru Apr. 1st)>
+> <@pokute:matrix.org> <thing> that wouldn't support `@decoratorFun` could include object literal likes, arraylikes and functions.
+
+Definitely want functions to work in the future. We spent multiple plenary meetings discussing the possibility of decorating many other things as well. I'd rather not have pipeline derail decorators, and I'm more and more concerned that using `@` is a very future hostile hazard considering the very valid use cases for decorated functions, structs, and enums (assuming the latter two also end up with expression forms), plus any other future syntax. 
+
+[09:57:37.0961] <rbuckton (OOF thru Apr. 1st)>
+This is making me less and less convinced that `@` is viable every time I think about it. It feels like we're cooking up future hazards for the convenience of a single character token. I'd rather see pipeline use `@@` or `##` than have this hazard
+
+[10:01:03.0294] <pokute>
+> <@rbuckton:matrix.org> `@dec` and `@dec()` aren't synonymous. The 1st is a decorator, the 2nd is a decorator factory
+
+The latter example, `decoratorfun(<thing>)` was missing `@` deliberately. Admittedly I'm not sure if it would work the same during runtime for all those examples (object literals, functions) and whether engine implementors want to be sure that nothing can touch the intermediary form.
+
+[10:01:05.0672] <jschoi>
+Check the specification and see what you think. It has a bunch of future proofing that (hopefully) covers any possible decorator expression.
+
+If you find a concerning example, then put it here and we’ll take a look.
+Developers should not be putting decorators in pipes anyway.
+
+[10:01:54.0596] <jschoi>
+> <@rbuckton:matrix.org> Definitely want functions to work in the future. We spent multiple plenary meetings discussing the possibility of decorating many other things as well. I'd rather not have pipeline derail decorators, and I'm more and more concerned that using `@` is a very future hostile hazard considering the very valid use cases for decorated functions, structs, and enums (assuming the latter two also end up with expression forms), plus any other future syntax.
+
+ * Check the specification and see what you think. It has a bunch of future proofing that (hopefully) covers any possible decorator expression.
+
+If you find a concerning example, then put it here and we’ll take a look.
+Developers should not be putting decorators in pipes anyway.
+
+[10:02:25.0664] <rbuckton (OOF thru Apr. 1st)>
+> <@jschoi:matrix.org> Check the specification and see what you think. I think the future proofing should be okay. 
+> If you find a concerning example, then put it here and we’ll take a look.
+> Developers should not be putting decorators in pipes anyway.
+
+I agree, but it's not the *intentional* use of decorators in pipes I'm worried about, it's the *unintentional* use. 
+
+[10:02:56.0245] <rbuckton (OOF thru Apr. 1st)>
+I'm in an airport now, I'll read through the spec tonight. 
+
+[10:03:53.0270] <jschoi>
+The spec does also try to prevent unintentional use of decorators, making things like the following an early error:
+
+```js
+// Syntax Error: Pipe body does not contain topic reference; pipe body cannot be unparenthesized decorated expression.
+x |> @(foo)
+{ x: 0 };
+```
+
+Thank you for looking!
+
+[10:05:05.0148] <jschoi>
+ * The spec does also try to prevent unintentional use of decorators, making things like the following an early error:
+
+```js
+// Syntax Error: Pipe body does not contain topic reference; pipe body cannot be unparenthesized decorated expression.
+x |> @(foo)
+{ x: 0 };
+```
+
+Thank you for looking!
+
+[10:05:13.0999] <jschoi>
+ * The spec does also try to prevent unintentional use of decorators, making things like the following an early error:
+
+```js
+// Syntax Error: Pipe body does not contain topic reference;
+// pipe body cannot be unparenthesized decorated expression.
+x |> @(foo)
+{ x: 0 };
+```
+
+Thank you for looking!
+
+[10:14:13.0956] <jschoi>
+rbuckton (OOF thru Apr. 1st): FYI, I just found a typo in the pull request; just force pushed, so go refresh in case you’re looking at it already.
+
+[10:14:38.0198] <jschoi>
+ * rbuckton (OOF thru Apr. 1st): FYI, I just found a typo in the pull request; just force pushed, so go refresh in case you’re looking at it already.
+
+[10:16:26.0718] <rbuckton (OOF thru Apr. 1st)>
+ For Apr.1 you should announce the topic was changed to `$#!+` to make it easier to see in a pipeline
+
+[10:16:27.0785] <pokute>
+> <@rbuckton:matrix.org> This is making me less and less convinced that `@` is viable every time I think about it. It feels like we're cooking up future hazards for the convenience of a single character token. I'd rather see pipeline use `@@` or `##` than have this hazard
+
+For every imaginable hazard, we can list them and see if they can be mitigated. If they're all mitigated, then they wouldn't be hazards any more.
+
+For this reason, I think the proponents of `@` as a topic should try their best to discover those hazards, as with any proposal. For this, checking out every possible proposal / idea for conflicts that result in hazards is important. I don't think unpublished ideas/proposals nor unimaginable hazards should influence the decision - no proposal would advance with that kind of burden.
+
+[10:18:17.0072] <rbuckton (OOF thru Apr. 1st)>
+> <@pokute:matrix.org> For every imaginable hazard, we can list them and see if they can be mitigated. If they're all mitigated, then they wouldn't be hazards any more.
+> For this reason, I think the proponents of `@` as a topic should try their best to discover those hazards, as with any proposal. For this, checking out every possible proposal / idea for conflicts that result in hazards is important. I don't think unpublished ideas/proposals nor unimaginable hazards should influence the decision - no proposal would advance with that kind of burden.
+
+Keep in mind Waldemar required grouped/auto-accessors to use a keyword so as not to pave over any other future `id {}` proposal in class bodies. 
+
+[10:20:14.0398] <jschoi>
+> <@rbuckton:matrix.org> For Apr.1 you should announce the topic was changed to `$#!+` to make it easier to see in a pipeline
+
+Announcing the new topic token:
+
+`𓀀`
+
+[10:20:32.0645] <rbuckton (OOF thru Apr. 1st)>
+JS already has limited syntax space because of ASI hazards, anything we can do to avoid eating up unnecessary real estate is important
+
+[10:20:53.0040] <pokute>
+I believe he, or anyone could come up with such possible conflicting proposals on the spot for that case.
+
+[10:21:44.0291] <pokute>
+> <@rbuckton:matrix.org> Keep in mind Waldemar required grouped/auto-accessors to use a keyword so as not to pave over any other future `id {}` proposal in class bodies.
+
+ * I believe he, or anyone could come up with such possible conflicting proposals on the spot for that case.
+
+[10:25:20.0213] <pokute>
+For arguments against `@`, I would require it to practically be an extension (or usage) of decorators since it's the only other established proposal using `@` and thus practically unable to use another symbol.
+
+[10:28:14.0960] <pokute>
+ * For arguments against `@`, I would require it to practically be an extension (or usage) of decorators since it's the only other established proposal using `@` and thus practically unable to use another symbol.
+
+[12:33:28.0114] <jschoi>
+A rendered version of the draft spec for everyone’s convenience.
+
+[14:58:18.0547] <ljharb>
+> <@rbuckton:matrix.org> JS already has limited syntax space because of ASI hazards, anything we can do to avoid eating up unnecessary real estate is important
+
+except we’ve previously decided not to let asi hazards block new features in the future, so while theyre best avoided it’s totally fine to add new ones
+
+
+2022-04-07
+[08:27:23.0713] <pokute>
+Would @ work as an infix operator itself: `op |> (a @ b)`?
+
+[08:32:39.0903] <pokute>
+ * Would @ work as an infix operator itself: `op |> (a @ b)` if we were to have run-time ability to add new infix oprators?
+
+[10:59:06.0438] <ljharb>
+how would we have that runtime ability?
+
+[12:39:30.0637] <pokute>
+Just considering all possible future extensions to the language
+
+
+2022-04-12
+[09:25:51.0664] <TabAtkins>
+Probably not, it would run into the same ambiguities that % or ^ as the topic have.
+
+[09:29:57.0387] <jschoi>
+Topic % and topic ^ don’t really have ambiguity...They just require tokenizer contextuality like /. I know Shu argued against topic % and topic ^ for this reason, but I wonder just how bad of a problem it would actually be in implementation. 
+
+[11:59:49.0988] <TabAtkins>
+That "contextuality" is the ambiguity I meant - without carrying parser context, it's ambiguous.
+
+[12:00:24.0892] <TabAtkins>
+And it's a pretty bad problem - note the objections Waldemar had in the types-as-comments about parsing issues, of which `/` is one of the problems.
+
+[12:07:19.0502] <shu>
+"how bad of a problem it is" is that it's a pretty bad problem and we shouldn't willingly add it unless it's like, really the least of all evils
+
+[12:14:49.0020] <jschoi>
+I understand; it’s good to hear that again, thank you. 
+

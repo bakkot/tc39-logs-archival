@@ -1,0 +1,988 @@
+2021-11-03
+[10:06:19.0791] <devsnek>
+what if we added toml to the stdlib
+
+[10:09:22.0318] <bakkot>
+i feel like it does not have a good place in JS
+
+[10:09:51.0259] <bakkot>
+it's intended as a human-readable config language, which makes sense for server-side apps but not really for any other JS users
+
+[13:40:29.0456] <bakkot>
+https://github.com/kaist-plrg/jiset is neat
+
+[13:40:50.0533] <bakkot>
+(jmdyck I imagine you might be particularly interested)
+
+[14:12:29.0026] <ljharb>
+browser-side users need to configure things too
+
+[14:39:49.0110] <jmdyck>
+@bakkot: yeah, it looks like they're doing something similar to my ecmaspeak project
+
+[14:53:34.0445] <jmdyck>
+Except, when I look at their code, nothing seems familiar.
+
+[15:15:36.0171] <jmdyck>
+ * Except, when I look at their code, not much seems familiar.
+
+[16:40:17.0055] <devsnek>
+>  Before installation, please download JDK 8
+
+[16:41:56.0687] <devsnek>
+would be cool if one of these spec evaluators can replace engine262 one day
+
+[16:42:45.0718] <devsnek>
+it looks like jiset was for some sort of university study
+
+[16:53:07.0973] <shu>
+PSA here is the incubator call doodle for pattern matching: https://github.com/tc39/Reflector/issues/407 it wasn't clear if there were interested non-champion delegates. if you are, please sign up for a time *before Nov 9*!
+
+
+2021-11-04
+[17:45:19.0674] <TabAtkins>
+okay so if we're champs no need to answer the doodle, or shoudl we do so to kick off time planning?
+
+[19:11:44.0747] <jmdyck>
+devsnek: I'm working on it, but progress is slow.
+
+[04:00:11.0920] <nicolo-ribaudo>
+Can anyone give me an example of an observable effect of what is explained in the second pagraph of the first note of https://tc39.es/ecma262/#sec-weakref-execution? I initially came up with this:
+```
+let obj = { x: 1 };
+let ref = new WeakRef(obj);
+await null; // I think we need to wait to allow WeakRefs to be emptied
+console.log(ref.deref(), obj.x);
+```
+
+which I though might log `undefined, 1` because it doesn't observe the _identity_ of `obj`.
+
+However, an _hypothetical WeakRef-oblivious execution_ (as defined in "9.10.2 - Liveness") might be `obj === obj`, which observes the identity of `obj` and thus makes it "live" and non-collectable, so `ref.deref()` must return `obj`.
+
+[04:00:27.0444] <nicolo-ribaudo>
+ * Can anyone give me an example of an observable effect of what is explained in the second pagraph of the first note of https://tc39.es/ecma262/#sec-weakref-execution? I initially came up with this:
+```
+let obj = { x: 1 };
+let ref = new WeakRef(obj);
+await null; // I think we need to wait to allow WeakRefs to be emptied
+console.log(ref.deref(), obj.x);
+```
+
+which I though might log `undefined, 1` because it doesn't observe the _identity_ of `obj`.
+
+However, an _hypothetical WeakRef-oblivious execution_ (as defined in "9.10.2 - Liveness") might be `obj === obj`, which observes the identity of `obj` and thus makes it "live" and non-collectable, so `ref.deref()` must return `obj`.
+
+[04:02:25.0609] <nicolo-ribaudo>
+Maybe my question is "is an _hypothetical WeakRef-oblivious execution_ any possible execution of any possible code, or just any possible execution flow in my code?"
+
+[04:02:33.0343] <nicolo-ribaudo>
+ * Maybe my question is "is an _hypothetical WeakRef-oblivious execution_ any possible execution of any possible code, or just any possible execution flow in my source code?"
+
+[04:02:39.0246] <nicolo-ribaudo>
+ * Maybe my question is "is an _hypothetical WeakRef-oblivious execution_ any possible execution of any possible code, or just any possible execution flow in my code?"
+
+[04:57:23.0502] <pokute>
+It's still weird that I don't have much idea what happened after the latest meeting. I understand that it takes a while to get the complete notes, but I really wish someone made an summary that has a sentence or two for each agenda item soon after a meeting.
+
+[04:57:43.0990] <pokute>
+*it still feels weird*
+
+[05:02:34.0726] <nicolo-ribaudo>
+pokute Justin Ridgewell has been doing an awesome job reporting the conclusion of each important topic at https://github.com/babel/proposals/issues/77
+
+[05:04:17.0867] <pokute>
+> <@nicolo-ribaudo:matrix.org> pokute Justin Ridgewell has been doing an awesome job reporting the conclusion of each important topic at https://github.com/babel/proposals/issues/77
+
+Oh, I didn't know about that. Thank you!
+
+[05:05:02.0813] <nicolo-ribaudo>
+Note that it should not be considered an "official source" (only the notes are official), but it's a good approximation
+
+[06:43:08.0544] <devsnek>
+> <@nicolo-ribaudo:matrix.org> Can anyone give me an example of an observable effect of what is explained in the second pagraph of the first note of https://tc39.es/ecma262/#sec-weakref-execution? I initially came up with this:
+> ```
+> let obj = { x: 1 };
+> let ref = new WeakRef(obj);
+> await null; // I think we need to wait to allow WeakRefs to be emptied
+> console.log(ref.deref(), obj.x);
+> ```
+> 
+> which I though might log `undefined, 1` because it doesn't observe the _identity_ of `obj`.
+> 
+> However, an _hypothetical WeakRef-oblivious execution_ (as defined in "9.10.2 - Liveness") might be `obj === obj`, which observes the identity of `obj` and thus makes it "live" and non-collectable, so `ref.deref()` must return `obj`.
+
+it's saying "if your code could be evaluated with defef() always returning null and still observe the identity of the object, the object is live"
+
+[06:43:55.0791] <devsnek>
+your example is correct afaict, assuming the engine optimized that
+
+[06:44:56.0346] <nicolo-ribaudo>
+Ok thanks 👍
+
+[10:36:51.0941] <Mathieu Hofman>
+> <@nicolo-ribaudo:matrix.org> Can anyone give me an example of an observable effect of what is explained in the second pagraph of the first note of https://tc39.es/ecma262/#sec-weakref-execution? I initially came up with this:
+> ```
+> let obj = { x: 1 };
+> let ref = new WeakRef(obj);
+> await null; // I think we need to wait to allow WeakRefs to be emptied
+> console.log(ref.deref(), obj.x);
+> ```
+> 
+> which I though might log `undefined, 1` because it doesn't observe the _identity_ of `obj`.
+> 
+> However, an _hypothetical WeakRef-oblivious execution_ (as defined in "9.10.2 - Liveness") might be `obj === obj`, which observes the identity of `obj` and thus makes it "live" and non-collectable, so `ref.deref()` must return `obj`.
+
+FYI, the releasing of kept objects is a host defined operation, so it may not happen at a promise job boundary. In particular, AFAIK most engines only clear kept objects when the promise queue is drained.
+
+[10:41:41.0154] <Mathieu Hofman>
+> <@devsnek:matrix.org> it's saying "if your code could be evaluated with defef() always returning null and still observe the identity of the object, the object is live"
+
+Correct. Here is the PR that introduced the weak-ref oblivious execution: https://github.com/tc39/proposal-weakrefs/pull/142
+I don't know how @syg came up with it, but it was very clever!
+
+[10:45:14.0450] <Mathieu Hofman>
+> <@devsnek:matrix.org> it's saying "if your code could be evaluated with defef() always returning null and still observe the identity of the object, the object is live"
+
+ * Correct. Here is the PR that introduced the weak-ref oblivious execution: https://github.com/tc39/proposal-weakrefs/pull/142
+I don't know how @shu came up with it, but it was very clever!
+
+[10:45:26.0602] <Mathieu Hofman>
+ * Correct. Here is the PR that introduced the weak-ref oblivious execution: https://github.com/tc39/proposal-weakrefs/pull/142
+I don't know how shu  came up with it, but it was very clever!
+
+[10:46:21.0717] <devsnek>
+yeah everything in the spec here is sort of "outer limits" on what engines must do. in practice they are not perfect at removing dead objects and cannot run gc immediately every time the job queue is empty, etc.
+
+[10:49:07.0063] <nicolo-ribaudo>
+Thanks everyone!
+
+[11:00:26.0965] <shu>
+yeah, the spec only says when it is allowed to empty a WeakRef, so that you can reason about WeakRefs which _must not_ be emptied according to the spec
+
+[11:00:41.0696] <shu>
+conversely, an implementation that never empties WeakRefs, or never GCs at all, is always compliant
+
+[11:00:44.0270] <shu>
+not that anyone really does that
+
+[11:01:35.0709] <shu>
+IOW you cannot write interoperable tests that test for "this WeakRef must be empty now", only "this WeakRef must not be empty now"
+
+[11:04:01.0652] <shu>
+you _can_ write tests that test implications, though, like "if this WeakRef is now empty, then these other properties must hold"
+
+[11:04:05.0689] <shu>
+test262 have tests of that shape
+
+[11:04:13.0447] <devsnek>
+shu now you need to write a turbofan pass that inlines `obj.x`
+
+[11:04:32.0678] <Mathieu Hofman>
+> <@shuyuguo:matrix.org> test262 have tests of that shape
+
+They're actually broken, I have on my todo to fix them
+
+[11:04:40.0370] <shu>
+oh yeah?
+
+[11:06:10.0402] <Mathieu Hofman>
+The hooks and most tests still use `cleanupSome`.
+
+[11:06:17.0825] <shu>
+oh lol
+
+[11:06:25.0909] <devsnek>
+i miss cleanupSome 
+
+[11:06:31.0161] <Mathieu Hofman>
+I rewrote the hooks locally already, I need to fix all the tests
+
+[11:06:43.0336] <shu>
+excellent, than kyou
+
+[11:07:33.0201] <devsnek>
+is cleanupSome just waiting on the champions at this point
+
+[11:08:40.0421] <Mathieu Hofman>
+Would be neat to have a flag to the test262 execution that says "this implementation supports GC and has all host hooks implemented, so these tests must collect as expected"
+
+[11:09:38.0068] <shu>
+devsnek: more than that was my understanding; Apple already rejected the wasm use case as compelling enough to add cleanupSome, and i don't know that a more compelling argument has been presented
+
+[11:09:39.0952] <devsnek>
+are you saying people provide no-op hooks? :O
+
+[11:10:39.0988] <Mathieu Hofman>
+Correct the current gc hooks are not, afaik, provided by the different implementations, so it's relying on a fallback, which is not working right.
+
+[11:11:43.0705] <devsnek>
+its weird that apple cares about the aesthetics of cleanupSome but not of Atomics, both being designed to be used in weird non-idiomatic-js cases
+
+[11:11:48.0748] <Mathieu Hofman>
+I'm talking about the `clearKeptObjects` and "cleanupFinalizationRegistries" which is not a currently requested hook but should be
+
+[11:13:08.0300] <devsnek>
+hmm why don't i implement clearKeptObjects 🤔
+
+[11:13:47.0302] <devsnek>
+does $262.clearKeptObjects just call ClearKeptObjects
+
+[11:13:49.0820] <devsnek>
+ * does $262.clearKeptObjects just call ClearKeptObjects
+
+[11:13:57.0590] <devsnek>
+its not in INTERPRETING.md
+
+[11:15:19.0187] <Mathieu Hofman>
+FYI, here is the async-gc harness fixed to not rely on `cleanupSome` and one test fixed: https://github.com/mhofman/test262/commit/a4ae8c8102586a29e06292556bc565776d19b045
+Haven't gotten around on fixing the rest
+
+[11:26:09.0532] <Mathieu Hofman>
+> <@devsnek:matrix.org> hmm why don't i implement clearKeptObjects 🤔
+
+Yeah I remember engine262 didn't expose the hooks, and the built-in fallbacks didn't work, so I couldn't check it worked there. The fallbacks I wrote cover at least JSC, SM, v8 and XS
+
+[11:26:55.0589] <Mathieu Hofman>
+I also found some weird behaviors in engine262 which claimed some things get cleaned up when they shouldn't. That was a separate and much more involved test, and I didn't have time to dig in
+
+[11:27:56.0381] <devsnek>
+stuff should be pretty easy to impl in engine262 when you're testing
+
+[11:28:28.0806] <devsnek>
+like https://gc.gy/65d126c9-a354-42e7-a63f-2555a9f035c1.png
+
+
+2021-11-05
+[14:38:41.0052] <rickbutton>
+anyone doing any work with JS CSTs lately? I’ve been doing a lot of codegen/codemod work lately and the idea of rolling my own sounds like a lot of work 
+
+[15:10:56.0863] <bakkot>
+define "doing any work with"
+
+[15:11:32.0903] <bakkot>
+I have been in the process of updating our AST (shift), which supports location information and comment although I wouldn't exactly call it a CST
+
+[15:11:57.0042] <bakkot>
+what sort of thing are you looking for?
+
+[15:24:58.0564] <rickbutton>
+yeah I guess I should clarify I'm not actually looking for a "true" CST from like grammar rules but an AST with additional metadata for comments/semicolons/etc that doesn't fit into a standard estree AST. for context, I've skimmed the various convos on estree/parser repos on this, but the convo seems to have stopped, im wondering if anyone has found a good way to do it
+
+[15:25:01.0269] <rickbutton>
+i should look at shift
+
+[15:31:54.0855] <bakkot>
+shift just has side tables for comments and location data
+
+[15:32:11.0353] <bakkot>
+not really any fancier than you'd get from babel's parser or any other, really
+
+[15:33:00.0438] <bakkot>
+the usual approach, or at least my approach, is to slice out input source text using the location data, and inspect that for whatever you're interested in
+
+[15:38:40.0572] <rickbutton>
+i see
+
+
+2021-11-06
+[18:53:11.0114] <Justin Ridgewell>
+^^ That's how I do it with prettier and eslint
+
+[18:53:29.0542] <Justin Ridgewell>
+I've never seen a good CST system yet
+
+[18:55:16.0515] <Justin Ridgewell>
+Rome is apparently trying with Red/Green Trees: https://rome.tools/blog/2021/09/21/rome-will-be-rewritten-in-rust
+
+[20:51:33.0951] <rickbutton>
+oh interesting, thanks for the link
+
+[03:00:01.0101] <vrafaeli>
+Can someone help me understand how "browser's built-in API callbacks" work? For example when I define websocket's onmessage, or fetch callback.
+Do the set up callbacks go in some JS callback space as closures, where they can be called or what?
+
+[03:36:43.0684] <vrafaeli>
+ * Can someone help me understand how "browser's built-in API callbacks" work? For example when I define websocket's onmessage, or fetch callback.
+For example with fetch. this is basically a promise which when resolved needs to process the then callback with the result. The callback closure is defined at the time of "then" method invocation.
+Do the set up callback closures go in some JS callback space as closures, where they can be called or what?
+
+[03:38:42.0323] <vrafaeli>
+ * Can someone help me understand how "browser's built-in API callbacks" work? For example when I define websocket's onmessage, or fetch callback.
+For example with fetch. this is basically a promise which when resolved needs to process the then callback with the result. The callback closure is defined at the time of "then" method invocation.
+Do the set up callback closures go in some JS closures space with some internal ID, where they get referenced by the task in event loop queue and invoked when its time?
+
+[03:38:45.0487] <vrafaeli>
+ * Can someone help me understand how "browser's built-in API callbacks" work? For example when I define websocket's onmessage, or fetch callback.
+
+For example with fetch. this is basically a promise which when resolved needs to process the then callback with the result. The callback closure is defined at the time of "then" method invocation.
+Do the set up callback closures go in some JS closures space with some internal ID, where they get referenced by the task in event loop queue and invoked when its time?
+
+[03:58:55.0062] <vrafaeli>
+ * Can someone help me understand how "browser's built-in API callbacks" work? For example when I define websocket's onmessage, or fetch callback.
+
+For example with fetch. this is basically a promise which when resolved needs to process the then callback with the result. The callback closure is defined at the time of "then" method invocation.
+Does the set up callback closures go in some separate JS-closures-memory-space and gets assigned some reference? This reference is used by the task in the task queue, and when it's its time to run, the task says to the engine to put the referenced closure on the main thread?
+
+[05:56:36.0402] <Ashley Claymore>
+I think your understanding is correct. Though there isn’t necessarily a need for a “separate JS-closures-memory-space”. Closures can be objects that live on the same JS heap as the other JS objects. And host-integrations can keep references to JS objects that will be compatible with the JS garbage collector.
+
+[06:03:47.0786] <vrafaeli>
+> <@aclaymore:matrix.org> I think your understanding is correct. Though there isn’t necessarily a need for a “separate JS-closures-memory-space”. Closures can be objects that live on the same JS heap as the other JS objects. And host-integrations can keep references to JS objects that will be compatible with the JS garbage collector.
+
+yea, later i realized this might be more natural
+
+[06:04:22.0081] <vrafaeli>
+The only difference is that these objects are not referenced from JS "context" but from outside of the context
+
+
+2021-11-11
+[10:07:26.0658] <jugglinmike>
+bakkot: I'd like to recommend some modifications to TR/104. Do you know who I can talk to about that?
+
+[10:41:37.0169] <bakkot>
+jugglinmike: I would _guess_ that it's owned by TC39 as a whole, so the way to modify it is probably to present a proposal to the committee in plenary asking for consensus for the modification
+
+[10:42:06.0003] <bakkot>
+But I don't actually know for certain; TR/104 hasn't been updated in a while, so I'm not as familiar with what the process ought to be
+
+[10:45:03.0051] <jugglinmike>
+Thanks! I think I'll ping the chairs, as well, just to be sure
+
+[12:52:04.0408] <jschoi>
+Does anyone have insight into why Generator and AsyncFunction were made separate types from Function? 
+
+[12:53:20.0793] <bakkot>
+what does "separate types" mean
+
+[12:54:31.0157] <bakkot>
+if you just mean "exist as separate objects", Generator objects need to inherit from the Generator prototype to have `.next`, which should not be on regular functions
+
+[12:55:25.0210] <bakkot>
+also, they allow you to dynamically construct a generator or async function from source text, although doing so is ev[ai]l and should be shunned
+
+[13:06:56.0418] <jschoi>
+Ah, yeah, right—`.next`. And yeah, that’s what I meant.
+Was AsyncFunction separated as a separate type from Function just to parallel Generator?
+
+[13:07:13.0089] <jschoi>
+> <@bakkot:matrix.org> if you just mean "exist as separate objects", Generator objects need to inherit from the Generator prototype to have `.next`, which should not be on regular functions
+
+ * Ah, yeah, right—`.next`. And yeah, that’s what I meant.
+Was AsyncFunction separated as a separate type from Function just to parallel Generator?
+
+[13:07:40.0356] <bakkot>
+well, there's also the use as a constructor thing
+
+[13:10:49.0867] <jschoi>
+Makes sense.
+
+
+2021-11-13
+[16:23:49.0544] <Mathieu Hofman>
+Can anyone explain to me what in the spec causes an error to be thrown in strict mode for `'abc'[2] = 'd'` but not for `abc[2]` nor `Object('abc')[2] = 'd'` ?
+
+[16:26:55.0392] <Mathieu Hofman>
+String Exotic object `[[DefineOwnProperty]]` (https://tc39.es/ecma262/#sec-string-exotic-objects-defineownproperty-p-desc) doesn't seem to check if the `this` value is a primitive string or object wrapper
+
+[16:27:22.0357] <Mathieu Hofman>
+ * Can anyone explain to me what in the spec causes an error to be thrown in strict mode for `'abc'[2] = 'd'` but not for `'abc'[2]` nor `Object('abc')[2] = 'd'` ?
+
+[16:58:04.0637] <Mathieu Hofman>
+To answer my own question, in strict mode it never get there, and `OrdinarySetWithOwnDescriptor` (https://tc39.es/ecma262/#sec-ordinarysetwithowndescriptor) Step 2.b. checks if the receiver is an object or not
+
+
+2021-11-15
+[03:30:04.0272] <David Alberto Adler>
+Hi guys wondering if there is an existing proposal for the non-null assertion operator?
+
+e.g. 
+
+```
+getFoo()! // will throw if undefined or null is returned
+```
+
+[03:31:56.0330] <Jack Works>
+No proposal for it as I know
+
+[03:34:42.0934] <David Alberto Adler>
+interesting, seems like an obvious thing which I would find super useful. I'm writing this code all day long
+
+```
+const foo = getFoo()
+assert(foo, 'missing foo')
+```
+
+[03:39:31.0552] <David Alberto Adler>
+I've popped it on discourse https://es.discourse.group/t/non-null-assertion-operator/1085
+
+[09:17:49.0748] <bakkot>
+I only just today realized that the `flatMap` methods in the iterator helpers proposal can take a generator; I love that
+
+[09:48:35.0981] <devsnek>
+i love it when a plan comes together
+
+[10:06:28.0559] <Ashley Claymore>
+PSA: There is the monthly Records&Tuples call tomorrow, 16th, 7pm UTC 
+
+[14:27:19.0114] <graingert>
+The spec lists #tc39 on freenode as the official IRC, but I can't seem to access it
+
+[14:27:28.0366] <graingert>
+There's a libera room though
+
+[14:29:15.0606] <Ashley Claymore>
+I think it’s changed in the latest draft spec since es2021 was published 
+
+[14:29:18.0357] <Ashley Claymore>
+https://tc39.es/ecma262/multipage/
+
+[14:29:20.0216] <Domenic>
+Seems you may have found a dead spec... always use the living spec, https://tc39.es/ecma262/
+
+[14:29:31.0955] <Ashley Claymore>
+Snap!
+
+
+2021-11-16
+[10:02:58.0306] <Ashley Claymore>
+> <@aclaymore:matrix.org> PSA: There is the monthly Records&Tuples call tomorrow, 16th, 7pm UTC 
+
+Record&Tuple monthly call starts in 1hr. Informal (not an official TC39 meeting) so open to the community: https://meet.google.com/iym-znhi-zno
+
+[12:45:24.0497] <bakkot>
+shu you may be interested in this thread on liveness on es-discourse: https://es.discourse.group/t/liveness-barriers-and-finalization/1082/
+
+[12:52:11.0595] <shu>
+interesting
+
+[12:52:32.0060] <shu>
+felix wants a portable liveness fence
+
+[12:52:34.0203] <shu>
+i don't think that exists
+
+[12:52:49.0255] <shu>
+(for the reasons that they point out, basically)
+
+[12:53:31.0914] <shu>
+well let me think about it some more
+
+[12:53:47.0588] <shu>
+one probably does exist for any given program (and a closed world assumption)
+
+[12:53:55.0574] <shu>
+but i'm not sure one exists for all implementations for all given programs
+
+[12:54:02.0611] <shu>
+ * but i'm not sure one exists for all implementations for all given programs
+
+[13:13:21.0361] <Ashley Claymore>
+> <@shuyuguo:matrix.org> one probably does exist for any given program (and a closed world assumption)
+
+Using `eval` to try and disable all optimisations would be cheating right?..
+
+[13:15:47.0401] <bakkot>
+`new WeakRef(obj)` actually is a liveness fence, by my reading
+
+[13:16:10.0606] <bakkot>
+since it adds `obj` to `KeptAlive`
+
+[13:22:52.0745] <shu>
+well, for one turn
+
+[13:23:14.0570] <shu>
+oh, like, constantly creating new WeakRefs?
+
+[13:23:25.0004] <shu>
+in practice i agree that is a fence
+
+[13:23:44.0023] <shu>
+but we hung all of this on observability which we also agreed to be too hard to pin down
+
+[13:24:08.0445] <shu>
+if the `new WeakRef(obj)` itself is unobservable, i'd imagine its effects to also be up for as-if DCE
+
+[13:24:18.0665] <shu>
+(though in practice of course nobody does that)
+
+[13:28:48.0507] <shu>
+i guess it's not that the `new WeakRef(obj)` would be unobservable, but whether the [[KeptAlive]] addition is unobservable
+
+[13:33:42.0698] <bakkot>
+right, and it is in fact observable, because addition to [[KeptAlive]] prevents collecting on the current turn
+
+[13:34:08.0118] <bakkot>
+ * right, and it is in fact observable, because addition to [[KeptAlive]] prevents collecting on the current turn
+
+[13:34:41.0838] <shu>
+i think there are cases that could be unobservable, but only theoretically
+
+[13:35:51.0946] <shu>
+like, if you have no `FinalizationRegistry`s or if the finalizer functions themselves are unobservable
+
+[13:36:48.0260] <shu>
+cause, like, are `malloc` and `free` observable? with an oracle i could stack allocate it
+
+[13:37:04.0222] <bakkot>
+well, sure, but then you can't tell it's _not_ acting as a fence
+
+[13:37:05.0978] <bakkot>
+by definition
+
+[13:37:43.0658] <shu>
+you can, because there's always an observability gap between the debugging tools and the optimizer
+
+[13:38:07.0579] <shu>
+debugging tool (looking at RSS size or whatever) has the assumption all memory in a process is observable
+
+[13:38:11.0709] <shu>
+the optimizer obviously does not have that assumption
+
+[13:38:14.0531] <shu>
+if there is no gap, then i'd agree
+
+[13:38:34.0727] <shu>
+again this is academic, in practice it is a universal fence because we'll never be that optimized
+
+[13:38:44.0923] <bakkot>
+well, ok, ignoring the debugger
+
+[13:39:02.0057] <shu>
+but how else do you observe that your finalizers are firing?
+
+[13:39:07.0947] <shu>
+like practically speaking
+
+[13:39:10.0248] <bakkot>
+they have side effects?
+
+[13:39:21.0082] <shu>
+yeah, they consider freeing up memory or a resource a side effect
+
+[13:39:38.0140] <bakkot>
+no, I mean, you can have a finalizer which has side effects
+
+[13:39:39.0484] <bakkot>
+in javascript
+
+[13:39:53.0150] <shu>
+right
+
+[13:39:58.0089] <bakkot>
+like, actual program-level side effects, not just freeing memory or whatever
+
+[13:39:59.0556] <shu>
+i'm saying, _if_ the finalizer is observable
+
+[13:40:07.0300] <shu>
+then [[KeptAlive]] is observable
+
+[13:40:16.0452] <shu>
+if it is not, i see it as fair game to optimize away too
+
+[13:40:22.0731] <bakkot>
+right, sure
+
+[13:40:31.0014] <bakkot>
+because it's not observable that you did that
+
+[13:40:39.0701] <bakkot>
+ * because it's not observable that you did that
+
+[13:40:50.0957] <shu>
+and the tricky thing is, whether we should consider a finalizer to be observable
+
+[13:40:53.0233] <bakkot>
+(without using the debugger or looking at memory usage)
+
+[13:41:03.0264] <shu>
+because if you ask most practitioners, do you think `free` is observable
+
+[13:41:04.0754] <shu>
+they'd say yes
+
+[13:41:13.0262] <shu>
+if you ask a POPL author
+
+[13:41:17.0025] <shu>
+then shrug
+
+[13:41:51.0532] <bakkot>
+I think JS programmers generally aren't thinking about memory usage, at least not as a property of their program rather than of a particular implementation
+
+[13:41:55.0415] <shu>
+maybe the right answer here is, ignore my PL semantics rambling and just use [[KeptAlive]]
+
+[13:42:04.0919] <shu>
+let me say that
+
+[13:44:29.0658] <shu>
+okay, back to the real world where liveness is just simple reachability of a particular implementation
+
+
+2021-11-17
+[16:09:28.0496] <devsnek>
+in practice this kind of code already exists in wasm libraries
+
+[16:11:02.0631] <devsnek>
+also do any implementations even *attempt* to perform scalar replacement across function boundaries? i would be very surprised if any did
+
+[17:46:06.0440] <jschoi>
+Is there a basic, gentle, up-to-date introduction on JS decorators that I can show beginners? The proposal explainer isn’t quite aimed for beginners, and the resources I’m finding are mostly about the old proposal version (or at least are seemingly somewhat out of date).
+
+[17:47:34.0232] <jschoi>
+ * Is there a basic, gentle, up-to-date introduction on JS decorators someone knows of? The proposal explainer isn’t quite aimed for beginners, and the resources I’m finding are mostly about the old proposal version (or at least are seemingly somewhat out of date).
+
+[17:48:27.0110] <jschoi>
+ * Is there a basic, gentle, up-to-date introduction on JS decorators that I can show beginners? The proposal explainer isn’t quite aimed for beginners, and the resources I’m finding are mostly about the old proposal version (or at least are seemingly somewhat out of date).
+
+[17:53:04.0835] <Jack Works>
+As I know the usage of decorator doesn't change so much. The underlying semantics changed so if you're not aimed to teach someone to write their own decorators, old tutorial might work too. 
+
+[07:34:49.0459] <iain>
+devsnek: SM does scalar replacement post-inlining, so it's technically across function boundaries, but we're quite conservative. In particular, we don't reason about individual fields; either an object is completely scalar-replaced, or it escapes and we do nothing. `this` escapes in the linked example, so we would not do scalar-replacement in this case.
+
+
+2021-11-18
+[19:49:35.0932] <rickbutton>
+for any babel folks: do the TS extensions to the babel AST have a spec?
+
+[19:49:46.0297] <rickbutton>
+can't seem to find any in the repo, only spec for regular babel AST
+
+[19:51:27.0667] <devsnek>
+does TS have a spec
+
+[19:53:18.0620] <rickbutton>
+good question, i don't think so
+
+[20:09:57.0407] <jschoi>
+I wouldn’t envy anyone given the task to write a complete formal specification for TypeScript, even if it’s all defined in terms of ECMAScript.
+
+[20:12:10.0846] <jschoi>
+ * I wouldn’t envy anyone given the task to write a complete formal specification for TypeScript, even if it’s all defined in terms of transforms to ECMAScript.
+
+[20:22:42.0863] <rickbutton>
+yeah a formal spec is right out unless someone really needs a thesis and hates themselves
+
+[20:48:35.0802] <Justin Ridgewell>
+There’s an unofficial AST typing
+
+[20:48:49.0232] <Justin Ridgewell>
+* There’s an unofficial AST typing
+
+[20:50:26.0315] <Justin Ridgewell>
+Eg, https://github.com/babel/babel/blob/d30308fe8eb5dd11c16a2d4c3a058e63ffe7949e/packages/babel-types/src/definitions/typescript.ts#L40
+
+[21:01:00.0321] <rickbutton>
+ooh nice thx
+
+
+2021-11-19
+[12:59:33.0261] <jugglinmike>
+By my reading, there is no mathematical value "-0", only "0", and "negative zero" can only be expressed with a Number value "-0𝔽". Can anyone confirm that?
+
+[13:14:00.0521] <bakkot>
+jugglinmike: yup, that's correct
+
+[13:15:07.0713] <jugglinmike>
+Thanks, bakkot ! And if I'd been just a little more patient, I might have answered this for myself from 262: "The mathematical value of +0𝔽 and -0𝔽 is the mathematical value 0."
+
+
+2021-11-20
+[16:21:53.0328] <jschoi>
+sideshowbarker: Does MDN document the autoboxing of primitives anywhere? I’m writing up documentation on why `x = 3; x.p = 2` doesn’t actually assign anything, and I’d like to be able to link to somewhere that explains, “The `3` gets autoboxed into a Number object that then gets discarded.”
+
+[16:22:00.0488] <jschoi>
+ * sideshowbarker: Does MDN document the autoboxing of primitives anywhere? I’m writing up documentation on why `x = 3; x.p = 2` doesn’t actually assign anything.
+
+[16:22:42.0319] <jschoi>
+ * sideshowbarker: Does MDN document the autoboxing of primitives anywhere? I’m writing up documentation on why `x = 3; x.p = 2` doesn’t actually assign anything, and I’d like to be able to link to somewhere that explains, “The `3` gets autoboxed into a Number object that then gets discarded.”
+
+[16:25:34.0058] <jschoi>
+ * sideshowbarker: Does MDN document the autoboxing of primitives anywhere? I’m writing up documentation on why the `x.p = 2` in `x = 3; x.p = 2` doesn’t actually assign anything, and I’d like to be able to link to somewhere that explains, “The `3` gets autoboxed into a Number object that then gets discarded.”
+
+[16:25:47.0243] <jschoi>
+ * sideshowbarker: Does MDN document the autoboxing of primitives anywhere? I’m writing up beginner documentation that mentions that the `x.p = 2` in `x = 3; x.p = 2` doesn’t actually assign anything, and I’d like to be able to link to somewhere that explains, “The `3` gets autoboxed into a Number object that then gets discarded.”
+
+[16:25:57.0240] <bakkot>
+it's probably worth having such documentation, but in real life people should use strict mode so that `x.p = 2` is an error and they don't have to think about it
+
+[16:25:58.0662] <Ashley Claymore>
+I don’t think auto boxing happens for a set operation 
+
+[16:26:28.0219] <jschoi>
+> <@aclaymore:matrix.org> I don’t think auto boxing happens for a set operation
+
+Maybe I’m misunderstanding why it’s a no-op that doesn’t throw an error, then, haha.
+
+[16:27:16.0831] <bakkot>
+it does; see GetValue step 4.a: https://tc39.es/ecma262/multipage/ecmascript-data-types-and-values.html#sec-getvalue
+
+[16:28:17.0474] <jschoi>
+I’m writing beginner documentation about `obj.prop = val` that mentions this idiosyncrasy and says, “Don’t do this,” but maybe I should just avoid mentioning it at all for now. MDN doesn’t talk about primitives in its tutorial until its “Advanced” level.
+
+[16:28:17.0477] <bakkot>
+or I guess PutValue 5.a., rather: https://tc39.es/ecma262/multipage/ecmascript-data-types-and-values.html#sec-putvalue
+
+[16:28:44.0440] <bakkot>
+PutValue is invoked in step 1.e. of the evaluation semantics for assignment: https://tc39.es/ecma262/multipage/ecmascript-language-expressions.html#sec-assignment-operators-runtime-semantics-evaluation
+
+[16:29:02.0077] <jschoi>
+ * I’m writing beginner documentation about `obj.prop = val` that mentions this idiosyncrasy and says, “Don’t do this,” but maybe I should just avoid mentioning it at all for now. MDN doesn’t talk about primitives in its tutorial until its “Advanced” level.
+
+[16:29:06.0152] <Ashley Claymore>
+`"".prop = 1` // throws
+`Object("").prop = 1` OK
+
+[16:29:21.0673] <bakkot>
+Ashley Claymore: only in strict mode!
+
+[16:30:22.0362] <bakkot>
+jschoi: I would encourage telling beginners to only ever write or think about strict mode code, and to avoid telling them things which are only relevant to sloppy mode
+
+[16:30:33.0741] <Ashley Claymore>
+Right, if set returns false it only throws in strict.
+
+[16:30:52.0722] <Ashley Claymore>
+What I mean is you get a different behaviour between auto-box and explicit box 
+
+[16:31:35.0533] <Ashley Claymore>
+the auto-box acts like it’s non-extensible, but the actual box is extensible 
+
+[16:33:34.0966] <bakkot>
+it's... actually weirder than that
+
+[16:34:09.0324] <jugglinmike>
+Can ECMA262 have a tagline?
+
+[16:35:21.0614] <bakkot>
+`'use strict'; Object.defineProperty(Number.prototype, 'x', { set: () => { console.log(this) } }); (3).x = 2; // works!`
+
+[16:36:25.0263] <bakkot>
+it's not that the auto-box acts like it's non-extensible, it's that in strict mode the [[Set]] sees the target as the primitive, rather than as the box, which is observable with setters
+
+[16:36:36.0720] <Mathieu Hofman>
+In sloppy mode `this` gets converted to object, so `PutValue` operates on the boxed version, and ToObject simply returns the already boxed value
+In strict mode, the value stays a primitive, ToObject boxes it, so `set` is given the primitive as receiver, which it checks, and throws
+
+[16:37:00.0403] <jschoi>
+> <@jugglinmike:matrix.org> Can ECMA262 have a tagline?
+
+“The ubiquitous language.” 
+
+[16:37:43.0948] <Mathieu Hofman>
+`Reflect.set(Object(3), 'x', 2, 3)` vs `tmp = Object(3); Reflect.set(tmp, 'x', 2, tmp)`
+
+[16:38:47.0171] <Mathieu Hofman>
+ * `Reflect.set(Object(3), 'x', 2, 3)` vs `tmp = Object(3); Reflect.set(tmp, 'x', 2, tmp)`
+
+[16:39:12.0784] <Mathieu Hofman>
+ * In strict mode `this` gets converted to object, so `PutValue` operates on the boxed version, and ToObject simply returns the already boxed value
+In sloppy mode, the value stays a primitive, ToObject boxes it, so `set` is given the primitive as receiver, which it checks, and throws
+
+[16:39:26.0034] <Ashley Claymore>
+Thanks, nice explanation!
+
+[16:39:52.0994] <Mathieu Hofman>
+ * In sloppy mode `this` gets converted to object, so `PutValue` operates on the boxed version, and ToObject simply returns the already boxed value
+In strict mode, the value stays a primitive, ToObject boxes it, so `set` is given the primitive as receiver, which it checks, and throws
+
+[16:40:52.0090] <Mathieu Hofman>
+I was very confused the other day where the different throwing happened in strict mode, so I had just looked it up
+
+[16:49:34.0043] <shu>
+> <@jugglinmike:matrix.org> Can ECMA262 have a tagline?
+
+"I Can't Believe It's Not JavaScript"
+
+[16:50:20.0996] <jugglinmike>
+lol
+
+[16:51:01.0690] <jugglinmike>
+I was thinking of bakkot 's comment, "it's... actually weirder than that", but these are good, too
+
+[16:51:49.0106] <shu>
+relatedly my favorite margarine tagline remains "Memories of Butter", but "Memories of JavaScript" doesn't work as well here
+
+[16:54:52.0067] <jugglinmike>
+"Memories of Restraint"
+
+[16:56:19.0980] <shu>
+dang
+
+[16:58:33.0063] <sideshowbarker>
+> <@jschoi:matrix.org> sideshowbarker: Does MDN document the autoboxing of primitives anywhere? I’m writing up beginner documentation that mentions that the `x.p = 2` in `x = 3; x.p = 2` doesn’t actually assign anything, and I’d like to be able to link to somewhere that explains, “The `3` gets autoboxed into a Number object that then gets discarded.”
+
+I think MDN does not, yet
+
+[16:59:30.0840] <jschoi>
+> <@sideshowbarker:mozilla.org> I think MDN does not, yet
+
+Thanks. Maybe we can work on that later. I’m about to put in a big pull request about assignment right now.
+
+[17:00:17.0631] <jschoi>
+> <@sideshowbarker:mozilla.org> I think MDN does not, yet
+
+ * Thanks. Maybe we can work on that later. I’m about to put in a big pull request on the tutorial section on assignment right now.
+
+[17:01:25.0567] <jschoi>
+https://github.com/mdn/content/pull/10648
+
+
+[17:01:25.0968] <jschoi>
+Some of you here might remember a person (and their probable sock puppet) persistently raising somewhat confused points about “evaluation order” in JavaScript a couple of months ago, on the pipe-operator repository and also MDN’s repository…Hopefully this will prevent further confusion for any coming newcomers.
+
+[17:01:29.0018] <jschoi>
+ * Some of you here might remember a person making a problem about “evaluation order” in JavaScript a couple of months ago in relation to the pipe operator…Hopefully this will prevent further confusion for any coming newcomers.
+
+[17:01:49.0389] <jschoi>
+ * Some of you here might remember a person persistently raising somewhat confused points about “evaluation order” in JavaScript a couple of months ago, in relation to the pipe operator…Hopefully this will prevent further confusion for any coming newcomers.
+
+[17:02:09.0698] <jschoi>
+(I was inspired by devsnek’s changes in response to that in mdn/content#9243.)
+
+[17:02:39.0280] <jschoi>
+ * Some of you here might remember a person persistently raising somewhat confused points about “evaluation order” in JavaScript a couple of months ago, on the pipe-operator repository and also MDN’s repository…Hopefully this will prevent further confusion for any coming newcomers.
+
+[17:03:37.0763] <jschoi>
+ * Some of you here might remember a person (and their probable sock puppet) persistently raising somewhat confused points about “evaluation order” in JavaScript a couple of months ago, on the pipe-operator repository and also MDN’s repository…Hopefully this will prevent further confusion for any coming newcomers.
+
+[17:04:06.0955] <jschoi>
+ * (I was inspired by devsnek’s changes in response to that in mdn/content#9243.)
+
+[17:09:16.0818] <bakkot>
+> <@jugglinmike:matrix.org> Can ECMA262 have a tagline?
+
+"your mistakes will outlive you"
+
+[17:14:32.0723] <jugglinmike>
+Oooh, so somber
+
+[17:50:00.0178] <devsnek>
+yikes
+
+[02:48:30.0672] <Jack Works>
+> <@jschoi:matrix.org> I wouldn’t envy anyone given the task to write a complete formal specification for TypeScript, even if it’s all defined in terms of transforms to ECMAScript.
+
+TypeScript used to had a specification in 1.x age but they have abandoned it.
+
+[06:25:31.0678] <devsnek>
+if we just removed isConcatSpreadable would anyone notice
+
+[07:41:22.0043] <jmdyck>
+Is it possible/allowed for an object to be the global object of two different realms? The line in the spec that would appear to answer this isn't entirely clear.
+
+[07:49:33.0813] <jmdyck>
+There's the question of which intrinsics (i.e., from what realm) its properties would point to.
+
+[07:49:42.0977] <sideshowbarker>
+> <@jschoi:matrix.org> https://github.com/mdn/content/pull/10648
+
+Nice work — merged
+
+[07:53:00.0975] <jmdyck>
+And it's unclear what effect SetDefaultGlobalBindings would have, if any. (It would depend on how the object's  [[DefineOwnProperty]] method is defined.)
+
+[07:54:03.0403] <jmdyck>
+It seems like the spec didn't anticipate the possibility, but hasn't actually disallowed it.
+
+[08:00:31.0165] <jmdyck>
+E.g., I don't think there's an Assert that would fail.
+
+[08:48:36.0383] <jmdyck>
+So each realm would have its own set of intrinsics, but in at least one, the global object's properties wouldn't point to the realm's well-known intrinsics. That'd be pretty weird, right?
+
+[08:51:13.0494] <Mathieu Hofman>
+Right, but I believe nothing prevents a host or first run code to modify the global in a similar way. It wouldn't be the same object, but all the properties could be copied from another realm.
+
+[08:52:54.0259] <Mathieu Hofman>
+Jest actually has a bad problem of copying some of the intrinsics from the incubator realm to the test realms it creates, which causes a ton of issues.
+
+[08:57:04.0789] <jmdyck>
+SetDefaultGlobalBindings is certainly *trying* to make a realm's global object's properties point to the realm's intrinsics. You're saying it's allowed for a host to 'get around' that?
+
+[08:58:15.0410] <jmdyck>
+(E.g., by making an exotic global object with a [[DefineOwnProperty]] that spurns SetDefaultGlobalBindings attempts.)
+
+[09:00:30.0785] <Mathieu Hofman>
+I'm saying since the host controls the global object, the only thing we can do is add new constraints on what a host is allowed to do with the global object.
+
+[09:02:18.0561] <Mathieu Hofman>
+There are other cases of constraints we'd like to add, such as the host cannot add any non configurable properties.
+
+[09:03:54.0986] <jmdyck>
+In that case, do you think we should add a constraint that the host can't use an object as the global object of multiple realms?
+
+[09:09:26.0726] <Mathieu Hofman>
+Possibly. I haven't really thought about it. Maybe it could say something about what the global object's exotic operations are allowed to do, then we can add assertions in the setup phase
+
+[09:10:58.0206] <jmdyck>
+Now I'm wondering if a [[DefineOwnProperty]] that thwarts SetDefaultGlobalBindings could satisfy the object invariants.
+
+[09:11:11.0978] <jmdyck>
+ * Now I'm wondering if a [[DefineOwnProperty]] that thwarts SetDefaultGlobalBindings could satisfy the object invariants.
+
+
+2021-11-22
+[08:39:52.0568] <yulia>
+stupid question: private methods are not bindable is that right?
+
+[08:40:42.0326] <Jack Works>
+🤔why not
+
+[08:42:23.0931] <yulia>
+you can bind them, it just takes a bit of effort, i want to check if that is right and also what the thinking was behind it
+
+[08:43:15.0021] <yulia>
+I think it makes sense 
+
+[08:43:30.0142] <yulia>
+the issue is constructor patterns like this: 
+
+```
+  constructor() {
+    this._onSomeEvent = this._onSomeEvent.bind(this);
+    // constructor implementation
+  }
+```
+
+[08:43:48.0788] <yulia>
+the person I am speaking with mentioned that you can't reassign private methods in the constructor
+
+[08:44:14.0017] <yulia>
+ * the person I am speaking with mentioned that you can't reassign private fields in the constructor
+
+[08:44:26.0828] <yulia>
+ * the person I am speaking with mentioned that you can't reassign private methods in the constructor
+
+[08:44:52.0231] <yulia>
+that is a pretty common pattern, so im checking if we got this right, and what thoughts were for this pattern
+
+[08:46:10.0875] <yulia>
+im wondering if we need bind in that case at all... i need to check
+
+[08:52:30.0951] <yulia>
+yeaeh... ok so it does become a problem with aliasing, and the arrow function is the most elegant way to deal with it
+
+[08:52:33.0727] <yulia>
+was that intentional?
+
+[08:53:39.0947] <bakkot>
+yulia: https://github.com/tc39/proposal-private-methods/issues/11
+
+[08:54:25.0983] <yulia>
+bakkot: thanks, that answers it
+
+[13:04:27.0214] <jmdyck>
+rbuckton: RegExp stuff was added to the spec in ES3. At the time, the algorithms in the rest of the spec were written in a fairly primitive form of pseudocode (e.g., "go to" instructions, limited use of aliases, no block structure). My guess is, whoever wrote the RegExp semantics didn't want to be limited to that style.
+
+[13:06:33.0946] <jmdyck>
+Re "ordered pair" instead of Records: Records didn't exist in ES3. (E.g., instead of Completion Records, there was the internal Completion type, which was defined as "triples  of  the  form  (type,  value,  target)".)
+
+[13:07:32.0341] <jmdyck>
+Re "captures m" instead of using internal slots: internal slots did exist in ES3 (although they were called internal properties), but (then as now), they only belonged to objects, and RegExp semantics wasn't defining an object there.
+
+[13:08:43.0025] <jmdyck>
+In fact, the rest of the spec "caught up" with RegExp semantics on that point when it introduced Abstract Closures.
+

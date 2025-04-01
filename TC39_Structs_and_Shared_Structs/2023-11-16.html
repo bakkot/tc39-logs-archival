@@ -1,0 +1,152 @@
+<!DOCTYPE html><html><head>
+  <title>TC39 Structs and Shared Structs on 2023-11-16</title>
+  <link rel="stylesheet" href="../style.css">
+  <script>window.room = "TC39 Structs and Shared Structs";</script><script src="../render-roomlist.js"></script>
+  <script src="../logs.js"></script>
+</head>
+<body><div class="wrapper">
+<div class="sidebar">
+<div class="title">TC39 Structs and Shared Structs<br>2023-11-16<br><a href="plaintext/">plaintext logs</a></div>
+<div class="nav">
+<a href="2023-10-19" class="nav-link"><span>prev</span></a>
+<a href="2023-11-17" class="nav-link"><span style="float:right">next</span></a>
+</div>
+    <div class="all-rooms"><noscript>JavaScript is required to load the channel index, but you can go to <a href="../..">the static index</a> directly.</noscript></div>
+<div class="footer"><a href="https://github.com/bakkot/matrix-archive-bot">source on github</a></div>
+</div>
+<div class="rhs">
+<div class="rhs-header">
+<span id="error" style="color: red; display:none">error</span>
+
+<input type="text" id="query" size="25" placeholder="Search TC39 Structs and Shared Structs">
+<a id="search-submit" class="button icon-link" title="Search">
+  <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M505 442.7L405.3 343c-4.5-4.5-10.6-7-17-7H372c27.6-35.3 44-79.7 44-128C416 93.1 322.9 0 208 0S0 93.1 0 208s93.1 208 208 208c48.3 0 92.7-16.4 128-44v16.3c0 6.4 2.5 12.5 7 17l99.7 99.7c9.4 9.4 24.6 9.4 33.9 0l28.3-28.3c9.4-9.4 9.4-24.6.1-34zM208 336c-70.7 0-128-57.2-128-128 0-70.7 57.2-128 128-128 70.7 0 128 57.2 128 128 0 70.7-57.2 128-128 128z"></path></svg>
+</a>
+</div>
+
+<div class="log"><table id="log-table"><tbody id="log-tbody">
+
+  <tr class="msg" id="L0"><td class="ts-cell"><a class="ts" href="#L0" alt="Thu Nov 16 2023 13:32:59 GMT-0800 (Pacific Standard Time)">21:32</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell"><p><span class="nick-8">shu</span>: I spoke with Luis and we both concur that <code>using</code> is preferred in the long term. For context, these are my primary concerns regarding a callback-based API:</p>
+<ul>
+<li>Since the addition of <code>async</code>/<code>await</code>, many JS programmers seem to be moving away from CPS for asynchronous code in new projects.</li>
+<li>Callback based APIs violate Tennent's Correspondence Principle, requiring complex rewrites of statements to introduce the callback when refactoring existing code and making things like <code>for</code> loops harder to reason over.</li>
+<li>An auto-locking callback API assumes no composition of locking mechanisms, such as building a SharedMutex that supports lock promotion, or holding a lock on a mutex longer than the scope of a single function call.</li>
+<li>While its feasible to build a rudimentary non-callback wrapper for the callback API, such a wrapper will not release its lock if the worker thread terminates abruptly, such as due to an exception or a call to <code>worker.terminate()</code>. With an object-based lock, it is feasible to write a callback-based wrapper that does not suffer from this limitation.</li>
+<li>Object-based locks are more flexible in terms of advanced scenarios, such as implementing a "scoped lock" that can lock multiple mutexes at once with a deadlock prevention algorithm (callback-based API is far more complicated and produces an arbitrarily deep call stack), or locks that are only conditionally taken (i.e., to avoid re-acquiring a lock in a recursive algorithm).</li>
+</ul>
+</td></tr>
+  <tr class="msg" id="L1"><td class="ts-cell"><a class="ts" href="#L1" alt="Thu Nov 16 2023 13:33:56 GMT-0800 (Pacific Standard Time)">21:33</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell"><p>Regarding the TCP issue, consider something as simple as a for loop with continue, break, and return:</p>
+<pre><code class="language-js">// non-locking code
+outer: for (const back of queues) {
+  for (const msg of queue.getMessages()) {
+    if (msg.stop) return msg.result;
+    if (msg.exitQueue) break outer; 
+    if (!msg.accept()) continue;
+    processMessage(msg);
+  }
+}
+// add lock using callback-based API
+outer: for (const back of queues) {
+  for (const msg of queue.getMessages()) {
+    const result = Mutex.lock(mut, () =&gt; {
+      if (msg.stop) return { op: "return", value: msg.result };
+      if (msg.exitQueue) return { op: "break_outer" }; 
+      if (!msg.accept()) return;
+      processMessage(msg);
+    });
+    if (result?.op === "return") return result.return;
+    if (result?.op === "break_outer") break outer;
+  }
+}
+// add lock via `using`:
+outer: for (const back of queues) {
+  for (const msg of queue.getMessages()) {
+    using lck = new UniqueLock(mut);
+    if (msg.stop) return msg.result;
+    if (msg.exitQueue) break outer; 
+    if (!msg.accept()) continue;
+    processMessage(msg);
+  }
+}
+</code></pre>
+</td></tr>
+  <tr class="msg" id="L2"><td class="ts-cell"><a class="ts" href="#L2" alt="Thu Nov 16 2023 13:35:28 GMT-0800 (Pacific Standard Time)">21:35</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell"><p>And a rough sketch of a <code>UniqueLock</code> API might look like:</p>
+<pre><code class="language-js">class UniqueLock {
+  constructor(mutex?: Atomics.Mutex, t?: "lock" | "defer-lock" | "try-to-lock" | "adopt-lock");
+  static lockAsync(mutex: Atomics.Mutex): Promise&lt;UniqueLock&gt;;
+  get mutex(): Atomics.Mutex | undefined;
+  get ownsLock(): boolean;
+  tryLock(timeout?: number): boolean;
+  lock(): void;
+  lockAsync(): Promise&lt;boolean&gt;;
+  unlock(): void;
+  release(): void;
+  [Symbol.dispose](): void;
+}
+</code></pre>
+<p>with usage like</p>
+<pre><code class="language-js">// sync lock
+{
+  using lck = new UniqueLock(mut);
+  ...
+}
+
+// async lock (option 1)
+{
+  using lck = await UniqueLock.lockAsync(mut);
+  ...
+}
+ 
+// async lock (option 2)
+{
+  using lck = new UniqueLock(mut, "defer-lock");
+  await lck.lockAsync();
+}
+</code></pre>
+</td></tr>
+  <tr class="msg" id="L3"><td class="ts-cell"><a class="ts" href="#L3" alt="Thu Nov 16 2023 13:45:48 GMT-0800 (Pacific Standard Time)">21:45</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@shuyuguo:matrix.org">shu</span>&gt;</div></td><td class="msg-cell">i see, thanks</td></tr>
+  <tr class="msg" id="L4"><td class="ts-cell"><a class="ts" href="#L4" alt="Thu Nov 16 2023 13:45:53 GMT-0800 (Pacific Standard Time)">21:45</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@shuyuguo:matrix.org">shu</span>&gt;</div></td><td class="msg-cell">i can live with this</td></tr>
+  <tr class="msg" id="L5"><td class="ts-cell"><a class="ts" href="#L5" alt="Thu Nov 16 2023 13:46:32 GMT-0800 (Pacific Standard Time)">21:46</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@shuyuguo:matrix.org">shu</span>&gt;</div></td><td class="msg-cell"><span class="nick-15">rbuckton</span>: Mutex then would be this opaque thing, no prototype methods, nothing?</td></tr>
+  <tr class="msg" id="L6"><td class="ts-cell"><a class="ts" href="#L6" alt="Thu Nov 16 2023 13:47:20 GMT-0800 (Pacific Standard Time)">21:47</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@shuyuguo:matrix.org">shu</span>&gt;</div></td><td class="msg-cell">my only quibble with the sketch is i would've figured <code>tryLock</code> and <code>lock</code> and friends would be on Mutex, with <code>UniqueLock</code> just providing a <code>Symbol.dispose</code></td></tr>
+  <tr class="msg" id="L7"><td class="ts-cell"><a class="ts" href="#L7" alt="Thu Nov 16 2023 13:47:27 GMT-0800 (Pacific Standard Time)">21:47</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@shuyuguo:matrix.org">shu</span>&gt;</div></td><td class="msg-cell">like what you do in C++</td></tr>
+  <tr class="msg" id="L8"><td class="ts-cell"><a class="ts" href="#L8" alt="Thu Nov 16 2023 13:50:35 GMT-0800 (Pacific Standard Time)">21:50</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell">C++ <code>std::unique_lock</code> has a similar API.</td></tr>
+  <tr class="msg" id="L9"><td class="ts-cell"><a class="ts" href="#L9" alt="Thu Nov 16 2023 13:51:01 GMT-0800 (Pacific Standard Time)">21:51</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell"><code>std::scoped_lock</code> has no methods, but also locks multiple mutexes at once</td></tr>
+  <tr class="msg" id="L10"><td class="ts-cell"><a class="ts" href="#L10" alt="Thu Nov 16 2023 13:53:37 GMT-0800 (Pacific Standard Time)">21:53</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell"><p>And sometimes you need need to hand off a lock to something else, or perform programmatic checks. For example:</p>
+<pre><code class="language-js">using lck = new UniqueLock(mut, "try-to-lock");
+if (lck.ownsLock) {
+  // fast path
+}
+else {
+  // slow path, may include calls to `wait` for conditions, etc.
+  lck.lock(); // blocks
+}
+</code></pre>
+</td></tr>
+  <tr class="msg" id="L11"><td class="ts-cell"><a class="ts" href="#L11" alt="Thu Nov 16 2023 13:54:34 GMT-0800 (Pacific Standard Time)">21:54</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell">And yes, <code>mutex</code> could just be opaque.</td></tr>
+  <tr class="msg" id="L12"><td class="ts-cell"><a class="ts" href="#L12" alt="Thu Nov 16 2023 13:55:16 GMT-0800 (Pacific Standard Time)">21:55</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@shuyuguo:matrix.org">shu</span>&gt;</div></td><td class="msg-cell">why start with that and not mutex_guard?</td></tr>
+  <tr class="msg" id="L13"><td class="ts-cell"><a class="ts" href="#L13" alt="Thu Nov 16 2023 13:55:36 GMT-0800 (Pacific Standard Time)">21:55</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell"><code>UniqueLock</code> could also accept user-defined lockables if you need to build more complex coordination primitives for your use case.</td></tr>
+  <tr class="msg" id="L14"><td class="ts-cell"><a class="ts" href="#L14" alt="Thu Nov 16 2023 13:55:46 GMT-0800 (Pacific Standard Time)">21:55</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@shuyuguo:matrix.org">shu</span>&gt;</div></td><td class="msg-cell">(again, the minimal thing). i don't want to lead with things like deadlock avoidance for sequencing locks, like unique_locks are often used for</td></tr>
+  <tr class="msg" id="L15"><td class="ts-cell"><a class="ts" href="#L15" alt="Thu Nov 16 2023 13:55:57 GMT-0800 (Pacific Standard Time)">21:55</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell">Because <code>UniqueLock</code> is the most flexible as a building block.</td></tr>
+  <tr class="msg" id="L16"><td class="ts-cell"><a class="ts" href="#L16" alt="Thu Nov 16 2023 13:56:33 GMT-0800 (Pacific Standard Time)">21:56</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell">IIRC, <code>unique_lock</code> doesn't provide deadlock avoidance. That's the job of <code>scoped_lock</code>. And I can build <code>scoped_lock</code> on top of <code>unique_lock</code> if I need too</td></tr>
+  <tr class="msg" id="L17"><td class="ts-cell"><a class="ts" href="#L17" alt="Thu Nov 16 2023 13:56:44 GMT-0800 (Pacific Standard Time)">21:56</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@shuyuguo:matrix.org">shu</span>&gt;</div></td><td class="msg-cell">ah perhaps i'm confusing the two</td></tr>
+  <tr class="msg" id="L18"><td class="ts-cell"><a class="ts" href="#L18" alt="Thu Nov 16 2023 13:56:44 GMT-0800 (Pacific Standard Time)">21:56</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@shuyuguo:matrix.org">shu</span>&gt;</div></td><td class="msg-cell">okay</td></tr>
+  <tr class="msg" id="L19"><td class="ts-cell"><a class="ts" href="#L19" alt="Thu Nov 16 2023 13:56:47 GMT-0800 (Pacific Standard Time)">21:56</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell">See <a href="https://github.com/microsoft/TypeScript/blob/shared-struct-test/src/compiler/threading/scopedLock.ts">https://github.com/microsoft/TypeScript/blob/shared-struct-test/src/compiler/threading/scopedLock.ts</a></td></tr>
+  <tr class="msg" id="L20"><td class="ts-cell"><a class="ts" href="#L20" alt="Thu Nov 16 2023 13:56:56 GMT-0800 (Pacific Standard Time)">21:56</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell">And <a href="https://github.com/microsoft/TypeScript/blob/shared-struct-test/src/compiler/threading/uniqueLock.ts">https://github.com/microsoft/TypeScript/blob/shared-struct-test/src/compiler/threading/uniqueLock.ts</a></td></tr>
+  <tr class="msg" id="L21"><td class="ts-cell"><a class="ts" href="#L21" alt="Thu Nov 16 2023 13:57:22 GMT-0800 (Pacific Standard Time)">21:57</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@shuyuguo:matrix.org">shu</span>&gt;</div></td><td class="msg-cell">i think deadlock avoidance definitely runs afoul of not minimal, but i see that this doesn't have that, that seems fine</td></tr>
+  <tr class="msg" id="L22"><td class="ts-cell"><a class="ts" href="#L22" alt="Thu Nov 16 2023 13:58:30 GMT-0800 (Pacific Standard Time)">21:58</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell">Both of those use an object-based wrapper for <code>Mutext</code> to avoid callbacks, but potentially runs afoul of bullet #4 above (assuming the callback-based approach currently releases the mutex if it is held when the worker is abruptly terminated)</td></tr>
+  <tr class="msg" id="L23"><td class="ts-cell"><a class="ts" href="#L23" alt="Thu Nov 16 2023 13:59:18 GMT-0800 (Pacific Standard Time)">21:59</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell"><code>UniqueLock</code> gives you the minimal functionality and flexibility necessary to build more complex things.</td></tr>
+  <tr class="msg" id="L24"><td class="ts-cell"><a class="ts" href="#L24" alt="Thu Nov 16 2023 14:00:06 GMT-0800 (Pacific Standard Time)">22:00</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@shuyuguo:matrix.org">shu</span>&gt;</div></td><td class="msg-cell">what's the 4th bullet? thread termination?</td></tr>
+  <tr class="msg" id="L25"><td class="ts-cell"><a class="ts" href="#L25" alt="Thu Nov 16 2023 14:00:10 GMT-0800 (Pacific Standard Time)">22:00</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell">And only really exposes <code>lock</code>, <code>tryLock</code>, and <code>unlock</code></td></tr>
+  <tr class="msg" id="L26"><td class="ts-cell"><a class="ts" href="#L26" alt="Thu Nov 16 2023 14:00:12 GMT-0800 (Pacific Standard Time)">22:00</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell">Yeah</td></tr>
+  <tr class="msg" id="L27"><td class="ts-cell"><a class="ts" href="#L27" alt="Thu Nov 16 2023 14:00:57 GMT-0800 (Pacific Standard Time)">22:00</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@shuyuguo:matrix.org">shu</span>&gt;</div></td><td class="msg-cell">yeah that's kind of tricky</td></tr>
+  <tr class="msg" id="L28"><td class="ts-cell"><a class="ts" href="#L28" alt="Thu Nov 16 2023 14:01:27 GMT-0800 (Pacific Standard Time)">22:01</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@shuyuguo:matrix.org">shu</span>&gt;</div></td><td class="msg-cell">it'd be nice to automatically release but... that has cost</td></tr>
+  <tr class="msg" id="L29"><td class="ts-cell"><a class="ts" href="#L29" alt="Thu Nov 16 2023 14:02:16 GMT-0800 (Pacific Standard Time)">22:02</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell">Even if there isn't automatic release, the object wrapper incurs more overhead since it needs both a <code>Mutext</code> and another boolean field.</td></tr>
+  <tr class="msg" id="L30"><td class="ts-cell"><a class="ts" href="#L30" alt="Thu Nov 16 2023 14:03:15 GMT-0800 (Pacific Standard Time)">22:03</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@shuyuguo:matrix.org">shu</span>&gt;</div></td><td class="msg-cell"><code>Worker.terminate()</code> is odd</td></tr>
+  <tr class="msg" id="L31"><td class="ts-cell"><a class="ts" href="#L31" alt="Thu Nov 16 2023 14:03:24 GMT-0800 (Pacific Standard Time)">22:03</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@shuyuguo:matrix.org">shu</span>&gt;</div></td><td class="msg-cell">bb in an hour</td></tr>
+  <tr class="msg" id="L32"><td class="ts-cell"><a class="ts" href="#L32" alt="Thu Nov 16 2023 15:18:28 GMT-0800 (Pacific Standard Time)">23:18</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@shuyuguo:matrix.org">shu</span>&gt;</div></td><td class="msg-cell">back</td></tr>
+  <tr class="msg" id="L33"><td class="ts-cell"><a class="ts" href="#L33" alt="Thu Nov 16 2023 15:18:42 GMT-0800 (Pacific Standard Time)">23:18</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@shuyuguo:matrix.org">shu</span>&gt;</div></td><td class="msg-cell">okay, so, i see Web Locks makes an attempt to release an agent's held locks upon termination</td></tr>
+  <tr class="msg" id="L34"><td class="ts-cell"><a class="ts" href="#L34" alt="Thu Nov 16 2023 15:19:06 GMT-0800 (Pacific Standard Time)">23:19</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@shuyuguo:matrix.org">shu</span>&gt;</div></td><td class="msg-cell">if we aspire to do the same, that means keeping a list, ugh</td></tr>
+  <tr class="msg" id="L35"><td class="ts-cell"><a class="ts" href="#L35" alt="Thu Nov 16 2023 15:25:39 GMT-0800 (Pacific Standard Time)">23:25</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-8" title="@shuyuguo:matrix.org">shu</span>&gt;</div></td><td class="msg-cell">i guess each execution context can keep a stack of currently held mutexes, that, upon termination execution, get unlocked</td></tr>
+
+</tbody></table></div></div></div>
+</body></html>

@@ -1,0 +1,47 @@
+2024-05-02
+[14:28:13.0114] <Himanshu Shubham>
+Hello everyone,
+I'm curious if anyone here understands how V8 implements the shift function for Arrays. I recently stumbled upon a question regarding the time complexity of the shift operation on an array in JavaScript. I know that when you remove an element from the front of the array, all other elements need to be shifted to the left. However, during my research, I found an interesting blog post by Jandemooij titled "Some SpiderMonkey Optimizations in Firefox Quantum," which suggests that SpiderMonkey has optimized the shift operation to have an O(1) time complexity.
+This got me wondering: Does V8 also implement a similar optimization for the shift function, or is it handled differently? Any insights or resources on this topic would be greatly appreciated!
+
+[14:35:01.0567] <shu>
+yes, but we don't like it: https://source.chromium.org/chromium/chromium/src/+/main:v8/src/heap/heap.cc;l=3597;drc=90f276be1122336c6ff7b808054fb183af7a2a9e
+
+[14:35:38.0087] <shu>
+the GC complexity is gross
+
+
+2024-05-03
+[07:12:32.0916] <Himanshu Shubham>
+Thanks for resource. really appreciate it. 
+I can see [here](https://source.chromium.org/chromium/chromium/src/+/main:v8/src/heap/heap.cc;l=3627;drc=90f276be1122336c6ff7b808054fb183af7a2a9e) that they are calculating the new start and then returning the new object with that start. It is O(1).
+
+May I know why you said `the GC complexity is gross`?
+
+
+[07:12:56.0579] <Himanshu Shubham>
+ * Thanks for resource. really appreciate it.
+I can see [here](https://source.chromium.org/chromium/chromium/src/+/main:v8/src/heap/heap.cc;l=3627;drc=90f276be1122336c6ff7b808054fb183af7a2a9e) that they are calculating the new start and then returning the new object with that start. It is O(1) if I am not wrong.
+
+May I know why you said `the GC complexity is gross`?
+
+[10:03:46.0615] <shu>
+by that i meant that we'd prefer that this optimization didn't exist
+
+[10:05:09.0410] <shu>
+because it is fundamentally kind of dangerous: you used to have a GC object in the heap at location _p_, and now you've split it into two
+
+[10:05:36.0949] <shu>
+this kind of object surgery is easy to get wrong and easy to forget in other parts of the system, adding complexity
+
+[10:06:01.0745] <shu>
+for example, if you're marking the heap concurrently with the mutator in another thread, what if left trimming happens at the same time for an object you're scanning?
+
+[14:20:08.0312] <Himanshu Shubham>
+While I might not grasp all the technical details, I do get the main idea. So, does SpiderMonkey's optimization in this area also introduce potential bugs, or did they manage it differently?
+
+The article I was referring to https://jandemooij.nl/blog/some-spidermonkey-optimizations-in-firefox-quantum/
+
+[14:28:47.0695] <bakkot>
+All engine optimizations introduce potential bugs.
+

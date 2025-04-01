@@ -1,0 +1,692 @@
+2022-07-04
+[15:02:28.0935] <ptomato>
+I'd like to do an informal poll! about coercion to integers in the context of Temporal
+
+[15:03:44.0623] <ptomato>
+precedent in JS is to convert all sorts of nonsensical values to 0 if an integer is expected:
+
+[15:03:58.0329] <ptomato>
+```js
+[1, 2, 3].slice(NaN) // => [1, 2, 3]
+[1, 2, 3].slice("foo") // => [1, 2, 3]
+[1, 2, 3].slice(/regex/) // => [1, 2, 3]
+[1, 2, 3].slice(Math) // => [1, 2, 3]
+```
+
+[15:04:13.0120] <ptomato>
+but not universally:
+
+[15:04:16.0646] <ptomato>
+```js
+[].length = NaN // RangeError
+String.fromCodePoint("foo") // RangeError
+```
+
+[15:05:22.0203] <ptomato>
+Temporal entry points currently work like the former
+
+[15:06:03.0686] <ptomato>
+this leads to several bug-prone situations:
+
+[15:06:38.0057] <ptomato>
+```js
+new Temporal.Duration("foo") // => zero-length duration 😱
+Temporal.PlainDateTime.from("2022-03-20T00:00").add({days: NaN}) // => 2022-03-20T00:00 😱
+```
+
+[15:07:08.0271] <ptomato>
+therefore we are considering changing this coercion to an integer to be more restrictive
+
+[15:08:30.0099] <ptomato>
+I'd like to figure out if people are generally comfortable with this or it is likely to provoke a lot of discussion
+
+[15:11:26.0330] <ptomato>
+please react:
+🤷 = I don't feel particularly strongly about this
+🐛 = I feel strongly that bug-prone situations such as these should be avoided
+⚖️ = I feel strongly that consistency with the precedent is most important
+
+[15:12:16.0782] <ptomato>
+(for more in-depth information, see https://github.com/tc39/proposal-temporal/issues/2112)
+
+
+2022-07-05
+[18:24:06.0763] <Domenic>
+I voted for consistency until I read the thread and saw that you were only considering changing behavior for NaN/things that convert to NaN
+
+[18:24:26.0013] <Domenic>
+I think it would be bad to stop `"2"` from being treated as `2`, but I guess that is not what is being proposed here
+
+[18:26:16.0514] <bakkot>
+my thoughts are the same as in https://github.com/tc39/proposal-iterator-helpers/issues/169#issuecomment-1025062252
+
+[18:26:36.0451] <bakkot>
+though do note that you might want to handle the case of `undefined` explicitly, if you intend for these things to be callable with no arguments
+
+
+2022-07-07
+[20:05:03.0016] <Domenic>
+Excited to see progress on iterator helpers
+
+[15:34:57.0922] <sideshowbarker>
+https://github.com/mdn/content/issues/12914 is an open issue about some of the MDN JavaScript docs that we could use some insight from others on — specifically it’s about the https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Operator_Precedence page, for which we sometimes get requests to include precedence information about things that aren’t actually operators.
+
+One thought I had was that maybe we could retitle the page _“Operator precedence and order of evaluation”_ , though I’m not sure even that would be enough to cover the non-operator cases that people have opened issues about.
+
+[15:44:11.0066] <jschoi>
+I’ve actually touched on this in that repository’s issues before, too, in https://github.com/mdn/content/issues/5365. I think we’ve discussed it a couple times here too; I remember raising it.
+For what it’s worth, it is my opinion that => is an operator in every way that = is an operator, and it is completely appropriate to include `=>` in a “table of operators” if `=` is in there too. There’s hardly any difference of worth between them.
+
+[15:44:44.0938] <jschoi>
+> <@sideshowbarker:mozilla.org> https://github.com/mdn/content/issues/12914 is an open issue about some of the MDN JavaScript docs that we could use some insight from others on — specifically it’s about the https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Operator_Precedence page, for which we sometimes get requests to include precedence information about things that aren’t actually operators.
+> 
+> One thought I had was that maybe we could retitle the page _“Operator precedence and order of evaluation”_ , though I’m not sure even that would be enough to cover the non-operator cases that people have opened issues about.
+
+ * I’ve actually touched on this in that repository’s issues before, too, in https://github.com/mdn/content/issues/5365. I think we’ve discussed it a couple times here too; I remember raising it.
+For what it’s worth, it is my opinion that => is an operator in every way that = is an operator, and it is completely appropriate to include `=>` in a “table of operators” if `=` is in there too. There’s hardly any difference of worth between them.
+
+[16:03:03.0759] <sideshowbarker>
+jschoi: Thanks yeah — IMHO we’d be better off if we removed `=` from that table. But most everybody else seems to feel otherwise.
+
+Anyway, my perspective on this is that every good intro-to-this-programming-language book I’ve ever read has a section for operator precedence that only includes actual operators — and then some separate discussion about order of evaluation.
+
+I don’t think the MDN JavaScript docs should be less precise or less rigorous about details like this than a well-written book would be. So that’s why I think, if we’re going to include things on that page that are not strictly operators according to the rules of the language, then we minimally should at least re-title the page — and beyond that, make it very clear which things are strictly operators and which are not.
+
+[16:03:26.0819] <sideshowbarker>
+ * jschoi: Thanks yeah — IMHO we’d be better off if we removed `=` from that table. But most everybody else seems to feel otherwise.
+
+Anyway, my perspective on this is that every good intro-to-this-programming-language book I’ve ever read has a section for operator precedence that only includes actual operators — and then some separate discussion about order of evaluation.
+
+I don’t think the MDN JavaScript docs should be less precise or less rigorous about details like this than a well-written book would be. So that’s why I think, if we’re going to include things on that page that are not strictly operators according to the rules of the language, then we minimally should at least re-title the page — and beyond that, make it very clear which things are strictly operators and which are not.
+
+[16:08:23.0208] <jschoi>
+@sideshowbarker: Yeah, I can certainly sympathize with the desire for rigor on MDN. And it certainly would be consistent to exclude both = and => from being operators.
+I don’t know if there’s any rigorous-but-still-useful definition of “operator” that would exclude =, though. I think that you could rigorously define a JavaScript operator as a “syntactic token(s) that create an expression but which is not a literal”, where an “expression” is a “syntax phrase that evaluates into a value at runtime”. So yield is a nullary-or-prefix operator (with side effects). + is a prefix-or-binary operator. import() probably should be called a circumflex operator (I forgot if it’s in the MDN table). And = and =>, I think, can reasonably be rigorously called operators, too. They’re certainly not literals or statements, heh.
+
+[16:08:48.0790] <jschoi>
+* @sideshowbarker: Yeah, I can certainly sympathize with the desire for rigor on MDN. And it certainly would be consistent to exclude both = and => from being operators.
+I don’t know if there’s any rigorous-but-still-useful definition of “operator” that would exclude =, though. I think that you could rigorously define a JavaScript operator as a “syntactic token(s) that create an expression but which is not a literal”, where an “expression” is a “syntax phrase that evaluates into a value at runtime”. So yield is a nullary-or-prefix operator (with side effects). + is a prefix-or-binary operator. import() probably should be called a circumflex operator (I forgot if it’s in the MDN table). And = and =>, I think, can reasonably be rigorously called operators, too. They’re certainly not literals or statements, heh.
+
+[16:11:00.0087] <sideshowbarker>
+I think I’m just gonna leave it up to Josh Chen to try to solve 😋 He’s been doing some great work on the JavaScript docs recently, with in general a much more informed perspective than mine anyway
+
+[16:24:27.0941] <jschoi>
+Sounds good. Some prior related discussion I found (sparked by the interpolate syntax of `match`): 
+https://matrixlogs.bakkot.com/TC39_General/2021-12-07
+https://matrixlogs.bakkot.com/TC39_General/2021-12-08
+
+
+2022-07-08
+[17:04:35.0935] <bakkot>
+jschoi: btw you can link to specific lines by clicking on the timestamp (and optionally shift-clicking on another timestamp to link to a range)
+
+[19:54:59.0499] <ljharb>
+> <@jschoi:matrix.org> @sideshowbarker: Yeah, I can certainly sympathize with the desire for rigor on MDN. And it certainly would be consistent to exclude both = and => from being operators.
+> I don’t know if there’s any rigorous-but-still-useful definition of “operator” that would exclude =, though. I think that you could rigorously define a JavaScript operator as a “syntactic token(s) that create an expression but which is not a literal”, where an “expression” is a “syntax phrase that evaluates into a value at runtime”. So yield is a nullary-or-prefix operator (with side effects). + is a prefix-or-binary operator. import() probably should be called a circumflex operator (I forgot if it’s in the MDN table). And = and =>, I think, can reasonably be rigorously called operators, too. They’re certainly not literals or statements, heh.
+
+i'm confused; `=>` like in an arrow function? how is that an operator? what's the LHS operand in `(a, b) => {}`?
+
+[22:16:40.0574] <jschoi>
+Well, I’m arguing that `=>` (at least when its RHS is an expression) is quite analogous to `=` in syntax. But you’re right in that `=>`’s analogy to `=` if the RHS is a block instead of an expression. And of course evaluation is deferred and not.
+
+If “operator” means “syntactic construct that creates an expression that evaluates to a value, unless it is a literal”, then `=>` definitely fulfills the former criterion. (I suppose one could argue that it may be considered a “literal” for functions…Now I’m wondering if there’s any useful distinction between compound literals and operators. Should `[]` be considered an operator?)
+
+There’s also the fact that the evaluation of RHS’s side is deferred. I think that’s a reasonable argument against `=>` as operator, despite its creating an expression…In other words, one might reasonably argue that an operator must combine subexpressions that are first evaluated in LTR order. (But then what about nullary operators like `yield` that do not involve any subexpressions? Or operators with special evaluation rules like short-circuiting operators?)
+
+I personally like the simplicity of “if it creates an expression, and it’s not a string/number/boolean literal, then it’s probably an operator”. And I personally would slot `=>` in there. 
+
+But I now realize I’ve overstated my case with regards to the `=` analogy, since `=>` can also have a block RHS…
+
+[22:20:33.0003] <jschoi>
+ * Well, I’m arguing that `=>` (at least when its RHS is an expression) is quite analogous to `=` in syntax. But you’re right in that `=>`’s analogy to `=` if the RHS is a block instead of an expression. And of course evaluation is deferred and not.
+
+If “operator” means “syntactic construct that creates an expression that evaluates to a value, unless it is a literal”, then `=>` definitely fulfills the former criterion. (I suppose one could argue that it may be considered a “literal” for functions…Now I’m wondering if there’s any useful distinction between compound literals and operators. Should `[]` be considered an operator?)
+
+There’s also the fact that the evaluation of `=>`’s RHS is deferred. I think that’s a reasonable argument against `=>` as operator, despite its creating an expression…In other words, one might reasonably argue that an operator must combine subexpressions that are first evaluated in LTR order. (But then why are nullary operators like `yield`, which do not involve any subexpressions, not disqualified? Or what about operators with special evaluation rules like short-circuiting operators?)
+
+Anyways, I personally like the simplicity of “if it creates an expression, and it’s not a string/number/boolean literal, then it’s probably an operator”. And I personally would slot `=>` in there.
+
+But I now realize I’ve overstated my case with regards to the `=` analogy, since `=>` can also have a block RHS. It’s a good point—I don’t think it necessarily disqualifies `=>` from being an operator (i.e., the RHS of `x => {}` is a block, and that’s okay, because the whole thing is an expression). But I do accept that it certainly weakens my position, heh.
+
+[22:24:07.0465] <ljharb>
+`(a, b)` is an argument list, which isn't a thing. how can you operate on it?
+
+[22:27:55.0937] <jschoi>
+Well, the `a` in `a = expr` isn’t an expression either, right? You could say that `=` is operating on `expr` but not `a` per se, since `a` is not an expression. That’s the strongest part of the analogy, I think: compare `([a, b]) => f()` and `[a, b] = f()`. In both cases, the LHS is not actually an expression.
+
+[22:28:57.0156] <jschoi>
+`=` “operates” on its RHS expression and not its LHS binding, and I suppose I would say that `=>` “operates” on its RHS expression and not its LHS arguments. But I feel less sure about when the RHS is a block.
+
+[22:29:23.0323] <jschoi>
+ * `=` “operates” on its RHS expression and not its LHS binding, and I suppose I would say that `=>` “operates” on its RHS expression and not its LHS arguments. But I feel less sure about when the RHS is a block.
+
+[22:31:04.0484] <jschoi>
+ * `=` “operates” on its RHS expression and not its LHS binding, and I suppose I would also say that `=>` “operates” on its RHS expression and not its LHS arguments. 
+(But I do feel less sure about when the RHS is a block. And I don’t want to claim either that my personal mental model is the One True Way, of course, but at least it’s “simple(r)”. 😅)
+
+[22:32:17.0497] <jschoi>
+ * `=` “operates” on its RHS expression and not its LHS binding, and I suppose I would also say that `=>` “operates” on its RHS expression and not its LHS arguments.
+(But I do feel less sure about when the RHS is a block. And I don’t want to claim either that my personal mental model is the One True Way, of course, but at least it’s “simple”. 😅)
+
+[22:57:19.0879] <jschoi>
+* = “operates” on its RHS expression and not its LHS binding, and I suppose I would also say that => “operates” on its RHS expression and not its LHS arguments. In `[x] = f()`, `=` “operates” on `f()`, and, in `([x]) => f()`, `=>` “operates” on `f()`.  But I do feel less sure about when the RHS is a block. I guess that I would say that, in `([x]) => {}`, `=>` “operates” on the empty block. But…yeah. (Either way, I don’t want to claim either that my personal mental model is the One True Way, of course, but at least it’s “simple” and “consistent”. 😅)
+
+[23:00:02.0320] <sideshowbarker>
+I guess there’s something different about JavaScript that makes the line between operators and non-operator things less clear?
+
+I mean in the case of C++ at least, I feel like the set of things that are actually operators is quite clear and I think I understand it pretty well — because it’s at least one part of the language that’s difficult for anybody to understand. But I could just be ignorant about some corner cases of C++ that I’m not familiar with
+
+[23:02:03.0188] <jschoi>
+* = “operates” on its RHS expression and not so much its LHS binding, and I suppose I would also say that => “operates” on its RHS expression and not so much its LHS arguments. In [x] = f(), = “operates” on f(), and, in ([x]) => f(), => “operates” on f().  But I do feel less sure about when the RHS is a block. I guess that I would say that, in ([x]) => {}, => “operates” on the empty block. But…yeah. (Either way, I don’t want to claim either that my personal mental model is the One True Way, of course, but at least it’s “simple” and “consistent”. 😅)
+
+[23:04:33.0889] <sideshowbarker>
+compare https://en.cppreference.com/w/cpp/language/operator_precedence
+
+[23:08:34.0018] <sideshowbarker>
+…and similarly, https://docs.python.org/3/reference/expressions.html#operator-precedence and https://docs.oracle.com/javase/tutorial/java/nutsandbolts/operators.html#nutsandbolts-precedence
+
+[23:12:31.0565] <Jack Works>
+I never figured out the subtle operator precedence. I use prettier and it will auto add `( )` for me to point out the precedence 😂
+
+[23:13:25.0938] <Jack Works>
+And it's also very confusing when I click Expression, I'm navigated to here
+
+[23:18:10.0097] <jschoi>
+Another can of worms is whether “compound literals” like array \[ \] should be considered to be circumfix operators. Note that the Python chart does list them as “operators”. I don’t know if they really have thought of this as robustly as we are here; they may have just listed what felt right for them too.
+
+ Semantics are hard, and words are squishy. Maybe we should just use wordier phrases: “expression syntaxes”, “statement syntaxes”, etc. This is mostly a joke.
+
+[23:18:27.0159] <jschoi>
+> <@sideshowbarker:mozilla.org> …and similarly, https://docs.python.org/3/reference/expressions.html#operator-precedence and https://docs.oracle.com/javase/tutorial/java/nutsandbolts/operators.html#nutsandbolts-precedence
+
+ * Another can of worms is whether “compound literals” like array [ ] should be considered to be circumfix operators. Note that the Python chart does list them as “operators”. I don’t know if they really have thought of this as robustly as we are here. Semantics are hard, and words are squishy. Maybe we should just use wordier phrases: “expression syntaxes”, “statement syntaxes”, etc. This is mostly a joke.
+
+[23:19:07.0565] <jschoi>
+ * Another can of worms is whether “compound literals” like array \[ \] should be considered to be circumfix operators. Note that the Python chart does list them as “operators”. I don’t know if they really have thought of this as robustly as we are here; they may have just listed what felt right for them too.
+
+ Semantics are hard, and words are squishy. Maybe we should just use wordier phrases: “expression syntaxes”, “statement syntaxes”, etc. This is mostly a joke.
+
+[23:20:14.0663] <sideshowbarker>
+ah now that I think about it I can imagine that maybe the Python docs maintainers may also get issue reports about some cases similar to the ones we’ve gotten at MDN
+
+[23:20:26.0027] <sideshowbarker>
+ * ah now that I think about it I can imagine that maybe the Python docs maintainers may also get issue reports about some cases similar to the ones we’ve gotten at MDN
+
+[23:21:01.0360] <jschoi>
+(I also note that they list lambda as an operator. But so are if/else—that’s what you get with a more expression-oriented language…)
+
+[23:21:19.0695] <sideshowbarker>
+oh
+
+[23:21:22.0029] <jschoi>
+* (I also note that they list lambda as an operator. But that’s what you get with a more expression-oriented language.)
+
+[23:21:24.0913] <sideshowbarker>
+hmm yeah, point taken there
+
+[23:21:41.0619] <jschoi>
+* (I also note that they list lambda as an operator. But so are if/else—that’s what you get with a more expression-oriented language…)
+
+
+2022-07-09
+[05:55:34.0971] <Jack Works>
+👀 is there a library can clone all intrinsic? (if it including host API it will be better!)
+
+[05:57:56.0334] <Jack Works>
+It should be able to recursively clone objects & classes by coping prototypes and property descriptors, and it should be aware of exotic intrinsic (like `location`)
+
+[05:58:18.0309] <Jack Works>
+ * It should be able to recursively clone objects & classes by coping prototypes and property descriptors, and it should be aware of exotic intrinsic (like `location`)
+
+
+2022-07-11
+[18:48:12.0622] <bakkot>
+Jack Works: well, nothing can clone a weakmap, so definitely not _all_ intrinsics
+
+[19:55:38.0030] <Jack Works>
+> <@bakkot:matrix.org> Jack Works: well, nothing can clone a weakmap, so definitely not _all_ intrinsics
+
+But there is no intrinsic WeakMap instance, there is only intrinsic WeakMap constructor 
+
+[20:05:39.0392] <bakkot>
+ah, didn't realize that was what you meant. I don't think you can clone the built-in constructors, in the sense of preserving their behavior
+
+
+2022-07-13
+[01:36:22.0644] <Jack Works>
+what is the initial value of CyclicModuleRecord.[[AsyncEvaluation]]? I guess it is `fales` but not mentioned in the spec. 
+
+[01:37:09.0684] <nicolo-ribaudo>
+The default value of internal slots is undefined 
+
+[01:38:46.0866] <Jack Works>
+thanks!
+
+[01:49:22.0290] <nicolo-ribaudo>
+> <@nicolo-ribaudo:matrix.org> The default value of internal slots is undefined 
+
+In 6.1.7.2
+> Unless specified otherwise, the initial value of an internal slot is the value undefined
+
+But maybe that applies only to internal slots of objects and not of records
+
+[04:31:15.0190] <Jack Works>
+I found there is some problem. It should not be `undefined`
+
+[04:32:23.0987] <Jack Works>
+`InnerModuleEvaluation` step 16.b.v
+
+[04:33:25.0431] <Jack Works>
+so it should be default to `false`
+
+[04:33:50.0604] <Jack Works>
+> <@jackworks:matrix.org> sent an image.
+
+(`requiredModule` is a sync module, it's `AsyncEvaluation` is never set)
+
+[05:32:44.0194] <Jack Works>
+oh, I see it `[[AsyncEvaluation]]: false,`. Spec said that in `ParseModule`
+
+[05:33:16.0405] <Jack Works>
+I fully ignore this AO because I'm implementing VirtualModuleRecord and I don't have a source text available 😂
+
+[05:54:29.0228] <Jack Works>
+```js
+// a.js
+export const a = 1
+export * from './b'
+
+// b.js
+export const a = 1
+```
+
+does any one know where is this duplicated export error reports at? I check the whole 16.2 section and didn't get any clue
+
+[06:10:49.0256] <nicolo-ribaudo>
+That should be valid code, and the `a` in `a.js` shadows the one in `b.js`
+
+[06:20:29.0288] <Jack Works>
+oh! only star exports has that duplicated check
+
+
+2022-07-15
+[05:25:12.0178] <Jack Works>
+does anyone know if there is a list of exotic objects in ECMAScript and Web APIs? 👀
+
+[07:53:14.0751] <jschoi>
+If anyone is familiar with Haskell, Scheme (R6RS or R5RS/R7RS), Common Lisp, or the GNU Multiple Precision Arithmetic Library, then I’d love if they would glance at https://github.com/js-choi/proposal-popcount/blob/main/README.md#description and double-check that the behavior column is correct for that language/library.
+
+[09:38:58.0777] <TabAtkins>
+jschoi: My CL impl (SBCL) is *not* using 2s complement. I'm not sure *what* it's using, since `(logcount -1)` returns 0
+
+[09:41:19.0977] <TabAtkins>
+ohhhhhh if the input is negative it counts the 0 bits
+
+[09:41:56.0260] <TabAtkins>
+okay then with that weird wrinkle, confirmed the Common Lisp entry
+
+[10:01:54.0049] <jschoi>
+> <@tabatkins:matrix.org> okay then with that weird wrinkle, confirmed the Common Lisp entry
+
+Thanks for looking! And, yeah, I need to note that it’s counting the zero bits of the 8-bit two’s complement and rolling over beyond 8 bits.
+
+At least…I *think* that’s what’s going on. `(logcount 255)` and `(logcount -256)` is 8, and `(logcount 256)` and `(logcount 257)` is 1, according to whatever implementation https://www.tutorialspoint.com/execute_lisp_online.php is using.
+
+[10:09:56.0065] <jschoi>
+That behavior is actually pretty similar to what Scheme (R7RS)’s SRFI 151 does (https://srfi.schemers.org/srfi-151/srfi-151.html), except SRFI 151 does it with arbitrary integer sizes. 
+I’ve been meaning to try out Chicken Scheme for years but never have found the time…
+
+[10:18:01.0329] <TabAtkins>
+Oh, I'm not seeing it be 8-bit, actually
+
+[10:18:07.0869] <TabAtkins>
+It's not specified to be so in the clhs
+
+[10:18:30.0535] <TabAtkins>
+and if it's *not* bit-constrained, then getting 8 and 1 for 255 and 256 is correct and expected
+
+[10:19:08.0832] <TabAtkins>
+(CL is supposed to be arbitrary-precision, with fixnums transparently upgraded to bignums when you get large enough)
+
+[10:24:14.0150] <TabAtkins>
+yeah note `(logcount (1- (expt 2 100)))` return 100, it's definitely not 8-bit
+
+[10:25:31.0640] <jschoi>
+> <@tabatkins:matrix.org> and if it's *not* bit-constrained, then getting 8 and 1 for 255 and 256 is correct and expected
+
+Oh wait, I’m being dumb. Yes, of course 256 has one 1.
+
+[10:25:38.0519] <jschoi>
+Thanks, that’s definitely an error.
+
+[10:25:52.0142] <jschoi>
+So it’s basically the same as SRFI 151.
+
+[10:27:57.0424] <TabAtkins>
+Yeah looks identical save for the name
+
+[10:58:06.0932] <jschoi>
+> <@tabatkins:matrix.org> okay then with that weird wrinkle, confirmed the Common Lisp entry
+
+ * Thanks for looking! And, yeah, I need to note that it’s counting the zero bits of the 8-bit two’s complement and rolling over beyond 8 bits.
+At least…I think that’s what’s going on. `(logcount 255)` and `(logcount -256)` are 8, and `(logcount 256)` and `(logcount -257)` are 1, according to whatever implementation https://www.tutorialspoint.com/execute_lisp_online.php is using.
+
+[11:00:06.0780] <ljharb>
+there are very few 262 objects that are not exotic
+
+[11:00:15.0839] <ljharb>
+i think the same may be true on the web
+
+[12:08:59.0511] <ptomato>
+bakkot: have you ever run into casing weirdness with the `emu-import` element name in https://github.com/tc39/ecmarkup/blob/main/src/Spec.ts#L1934?
+
+[12:09:08.0671] <bakkot>
+yes
+
+[12:09:09.0316] <bakkot>
+sorry
+
+[12:09:16.0170] <bakkot>
+it's a bug in a transitive dependency
+
+[12:09:20.0800] <bakkot>
+I will pin that and publish a new version
+
+[12:09:34.0539] <ptomato>
+ah, I was wondering if it was something like that
+
+[12:09:36.0306] <ptomato>
+thanks
+
+[12:09:40.0100] <bakkot>
+you're the third person to run into it
+
+[12:09:40.0594] <bakkot>
+https://github.com/tc39/ecmarkup/pull/471
+
+[12:09:44.0427] <bakkot>
+https://github.com/dperini/nwsapi/issues/57
+
+[12:10:07.0191] <bakkot>
+you can just pin nwsapi at 2.2.0 if you don't want to wait for the ecmarkup job to finish
+
+
+2022-07-18
+[11:45:14.0114] <jschoi>
+Someone might find this interesting: https://github.com/w3ctag/design-principles/issues/378 is about the names of factory methods in web APIs, but it also touches on factory methods from TC39 specs. 
+
+Has anyone in TC39 ever come with guidelines for consistent naming? (I know a lot of questions are still unsettled, like how and when to nest “namespace” objects or constructors in constructors.)
+
+
+2022-07-22
+[19:46:07.0584] <snek>
+does anyone know why this is nested like this? https://github.com/tc39/test262/blob/main/harness/regExpUtils.js#L52
+
+[19:46:33.0274] <snek>
+my guess is that the outer `regexp.test` is the actual test, and the inner one is just to find which character failed if one did?
+
+[22:07:30.0293] <snek>
+can anyone confirm... when `%TypedArray%.prototype.set` was changed to not check detached every loop iteration, it seems to have let that fall through to Get/SetValueInBuffer, which immediately does `Assert: IsDetached(ta) is false`, so we're hitting a spec assertion there now?
+
+[22:07:56.0849] <rkirsling>
+ruh roh
+
+[22:09:14.0730] <snek>
+relevant test262 test `built-ins/TypedArray/prototype/set/array-arg-targetbuffer-detached-on-get-src-value-no-throw.js` 
+
+[22:09:32.0030] <snek>
+ * can anyone confirm... when `%TypedArray%.prototype.set` was changed to not check detached every loop iteration, it seems to have let that fall through to Get/SetValueInBuffer, which immediately does `Assert: IsDetached(ta) is false`, so we're hitting a spec assertion there now?
+
+[22:11:21.0374] <rkirsling>
+wait no
+
+[22:11:50.0699] <rkirsling>
+SetValueInBuffer is only reached if IsValidIntegerIndex is true
+
+[22:11:56.0135] <rkirsling>
+but it's false if detached
+
+[22:13:29.0996] <snek>
+oh i see
+
+[06:29:37.0343] <Richard Gibson>
+> <@devsnek:matrix.org> my guess is that the outer `regexp.test` is the actual test, and the inner one is just to find which character failed if one did?
+
+Precisely correct. It was introduced to unicode-property-escapes-tests in https://github.com/mathiasbynens/unicode-property-escapes-tests/commit/cdd000582bf44c43d41c921efdaebdacb48dd10d
+
+[12:07:31.0223] <snek>
+interesting indeed. i found that if i only run the inner loop, engine262 actually does pass these tests, though it takes a REALLY long time :P
+
+[12:09:17.0337] <snek>
+i also tried running it in bun for tail calls but i realized that regex continuations are not always tail recursive so it still overflows
+
+
+2022-07-25
+[11:32:38.0558] <bakkot>
+kinda want a `String.prototype.splitIter` method
+
+[11:32:43.0547] <bakkot>
+now that we're getting iterator helpers
+
+[11:33:01.0109] <bakkot>
+for e.g. processing a long string line-by-line
+
+[11:33:14.0842] <bakkot>
+I guess you can do it with `matchAll` but that's a bit painful
+
+[12:09:47.0415] <rkirsling>
+gotta call it `splIter`
+
+[12:10:00.0666] <rkirsling>
+(surely won't confuse anyone)
+
+[12:12:40.0838] <bakkot>
+... tempting
+
+[12:52:15.0204] <Kris Kowal>
+Consider that this implies: `GeneratorFunction.prototype.fork`.
+
+[12:55:04.0111] <Kris Kowal>
+Which would be wickèd, of course.
+
+[12:55:46.0516] <Kris Kowal>
+And also perhaps gives more power to the holder of an iterator than they ought have.
+
+[13:01:48.0879] <bakkot>
+`GeneratorFunction.prototype.fork` sounds incredible, we should do that (except that probably we shouldn't actually do that)
+
+[13:08:25.0580] <shu>
+is the state COW
+
+[13:08:51.0016] <Kris Kowal>
+Only in Bovinia.
+
+[15:41:02.0191] <snek>
+i'm in favor of generator forking
+
+[15:41:30.0328] <snek>
+with implementation defined behavior for whether locals are copied or not
+
+
+2022-07-27
+[21:52:26.0422] <bakkot>
+what do y'all figure the odds are that we could make `Object.assign` special-case `__proto__` to not trigger the setter on `Object.prototype`
+
+[21:52:31.0946] <bakkot>
+probably not high, I guess
+
+[21:52:39.0726] <bakkot>
+but I would like that
+
+[21:52:58.0544] <bakkot>
+(not trigger any setters on Object.prototype, ideally.)
+
+[06:22:33.0711] <littledan>
+huh, are you seeing a particular sort of injection attack occur?
+
+[06:22:45.0434] <littledan>
+or like where is this coming up?
+
+[06:24:16.0605] <littledan>
+Oh this is what everyone is talking about for "secure" JSON parse?
+
+[06:51:15.0078] <bakkot>
+littledan: yeah
+
+[06:53:42.0872] <bakkot>
+some actually exploitable issues, for a change, e.g. https://github.com/advisories/GHSA-p6h4-93qp-jhcm
+
+[06:54:08.0018] <Jack Works>
+> <@bakkot:matrix.org> what do y'all figure the odds are that we could make `Object.assign` special-case `__proto__` to not trigger the setter on `Object.prototype`
+
+Maybe we should let SES shim to do that 🤔
+
+[06:54:13.0832] <bakkot>
+also just a violation of expectations, really
+
+[06:54:50.0477] <Jack Works>
+Oh I don't know if SES is removing __proto__ accessors
+
+[07:07:23.0697] <littledan>
+so this is entirely avoided by Object spread right?
+
+[07:07:58.0742] <littledan>
+> <@bakkot:matrix.org> what do y'all figure the odds are that we could make `Object.assign` special-case `__proto__` to not trigger the setter on `Object.prototype`
+
+idk seeing the implications I'd be OK with this change as a security/legacy hotfix
+
+[07:08:12.0143] <littledan>
+ * so this is entirely avoided by Object spread right?
+
+[07:08:41.0225] <littledan>
+at this point I guess we could agree that Object.assign should've had {... } semantics
+
+[07:08:48.0045] <bakkot>
+> this is entirely avoided by Object spread right
+
+yup
+
+[07:10:08.0982] <bakkot>
+though I guess there are still _some_ cases where you want to mutate rather than making a new object, and spread doesn't help there
+
+[07:15:40.0701] <littledan>
+right, but we kinda should've done the other aspects of spread semantics, but it's too late now
+
+[07:15:48.0935] <littledan>
+yeah the small patch sounds like a good approach to me
+
+[07:19:01.0465] <bakkot>
+there's still going to be bugs with manually copying properties, which happens pretty often, but this would be an improvement at least
+
+[07:26:33.0366] <bakkot>
+looking in a little more detail https://arxiv.org/pdf/2207.11171.pdf reports one object.assign issue (linked above) and then two manual copying issues, both in the npm cli (patches for which are https://github.com/angus-c/just/blob/66b8abacba16fff2f16a61620ddaddbcad092349/packages/collection-diff-apply/index.js#L109-L113 and https://github.com/npm/parse-conflict-json/blob/6de41ffe0715cedcd92840e7b463b965461d6235/lib/index.js#L92-L94 )
+
+[07:27:21.0769] <bakkot>
+can't do much about the manual copying cases, though
+
+[07:27:49.0827] <bakkot>
+ * looking in a little more detail https://arxiv.org/pdf/2207.11171.pdf reports one object.assign issue (linked above) and then two manual copying issues, both in the npm cli (patches for which are https://github.com/angus-c/just/blob/66b8abacba16fff2f16a61620ddaddbcad092349/packages/collection-diff-apply/index.js#L109-L113 and https://github.com/npm/parse-conflict-json/blob/6de41ffe0715cedcd92840e7b463b965461d6235/lib/index.js#L92-L94 )
+
+[07:34:48.0113] <littledan>
+Do we have any evidence that this error is common?
+
+[07:43:34.0619] <bakkot>
+the `object.assign` one in particular? not that I'm aware of
+
+[07:45:26.0870] <bakkot>
+`JSON.parse` in particular? also not that I'm aware of. a lot of exploitable prototype pollution issues in practice come from other sources, notably parsing+copying of query parameters
+
+[07:45:30.0365] <bakkot>
+ * `JSON.parse` in particular? also not that I'm aware of. a lot of exploitable prototype pollution issues in practice come from other sources, notably parsing+copying of query parameters
+
+[07:46:00.0980] <bakkot>
+there are, unfortunately, a distressing number of ways one might end up copying properties from one object to another
+
+[07:46:36.0713] <bakkot>
+we do have evidence that prototype pollution _in general_ is something which is common, though, I think.
+
+[07:46:45.0561] <littledan>
+can we file a CVE to instruct everyone to give up and switch to Python? merging dictionaries and objects seems like a mistake
+
+[07:47:23.0010] <bakkot>
+if only
+
+[07:48:58.0525] <bakkot>
+original sin was having `Object.prototype` in the first place
+
+[07:49:02.0034] <bakkot>
+and also accessors
+
+[07:49:43.0287] <bakkot>
+a massive sin in combination, also each a sin in isolation
+
+[07:51:27.0642] <littledan>
+also mutable prototypes, instead of Object.create
+
+[09:01:59.0998] <ptomato>
+snek: installation of graaljs in esvu seems to be breaking, you asked for a heads up if that happened again :-)
+
+[09:02:07.0679] <ptomato>
+https://app.circleci.com/pipelines/github/tc39/test262/4173/workflows/ac21cfed-4152-496a-962d-a0d6d24649fe/jobs/38890
+
+[09:05:36.0848] <snek>
+oh is that 
+
+[09:05:39.0527] <snek>
+outdated esvu?
+
+[09:06:19.0701] <snek>
+yeah it is
+
+[09:06:24.0449] <snek>
+should be 1.2.9 but thats 1.2.8
+
+
+2022-07-28
+[00:52:15.0563] <Jack Works>
+👀
+
+[00:52:56.0686] <Jack Works>
+It looks like you mis pressed your phone 
+
+[01:17:17.0822] <ljharb>
+lol i did, oops. Thanks
+
+
+2022-07-30
+[23:25:42.0492] <snek>
+should this be `~Await`? https://gc.gy/126867328.png
+
+[23:27:37.0946] <snek>
+> It is a Syntax Error if ClassStaticBlockStatementList Contains await is true.
+
+[23:27:40.0482] <snek>
+strange
+
+[23:28:00.0607] <nicolo-ribaudo (back on Aug 15th)>
++Await is probably to prevent await from being parsed as an identifier 
+
+[23:28:16.0311] <nicolo-ribaudo (back on Aug 15th)>
+* +Await is probably to prevent await from being parsed as an identifier 
+
+[23:29:02.0736] <snek>
+oh
+
+[23:29:05.0097] <snek>
+fun
+
+[23:32:38.0603] <bakkot>
+really it should be inherited from the surrounding context, but I lost that fight
+
+[23:58:53.0998] <snek>
+ok i think i found a real bug
+
+[23:59:07.0005] <snek>
+`(class { static { this.toString() } })`
+
+[23:59:21.0626] <snek>
+[[SourceText]] on classes is set after the static block evaluates
+
+[23:59:56.0813] <snek>
+seems like a pretty simple fix though
+

@@ -1,0 +1,146 @@
+2023-02-01
+[16:21:14.0933] <sffc>
+Hmm, I may be open to considering if DTF *always* throws on ZDT, or perhaps any Temporal object, if the time zone is not undefined, because if you're using Temporal, you shouldn't get your time zone from Intl
+
+[17:37:17.0370] <justingrant>
+There are three cases:
+- `Instant` - time zone is unknown, so no potential for conflict. `Instant` has the same data model as `Date`, so they should behave identically in `format`.
+- `ZonedDateTime` - time zone is known, so there's potential for conflict. This is the focus of the PR linked above. 
+- `Plain*` types - time zone is excluded from the data model, so currently the 402 section of the Temporal spec doesn't include the `[[timeZoneName]]` in the [list of supported fields](https://tc39.es/proposal-temporal/#table-temporal-patterns). We could discuss changing this behavior, but IMO this should be a separate PR and discussion.
+
+So the issue at hand is really focused on how to handle `ZonedDateTime` output only. 
+
+
+[17:42:32.0776] <sffc>
+Right. Yeah. So it seems reasonable that Instant always converts to the time zone if the DTF, and ZDT always retains its time zone
+
+[17:43:51.0293] <justingrant>
+> <@sffc:mozilla.org> Hmm, I may be open to considering if DTF *always* throws on ZDT, or perhaps any Temporal object, if the time zone is not undefined, because if you're using Temporal, you shouldn't get your time zone from Intl
+
+My main concern is ensuring that, if there's no `timeZone` option specified on the Intl side, then the output of `format` includes the ZDT's time zone. 
+
+What we do if there's also a `timeZone` option on the Intl side is a much lower priority because it seems like it'll be a pretty rare use case. I'm not strongly opposed to your suggestion to always throw in that case, but I'd like to understand your reasoning for why we'd deviate from `calendar` behavior where both are allowed as long as they don't conflict. 
+
+[17:43:54.0509] <sffc>
+The only thing I'm unsure about are the implications for data loading. With this model, the DTF needs to be able to select the time zone in the format function, which means all the display names for all time zones need to be available and efficiently indexable 
+
+[17:44:39.0237] <sffc>
+Currently, the DTF can do the time zone name lookup in the constructor, which is likely more efficient
+
+[17:49:03.0074] <justingrant>
+Is there any choice but to solve this perf problem?  Otherwise, `zonedDateTime.toLocaleString()` would return the system time zone which is never what's intended.
+
+[17:49:13.0632] <justingrant>
+ * Is there any choice but to solve this perf problem?  Otherwise, `zonedDateTime.toLocaleString()` would return the system time zone which is never what's intended.
+
+[17:49:24.0241] <sffc>
+I'm not sure if that's a real concern; Frank could weigh in. A workaround would be that the time zone must match, a restriction we could later lift. This is fine in toLocaleString.
+
+[17:50:28.0698] <sffc>
+I definitely think that DTF converting ZDT to a different time zone is a bad idea, just like converting to a different calendar is a bad idea
+
+[17:52:33.0984] <sffc>
+So I guess the options are (1) always use ZDT zone and eat the format-time lookup cost; (2) require the time zones to match; or (3) require the time zones to match but only if the constructor received an explicit zone.
+
+[17:53:36.0208] <justingrant>
+> I'm not sure if that's a real concern; Frank could weigh in. 
+
+Even if it's a real concern, doesn't that concern have to be solved in order to implement an efficient parameterless `toLocaleString`?
+
+[17:54:08.0008] <ptomato>
+no, because toLocaleString would have no choice but to construct the DTF instance, so that cost is incurred in toLocaleString either way
+
+[17:54:09.0536] <sffc>
+If we did (2) we could switch to (1) or (3) later since they are less strict 
+
+[17:54:43.0015] <ptomato>
+in other words, if you want efficient toLocaleString, you create a DTF and call format instead 😄
+
+[17:56:38.0900] <sffc>
+But I think we should decide on the issue ptomato raised in Intl about whether to resolve the undefined time zone at construction or formating time, because that decision could lead to different value judgements here
+
+[17:57:41.0621] <sffc>
+Like, if DTF responds to browser time zone changes, it means it must retain access to time zone data even after it is constructed
+
+[18:05:13.0940] <justingrant>
+AFAICT, in the current spec, `toLocaleString` doesn't work either. At a minimum could we get consensus on fixing that method now, even if the DTF side of things is still an open question?
+
+[18:08:17.0288] <justingrant>
+BTW, the polyfill doesn't match the spec today. In the polyfill, `ZDT.p.toLocaleString` outputs the ZDT's time zone name. 
+
+[18:10:06.0855] <justingrant>
+In the current spec, it just passes `locales` and `options` directly down to the internal DTF constructor.
+
+[18:16:14.0115] <justingrant>
+Here's the current spec: https://tc39.es/proposal-temporal/#sup-temporal.zoneddatetime.prototype.tolocalestring
+
+[18:16:38.0287] <justingrant>
+```
+1. Let zonedDateTime be the this value.
+2. Perform ? RequireInternalSlot(zonedDateTime, [[InitializedTemporalZonedDateTime]]).
+3. Let dateFormat be ? Construct(%DateTimeFormat%, « locales, options »).
+4. Return ? FormatDateTime(dateFormat, zonedDateTime).
+```
+
+
+2023-02-02
+[16:32:26.0417] <ptomato>
+hi folks, since we have a short Temporal overflow item tomorrow, we have a chance to ask for consensus on https://github.com/tc39/proposal-temporal/pull/2479 again. given that, it'd be much appreciated if you have a chance to weigh in on that PR or its associated issue by about 11:00 Eastern time tomorrow - obviously we won't put it up for consensus again unless everyone has had enough of a chance to review it, but it'd be nice not to have to delay it until the next plenary! thanks
+
+[16:45:49.0993] <justingrant>
+> <@sffc:mozilla.org> So I guess the options are (1) always use ZDT zone and eat the format-time lookup cost; (2) require the time zones to match; or (3) require the time zones to match but only if the constructor received an explicit zone.
+
+ptomato: which of these three options does the current PR use?
+
+[16:48:07.0791] <ptomato>
+(3), essentially
+
+[17:42:39.0983] <justingrant>
+From the convo above it sounds like (2) is more likely to get consensus, and we could maybe relax to (3) in March? 
+
+[17:43:10.0547] <justingrant>
+sffc: how would you suggest we proceed?
+
+[17:43:19.0185] <justingrant>
+(or others)
+
+
+2023-02-06
+[10:24:45.0927] <littledan>
+Hey, do people have any thoughts on the "search" option for collation? https://github.com/tc39/ecma402/issues/256#issuecomment-979760435
+
+[10:25:04.0441] <littledan>
+Mozilla is considering unshipping this support. If we come back to them with use cases, it would help
+
+[10:25:13.0059] <littledan>
+see #whatwg:matrix.org for discussion
+
+[10:25:20.0774] <littledan>
+Maybe this should go on a future TG2 agenda
+
+
+2023-02-16
+[17:12:25.0834] <justingrant>
+Does anyone know if the current plan is to remove the Julian=>Gregorian gap in the `japanese`, `roc`, and `buddhist` calendars before the release of Temporal in V8?  See https://bugs.chromium.org/p/chromium/issues/detail?id=1173158
+
+I'm asking because I'm working on a PR for the Temporal docs that discusses how to handle calendars with gaps (like the Julian=>Gregorian transition). If the long-term plan is to retain use of Julian for these calendars, then it'd be good to include this info in the docs. If not, then it'd be good to fix that issue before Temporal is widely available. 
+
+[11:19:13.0026] <Jamie Kyle>
+I'm really interested in adding `Intl.LocaleMatcher` which has been sitting at Stage 1 for a long time now. It looks like it needs a spec, and I'd be happy to pick up that work. I've never done anything with ECMA-402 though so I don't know how the process is different if at all. Long Ho would you still be interested in championing it? 
+
+https://github.com/tc39/proposal-intl-localematcher
+
+
+2023-02-17
+[03:52:35.0384] <hsivonen>
+> <@littledan:matrix.org> Mozilla is considering unshipping this support. If we come back to them with use cases, it would help
+
+To follow up on this:
+1. There is usage inside Firefox itself! Firefox uses `usage: "search", sensitivity: "base"` equality to find duplicate entries in form autofill data.
+2. The vast, vast majority of usage on the Web can be traced to a single PR: https://github.com/mapbox/mapbox-gl-js/pull/6270
+3. There is also some other Open Source JS library (whose distinction is passing `void 0` as the locale) that gets bundled in a bunch of places, but I haven't taken the time to identify which library it is. The sites don't look appy.
+4. A product called Vanilla Forums uses it somehow always with "en" locale, i.e. the root search collation.
+5. Other than those, there about 16 sites in HTTP Archive that match. 6 of those seem to be the same Polish food menu template vendor. The remaining 10 seem to be one-off uses each.
+
+Both `void 0` and `"en"` are fine in the sense that they map to the root search collation and don't involve root search data inheritance, which is the binary size problem.
+

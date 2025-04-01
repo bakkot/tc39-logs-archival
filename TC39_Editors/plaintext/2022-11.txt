@@ -1,0 +1,372 @@
+2022-11-01
+[07:59:20.0780] <Michael Ficarra>
+https://github.com/tc39/ecma262/pull/2926 pins the SHA now
+
+[07:59:25.0065] <Michael Ficarra>
+shall I mark it as ready to merge?
+
+[10:59:54.0404] <Michael Ficarra>
+shu: did you want to review this one or should I mark it as ready to merge? https://github.com/tc39/ecma262/pull/2915
+
+[11:03:43.0485] <shu>
+let me take a look now
+
+[13:21:02.0514] <Michael Ficarra>
+shu: and the esmeta one?
+
+[13:22:41.0888] <shu>
+https://github.com/tc39/ecma262/pull/2926?
+
+[13:22:44.0459] <shu>
+i'm happy to defer on that one
+
+[13:35:07.0307] <bakkot>
+:shipit:
+
+
+2022-11-02
+[15:17:28.0250] <bakkot>
+Michael Ficarra: 
+
+```
+git rebase -i commit-before-format
+git rebase -X theirs commit-with-format # NB no "-i"
+npm i && npm run format
+git commit --amend -a --no-edit
+git rebase -i commit-after-format
+```
+
+[15:31:51.0601] <bakkot>
+ * Michael Ficarra:
+
+```
+git rebase -i 771ff09cb0dc323b49cc7345ac6a929e95e0a631 # commit before format
+git rebase -X theirs 0090daffc4199c561583bd537ac0737aada4760f # commit with format; NB no "-i"
+npm i && npm run format
+git commit --amend -a --no-edit
+git rebase -i f5f5513a19fdf1ecd8e473b584804c0212a50189 # commit-after-format
+```
+
+[15:32:51.0110] <bakkot>
+ * Michael Ficarra:
+
+```
+git rebase -i 771ff09 # commit before format
+git rebase -X theirs 0090daf # commit with format; NB no "-i"
+npm i && npm run format
+git commit --amend -a --no-edit
+git rebase -i f5f5513 # commit-after-format
+```
+
+[15:49:45.0668] <bakkot>
+ * Michael Ficarra:
+
+```
+git rebase -i 0090daf^ # 0090daf is the commit where the formatter is applied
+git rebase -X theirs 0090daf --exec "npm i && npm run format && git commit --amend -a --no-edit"
+git rebase -i main
+```
+
+[15:50:05.0889] <bakkot>
+updated the above command to handle multiple-commit PRs
+
+[15:50:20.0393] <bakkot>
+ * updated the above command to handle multiple-commit branches
+
+
+2022-11-03
+[06:30:34.0183] <jmdyck>
+So after 2901, is there a rule about when to use entities and when not? (other than "Do what `npm run format` says")
+
+[08:34:52.0444] <bakkot>
+The rule is, don't use entities except for `&amp;` and `&lt;`
+
+[08:35:09.0323] <bakkot>
+which is also what `npm run format` does
+
+[09:04:50.0977] <jmdyck>
+`< spec.html grep -o '&\w\+;' | sort | uniq -c` says otherwise
+
+[09:10:18.0592] <jmdyck>
+most are in `<emu-grammar>` elements, but also some in `<h1>`, `<code>`, `<td>`.
+
+[09:35:02.0579] <bakkot>
+oh, sorry, also whitespace like nbsp
+
+[09:35:11.0405] <bakkot>
+I will fix up the others at some point
+
+[09:40:04.0333] <bakkot>
+(the formatter doesn't apply the same rules to emu-grammar etc, is why those got left behind)
+
+[11:22:29.0988] <shu>
+bakkot: Michael Ficarra: you two should prioritize reviewing https://github.com/tc39/ecma262/pull/2905
+
+[11:22:50.0039] <shu>
+well, at least one of you
+
+
+2022-11-04
+[14:23:33.0656] <jmdyck>
+So if esmeta raises a bogus error, what do I do?
+
+[14:27:53.0915] <bakkot>
+add the containing clause to esmeta-ignore.json, and if that doesn't work, complain to Michael Ficarra 
+
+[14:29:48.0579] <jmdyck>
+The funny thing is, as far as i can tell, the pr didn't do anything to cause the error.
+
+[14:32:46.0711] <jmdyck>
+So does the error message tell me the clause-identifier that would need to be added to esmeta-ignore?
+
+[14:33:13.0218] <jmdyck>
+because I don't know esmeta's naming convention
+
+[14:40:38.0857] <jmdyck>
+That's https://github.com/tc39/ecma262/actions/runs/3397117278/jobs/5648935776.
+
+[14:42:10.0384] <jmdyck>
+ For https://github.com/tc39/ecma262/actions/runs/3397080497/jobs/5648856698, it's raising a Parse Error, which I'm guessing esmeta-ignore doesn't help with. But even if it does, again, I don't know how esmeta wants me to refer to the Function constructor. Just "Function" ?
+
+[14:49:37.0466] <jmdyck>
+Re the failure of https://github.com/tc39/ecma262/pull/2246, adding "ECMAScriptFunctionObject.Construct" to esmeta-ignore didn't make the error go away, so complaining to Michael Ficarra .
+
+[14:52:46.0095] <jmdyck>
+(It weird that the workflow-run report doesn't link back to the PR.)
+
+
+2022-11-05
+[17:38:17.0452] <jmdyck>
+ * (It's weird that the workflow-run report doesn't link back to the PR.)
+
+[17:38:51.0029] <jmdyck>
+ * Re the failure of https://github.com/tc39/ecma262/pull/2246, adding "ECMAScriptFunctionObject.Construct" to esmeta-ignore didn't make the error go away, so this is me complaining to Michael Ficarra .
+
+
+2022-11-07
+[07:26:51.0581] <bakkot>
+we should turn off the check in the mean time, I suppose
+
+[07:50:55.0477] <Michael Ficarra>
+are we in that much of a rush to get the PR in?
+
+[07:51:13.0609] <Michael Ficarra>
+if you haven't noticed, things move a little slowly around here
+
+[08:08:39.0909] <bakkot>
+I thought that's what we said the plan was?
+
+[08:08:54.0437] <bakkot>
+I don't want things to be blocked on waiting for esmeta to update
+
+[08:31:26.0461] <Michael Ficarra>
+I'm fine either way, I'm just patient and lazy so would opt to wait until next week
+
+[09:09:12.0340] <Michael Ficarra>
+actually my opinion is stronger: I'd prefer to leave it enabled for now so we can have it run on other PRs in the meantime
+
+[09:09:43.0189] <Michael Ficarra>
+when we discussed being blocked, I was thinking we were talking about extended periods of time with no feedback from the esmeta devs
+
+[09:45:32.0055] <bakkot>
+we should talk about that more, then
+
+[09:46:09.0300] <bakkot>
+but if it's just that you still want it to run, I'm fine with just disabling the enforcement of the check
+
+[09:46:41.0014] <bakkot>
+I don't want to ever be in a situation of being ready to merge a PR but needing to wait for esmeta devs to do things first; I'd thought we said that whenever that situation arose we'd just turn it off
+
+[09:47:00.0220] <bakkot>
+I wouldn't've wanted to land it under any other conditions
+
+[10:44:21.0938] <jmdyck>
+I think ljharb said that he could merge a PR despite a failing check, so you wouldn't even have to disable enforcement.
+
+[10:49:15.0022] <ljharb>
+true
+
+
+2022-11-09
+[08:09:23.0775] <shu>
+Michael Ficarra: bakkot i have a conflict due to an off-site today, could you please ping me in the PRs you'd like me to review? otherwise i'll knock a few out that seem good to do
+
+[08:09:37.0788] <shu>
+my other request is please review nicolo's module layering PR 
+
+[14:23:58.0412] <shu>
+ah nevermind i will be attending after all, it ended early
+
+
+2022-11-10
+[05:18:27.0167] <jmdyck>
+This is odd: in https://github.com/tc39/ecma262/actions/runs/3433605414/jobs/5724102834 the emu-format check is failing because some shell script is raising "Unknown: command not found"
+
+[05:20:50.0833] <jmdyck>
+oh, never mind, I see it's been reported already.
+
+[10:44:00.0068] <ljharb>
+it should be fixed if you rebase
+
+
+2022-11-11
+[14:54:54.0601] <shu>
+bakkot: Michael Ficarra i'm about to write some real cursed spec stuff about inspecting execution contexts, would like to get your thoughts
+
+[14:55:37.0788] <jmdyck>
+inspecting them how?
+
+[14:56:15.0265] <shu>
+i want to check if a Parse Node _pn_ is currently undergoing Evaluation (i.e. it's either being evaluated itself or is contained in the top-level Parse Node being evaluated) in a non-suspended execution context on the execution context stack
+
+[14:56:51.0597] <shu>
+i'm not sure what the best way to write this prose is other than, basically, what i said
+
+[14:57:39.0896] <shu>
+i'd prefer to avoid building out spec machinery for this since it's for a fairly small use case for refining liveness guarantees of template objects which i'm writing up
+
+[14:58:39.0656] <shu>
+actually maybe i should just add a ParseNodeBeingEvaluated component
+
+[15:01:49.0210] <shu>
+casing on Function and ScriptOrModule almost works, except for these iterators that were created from Abstract Closures, hm
+
+[15:01:54.0068] <jmdyck>
+Note that there are a couple uses of "that is being evaluated" in the spec that might or might not assume the same semantics.
+
+[15:02:56.0380] <jmdyck>
+(I don't expect they'll help you, but they might be other places that could use something you introduce.)
+
+[15:03:27.0144] <shu>
+ah interesting
+
+[15:05:56.0395] <jmdyck>
+Does "a non-suspended execution context on the execution context stack" mean something other than "the running execution context"?
+
+[15:07:14.0228] <shu>
+no, that's what i meant
+
+[15:08:03.0243] <jmdyck>
+ok, that simplifies things
+
+[15:08:44.0125] <shu>
+but i in fact think i misspoke, the property i need to specify should be looking at all execution contexts
+
+[15:09:46.0889] <jmdyck>
+all ECs on the stack, or all ECs in the agent?
+
+[15:12:21.0659] <shu>
+all ECs on the stack, i need to manually check liveness of generator objects before looking at their saved contexts
+
+[15:14:40.0637] <jmdyck>
+(afk)
+
+
+2022-11-12
+[16:01:00.0064] <Michael Ficarra>
+> <@shuyuguo:matrix.org> actually maybe i should just add a ParseNodeBeingEvaluated component
+
+this seems like the right thing to do
+
+[16:21:08.0337] <shu>
+actually i might've handwaved my way through this, but good to get your feedback if i ended up reasoning about this circularly and this current handwave is wrong
+
+
+2022-11-15
+[11:24:24.0075] <Michael Ficarra>
+the Unicode spec is moving to HTML with generated PDFs for archival, like us: https://twitter.com/lianghai/status/1592298176450633731
+
+[11:24:58.0782] <Michael Ficarra>
+their current plan is to use PrinceXML
+
+[11:25:08.0155] <Michael Ficarra>
+very interested how this goes for them
+
+[11:25:49.0695] <Michael Ficarra>
+they have even more challenges than us since they need to embed glyphs somehow
+
+[11:27:29.0317] <Michael Ficarra>
+they also have very large tables
+
+
+2022-11-16
+[14:04:21.0477] <shu>
+bakkot: the current linter is too clever in a few places for these hand-written diff style of spec drafts for proposals
+
+[14:04:40.0433] <shu>
+```
+error: expected freeform line with substeps to end with ":" (found ", then") (algorithm-line-style) at spec.html:1237:77:
+  1235 |         1. <ins>If _bufferIsResizable_ is *true* and _byteLength_ is *undefined*, then</ins>
+  1236 |           1. <ins>Let _viewByteLength_ be ~auto~.</ins>
+> 1237 |         1. <del>If</del><ins>Else if</ins> _byteLength_ is *undefined*, then
+       |                                                                             ^
+```
+
+[14:21:07.0184] <bakkot>
+Too stupid, really
+
+[14:21:12.0386] <bakkot>
+It should handle ins/del
+
+[14:21:16.0574] <bakkot>
+it does for other rules but not those, yet
+
+[14:21:30.0136] <bakkot>
+I'll fix it at some point but you'll probably need to not enforce for now
+
+[14:22:30.0463] <shu>
+yeah happy to just leave that one and not pass --strict
+
+
+2022-11-17
+[17:14:35.0141] <shu>
+updating the RAB/GSAB spec really showcases how much state of the art has advanced for ecmarkup
+
+[17:14:40.0963] <shu>
+great job bakkot 
+
+[22:47:31.0434] <bakkot>
+yeah it's getting to be a real tool, almost
+
+[22:47:38.0562] <bakkot>
+shu: https://github.com/tc39/ecma262/pull/2958
+
+[22:47:40.0244] <bakkot>
+whoops
+
+
+2022-11-23
+[11:40:36.0490] <jmdyck>
+no editors call today (or next week), right?
+
+[12:01:17.0813] <bakkot>
+correct
+
+
+2022-11-29
+[02:14:12.0599] <Michael Ficarra>
+ljharb: https://github.com/tc39/ecma262/pull/2905#issuecomment-1330360353
+
+[06:22:27.0054] <jmdyck>
+were editors going to alert/ask the meeting about "inlining" Annex B's monkey-patches (PR 2952)? Or has that already happened?
+
+[06:34:49.0437] <Michael Ficarra>
+I believe the plan was to have a short discussion item notifying the committee and soliciting feedback once we thought it was ready to merge
+
+[06:35:09.0939] <Michael Ficarra>
+probably at the next meeting, since we're already past the short discussion section of this meeting
+
+[06:59:11.0586] <jmdyck>
+:sigh:
+
+[08:22:26.0061] <ljharb>
+I’ll take a look at the ipr thing today
+
+
+2022-11-30
+[02:18:18.0551] <Michael Ficarra>
+can I get a quick little review on https://github.com/tc39/ecma262/pull/2966?
+
+[02:22:44.0186] <bakkot>
+:approved:
+

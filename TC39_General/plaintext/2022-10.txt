@@ -1,0 +1,1340 @@
+2022-10-01
+[21:11:49.0235] <ljharb>
+i think the Array.of behavior is ideal - it’s always Array unless you’re subclassing or doing something unreasonable, including when destructured. Sticking to purity is how you get the Promise statics, which break when you do the idiomatic thing and destructure them.
+
+[22:34:23.0097] <bakkot>
+the Array behavior seems kind of odd because it's not actually helpful for a subclass - if the subclass is relying on `Subclass.of(x)` working, then it probably also expects `[x].map(Subclass.of)` to work, not to make a base Array
+
+[22:34:30.0247] <bakkot>
+so if you're subclassing you're gonna have to override anyway
+
+[22:34:38.0067] <bakkot>
+at which point, why bother looking at the receiver at all?
+
+[22:34:50.0775] <bakkot>
+ * the Array behavior seems kind of odd because it's not actually helpful for a subclass - if the subclass is relying on `Subclass.of(x)` working, then it probably also expects `[x].map(Subclass.of)` to work, not to make a base Array
+
+[22:35:04.0558] <bakkot>
+ * at which point, why bother having `of` look at the receiver at all?
+
+[22:35:46.0805] <bakkot>
+(specifically, the Array behavior seems kind of odd relative to the simpler option of just always making a base Array)
+
+
+2022-10-02
+[19:19:27.0277] <Jack Works>
+> <@nicolo-ribaudo:matrix.org> Being able to use the method without a receiver is nice though, because I can do `const { of } = Array` and then directly use it (for the people that don't trust "other code" to not mess with built-ins)
+
+I believe these people are minority. Most devs won't do that 
+
+[14:21:27.0840] <ljharb>
+in my experience, i think most devs will do that
+
+[16:11:56.0895] <snek>
+i've never seen anyone except tc39 delegates and nodejs contributors do that
+
+[16:12:04.0227] <snek>
+ * i've never seen anyone except tc39 delegates and nodejs contributors do that
+
+
+2022-10-03
+[22:19:43.0919] <littledan>
+Maybe the version without the cute destructuring use is a little more popular?
+
+
+2022-10-05
+[09:34:47.0091] <ljharb>
+i mean, the airbnb style code tends to recommend that, so i'm not sure why you'd not have seen it more broadly
+
+[09:35:03.0762] <ljharb>
+certainly nobody outside that group will do it for robustness reasons tho :-)
+
+[13:10:04.0634] <ptomato>
+jmdyck: do you have any follow up on https://github.com/tc39/ecma262/pull/2781#discussion_r981535579? I can join the editor call if it's needed today; just give me a bit of advance notice
+
+[13:13:23.0591] <ptomato>
+I will add the assertion there if it really has to be there, but I'd prefer that it be part of the task of specifying the web reality of code like `Date.UTC(NaN, NaN)` and I'd prefer not to block this PR on that
+
+[14:29:43.0596] <jmdyck>
+ptomato: I responded in the PR.
+
+
+2022-10-11
+[15:15:57.0649] <shu>
+we might've accidentally made template literal arrays eternal again?
+
+[15:16:44.0165] <shu>
+we (chrome) recently discovered the note for [[TemplateMap]] in https://tc39.es/ecma262/#table-realm-record-fields is not true, because, well, WeakMaps and WeakRefs exist
+
+[15:44:23.0294] <Ashley Claymore>
+It seems to just not be true general. The array could still be reachable by anything live having a reference to it. The array can be passed around. Unless it means the literal accessing of the [[array]] field rather than the value?
+
+[15:45:34.0544] <Ashley Claymore>
+* It seems to just not be true in general. The array could still be reachable by anything live having a reference to it. The array can be passed around. Unless it means the literal accessing of the [[array]] field rather than the value?
+
+[15:45:35.0790] <shu>
+good point, i think that note is probably in general wrong
+
+[15:46:04.0832] <shu>
+but the original intention was assuming no live strong references to the template array, we _could_ collect it if the parse node was no longer reachable
+
+[15:47:59.0188] <Ashley Claymore>
+That seems OK? Even if the array is in a WeakRef. Or is there a risk to making that collection observable?
+
+[15:48:07.0126] <shu>
+but it is not in fact unobservable to collect them, because of weakrefs
+
+[15:48:50.0782] <shu>
+i think we should clarify that note because it's saying a collecting implementation strategy is allowed because of unobservability, which is false
+
+[15:49:13.0749] <shu>
+maybe we don't need to say anything more than "it's observable in weak collections and weakrefs and that's fine"
+
+[15:50:43.0003] <shu>
+it's also not very clear to me what a Parse Node becoming unreachable means
+
+[15:51:01.0188] <shu>
+now that we talk about liveness for other things in the spec, we should give these the same treatment
+
+[15:51:01.0328] <Ashley Claymore>
+When can parse nodes be collected? Eval and script tags?
+
+[15:51:20.0206] <shu>
+beats me!
+
+[15:51:26.0084] <shu>
+they're technically spec fiction
+
+[15:51:51.0402] <shu>
+oh no, maybe not, because functions hold on to them?
+
+[16:05:08.0331] <bakkot>
+yeah, functions hold on to them
+
+[16:05:27.0142] <bakkot>
+and that's how you'd normally re-manifest it: `` () => tag`foo` `` or whatever
+
+[16:05:35.0105] <bakkot>
+ * and that's how you'd normally re-manifest it: ``() => tag`foo``` or whatever
+
+[16:05:47.0999] <bakkot>
+ * and that's how you'd normally re-manifest it: `` () => tag`foo` `` or whatever
+
+[16:10:18.0506] <shu>
+but the only way we would collect them is if the toplevel Script or Module that has the root Parse Node itself becomes unreachable at some point
+
+[16:10:27.0696] <shu>
+and that i guess is currently up to the host
+
+[16:41:06.0174] <bakkot>
+the Script is not reachable from code, from the POV of the spec
+
+[16:41:40.0156] <bakkot>
+like if you just have `` tag`foo` `` in your program, not in a closure, then after the main body of the script runs you can collect the array for that template
+
+[16:41:44.0004] <bakkot>
+(ignoring WeakRefs, and assuming `tag` doesn't create a longer-lived reference)
+
+[16:41:53.0421] <bakkot>
+ * (ignoring WeakRefs, and assuming `tag` doesn't create a longer-lived reference)
+
+[16:43:53.0851] <shu>
+isn't the entry point to parse a script from the host though?
+
+[16:45:32.0464] <shu>
+anyway that part isn't so important
+
+[16:46:31.0020] <shu>
+we should say that the liveness of the template array literal is tied to the liveness of the Parse Node, which may be observed by weak collections and weak refs
+
+
+2022-10-14
+[20:12:57.0106] <Domenic>
+rbuckton: I'm trying to figure out what's included and what's not included in proposal-explicit-resource-management with regards to async resources. There's still `@@disposeAsync`, but... no syntactic support for calling it?? Is that right?
+
+[20:14:09.0693] <Domenic>
+I very much appreciate the analysis of web platform & Node.js objects BTW
+
+[02:39:12.0457] <nicolo-ribaudo>
+Does ecmarkup support something like `break;`?
+
+Or in order to do this:
+```
+1. Let _found_ be *null*.
+2. For each Record _x_ of _y_, do
+   1. If ..., then
+      1. Set _found_ to _x_.
+      2. Break.
+```
+
+Do I have to manually iterate over y?
+```
+1. Let _found_ be *null*.
+2. Let _len_ be the length of _y_.
+3. Let _i_ be 0.
+4. Let _stop_ be *false*.
+2. While _i_ < _len_ and _stop_ is *false*, do
+   1. If ..., then
+      1. Set _found_ to _x_.
+      2. Set _stop_ to *true*.
+   2. Set _i_ to _i_ + 1.
+```
+
+
+[03:00:57.0229] <Jack Works>
+```
+1. Let _wrapperList_ be a List of the same length with _y_ whose each element _O_ is ! OrdinaryObjectCreate(*null*, « [[WrappedSpecValue]] ») and _O_.[[WrappedSpecValue]] has been set to the coresponding value in _y_ in _y_'s order.
+2. Let _finder_ be a new Abstract Closure with parameters (_currentValue_) that captures ... and performs the following steps when called:
+    1. If ..., then
+        1. Return *true*.
+    2. Return *false*.
+3. Let _finderF_ be CreateBuiltinFunction(_finder_, 1, "", « »).
+4. Let _foundResult_ be ! Call(%Array.prototype.find%, ! CreateArrayFromList(_wrapperList_), « _finderF_ »).
+5. If _foundResult_ is *undefined*, then
+    1. ...
+6. Let _matched_ be _foundResult_.[[WrappedSpecValue]].
+```
+
+Just a joke LOL
+
+[05:18:52.0678] <sachag>
+hi all! just a quick message to let you know that I've started work on the 2022 edition of the State of JS survey
+
+[05:19:02.0357] <sachag>
+there's an open GitHub thread to collect feedback here: https://github.com/Devographics/surveys/issues/47
+
+[07:27:56.0360] <littledan>
+Thanks for reaching out sachag!
+
+[08:27:54.0312] <bakkot>
+nicolo-ribaudo: it does not support `break`. easiest thing in your case is probably
+
+```
+1. Let _found_ be *null*.
+1. For each Record _x_ of _y_, do
+   1. If _found_ is *null* and ..., then
+      1. Set _found_ to _x_.
+```
+or similar
+
+[08:28:16.0901] <bakkot>
+though you _can_ early exit AOs with `Return` so an alternative is to factor out an AO, if it makes sense to do so in your case
+
+[08:40:07.0152] <annevk>
+no KitKats for you
+
+[14:58:56.0432] <rbuckton>
+> <@domenicdenicola:matrix.org> rbuckton: I'm trying to figure out what's included and what's not included in proposal-explicit-resource-management with regards to async resources. There's still `@@disposeAsync`, but... no syntactic support for calling it?? Is that right?
+
+For now, yes. Syntactic support is still planned, but it was suggested that we reduce the scope of the proposal in an effort to reach Stage 3. Syntactic async dispose is still under debate due to concerns about the implicit `await` that is introduced. See https://github.com/tc39/proposal-explicit-resource-management/issues/101 for the current status of that issue.
+
+
+2022-10-15
+[01:33:43.0439] <Domenic>
+rbuckton: Got it. That's unfortunate. In that case, I think it'd be better to remove all async dispose stuff, as there's no incentive for at least the web platform to add a bunch of aliases/wrappers without syntax support.
+
+[11:11:52.0127] <snek>
+reading this really makes we had some way to make first class functions call locations. https://github.com/acdlite/rfcs/blob/first-class-promises/text/0000-first-class-support-for-promises.md
+
+[11:12:01.0773] <snek>
+currently you can only do that for tagged templates :(
+
+[11:12:19.0893] <snek>
+ * reading this really makes we had some way to make first class functions call locations. https://github.com/acdlite/rfcs/blob/first-class-promises/text/0000-first-class-support-for-promises.md
+
+
+2022-10-16
+[09:42:53.0108] <Jack Works>
+> first class functions call locations
+
+[09:42:54.0933] <Jack Works>
+what is that?
+
+[10:06:06.0391] <nicolo-ribaudo>
+Maybe something like https://astexplorer.net/#/gist/08ef948999a34f5e37da8cf9ca9c38ff/46948e5f05780b6f56789736aa0822f841a51f79 (output in bottom right), even if I'm doing it for JSX and not for calls, where I'm passing an object stored in a top-level variable to every root JSX element, so that when it's rendered multiple times I know if it was generated by the same source code
+
+[10:06:29.0767] <nicolo-ribaudo>
+> <@jackworks:matrix.org> what is that?
+
+ * Maybe something like https://astexplorer.net/#/gist/08ef948999a34f5e37da8cf9ca9c38ff/46948e5f05780b6f56789736aa0822f841a51f79 (output in bottom right), even if I'm doing it for JSX and not for calls, where I'm passing an object stored in a top-level variable to every root JSX element, so that when it's rendered multiple times I know if it was generated by the same source code
+
+[10:20:24.0268] <Jack Works>
+Interesting 🤔
+
+[10:26:30.0908] <Luca Casonato>
+I have sooo many use cases for stuff like this. But most of them are probably rather confusing because they rely on this implicit source location state which I think is very non obvious to beginners. Not sure how I feel about it yet
+
+[10:26:46.0802] <Luca Casonato>
+* I have sooo many use cases for stuff like this. But most of them are probably rather confusing because they rely on this implicit source location state which I think is very non obvious to beginners. Not sure how I feel about it yet
+
+[10:31:35.0308] <nicolo-ribaudo>
+`typeof arguments.callLocationToken === "symbol"` 😎
+
+[10:31:57.0697] <nicolo-ribaudo>
+ * `typeof arguments.callLocationSymbol === "symbol"` 😎
+
+[10:32:13.0379] <nicolo-ribaudo>
+ * `typeof arguments.callLocationToken === "symbol"` 😎
+
+[10:42:08.0409] <Jack Works>
+😂
+
+[10:42:33.0183] <Jack Works>
+arguments.caller
+
+[10:42:52.0729] <Jack Works>
+* argument.callee
+
+[10:42:59.0619] <Jack Works>
+* argument.caller
+
+[10:43:09.0488] <Jack Works>
+* arguments.caller
+
+
+2022-10-17
+[20:13:03.0157] <Justin Ridgewell>
+I had a similar thought reading it. It seems like it make it possible to use any hooks in conditions codepaths. But, it’d only work if the component directly calls the hook, any indirection (like a custom hook) and we’d need to know the call locations if everything in the stack to differentiate.
+
+[21:45:24.0270] <Ashley Claymore>
+being able to useContext conditionally is a nice follow on, and makes sense that the context can serve as the tracking marker.  Not being able to use{State,Effect} conditionally still seems fine, as conditional state is a bit like having a class where the code `delete`s a field while its not using it instead of setting it to `undefined`
+
+[21:46:30.0357] <Ashley Claymore>
+the choice to mutate the promise object rather than require it to be memoized surprised me, considering react is usually all about immutability. 
+
+[21:46:54.0466] <Ashley Claymore>
+ * the choice to mutate the promise object rather than require it to be memoized surprised me, considering react is usually all about immutability. 
+
+[06:50:32.0298] <littledan>
+> <@domenicdenicola:matrix.org> rbuckton: Got it. That's unfortunate. In that case, I think it'd be better to remove all async dispose stuff, as there's no incentive for at least the web platform to add a bunch of aliases/wrappers without syntax support.
+
+The rationale for the async dispose stuff in the web platform would be something like:
+- This solves the confusion where you don't know whether a disposal is something you need to wait for, by sorting things into two different names which aren't conflated by default
+- The AsyncDisposeStack library helps compose these, making this protocol directly useful
+
+[06:50:46.0563] <littledan>
+Domenic: I don't fully understand how important it is to correct the current conflation that the web platform does (where the same method name is used for both sync and async disposal). If we don't add add the async disposal protocol, we'd have to decide whether web platform objects which have a logically asynchronous disposal should implement Symbol.dispose anyway (at the risk that some usages of these disposals should wait for the "commit" to complete, but the syntax does not provide this). How do you think the web platform should answer this question?
+
+[06:51:04.0095] <littledan>
+(also a question for annevk :)
+
+[07:10:08.0922] <annevk>
+littledan: I'd need more context to be useful. I might have read something about this at some point, but I forgot :-)
+
+[07:34:15.0149] <littledan>
+You might start at https://github.com/tc39/proposal-explicit-resource-management#relation-to-dom-apis (and earlier in that doc) and https://github.com/tc39/proposal-explicit-resource-management/issues/91
+
+[07:34:51.0516] <littledan>
+IMO the protocol itself and web platform implementation of it is a huge thing about this proposal's value, and would be worth it to add even if we didn't have the syntax
+
+[07:38:46.0367] <littledan>
+in particular, I think composing disposables is a big thing, and it will be useful for frameworks to be able to tie into a common construct for this (probably this assertion should be validated with actual framework authors...)
+
+[07:39:44.0406] <littledan>
+I do think we need a strong web platform review and integration plan before this goes to Stage 3
+
+[07:40:16.0681] <littledan>
+ * I do think we need a strong web platform review and roughly agreed-on integration plan before this goes to Stage 3
+
+[07:42:10.0400] <annevk>
+Interesting, we did talk about this at some point. For addEventListener(), is there some way dispose could integrate with AbortSignal instead?
+
+[07:42:39.0054] <annevk>
+Perhaps it invokes AbortController's abort(). Which then does a bunch of cleanup.
+
+[07:42:59.0681] <littledan>
+yeah, I guess this is an addition I'd make to the integration plan above, that disposing an AbortController would abort it.
+
+[07:43:30.0926] <littledan>
+(my intuitions here are largely based on a conversation I had with wycats)
+
+[07:46:21.0598] <annevk>
+I guess in general I wonder how much of this can be done through signals instead. I've been kinda seeing that as our "cleanup API".
+
+[07:46:44.0618] <littledan>
+what do you mean by signals?
+
+[07:47:06.0206] <annevk>
+https://dom.spec.whatwg.org/#aborting-ongoing-activities
+
+[07:47:19.0064] <littledan>
+oh AbortSignals
+
+[07:48:08.0579] <annevk>
+I call them signals as they're somewhat more general-purpose these days (and that's how the dictionary member is called, well in the singular)
+
+[07:48:27.0484] <annevk>
+Though the documentation doesn't reflect that terribly well
+
+[07:48:34.0504] <littledan>
+makes sense, the term signal is just a bit overloaded in the ecosystem...
+
+[07:49:39.0611] <littledan>
+yeah I guess my intuition is that a signal is a more flexible thing in the same space and a bit less convenient, which is why I thought that Symbol.dispose would generalize the set of things that you can abort
+
+[07:49:41.0556] <annevk>
+As in, do we want Worker's terminate() to be pluggable in some way or should Worker just take a signal
+
+[07:50:13.0055] <littledan>
+it's sort of convenient to just call the method directly on the thing, rather than keeping around some other object
+
+[07:50:18.0579] <littledan>
+so... you might want both versions
+
+[07:50:40.0803] <littledan>
+(not extremely satisifying, the duplication)
+
+[07:50:48.0191] <littledan>
+ * (not extremely satisifying, the duplication)
+
+[07:51:01.0294] <annevk>
+Yeah maybe, exploring that seems worthwhile as part of stage 2-3
+
+[07:51:48.0795] <littledan>
+yeah we could really use more WHATWG/DOM input here. I'm glad that Ron got this started with a proposal but we need more conversation here.
+
+[07:57:55.0701] <annevk>
+To get back to the earlier question, I think I agree with Domenic that it would be good if adding an @@ thing provided a benefit of sorts other than a consistent name. I could see that still being the case without syntax if it always returned a promise for the async case, which seems unlikely to be what the web platform currently offers. But syntax support does seem nicer.
+
+[07:58:56.0046] <littledan>
+One reason the syntax is delayed/omitted is because there's strong interest in an RAII-style syntax for this feature, but it'd be weird if we had a totally implicit `await` pause at the end of the block
+
+[07:59:50.0127] <littledan>
+I advocated for just focusing on the sync case for now, and being OK with these async disposals being launched off into space (I think this makes sense for cases that are like resource cleanup, though not for cases that are about committing storage)
+
+[08:00:24.0842] <littledan>
+an async disposal construct would probably look more block-like (as in Python `with` statements), but this is less usable for common sync disposal cases, where a flat RAII-style thing is more usable.
+
+[08:00:38.0646] <littledan>
+ * an async disposal construct would probably look more block-like (as in Python `with` statements), but this is less usable for common sync disposal cases, where a flat RAII-style thing is more usable.
+
+[08:49:41.0090] <littledan>
+I guess AbortSignal has no way to wait for something to be committed...
+
+[10:32:20.0118] <rbuckton>
+> <@annevk:matrix.org> Perhaps it invokes AbortController's abort(). Which then does a bunch of cleanup.
+
+Does `AbortController` have a concept of "I should never be aborted"? In C#, a `CancellationTokenSource` can be disposed without calling `cancel()`, in which case it can never be canceled and any registered subscriptions or linked tokens can be GC'd. I'd love to see something like that for `AbortController`/`AbortSignal`, since I'm not 100% sure I agree that disposing of an `AbortController` should cause an abort.
+
+[10:33:24.0668] <rbuckton>
+> <@annevk:matrix.org> To get back to the earlier question, I think I agree with Domenic that it would be good if adding an @@ thing provided a benefit of sorts other than a consistent name. I could see that still being the case without syntax if it always returned a promise for the async case, which seems unlikely to be what the web platform currently offers. But syntax support does seem nicer.
+
+There are plenty of built-in symbols that are unrelated to syntax.
+
+[11:00:48.0347] <littledan>
+rbuckton: What do you think of the growing use in the web platform of AbortSignal as a way to dispose of things?
+
+[11:52:42.0181] <rbuckton>
+Unfortunately, userland use of `AbortSignal` via the `abort` event isn't a 100% reliable mechanism for disposal. The `abort` event uses DOM event dispatch, which is asynchronous, and thus won't work well with the semantics of `using` with respect to error aggregation (nor any potential `Symbol.exitContext` extension in the future that might allow for control over error suppression). It also doesn't release the event listeners when the controller is aborted, which can hold onto references that should be GC'd.
+
+[11:52:56.0802] <rbuckton>
+ * Unfortunately, userland use of `AbortSignal` via the `abort` event isn't a 100% reliable mechanism for disposal. The `abort` event uses DOM event dispatch, which is asynchronous, and thus won't work well with the semantics of `using` with respect to error aggregation (nor any potential `Symbol.exitContext` extension in the future that might allow for control over error suppression). It also doesn't release the callbacks when the controller is aborted, which can hold onto references that should be GC'd.
+
+[11:53:07.0560] <rbuckton>
+ * Unfortunately, userland use of `AbortSignal` via the `abort` event isn't a 100% reliable mechanism for disposal. The `abort` event uses DOM event dispatch, which is asynchronous, and thus won't work well with the semantics of `using` with respect to error aggregation (nor any potential `Symbol.exitContext` extension in the future that might allow for control over error suppression). It also doesn't release the event listeners when the controller is aborted, which can hold onto references that should be GC'd.
+
+[11:54:11.0934] <rbuckton>
+I don't think `AbortSignal` is the right primitive from a resource management perspective, though its fine as a async coordination primitive.
+
+[12:03:10.0244] <rbuckton>
+That said, DOM built-ins aren't handled in the same way that userland `abort` event handlers are. They are privileged and abort synchronously, but the dual nature of sync abort for built-ins and async abort for userland has the potential to cause confusion.
+
+[12:03:24.0806] <rbuckton>
+ * That said, DOM built-ins aren't handled in the same way that userland `abort` event handlers are. They are privileged and abort synchronously, but the dual nature of sync abort for built-ins and async abort for userland has the potential to cause confusion.
+
+[12:03:58.0770] <littledan>
+I guess coming up with a shared understanding of this area would be good
+
+[12:04:21.0801] <littledan>
+we shouldn't really have two mechanisms that are parallel due to disagreements about how the same problem should be approached
+
+[12:14:44.0381] <bakkot>
+> The `abort` event uses DOM event dispatch, which is asynchronous
+
+... is it?
+
+```
+let controller = new AbortController();
+let signal = controller.signal;
+
+signal.addEventListener('abort', () => { console.log('aborted'); });
+controller.abort();
+console.log('after calling abort');
+```
+prints "aborted" before it prints "after calling abort"
+
+[12:17:44.0126] <bakkot>
+by "asynchronous" do you mean "errors thrown by event listeners aren't propagated to the person who called `.abort()`"? because I'd imagine that's a solvable problem (`controller.abort(null, { handleErrors: true })` or something)
+
+[13:01:47.0465] <rbuckton>
+Partially, while I admit my original impression was that `abort` event handlers were invoked in a later turn, there is still the issue that errors are reported out of band from the invocation, and that built-ins are handled before `"abort"` callbacks regardless of the order things are attached to the signal.
+
+[13:02:01.0585] <rbuckton>
+ * Partially, while I admit my original impression was that `abort` event handlers were invoked in a later turn, there is still the issue that errors are reported out of band from the invocation, and that built-ins are handled before `"abort"` callbacks regardless of the order things are attached to the signal.
+
+[13:03:39.0049] <rbuckton>
+Either way, my concern stands. If `using controller = new AbortController()` were to abort on dispose, I'd like a way to prevent that from happening so that `abort` event listeners aren't triggered in the event my code runs to completion successfully.
+
+[13:06:52.0552] <rbuckton>
+I tend to lean more towards the behavior here, based on my prior experience: https://learn.microsoft.com/en-us/dotnet/api/system.threading.cancellationtokensource.dispose?view=net-7.0. `CancellationTokenSource.Dispose()` does not cancel
+
+[13:08:24.0357] <ptomato>
+with the way that cancellations are used in GNOME, which is the other platform I'm familiar with that has such a facility, it wouldn't work well if [`Gio.Cancellable`](https://gjs-docs.gnome.org/gio20~2.66p/gio.cancellable) aborted on dispose
+
+[13:08:48.0377] <rbuckton>
+Mostly because the link between `using` and `"abort"` event listeners firing isn't immediately obvious, so its fairly easy to write code that only expects to be triggered while the operation is still active.
+
+[13:11:30.0273] <bakkot>
+on the other hand,
+
+```
+using controller = new AbortController();
+let pages = await Promise.all(urls.map(url => fetch(url, { signal: controller.signal }));
+// automatically cancels outstanding requests if any request fails
+```
+
+would be really nice
+
+[13:11:34.0332] <bakkot>
+ * on the other hand,
+
+```
+using controller = new AbortController();
+let pages = await Promise.all(urls.map(url => fetch(url, { signal: controller.signal }));
+// automatically cancels outstanding requests if any request fails
+```
+
+would be really nice
+
+[13:11:44.0752] <bakkot>
+(I don't yet have an opinion on this either way, just thinking through use cases)
+
+[13:21:49.0134] <rbuckton>
+either way, you need to be able to model both behaviors. 
+```js
+// option 1: cleanup but don't abort on dispose:
+using controller = new AbortController();
+
+// this could also be: `using _ = controller.enter();` or some better name
+using stack = new DisposableStack();
+stack.defer(() => controller.abort());
+
+let pages = await Promise.all(urls.map(url => fetch(url, { signal: controller.signal }));
+// automatically cancels outstanding requests if any request fails
+
+stack.move(); // empties out stack
+
+// no longer tries to abort for any errors that follow.
+
+// controller is disposed. since it is no longer usable, callbacks etc. can be GC'd
+```
+
+```js
+// option 2: abort on dispose
+using stack = new DisposableStack();
+const controller = stack.use(new AbortController());
+
+let pages = await Promise.all(urls.map(url => fetch(url, { signal: controller.signal }));
+// automatically cancels outstanding requests if any request fails
+
+stack.move(); // empties out stack
+
+// no longer tries to abort for any errors that follow.
+
+// controller isn't disposed, any closure that captures and holds a reference to `controller` will prevent GC of `abort` callbacks
+```
+
+[13:24:19.0900] <rbuckton>
+I prefer option 1 because its more GC friendly wrt/closures. If disposing the controller doesn't abort it, but instead makes it unusable and frees references to held "abort algorithms" or userland `abort` event handlers, then it doesn't matter if a closure holds a reference to the controller since everything it was holding can be GC'd. Option 2 doesn't have that benefit.
+
+[13:25:07.0987] <bakkot>
+hmmm, yeah; on the other hand it makes the simple case a lot uglier
+
+[13:25:09.0701] <rbuckton>
+Also, option 1 can be simplified by introducing a method on `AbortController.prototype` that lets you opt-in to "abort-on-dispose" semantics.
+
+[13:26:20.0805] <bakkot>
+yeah
+
+[13:27:09.0831] <rbuckton>
+> <@bakkot:matrix.org> hmmm, yeah; on the other hand it makes the simple case a lot uglier
+
+Not if you have some kind of "enter abort context" method like I mentioned above, i.e.:
+```js
+using controller = new AbortController();
+using ctx = controller.enterAbortOnDisposeContext(); // needs a better name.
+let pages = await ...;
+ctx.exit(); // exit the context without triggering dispose
+```
+
+[13:27:46.0220] <bakkot>
+right, I just mean it makes the simple case uglier unless you also add other stuff
+
+[13:28:11.0694] <rbuckton>
+Defining such lifetime contexts is well within the domain of resource management (see Python's `contextlib`)
+
+[13:28:34.0427] <bakkot>
+I could also imagine instead having a `AbortController.AutoCancel` constructor, so `using controller = new AbortController.AutoCancel()` would give you a controller with the auto-cancel behavior
+
+[13:28:48.0378] <rbuckton>
+You say simple case, but both the "i want to abort on dispose" and the "i don't want to abort on dispose" scenarios are equally as valid.
+
+[13:29:36.0565] <bakkot>
+mm... I agree they are both _valid_, but personally I anticipate wanting the "abort on dispose" semantics several orders of magnitude more often than I want the "don't want abort on dispose" semantics, and I expect this is true of almost all JS code
+
+[13:29:46.0900] <rbuckton>
+My examples illustrate how to do the same thing regardless of each behavior.
+
+[13:30:09.0649] <bakkot>
+(at least if I have understood correctly that the only use case for disposal-without-abort is for GC)
+
+[13:30:54.0933] <bakkot>
+and yes I agree it will be possible to accomplish either semantics regardless of which the language makes simple, but I would like to make the common case the simple one, as a general rule
+
+[13:31:05.0058] <rbuckton>
+> <@bakkot:matrix.org> mm... I agree they are both _valid_, but personally I anticipate wanting the "abort on dispose" semantics several orders of magnitude more often than I want the "don't want abort on dispose" semantics, and I expect this is true of almost all JS code
+
+I'm not sure I agree.
+
+[13:31:39.0249] <bakkot>
+(which case is more common is of course an empirical question I could be entirely wrong about; this is all off-the-cuff intuition)
+
+[13:31:42.0981] <rbuckton>
+I'd rather make the case that is less likely to unexpectedly trigger unwanted behavior the easiest to accomplish.
+
+[13:31:56.0410] <rbuckton>
+ * I'd rather make the case that is less likely to unexpectedly trigger unwanted behavior the easiest to accomplish.
+
+[13:32:10.0987] <bakkot>
+hm, well, I think I would be more surprised by not-abort-on-dispose than abort-on-dispose, right?
+
+[13:32:36.0862] <rbuckton>
+Similar to how `DisposableStack.from()` seems like it would be common, but it's also wrong.
+
+[13:33:03.0371] <rbuckton>
+Does an `AbortController` abort if it is GC'd?
+
+[13:33:16.0301] <bakkot>
+No
+
+[13:34:24.0186] <bakkot>
+I think I also disagree about which semantics are more likely to be surprising here, and how bad the surprising behavior is in each case.
+
+the only thing AbortController right now does is cancellation, so it is natural to assume that `using x = new AbortController` is going to have the disposal semantics related to cancellation (i.e. abort-on-dispose). If you see that code but it doesn't do the thing it looks like (i.e. it just does GC), you're probably going to have a resource leak (e.g. requests will not be cancelled) which is very surprising to you, and you might well not even notice it (a fetch request not being cancelled is not an error you will likely notice).
+
+[13:34:25.0564] <rbuckton>
+While its expected that there will be cases that don't follow that behavior, in general disposables should try to be "better than just GC"
+
+[13:34:56.0570] <bakkot>
+ * I think I also disagree about which semantics are more likely to be surprising here, and how bad the surprising behavior is in each case.
+
+the only thing AbortController right now does is cancellation, so it is natural to assume that `using x = new AbortController` is going to have the disposal semantics related to cancellation (i.e. abort-on-dispose). If you see that code but it doesn't do the thing it looks like (i.e. it just does GC), you're probably going to have a resource leak (e.g. requests will not be cancelled) which is very surprising to you, and you might well not even notice it (a fetch request not being cancelled is not an error you will likely notice).
+
+[13:36:01.0137] <bakkot>
+on the other hand, if `using x = new AbortController` _does_ do cancellation, and you're expecting it not to (... in which case, why did you write that code in the first place? were you looking for the GC semantics? JS developers probably are not looking for the GC semantics), what's the bug you get? probably an error in the happy path case? so you will almost certainly notice the error
+
+[13:36:22.0741] <rbuckton>
+One of the big things I wanted for the cancellation proposal was the ability to clean up complex cancellation graphs when _not_ canceled. That is something that has never made it to `AbortController`/`AbortSignal`.
+
+[13:38:37.0722] <bakkot>
+I agree that's a reasonable thing to want, I just expect JS devs will not want that nearly as often as they want "cancel outstanding fetch requests as soon as other simultaneous requests failed"
+
+[13:39:40.0217] <bakkot>
+I suppose in principle we could solve the "people having the wrong expectations" problem by not making `AbortController` disposable at all, and instead adding _two_ new properties (`.cleanupOnDispose` and `.abortOnDipsose`, say) each of which is disposable in different ways
+
+[13:40:01.0083] <rbuckton>
+Its perfectly reasonable to want an easy way to make that work, but I still believe it's the wrong default behavior. I'd honestly rather `AbortController` not be disposable at all.
+
+[13:40:26.0646] <rbuckton>
+ * Its perfectly reasonable to want an easy way to make that work, but I still believe it's the wrong default behavior. I'd honestly rather `AbortController` not be disposable at all than to abort on dispose.
+
+[13:44:05.0244] <rbuckton>
+Something like this is fairly easy to write in user code, or to build into the DOM API:
+
+```js
+class AbortRegion {
+  #controller;
+  constructor(controller) {
+    this.#controller = controller;
+  }
+  preventAbort() {
+    this.#controller = null;
+  }
+  [Symbol.dispose]() {
+    const controller = this.#controller;
+    this.#controller = null;
+    controller?.abort();
+  }
+}
+
+...
+const controller = new AbortController();
+using region = new AbortRegion(controller);
+... // abort on error
+region.preventAbort();
+... // no longer abort on error
+```
+
+[13:44:21.0181] <rbuckton>
+ * Something like this is fairly easy to write in user code, or to build into the DOM API:
+
+```js
+class AbortRegion {
+  #controller;
+  constructor(controller) {
+    this.#controller = controller;
+  }
+  preventAbort() {
+    this.#controller = null;
+  }
+  [Symbol.dispose]() {
+    const controller = this.#controller;
+    this.#controller = null;
+    controller?.abort();
+  }
+}
+
+...
+const controller = new AbortController();
+using region = new AbortRegion(controller);
+... // abort on error
+region.preventAbort();
+... // no longer abort on error
+```
+
+[13:57:47.0844] <bakkot>
+It would be helpful I think to have more examples of places where you specifically want cleanup-but-not-cancel
+
+[13:58:22.0889] <bakkot>
+I am mostly thinking about `fetch`, and cancelling a completed request doesn't do anything, so doing the cancellation isn't problematic
+
+[13:59:46.0432] <bakkot>
+is the concern things which can't handle being cancelled after they complete, or cases where you no longer want the ability to cancel things which are still in progress?
+
+[14:01:27.0450] <bakkot>
+I guess cases like `addEventListener(x, y, { signal })` probably fall into the second bucket
+
+[14:03:19.0304] <ptomato>
+you mentioned the use case of sending concurrent fetch requests and cancelling them all when one fails; there's also the case of starting concurrent async operations that aren't redundant with each other and Promise.all'ing them, like reading multiple different config files
+
+[14:03:57.0765] <ptomato>
+(neither redundant with nor dependent on, I mean)
+
+[14:05:47.0502] <rbuckton>
+I'm more concerned about userland, since `signal.addEventListener("abort", () => { someDestructiveCleanupAction(); })` is likely and every userland "abort" handler would need some way to be informed it _shouldn't_ execute when the operation completed successfully.
+
+[14:06:55.0632] <rbuckton>
+Ideally, that would be having a mechanism that makes the controller unusable (i.e., cannot abort it), and removes all `abort` handlers such as a `.preventAbort()` method. However, if that exists _that_ is what cleanup would entail so I'd argue _that_ is what should happen when disposed.
+
+[14:09:54.0400] <rbuckton>
+That's the case I _want_ to be the common case, but its not feasible currently without additions to the DOM API. Its important to keep in mind that an `AbortController` will usually outlive the request that uses its `signal`. That means there's almost always a period of time after the requests completes successfully where it _shouldn't_ be aborted.
+
+[14:11:14.0197] <rbuckton>
+built-ins generally don't care since they're spec'd not to, but its much more complex and cumbersome to do so in user code.
+
+[14:12:00.0848] <rbuckton>
+ * That's the case I _want_ to be the common case, but its not feasible currently without additions to the DOM API. Its important to keep in mind that an `AbortController` will usually outlive the request that uses its `signal`. That means there's almost always a period of time after the request completes successfully where it _shouldn't_ be aborted.
+
+[14:12:17.0850] <rbuckton>
+ * That's the case I _want_ to be the common case, but its not feasible currently without additions to the DOM API. Its important to keep in mind that an `AbortController` will usually outlive the request that uses its `signal`. That means there's almost always a period of time after requests complete successfully where the controller _shouldn't_ be aborted.
+
+[14:12:44.0543] <bakkot>
+well, usually just a `if (this.#done) return` will suffice, but yes it is something you have to handle
+
+[14:12:59.0649] <bakkot>
+something you probably should be handling either way
+
+[14:17:07.0647] <rbuckton>
+> <@bakkot:matrix.org> well, usually just a `if (this.#done) return` will suffice, but yes it is something you have to handle
+
+That's glossing over the fact you a) have to communicate that its done, b) may need to coordinate between multiple subscribers that only have the `AbortController`/`AbortSignal` in common, c) may be using third-party code that doesn't have a mechanism to signal disinterest.
+
+[14:19:44.0736] <rbuckton>
+`AbortController` has no mechanism to signal disinterest other than "never call `abort` and let the controller be GC'd", so if we intend to have `using` on an AbortController mean you can't do that (because `abort` will always be called), we need _some_ mechanism to opt out. And that opt-out mechanism is _exactly_ what I would expect dispose to do if it exists.
+
+[14:27:00.0436] <bakkot>
+Sorry, I mean, making your cancelable thing robust against calling "abort()" after the thing has finished is just a matter of doing `if (this.#done) return` (in the signal listener)
+
+[14:28:18.0494] <bakkot>
+If everything is robust against `abort` being called after the thing has finished, then calling `abort` when disposing of the controller should be harmless, generally
+
+[14:29:14.0478] <bakkot>
+(except in the rare case that you are done with the controller _before_ you are done with all of the things it controls)
+
+[14:29:34.0175] <bakkot>
+ * If everything is robust against `abort` being called after the thing has finished, then calling it when disposing of the controller should be harmless, generally
+
+[14:29:39.0952] <bakkot>
+ * If everything is robust against `abort` being called after the thing has finished, then calling `abort` when disposing of the controller should be harmless, generally
+
+[14:51:21.0483] <rbuckton>
+"after the thing has finished" is still glossing over the issue. Knowing "the thing has finished" is actually the crux of my concern. Having a means for an `AbortController` signal disinterest is far cheaper than defending against an incorrect `abort` for all the reasons I mentioned above.
+
+[14:52:15.0818] <rbuckton>
+Even if you're done with it, the controller still lives until its signal has GC'd, which in turn keeps everything else alive it's holding.
+
+[14:52:24.0701] <bakkot>
+I am not understanding the reasons you think it's difficult for a cancelable thing to defend against an incorrect abort.
+
+[14:52:27.0971] <rbuckton>
+> <@bakkot:matrix.org> (except in the rare case that you are done with the controller _before_ you are done with all of the things it controls)
+
+ * Even if you're done with it, the controller still lives until its signal has GC'd, which in turn keeps everything else alive it's holding.
+
+[14:52:46.0955] <bakkot>
+or rather "an abort which happens after the thing is finished", which I would not think is incorrect personally.
+
+[14:53:45.0883] <rbuckton>
+Its not difficult, its time consuming. You have to write scaffolding to handle that case for every single userland "abort" handler. Other implementations don't have this issue, because the ability to signal disinterest is baked in.
+
+[14:55:04.0090] <bakkot>
+You're almost certainly going to want do that anyway because someone calling `.abort` after your thing is finished is a totally normal thing to happen
+
+[14:55:18.0917] <rbuckton>
+Its far too easy to write code that doesn't handle "abort" well. That's not so much a concern if you can just drop the controller on the floor, but if `AbortController` aborts on dispose and every new StackOverflow example has `using controller = ...`, we've just made folks lives a lot harder.
+
+[14:57:40.0355] <bakkot>
+Assuming cancel-on-dispose semantics, the only reason you'd see `using controller = ...` is if it's _useful_ to call `.abort`, so we haven't made anyone's lives harder
+
+[14:58:02.0287] <bakkot>
+presumably if we had a `using _ = controller.cancelOnDipose` helper, instead of cancel-on-dispose semantics, then the stackoverflow example in question would have that line instead
+
+[14:58:27.0633] <rbuckton>
+Here's an example: Someone writes a website that asynchronously requests a page of data from the server. They use `signal.addEventListener("abort", () => { someElement.innerHTML = "Request aborted" })`, and all is well and good because they only call `.abort()` when they need to.
+
+[14:58:33.0137] <bakkot>
+ * presumably if we had a `using _ = controller.cancelOnDipose` helper, instead of cancel-on-dispose semantics, then the stackoverflow example in question would have that line instead
+
+[14:59:29.0059] <rbuckton>
+Now someone makes a change to this working code and switches `const` to `using`. Now, after the page of data is presented successfully, it is then replaced with a "Request aborted" message.
+
+[14:59:32.0060] <rbuckton>
+ * Now someone makes a change to this working code and switches `const` to `using`. Now, after the page of data is presented successfully, it is then replaced with a "Request aborted" message.
+
+[15:01:47.0458] <rbuckton>
+Many users don't write extremely defensive code in event handlers (i.e., "click", "mousemove", etc.), and they haven't had to do so for `AbortController` up until now because you can simply just drop it on the floor. `using` and abort-on-dispose now creates this action-at-a-distance that can be hard to pin down.
+
+[15:02:27.0764] <rbuckton>
+That, plus it doesn't make sense to abort a completed operation. 
+
+[15:03:52.0381] <bakkot>
+yes, changing your code can cause it to have different behavior. presumably they switched `const` to `using` because they _wanted_ it to cancel at the end of the block. this does not really seem problematic  to me?
+
+[15:04:57.0837] <bakkot>
+The whole design of AbortSignal is that it can be passed to multiple things, so that someone might reasonable want to cancel a different operation in a group even after a particular member of the group is done, so I definitely do not agree with "it doesn't make sense to abort a completed operation"
+
+[15:07:15.0616] <bakkot>
+ * The whole design of AbortSignal is that it can be passed to multiple things, so that someone might reasonably want to cancel a different operation in a group even after a particular member of the group is done, so I definitely do not agree with "it doesn't make sense to abort a completed operation"
+
+[15:09:56.0054] <Kris Kowal>
+I think we all agree that whomever calls `abort` is not in a position to know whether any or all of a tree of dependent operations have completed.
+
+[15:10:57.0289] <Kris Kowal>
+And that calling `abort` should be a noöp for any part of the dependent operations that have already completed.
+
+[15:12:00.0947] <Kris Kowal>
+(Yes, you saw technically correct but still insufferable use of diaeresis in noöp here first. Tell a friend.)
+
+[15:12:56.0167] <bakkot>
+If we do in fact all agree on that then I don't know what we're disagreeing about
+
+[15:17:24.0365] <bakkot>
+anyway like I said I don't yet have firm opinions on what we should do here. my only strongly-held opinions are a.) it would be nice if _something like_ my "cancel outstanding requests if any request fails" example were easy and b.) usability of that case should be prioritized above usability of the "I want to make things easier to GC" case
+
+[15:19:34.0927] <bakkot>
+personally I am not yet convinced that it would be problematic to make AbortController disposal do cancelation but I am not dead set on that particular solution
+
+[15:22:24.0995] <Kris Kowal>
+If we agree about all that, it’s possible that we also agree that EventTarget is a poor choice of base type for AbortSignal, since it’s up to the user to check whether the signal won or lost the completion race. My feeling is definitely that it’s a poor design. Cancellation tokens should _resemble_ and compose like promises, except that they can only fail, and their completion bit should be synchronously observable.
+
+[15:24:15.0230] <Kris Kowal>
+And, at that, they should compose with promises such that `await Promise.race([cancelled, undefined])` is a sensible way to bail early if already cancelled.
+
+[15:37:55.0428] <bakkot>
+well, given that AbortController already exists and is ubiquitous it's not all that useful to worry about ways its design could have been better
+
+[15:44:20.0216] <rbuckton>
+with linking registrations and the ability to signal disinterest, we could have these capabilities in a single place rather than requiring every user roll their own defense mechanism to handle completion/disinterest.
+
+[15:46:23.0953] <rbuckton>
+> <@bakkot:matrix.org> The whole design of AbortSignal is that it can be passed to multiple things, so that someone might reasonably want to cancel a different operation in a group even after a particular member of the group is done, so I definitely do not agree with "it doesn't make sense to abort a completed operation"
+
+Linking registrations (i.e., one or more AbortControllers linked to one or more other AbortControllers) specifically addresses this use case.
+
+[15:48:04.0988] <rbuckton>
+Years ago when I proposed a `CancelToken` API, I expressly argued for linking registrations and the ability to signal disintrest/cleanup. Some of these things have been slowly making their way to AbortController, so there is hope.
+
+[15:54:16.0583] <rbuckton>
+With an `AbortSignal.prototype.canBeAborted`, for example, you can write optimized code paths that avoid subscribing to the signal to begin with. With an `AbortController.prototype.close()` that sets `canBeAborted` to `false` and removes all registrations/abort handlers, you can free up swaths of memory related to abort callbacks that will never be executed. That _should_ exist and is, IMO, probably the single most important thing a cancellation system should do aside from actually signaling cancellation, and is exactly what I'd expect `Symbol.dispose` to do. All other features of a robust cancellation system (linking registrations, building cancellation graphs, etc.) can be built on subscribing to cancellation and signaling disinterest. You cannot efficiently write them (with good memory/GC) without the ability to signal disinterest and cleanup.
+
+[16:03:50.0401] <littledan>
+Probably popular opinion which might not be so well-informed: We need to find a way to solve these issues without adding tons of switches 
+
+[16:10:31.0727] <littledan>
+(Or at least, we should avoid adding switches. I don’t really understand the problem Ron is describing)
+
+[16:14:33.0558] <Domenic>
+Lots of discussion here while I was sleeping, but I think my main belief that web platform integration without syntax is not valuable still stands. I hope you all work on the syntax for async disposes.
+
+[16:15:14.0479] <rbuckton>
+Some of it is described in the original cancellation proposal: https://github.com/tc39/proposal-cancellation/tree/master/stage0, but I recall there were some open issues to add a linking registration mechanism (even if its just something like `AbortSignal.race()` or the like).
+
+
+2022-10-18
+[02:41:35.0106] <Jack Works>
+is there a way to get a native function in ECMAScript that do the following thing: `(f) => f()`? `this` and `arguments` are not important in my use case
+
+[02:43:29.0801] <Jack Works>
+oh I got it. `Function.prototype.call.bind(Function.prototype.call)`
+
+[10:47:12.0760] <ljharb>
+`Function.call.bind(Function.call)` works too :-)
+
+[11:01:47.0222] <TabAtkins>
+What's the reason for doing that rather than just writing `f=>f()`? This way is shorter, clearer, and safer since it's 100% syntax.
+
+[11:22:01.0905] <littledan>
+pOiNtFrEe PrOgRaMmInG iS mOrE eLeGaNt
+
+[11:31:43.0099] <ptomato>
+`Function.call.bind(Function.call)` has more `.` than `f=>f()`, so I don't get it
+
+[11:32:12.0242] <littledan>
+this is the academic usage where "point" means a named variable
+
+[11:32:26.0687] <ptomato>
+I know, just shitposting
+
+[11:36:40.0991] <Jack Works>
+> <@tabatkins:matrix.org> What's the reason for doing that rather than just writing `f=>f()`? This way is shorter, clearer, and safer since it's 100% syntax.
+
+To make sure the debugger won't step in anything 
+
+[11:36:52.0105] <Jack Works>
+It will bring better debug experience 
+
+[11:37:11.0034] <TabAtkins>
+Ah I see, ok
+
+[11:38:03.0342] <Jack Works>
+https://twitter.com/jackworks_asref/status/1567372760573440000
+
+[11:38:24.0310] <Jack Works>
+Nowadays I write proxies in this way
+
+[13:44:59.0570] <shu>
+should've called it pointless programming
+
+[13:56:08.0234] <bakkot>
+need a directive which says "debuggers should not stop in this function"
+
+[14:11:31.0730] <rbuckton>
+Like C#'s `[DebuggerStepThrough]` attribute. Maybe someday a `@debugger.StepThrough` meta decorator?
+
+
+2022-10-19
+[18:42:27.0348] <Domenic>
+I'm pretty sure this is exactly what types-as-comments was designed for!
+
+
+2022-10-20
+[09:16:25.0900] <Mathieu Hofman>
+> <@pchimento:igalia.com> `Function.call.bind(Function.call)` has more `.` than `f=>f()`, so I don't get it
+
+We've also noticed significant performance improvements with the latter for our `uncurryThis` when going from `fn => (thisArg, ...args) => apply(fn, thisArg, args);` to `bind.bind(bind.call);`
+
+[13:16:13.0410] <TabAtkins>
+I mean it doesn't surprise me with that level of indirection and temporary object creation
+
+[13:27:16.0675] <shu>
+bound functions have special representation that's cheaper, and also special calling stubs i think
+
+[13:32:44.0057] <snek>
+nodejs's movement to primordials drove a lot of improvements in v8 there
+
+[13:32:50.0927] <snek>
+cuz it uses lots of super ugly .bind hacks
+
+[13:32:58.0368] <snek>
+and reflect.call/construct
+
+[13:33:31.0432] <littledan>
+I think web uses of .bind were also part of what drove improvements
+
+[13:34:18.0170] <littledan>
+there was a weird period of time when microbenchmarks showed you should switch from .bind to arrow functions, and then I guess the two constructs were racing for a time
+
+
+2022-10-25
+[10:10:39.0077] <ptomato>
+is the notation _record_.[[<_nameOfField_>]] OK to use in ECMA-262? it's used plenty in ECMA-402, but there are no examples of it in 262 as far as I can see
+
+[10:12:03.0342] <ryzokuken>
+"the field _<name>_ of _record_" was suggested
+
+[10:21:58.0105] <ptomato>
+with angle brackets?
+
+[10:23:21.0628] <ryzokuken>
+no, I just realized you meant it _with_ the brackets
+
+[10:23:34.0821] <ryzokuken>
+ * "the field _name_ of _record_" was suggested
+
+[10:23:47.0822] <nicolo-ribaudo>
+Is _name_ a variable?
+
+[10:24:13.0928] <ryzokuken>
+yeah
+
+[10:24:26.0123] <ryzokuken>
+same as _nameOfField_
+
+[10:27:32.0758] <bakkot>
+ecma262 does not use that notation currently, and we as editors would generally prefer to avoid it if at all possible
+
+[10:27:49.0880] <bakkot>
+what's the context in which you need that?
+
+[10:32:53.0136] <ptomato>
+just wondering about phrasing like https://github.com/tc39/proposal-temporal/pull/2429/files#diff-ceec2609082b71fe76df3f43d148b97d667dde310f51a514141886246bf3fc74R1058
+
+[10:34:31.0470] <ptomato>
+"Set the field of _record_ whose name is _fieldName_ to _value_" seems like it could be better expressed, and indeed ECMA-402 consistently does "Set _record_.[[<_fieldName_>]] to _value_"
+
+[10:45:25.0143] <bakkot>
+Personally I would just write out the fields, instead of trying to use a loop
+
+[10:45:58.0970] <bakkot>
+cc shu ^
+
+[10:50:44.0644] <ptomato>
+fair enough. perhaps this is a good reason to move https://github.com/tc39/how-we-work/pull/119 forward so we could stick that in there? 😇
+
+[10:55:12.0801] <shu>
+i would strongly prefer to write out the fields instead of using a loop
+
+[10:56:28.0783] <shu>
+using a loop over table has at least two major downsides for the reader. 1) the table is non-local, so i have to open another window or something to match up 2) it results in hard to understand state-keeping between iterations that are really just mystified ways to apply some logic to a particular field
+
+[10:56:39.0562] <shu>
+both of which are directly avoided by just writing the fields out inline
+
+[10:56:54.0707] <shu>
+ * using a loop over table has at least two major downsides for the reader. 1) the table is non-local, so i have to open another window or something to match up 2) it results in hard to understand state-keeping between iterations that are really just mystified ways to apply some logic to a particular field
+
+[12:15:45.0623] <ptomato>
+shu: bakkot: so, [this](https://github.com/tc39/proposal-temporal/pull/2429/commits/50fef673293645db37945fb6084b1e91e59e44fd)?
+
+[12:18:35.0890] <ptomato>
+that doesn't seem to me like an improvement for the reader, but that opinion is based on a survey of exactly one reader (me) 😄
+
+[12:59:37.0457] <shu>
+yes
+
+[13:00:05.0092] <shu>
+i consider that an improvement as a reviewer of temporal patches
+
+[13:43:21.0892] <nicolo-ribaudo>
+As a first-time reader of the temporal spec, the new version looks more readable to me
+
+[13:47:33.0562] <nicolo-ribaudo>
+There are more things to read, but they require less effort
+
+[13:52:57.0947] <snek>
+wasm people say our spec is pretty good for automated mechanization (in comparison to the c++ one 😄)
+
+[13:53:23.0137] <shu>
+lol suck it formalisms
+
+[13:54:08.0006] <snek>
+webassembly is the easiest though because they have formal semantics in the spec for *every* operation :)
+
+[13:54:15.0261] <snek>
+ * webassembly is the easiest though because they have formal semantics in the spec for *every* operation :)
+
+[14:02:45.0290] <bakkot>
+lol that screenshot is old
+
+[14:03:08.0103] <bakkot>
+you can tell because we actually replaced the "result of evaluating |x|" thing with "Evaluation of |x|" so that it would be more consistent
+
+[14:03:20.0317] <snek>
+can't win them all
+
+[14:03:35.0134] <snek>
+but its still a lot better than c++ which is just a paragraph of vague requirements
+
+[14:03:59.0386] <shu>
+yet c++ is faster. curious
+
+[14:04:21.0838] <snek>
+maybe you're on to something here
+
+[14:04:34.0714] <snek>
+kevin can you disable all the lint rules in ecmarkup
+
+[14:05:03.0950] <bakkot>
+jugglinmike pointed me to the commonmark tspec the other day https://spec.commonmark.org/0.30/
+
+[14:05:14.0668] <bakkot>
+which is similarly... difficult to mechanize, let us say
+
+[14:06:51.0856] <bakkot>
+incidentally my dad contributed to the C++ spec; the very first paragraph of any specification I ever read was this one: https://timsong-cpp.github.io/cppwp/n4861/temp.expl.spec#8
+
+[14:07:07.0346] <bakkot>
+which is, in fairness, deliberately opaque
+
+[14:07:17.0694] <bakkot>
+it is deliberately opaque so that people won't read the last line, which is a limerick
+
+[14:07:19.0657] <snek>
+oh my god
+
+[14:08:24.0841] <shu>
+i am mostly appreciating that comments in code listings are in proportional serif?
+
+[14:11:08.0371] <snek>
+i guess this technically is a proportion https://gc.gy/134437262.png
+
+
+2022-10-26
+[11:25:23.0855] <nicolo-ribaudo>
+Why doesn't `reduce` take a `thisArg` parameter?
+
+[11:31:40.0365] <bakkot>
+presumably because it already has a different optional parameter?
+
+[13:00:07.0207] <Kris Kowal>
+Indeed, and `reduce` is arity sensitive so you can’t throw another optional argument after it.
+
+[13:01:29.0035] <Kris Kowal>
+```
+> [].reduce(() => {})
+Uncaught TypeError: Reduce of empty array with no initial value
+    at Array.reduce (<anonymous>)
+> [].reduce(() => {}, undefined)
+undefined
+```
+
+[13:04:10.0766] <Kris Kowal>
+In a parallel universe where Pepsi and Coke products coëxist in peace, the `basis` argument of `reduce` is required and `thisArg` is optional on the end.
+
+[13:05:15.0603] <bakkot>
+it would not make sense to make the `basis` required; there are plenty of things which support some add/join/whatever operation but which do not have an identity 
+
+[13:08:12.0807] <bakkot>
+(assuming by `basis` you mean the initial value, anyway)
+
+[13:08:46.0887] <Kris Kowal>
+Yeah, as in `basis` and `recursive step`. `reduce` is induction with a funny name.
+
+[13:09:28.0711] <Kris Kowal>
+Could be worse. Like, `fold`.
+
+[13:09:41.0134] <bakkot>
+`fold` is at least physically evocative
+
+[13:10:03.0457] <Kris Kowal>
+I’m speaking from a place of caffeine. Please take all above in jest.
+
+[13:37:12.0904] <nicolo-ribaudo>
+Thanks to both of you!
+
+[13:38:02.0167] <nicolo-ribaudo>
+I have another "why?" 😄
+
+Why do we need to disallow line terminators between `yield` and `*`? Just for consistency with non-`*` `yield`?
+
+[13:38:19.0019] <nicolo-ribaudo>
+ * I have another "why?" 😄
+
+Why do we need to disallow line terminators between `yield` and `*`? Just for consistency with non-`*` `yield`?
+
+[13:39:53.0220] <bakkot>
+my guess - again just a guess - is to preserve the possibility of `*` as a prefix operator, as in `yield\n*x`
+
+[13:40:41.0915] <bakkot>
+though actually that doesn't really make the situation better, come to think
+
+[13:40:43.0370] <bakkot>
+yeah I dunno
+
+[13:41:03.0860] <nicolo-ribaudo>
+That operator screams "ASI hazard" very loudly :P
+
+[13:42:27.0597] <bakkot>
+eh, so does `+`
+
+[13:42:40.0451] <bakkot>
+`+x === 1 && console.log('x is 1')`
+
+[13:42:48.0056] <bakkot>
+I guess probably don't write that code though
+
+
+2022-10-27
+[19:20:57.0802] <bakkot>
+what do people do if they want to take the maximum of an with like 200k items in it, such that `Math.max(...arr)` overflows
+
+[19:21:03.0749] <bakkot>
+does this just not happen?
+
+[19:21:32.0338] <bakkot>
+context: I am thinking about how `Math.sum` should work - it could take an iterable, which seems like the obvious thing, but then it wouldn't match `Math.max`
+
+[20:13:44.0837] <ljharb>
+you’d probably slice it and max the slices? but i think it largely doesn’t happen
+
+[20:15:00.0009] <ljharb>
+however I’d assume that it should be possible for engines to handle too-large arg arrays that are spread into a call to a builtin function?
+
+[20:24:31.0090] <bakkot>
+it is possible in principle but difficult in practice; none of the major engines support passing an array of length 1e6 in my testing
+
+[20:31:13.0221] <bakkot>
+I would if we could reasonably overload `Math.max` such that if you call it with exactly one argument, and that argument is an object, it does a lookup of `Symbol.iterator` on that object and then uses that
+
+[20:31:18.0559] <bakkot>
+possibly this is a bad idea though
+
+[20:31:48.0629] <bakkot>
+probably someone out there is somehow relying `Math.max([0, 1])` being NaN
+
+[20:36:08.0200] <Kris Kowal>
+> <@bakkot:matrix.org> what do people do if they want to take the maximum of an with like 200k items in it, such that `Math.max(...arr)` overflows
+
+At some point, I ran into this with `splice`, because it was useful to funnel insertion and deletion operations through a single method. I ended up adding an `swap(index, count, replacements) => void` that was `splice` but not-variadic and also didn’t return a useless `slice`.
+
+[20:39:06.0526] <Kris Kowal>
+I think the bigger concern with unadic overloads of `min` and `max` would be the behavior of `Math.min(...array)` for arrays that happen to only have one value.
+
+[20:40:33.0525] <Kris Kowal>
+Perhaps it makes more sense to leave `Math` behind and `Number.min,max,sum`.
+
+[20:41:22.0566] <Kris Kowal>
+Also `String.join(iterable)`
+
+[21:02:59.0461] <bakkot>
+I would not want to have both `Math.max` and also `Number.max`, especially with different behaviors
+
+[21:03:48.0939] <bakkot>
+> `Math.min(...array)` for arrays that happen to only have one value
+
+with my suggestion this would only be problematic if the first value in the array happened to be an object with a Symbol.iterator method (or such that accessing that property was side-effecting, I guess)
+
+[21:04:09.0911] <bakkot>
+ * > `Math.min(...array)` for arrays that happen to only have one value
+
+with my suggestion this would only be problematic if the first value in the array happened to be an object with a Symbol.iterator method (or such that accessing that property was side-effecting, I guess)
+
+[21:04:19.0834] <bakkot>
+which seems unlikely, or at least unlikely-ish
+
+[21:45:44.0754] <Richard Gibson>
+I for one don't support that kind of overloading. If such behavior is to be added to the standard library, it should be in the form of new functions that always read `Symbol.iterator`.
+
+[21:56:56.0766] <bakkot>
+Richard Gibson do you think `Math.sum` should be such a new function, inconsistent with `Math.max`? or would you want like a `Math.maxList` and `Math.sumList` so they could be consistent?
+
+[22:00:09.0259] <Richard Gibson>
+the latter. We've got precedent for Math functions that operate on an arbitrary number of values to accept each one as an argument, so new Math functions that accept an arbitrary number of values from an iterable should indicate that distinction by a common naming pattern.
+
+[22:00:17.0538] <Richard Gibson>
+ * the latter. We've got precedent for Math functions that operate on an arbitrary number of values to accept each one as an argument, so new Math functions that accept an arbitrary number of values from an iterable should indicate that distinction by a common naming pattern.
+
+[22:11:32.0844] <Richard Gibson>
+similar to how `Array.from` process its argument as an iterable but `Array` does not
+
+[22:41:24.0659] <bakkot>
+python's `max` appears to be overloaded exactly as I suggested above, incidentally
+
+[22:41:41.0653] <bakkot>
+and their `sum` only takes an iterable
+
+[22:42:35.0641] <bakkot>
+I guess their `max` isn't _exactly_ as I suggested; if you pass it exactly one item it assumes it's iterable and throws if not
+
+[22:42:44.0785] <bakkot>
+which, alas, we could not do at this point
+
+[22:46:26.0716] <Jessidhia>
+was wondering about “what if you want to sum more than one iterable”, and the obvious answer is to spread them, but that’d be an eager operation that’d result in double iteration and extra GC garbage; perhaps that’s a use case for concat in iteratorhelpers, or perhaps I’m just overthinking
+
+[22:46:56.0240] <Jessidhia>
+* was wondering about “what if you want to sum more than one iterable”, and the obvious answer is to spread them, but that’d be an eager operation that’d result in double iteration and extra GC garbage; perhaps that’s a use case for concat in iteratorhelpers, or perhaps I’m just overthinking
+
+[22:59:22.0214] <bakkot>
+Jessidhia: yeah, concat in iterator helpers would work, though that's not in V1; flatmap serves the same purpose though
+
+[22:59:48.0841] <bakkot>
+`Math.sumList(Iterator.from(arrayOfIterables).flatMap(x => x))`
+
+[23:00:30.0591] <bakkot>
+`sumList` is a terrible name for this API though; hope someone can come up with a better one
+
+[23:16:39.0806] <Richard Gibson>
+my bikeshed vote would be `sumFrom`, aligning with `Array.from`
+
+[23:20:49.0422] <bakkot>
+I don't hate it
+
+[23:21:31.0987] <bakkot>
+also if we do add `Math.sum` (the argument-list-taking version, by contrast to the iterable-taking version) can we make it throw if any of the things are not already numbers, instead of casting
+
+[23:22:09.0364] <bakkot>
+I don't want `Math.sum([1])` to work; the fact that `Math.max([1])` works is horrifying
+
+[23:22:35.0232] <bakkot>
+ * also if we do add `Math.sum` (the argument-list-taking version, by contrast to the iterable-taking version) can we make it throw if any of the things are not already numbers, instead of casting
+
+[00:12:22.0261] <Ashley Claymore>
+> <@bakkot:matrix.org> what do people do if they want to take the maximum of an with like 200k items in it, such that `Math.max(...arr)` overflows
+
+I use a for-loop instead if not confident on limit of array length 
+
+[14:44:16.0163] <TabAtkins>
+yup, or that's simple enough that I feel okay doing an `arr.reduce((a,b)=>Math.max(a,b))`
+
+[14:44:34.0052] <TabAtkins>
+(I don't use `reduce` if the operation is more than a single simple expression, but this qualifies)
+
+
+2022-10-28
+[19:55:34.0401] <Jack Works>
+> <@tabatkins:matrix.org> yup, or that's simple enough that I feel okay doing an `arr.reduce((a,b)=>Math.max(a,b))`
+
+Isn't that a performance waste? You can split them into slices of thousands instead of one by one
+
+[20:00:57.0508] <TabAtkins>
+In the rare cases I care about that, maybe
+
+[21:48:40.0414] <Jack Works>
+An array with 2^32-1 (is that maximum argument count?) Is also rare case
+
+[21:55:19.0043] <Jessidhia>
+2^32-1 is the maximum array size, but the problem here is arguments being capped at 2^20-ish in some engines
+
+[21:56:54.0708] <Jessidhia>
+* 2^32-1 is the maximum array size, but the problem here is arguments being capped at 2^20-ish in some engines
+
+[23:30:59.0187] <bakkot>
+a lot less in some cases; safari tops out at 2^16, on my machine
+
+[06:41:22.0488] <tolmasky>
+It is my understanding that the grammarkdown ( https://github.com/rbuckton/grammarkdown ) does not generate a parser for a provided grammar -- is that correct? Also, is the .grammar file in there ( https://github.com/rbuckton/grammarkdown/blob/main/spec/grammarkdown.grammar ) considered to be the official "spec" for the grammar used in the ECMAScript spec?
+
+[08:32:22.0440] <rbuckton>
+> <@tolmasky:matrix.org> It is my understanding that the grammarkdown ( https://github.com/rbuckton/grammarkdown ) does not generate a parser for a provided grammar -- is that correct? Also, is the .grammar file in there ( https://github.com/rbuckton/grammarkdown/blob/main/spec/grammarkdown.grammar ) considered to be the official "spec" for the grammar used in the ECMAScript spec?
+
+Grammarkdown is not a parser generator, no. Also, the grammer files in the project are   not authorative
+
+[13:44:03.0263] <rbuckton>
+> <@tolmasky:matrix.org> It is my understanding that the grammarkdown ( https://github.com/rbuckton/grammarkdown ) does not generate a parser for a provided grammar -- is that correct? Also, is the .grammar file in there ( https://github.com/rbuckton/grammarkdown/blob/main/spec/grammarkdown.grammar ) considered to be the official "spec" for the grammar used in the ECMAScript spec?
+
+ * Grammarkdown is not a parser generator, no. Also, the grammer files in the project are not authoritative
+
+[13:44:51.0583] <rbuckton>
+ * Grammarkdown is not a parser generator, no. Also, the grammar files in the project are not authoritative
+

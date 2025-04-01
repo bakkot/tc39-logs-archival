@@ -1,0 +1,3405 @@
+2022-12-01
+[01:00:41.0942] <shu>
+what is the last item scheduled for today?
+
+[01:03:59.0268] <Rob Palmer>
+ShadowRealm
+
+[01:04:20.0889] <Rob Palmer>
+but it may move slightly if time magically opens up
+
+[01:05:19.0833] <shu>
+i should like to be present for shadowrealms but tbqh i don't know if i'll be able to stay awake until then
+
+[01:08:43.0504] <ljharb>
+ * can someone let me in to the meet? Rob Palmer ryzokuken bterlson 
+
+[01:09:42.0465] <Luca Casonato>
+bakkot: can you add `amazing iterator` -> `async iterator`?
+
+[01:19:01.0217] <ljharb>
+bterlson: advance queue?
+
+[01:23:17.0533] <Rob Palmer>
+As Michael Saboff said, please add your name, abbreviation and organization to today's meeting notes.  Link here:  https://github.com/tc39/Reflector/issues/446
+
+[01:24:41.0614] <Rob Palmer>
+Please could everyone avoid sharing direct URLs to our notes or meeting URLs in this publicly logged room.  These are all linked from the Reflector post so that they are kept private.
+
+[01:28:35.0651] <Michael Ficarra>
+already 15 min ahead!
+
+[01:37:47.0951] <Christian Ulbrich>
+Wouldn't this be also the first time, that we would have a ~_keyword_~operator being extended / giving a `.` ? `await` is not a normal function but sth. _magical_ like `delete`?
+
+[01:37:58.0172] <Christian Ulbrich>
+ * Wouldn't this be also the first time, that we would have a ~_keyword_~operator being extended / giving a `.` ? `await` is not a normal function but sth. _magical_ like `delete`?
+
+[01:38:14.0029] <ljharb>
+no, we have `new.target`
+
+[01:38:16.0649] <ljharb>
+and `super.whatever`
+
+[01:38:24.0849] <rbuckton>
+and `import.meta`
+
+[01:38:29.0365] <ljharb>
+metaproperties are already A Thing
+
+[01:40:01.0298] <Christian Ulbrich>
+`super.whatever` is used like a magical function and `new.target` is a magical property. `import.meta` a magical global.
+
+[01:40:21.0431] <yulia>
+speaking of research -- anyone wanna take over running that call?
+
+[01:42:11.0843] <Christian Ulbrich>
+I can relate to the idea of hiding Promises, but it would come at the cost of having - IMO - at the cost of another magical thing, that we do not have so far.
+
+[01:43:37.0048] <Christian Ulbrich>
+ * `super.whatever` is used like a _magical_ **function** and `new.target` is a _magical_ **property**. `import.meta` a _magical_ **global**.
+
+[01:44:40.0090] <ljharb>
+it could be an `awaitAll` keyword and it'd be the same
+
+[01:44:44.0490] <yulia>
+we have issues with sound in the room?
+
+[01:44:58.0460] <ljharb>
+`await.all` isn't magical, it's just a way to nest keywords under keyords in this case
+
+[01:44:58.0678] <bakkot>
+`await.all [a, b, c]` just doesn't seem that different from `await Promise.all([a, b, c])` to me
+
+[01:45:00.0480] <rbuckton>
+async/await isn't about hiding promises. It's about taking continuation passing style code and allowing you to write it as linear code so that you can maintain the benefit of existing control flow constructs like `continue`/`break`/`return`/`yield`.
+
+[01:45:20.0890] <yulia>
+what is being highlighted right now is the issue of breaking consistency in a language -- new developers will have a hard time keeping two things in mind
+
+[01:45:30.0278] <ljharb>
+> <@bakkot:matrix.org> `await.all [a, b, c]` just doesn't seem that different from `await Promise.all([a, b, c])` to me
+
+sure, i do the latter all the time, but in my experience devs in fact consider those quite different, and avoid the latter in favor of `await a; await b; await c` *constantly*
+
+[01:45:31.0280] <yulia>
+I would question teaching async/await before promises for this reason
+
+[01:45:45.0867] <yulia>
+i don't think the solution here is syntax
+
+[01:46:00.0430] <Christian Ulbrich>
+In other words, is there so far any `await`-like thing with a `.`?
+
+[01:46:18.0765] <ljharb>
+Christian Ulbrich: no, in that respect it'd be something new, but almost every new syntax feature has that :-)
+
+[01:46:30.0645] <ljharb>
+yulia: i totally agree this doesn't fix the education problem. to me it's fixing an ergonomics problem.
+
+[01:46:33.0799] <Alex Vincent>
+DevMo has a great example of how to do promises in sequence via Array.prototype.reduce
+
+[01:46:36.0953] <bakkot>
+ljharb I definitely see people do `await a; await b; await c` over `await Promise.all` but I have generally assumed it was because of thinking serially rather than because of wanting to avoid `Promise`?
+
+[01:46:46.0696] <yulia>
+> <@ljharb:matrix.org> yulia: i totally agree this doesn't fix the education problem. to me it's fixing an ergonomics problem.
+
+the ergonomics issue is relying on learners to make its poinit
+
+[01:46:48.0438] <bakkot>
+"wanting to avoid `Promise`" seems like a problem we should not be trying to solve for them
+
+[01:46:49.0924] <yulia>
+you just did so as well
+
+[01:46:55.0423] <Kris Kowal>
+I imagine `for await all` would take a lot of pressure off of `await.all`.
+
+[01:46:57.0868] <yulia>
+i don't agree that this is a solution
+
+[01:47:02.0745] <ljharb>
+> <@bakkot:matrix.org> ljharb I definitely see people do `await a; await b; await c` over `await Promise.all` but I have generally assumed it was because of thinking serially rather than because of wanting to avoid `Promise`?
+
+my experience is that most of the time they don't need to be serial, and that they didn't want to deal with the ceremony of Promise.all
+
+[01:47:12.0974] <Christian Ulbrich>
+Motivate a change to "unconfuse" developers from Promises by adding a totally new syntax, should be well-thought of.
+
+[01:47:13.0824] <shu>
+> <@bakkot:matrix.org> ljharb I definitely see people do `await a; await b; await c` over `await Promise.all` but I have generally assumed it was because of thinking serially rather than because of wanting to avoid `Promise`?
+
+this rings true to me
+
+[01:48:00.0795] <shu>
+i reckon beginners are not at a place that _would_ reach for parallel combinators but for a more discoverable way to do so, like syntax, or something
+
+[01:48:08.0880] <shu>
+they're just not at a place to reason about things in parallel
+
+[01:48:21.0279] <Christian Ulbrich>
+Concerning the hiding motivation, it actually is a problem that have all the time with junior developers, they already do not know, that they are using promises...
+
+[01:48:49.0535] <Kris Kowal>
+I agree with Yulia that promises should be taught before async/await. I agree with rbuckton that the latter is not to hide the former.
+
+[01:49:11.0153] <HE Shi-Jun>
+if the main problem is await all, should we only add `await.all` without `await.race` and others? Or even just introduce a special syntax (eg. `await* promises`)?
+
+[01:49:15.0358] <shu>
+first we must teach one of the First Mistakes -- the existence of the microtask queue
+
+[01:49:22.0678] <Christian Ulbrich>
+shu: The whole Playwright API is heavily _async_...
+
+[01:49:48.0922] <shu>
+Christian Ulbrich: sorry what's the context of that comment? i don't know what that means
+
+[01:50:07.0352] <Kris Kowal>
+ * I agree with @yulia that promises should be taught before async/await. I agree with rbuckton that the latter is not to hide the former.
+
+[01:51:06.0460] <ljharb>
+> <@haxjs:matrix.org> if the main problem is await all, should we only add `await.all` without `await.race` and others? Or even just introduce a special syntax (eg. `await* promises`)?
+
+that would still be better than the status quo, but i think that'd be an unfortunate inconsistency
+
+[01:51:43.0848] <Alex Vincent>
+"do nothing" is always an option.
+
+[01:51:46.0985] <HE Shi-Jun>
+ljharb: if syntax, there is no inconsistency?
+
+[01:52:37.0597] <ljharb>
+the inconsistency would be 3 of the promise combinators lacking syntax, but 1 having it
+
+[01:55:21.0091] <HE Shi-Jun>
+I mean, if 80% usage of combinators is just Promsie.all, is it ok to only add syntax for it?
+
+[01:58:15.0628] <ljharb>
+should we only add a subset of + - * /, because some of them get more usage than the others?
+
+[01:58:45.0317] <yulia>
+i remain adamant that consistency is important for learnability of a language, 20% is a pretty big chunk, but i think we are  just pulling numbers from the air right now. 
+
+[02:00:02.0228] <Jack Works>
+> <@yulia:mozilla.org> speaking of research -- anyone wanna take over running that call?
+
+Sad to see you cannot attend 
+
+[02:00:17.0478] <yulia>
+> <@jackworks:matrix.org> Sad to see you cannot attend
+
+wanna take over?
+
+[02:00:38.0941] <yulia>
+you can bug felienne
+
+[02:00:55.0202] <yulia>
+or we can go without a research call for a while
+
+[02:10:05.0658] <ljharb>
+bterlson: it'd be really helpful to plan my sleep if the hackmd could be updated with an estimated plan for the rest of the day 🙏
+
+[02:10:42.0349] <Jack Works>
+> <@shuyuguo:matrix.org> they're just not at a place to reason about things in parallel
+
+Sounds true. For beginners they need to be taught to be aware of parallel. But for me, I sometimes drop parallelism because I'm lazy to write Promise.all()
+
+[02:11:35.0547] <Rob Palmer>
+ljharb: hackmd is constantly kept as up to date as we can make it - as we approach the end of the meeting it generally becomes more reliable as uncertainty decreases
+
+[02:11:46.0447] <Kris Kowal>
+I think Promise.all is the tip of the lazy iceberg. To go from lazy about parallelism to rigorous usually means converting a for loop to a map, or accumulating an array of promises in a for loop.
+
+[02:11:50.0966] <ljharb>
+thanks, appreciate whatever you can do!
+
+[02:12:32.0391] <shu>
+Jack Works: have you tried to use editor abbreviations?
+
+[02:12:36.0005] <Jack Works>
+> <@alex.vincent:matrix.org> "do nothing" is always an option.
+
+I'm prepared and think it's ok if the committee dont like this idea 
+
+[02:12:53.0268] <shu>
+like this seems like an easier problem to solve than through the language
+
+[02:13:15.0633] <Kris Kowal>
+A much bolder improvement would be parallel for await loops.
+
+[02:15:12.0807] <Jack Works>
+> <@ljharb:matrix.org> should we only add a subset of + - * /, because some of them get more usage than the others?
+
+OOT: imo some operators (| & %) do not deserve a single character operator because they're not used so often (than || &&)
+
+[02:15:58.0712] <rbuckton>
+> <@jackworks:matrix.org> OOT: imo some operators (| & %) do not deserve a single character operator because they're not used so often (than || &&)
+
+As someone that does a fair amount of bit twiddling, I disagree
+
+[02:16:25.0074] <Kris Kowal>
+> <@jackworks:matrix.org> OOT: imo some operators (| & %) do not deserve a single character operator because they're not used so often (than || &&)
+
+K&R’s Regret. They got to bitwise first.
+
+[02:16:32.0906] <sffc>
+I would like 10 minutes of plenary time to discuss an additional question regarding Intl NumberFormat v3. I have added a slide at the end of the deck I used on Tuesday
+
+[02:16:42.0360] <Jack Works>
+> <@yulia:mozilla.org> wanna take over?
+
+I have little knowledge about how to do research... I can join the meeting but I don't think I can take the charge 👀
+
+[02:16:53.0843] <apaprocki>
+sffc: have you proposed strings for the eras anywhere?
+
+[02:17:06.0777] <yulia>
+i think the only person who really knows what they are doing is felienne
+
+[02:19:13.0014] <shu>
+i know how to confirm my priors and ignore counter evidence
+
+[02:19:32.0216] <Jack Works>
+> <@shuyuguo:matrix.org> Jack Works: have you tried to use editor abbreviations?
+
+Oh
+
+[02:20:55.0921] <Jack Works>
+One of the main pain point is when I'm using for...of loop and I want to use await in the loop body
+
+[02:20:57.0975] <yulia>
+> <@shuyuguo:matrix.org> i know how to confirm my priors and ignore counter evidence
+
+sounds like ✨science✨
+
+[02:21:05.0970] <sffc>
+apaprocki: All context and work on this should be available on the proposal repository; e.g. https://github.com/FrankYFTang/proposal-intl-era-monthcode/issues/1 ... my colleague Manish has a proposal that has been presented to CLDR. There is still room to evolve before they are written down. Would like your feedback if interested!
+
+[02:21:09.0575] <Jack Works>
+> <@jackworks:matrix.org> One of the main pain point is when I'm using for...of loop and I want to use await in the loop body
+
+Does anyone have the same feeling about this? 
+
+[02:22:33.0369] <rbuckton>
+slides aren't showing on meet
+
+[02:22:36.0497] <yulia>
+blank screen
+
+[02:22:39.0421] <yulia>
+ * blank screen
+
+[02:22:46.0644] <HE Shi-Jun>
+I can't see the slide
+
+[02:26:19.0071] <Jack Works>
+* you don't need to understand what membrane is to know the motivation of this proposal
+
+[02:26:57.0910] <Jack Works>
+TLDR: we have tons of revocable Proxies and we need to revoke them in an ergonomic way. 
+
+[02:28:28.0974] <rkirsling>
+I mean you kind of do if you've never encountered proxy revocation before (I merely know that it's a thing that exists that I've not needed to investigate to any depth)
+
+[02:30:09.0993] <Jack Works>
+today:
+
+```js
+for (const p of proxiesToRevoke) revokerMap.get(p)()
+```
+
+You need to store tons of revoker functions and call them one by one
+
+[02:31:56.0121] <rbuckton>
+I'm curious if `DisposableStack` can help here, either:
+```js
+const { proxy, revoke } = Proxy.revocable(...);
+stack.defer(revoke);
+return proxy;
+
+// later
+
+stack.dispose(); // mass revocation
+```
+
+Or make the return value of `Proxy.revocable` itself a disposable.
+
+[02:32:59.0252] <Jack Works>
+Cannot help.
+
+[02:33:20.0847] <Jack Works>
+Proxy does not have a prototype to store @@disposable
+
+[02:33:32.0420] <rbuckton>
+I'm not sure how I see how
+
+[02:34:17.0438] <ljharb>
+the confusing name of `defer` aside, that seems like it'd work
+
+[02:34:31.0104] <Christian Ulbrich>
+Is the memory argument really so strong?
+
+[02:35:39.0872] <Michael Ficarra>
+I don't think we need to determine whether DisposableStack would be sufficient today
+
+[02:35:57.0745] <Michael Ficarra>
+this can reach stage 1 and later we don't advance to stage 2 because we realise DisposableStack is a fine solution
+
+[02:36:08.0411] <Christian Ulbrich>
+/me has never _revoked_ a proxy, why would I? I want all of them to go through **my** _proxy_ :)
+
+[02:37:12.0529] <HE Shi-Jun>
+> <@jackworks:matrix.org> Proxy does not have a prototype to store @@disposable
+
+DisposableStack defer still could work
+
+[02:37:49.0649] <rbuckton>
+And I meant that its not the proxy that is disposable, but the `{ proxy, revoke }` object
+
+[02:38:30.0478] <HE Shi-Jun>
+I think DisposableStack could work, but the proposed api seems much easy to use.
+
+[02:39:06.0432] <Christian Ulbrich>
+I also had the https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal in mind...
+
+[02:40:31.0056] <HE Shi-Jun>
+yeah, cross realm seems a requirement of this proposal?
+
+[02:41:14.0405] <Mathieu Hofman>
+I think wrapped revokers could also be optimized in theory, but would any engine realistically perform all these optimizations?
+
+[02:42:20.0804] <Christian Ulbrich>
+Proxies now have some heavy uses... they are used by recent Vue3 and libs implementing _immutability_.
+
+[02:42:45.0271] <Christian Ulbrich>
+I still wonder though, whether they are actually _revoking_ their Proxies...
+
+[02:42:59.0966] <HE Shi-Jun>
+Not sure whether Vue3/Mobx use revoke...
+
+[02:43:01.0605] <rkirsling>
+hard to disagree with shu here as my point above was that I've never actually _used_ a Proxy, let alone thought about revoking one
+
+[02:43:38.0829] <Mathieu Hofman>
+you may not have used one directly, but lots of libraries / frameworks do leverage them under the hood
+
+[02:43:45.0110] <rkirsling>
+(not that I'm objecting to anything :P my point above was that without membranes, there isn't an obvious context of usage)
+
+[02:44:16.0925] <Jack Works>
+> <@haxjs:matrix.org> yeah, cross realm seems a requirement of this proposal?
+
+don't know maybe we need ask caridy 
+
+[02:44:24.0280] <Mathieu Hofman>
+I would like to see usage trackers from web browsers (which do not cover the usages in non browser environments)
+
+[02:44:42.0797] <Jack Works>
+> <@rbuckton:matrix.org> And I meant that its not the proxy that is disposable, but the `{ proxy, revoke }` object
+
+oh that works.
+
+[02:45:05.0022] <Christian Ulbrich>
+Membranes are just a mental model around Proxies. Their are many use cases for Proxies, it does not matter, whether they are actually membranes. 
+
+[02:45:38.0513] <Mathieu Hofman>
+ * I would like to see usage numbers from web browsers (which do not cover the usages in non browser environments)
+
+[02:46:15.0320] <Christian Ulbrich>
+ * Membranes are just a mental model around Proxies. There are many use cases for Proxies, it does not matter, whether they are actually membranes. 
+
+[02:47:49.0097] <shu>
+Vue is proxying objects to implement immutability?
+
+[02:47:52.0347] <shu>
+they expect this to be performant?
+
+[02:48:21.0351] <Christian Ulbrich>
+@shu They use it to implement reactivity.
+
+[02:48:40.0205] <HE Shi-Jun>
+> <@shuyuguo:matrix.org> Vue is proxying objects to implement immutability?
+
+Not immutablitity, but use proxy for reactivity
+
+[02:49:11.0665] <Christian Ulbrich>
+I have skimmed through the source, looks like they never revoke them.
+
+[02:49:19.0362] <shu>
+interesting, i see
+
+[02:49:32.0124] <Jack Works>
+```js
+const disposable = new DisposableStack()
+function createProxy() {
+    const {proxy, revoke} = Proxy.revocable(...)
+    disposable.defer(revoke)
+    return proxy
+    // at this point, revoke only hold by the DisposableStack.
+    // engine can GC `revoke` and knowing the Proxy is being revoked after the DisposableStack disposes
+}
+```
+
+[02:51:35.0477] <rkirsling>
+so do we have a non-theoretical go-to use case of revocation then?
+
+[02:52:19.0075] <Christian Ulbrich>
+rkirsling: So far not, because at least Vue, does not seem to use _revocation_
+
+[02:52:28.0029] <Mathieu Hofman>
+Jack Works: according to the definition of liveness, clearing out the proxy target is not necessary, as the target's identity would be unobservable to the program through the proxy already
+
+[02:52:30.0266] <rbuckton>
+> <@jackworks:matrix.org> ```js
+> const disposable = new DisposableStack()
+> function createProxy() {
+>     const {proxy, revoke} = Proxy.revocable(...)
+>     disposable.defer(revoke)
+>     return proxy
+>     // at this point, revoke only hold by the DisposableStack.
+>     // engine can GC `revoke` and knowing the Proxy is being revoked after the DisposableStack disposes
+> }
+> ```
+
+I mean, something like `new Proxy(target, handlers, { revocationStack: disposables })` might be feasible, but prefer this approach in general
+
+[02:53:51.0065] <Jack Works>
+> <@mhofman:matrix.org> Jack Works: according to the definition of liveness, clearing out the proxy target is not necessary, as the target's identity would be unobservable to the program through the proxy already
+
+the [[ProxyHandler]] might get access to [[ProxyTarget]] when the internal slot is called right
+
+[02:54:01.0183] <Mathieu Hofman>
+> <@rkirsling:matrix.org> so do we have a non-theoretical go-to use case of revocation then?
+
+membranes are not theoretical
+
+[02:55:06.0039] <Mathieu Hofman>
+> <@jackworks:matrix.org> the [[ProxyHandler]] might get access to [[ProxyTarget]] when the internal slot is called right
+
+but if the proxy is revoked, the proxy handler would never be invoked with the target anymore
+
+[02:57:17.0053] <Mathieu Hofman>
+An editor note might suffice to make it clear that once revoked, the proxy target's identity will no longer be observable by the program through the handler / proxy
+
+[02:57:47.0031] <Luca Casonato>
+Thanks bterlson!! 👏
+
+[02:59:01.0405] <Rob Palmer>
+We will resume at 13:00 (62mins time)
+
+[02:59:14.0084] <Christian Ulbrich>
+I _assume_ that SalesForce' whole [LightningLocker](https://developer.salesforce.com/docs/component-library/documentation/en/lwc/lwc.security_locker_service) stuff being based on Proxies, they are also using _revocation_
+
+[02:59:35.0045] <bakkot>
+if anyone here is on the typescript team and needs something to do over lunch I have a small QoL PR https://github.com/microsoft/TypeScript/pull/51457
+
+[03:00:00.0400] <Michael Ficarra>
+I'm realising now that I have a LOT of tests to write for iterator helpers in test262...
+
+[03:00:20.0527] <Michael Ficarra>
+btw, link to the thread asking for a TG3 chair that I mentioned: https://github.com/tc39/Reflector/issues/450
+
+[03:00:25.0309] <bakkot>
+yeah set methods will be fun too
+
+[03:01:17.0848] <Michael Ficarra>
+🙏 hopefully a helpful community member will just do it before I get around to it
+
+[03:08:25.0177] <ljharb>
+i'm going to sleep because i'm sick and exhausted, but for Resource Management, i still think https://github.com/tc39/proposal-explicit-resource-management/issues/102 is not resolved, and i think any stage 3 for it needs to be conditional on coming to consensus on that. i hope my absence won't mean my concerns are overlooked (assuming that it otherwise would get stage 3, ofc)
+
+[03:09:53.0565] <shu>
+ljharb: is there a summary of your concern?
+
+[03:10:03.0048] <shu>
+or can ron characterize it accurately?
+
+[03:13:32.0072] <rbuckton>
+IIRC, it's in regards to argument ordering of the `adopt` method, and thus it's existence entirely
+
+[03:15:30.0291] <rbuckton>
+I can add a note to the slides to call this out
+
+[03:17:08.0812] <shu>
+great, thanks
+
+[03:21:55.0824] <Alex Vincent>
+I missed a key point in my presentation:  when we revoke a proxy, the _underlying slots_ are nullified, but the _proxy itself_ remains part of the object graph it lives in.  You can't do anything with the proxy, but it's still there because (probably) something else refers to it.  The revocation of an object graph, and of proxies pointing to it, means the original objects in that object graph can be gc'd.  The proxies themselves are still reachable 
+
+[03:57:06.0476] <Alex Vincent>
+ljharb: Rob Palmer per the proposals index, I have transferred my GitHub repo to tc39-transfer.
+
+[04:03:58.0263] <Mathieu Hofman>
+Markm is still having trouble joining
+
+[04:04:22.0247] <Rob Palmer>
+tell him to try again
+
+[04:04:32.0084] <Rob Palmer>
+I think I have admin rights to let people in now
+
+[04:04:50.0392] <Mathieu Hofman>
+He did
+
+[04:05:37.0584] <Mathieu Hofman>
+Thanks!
+
+[04:06:29.0937] <Rob Palmer>
+It wasn't me - I suspect Yulia has done it
+
+[04:06:36.0391] <yulia>
+nope -- it was ujjwal
+
+[04:06:38.0627] <yulia>
+i don't have rights either
+
+[04:06:58.0799] <yulia>
+from the shadows
+
+[04:07:43.0455] <ryzokuken>
+Permissions fixed
+
+[04:08:09.0364] <Mathieu Hofman>
+> <@alex.vincent:matrix.org> I missed a key point in my presentation:  when we revoke a proxy, the _underlying slots_ are nullified, but the _proxy itself_ remains part of the object graph it lives in.  You can't do anything with the proxy, but it's still there because (probably) something else refers to it.  The revocation of an object graph, and of proxies pointing to it, means the original objects in that object graph can be gc'd.  The proxies themselves are still reachable
+
+As I mentioned above, explicitly emptying the slots is not actually necessary to make the targets eligible for collection once the proxy is revoked
+
+[04:21:01.0203] <yulia>
+dumb question about this -- this would still be usable with streams in spite of the lack of async or no?
+
+[04:22:17.0858] <bakkot>
+yulia: basically no
+
+[04:22:41.0832] <bakkot>
+if the dispose method is async you need the async syntax, which is not in this version of the proposal
+
+[04:22:45.0381] <yulia>
+what are current use cases that would be directly impacted here? 
+
+[04:22:48.0529] <bakkot>
+and stream.cancel is async
+
+[04:24:00.0300] <bakkot>
+https://github.com/tc39/proposal-explicit-resource-management/#relation-to-dom-apis has a list
+
+[04:24:00.0584] <yulia>
+I'm aware of the the atomic locking/unlocking behavior, but i think this is also in support of the shared structs proposal?
+
+[04:24:12.0172] <bakkot>
+about half of which is sync stuff
+
+[04:24:20.0786] <yulia>
+ah great thanks
+
+[04:24:39.0770] <bakkot>
+also I really like https://github.com/whatwg/html/issues/8557#issuecomment-1331448189
+
+[04:25:17.0286] <yulia>
+thanks, that is useful
+
+[04:32:14.0218] <Ashley Claymore>
+> <@bakkot:matrix.org> also I really like https://github.com/whatwg/html/issues/8557#issuecomment-1331448189
+
+adding in do-expressions to this would be nice, for ensuring the cancelation happens asap.
+
+```
+const pages = do {
+  using controller = new AbortController.AutoAbort();
+  await Promise.all(urls.map(url => fetch(url, { signal: controller.signal }));
+};
+... // more logic and awaits follow
+```
+
+[04:32:42.0508] <bakkot>
+Ashley Claymore: that doesn't actually end up making any difference
+
+[04:33:00.0508] <Ashley Claymore>
+ah yes, Im thinking of Promise.race
+
+[04:33:06.0860] <Ashley Claymore>
+where it would
+
+[04:33:50.0120] <bakkot>
+ah, yeah
+
+[04:47:53.0075] <Michael Ficarra>
+Rob Palmer: is VERY quiet
+
+[04:57:43.0461] <bakkot>
+I should say also that I do not at all agree with markm's opinion that `{ using async x = y }` causing an `await` at block exit is a problem
+
+[04:57:51.0662] <bakkot>
+I would much prefer to just use that syntax
+
+[04:59:11.0246] <bakkot>
+it's not like it's super nested - the `using` statement is necessarily at the same level as the block where the `await` will happen; even if it's in the middle of the block, being at the top level of the block means it is inherently not that obscure
+
+[04:59:26.0952] <bakkot>
+ * it's not like it's super nested - the `using` statement is necessarily at the same level as the block where the `await` will happen; even if it's in the middle of the block, being at the top level means it is inherently not that obscure
+
+[04:59:33.0250] <bakkot>
+ * it's not like it's super nested - the `using` statement is necessarily at the same level as the block where the `await` will happen; even if it's in the middle of the block, being at the top level of the block means it is inherently not that obscure
+
+[05:00:59.0654] <Kris Kowal>
+I tend to agree. Maybe I can help convince markm.
+
+[05:02:37.0598] <shu>
++1 the partial class initialization thing is a pretty good motivation imo
+
+[05:08:48.0742] <Mathieu Hofman>
+bakkot: in that short example maybe, but 1) currently all interleaving points within an async function are marked with `await`, and 2) with a block populated with other statements, the `using async` would not be as visible
+
+[05:10:32.0712] <bakkot>
+I really don't think it would be hard to see the `using async`, and I consider it to be a sufficient marker of the interleaving point
+
+[05:10:48.0757] <Mathieu Hofman>
+we have found nested async interleaving to be a footgun today, and we're considering any further unclear interleaving as very undesirable
+
+[05:11:19.0241] <bakkot>
+I consider making `using async` harder to use very undesirable
+
+[05:11:24.0405] <Mathieu Hofman>
+`async` is not a marker of interleaving. `await` is
+
+[05:11:26.0429] <shu>
+wait i don't understand why "async" isn't a clear indication of an interleaving point?
+
+[05:12:11.0739] <shu>
+well it's a marker that the thing contains interleaving points?
+
+[05:12:13.0406] <Mathieu Hofman>
+async is a declaration that the thing has asynchronous behavior (returns a promise)
+
+[05:12:20.0639] <Mathieu Hofman>
+ * async is a declaration that the thing has asynchronous behavior (returns a promise)
+
+[05:12:22.0764] <shu>
+yes, you're declaring a thing that can contain interleaving points
+
+[05:12:40.0411] <sffc>
+Congratulations rbuckton on Stage 3! I'm looking forward to _using_ the proposal in the wild 😀
+
+[05:12:45.0956] <Mathieu Hofman>
+no you're declaring it returns a promise
+
+[05:12:51.0540] <Mathieu Hofman>
+await is the interleaving
+
+[05:13:02.0750] <eemeli>
+rbuckton: I would still appreciate seeing what your PluginHost example would look like if DisposableStack was not available.
+
+[05:13:25.0496] <caridy>
+trying to join the call! can someone let me in?
+
+[05:13:48.0428] <bakkot>
+Mathieu Hofman: I just don't think the "it has to be exactly the `await` keyword, and not the `async` keyword" is a rule which is important
+
+[05:13:54.0553] <bakkot>
+who is that rule for?
+
+[05:14:31.0202] <Mathieu Hofman>
+for people reading / auditing a piece of code
+
+[05:14:36.0739] <bakkot>
+right but like
+
+[05:14:41.0411] <bakkot>
+why is `async` not sufficient for those people
+
+[05:14:50.0465] <shu>
+more specifically why is `using async` insufficient
+
+[05:14:52.0452] <Mathieu Hofman>
+because that's what async means today?
+
+[05:14:55.0156] <shu>
+treat it as a lexeme
+
+[05:14:59.0467] <shu>
+people are smart and adaptable
+
+[05:15:00.0637] <rbuckton>
+> <@shuyuguo:matrix.org> wait i don't understand why "async" isn't a clear indication of an interleaving point?
+
+It's something erights wants to make very clear in the language, that `await` and `yield` are the *only* way to indicate interleaving points. `async` does not, since you must `await` the result of the async function to observe the result.
+
+[05:15:11.0694] <bakkot>
+yeah, what shu said
+
+[05:15:17.0703] <bakkot>
+right and I'm disagreeing with erights 
+
+[05:15:30.0429] <Mathieu Hofman>
+> <@shuyuguo:matrix.org> people are smart and adaptable
+
+you put more trust in people than I do
+
+[05:15:30.0872] <bakkot>
+I think `using async` being a new way to indicate an interleaving point is not a problem
+
+[05:15:31.0781] <bakkot>
+it's fine
+
+[05:15:35.0229] <shu>
+like this strikes me as "we must ship my mental model or we ship nothing", which doesn't seem great?
+
+[05:15:49.0244] <bakkot>
+ * I think `using async` being a new way to indicate an interleaving point is not a problem
+
+[05:15:53.0279] <caridy>
+Rob Palmer: can you help? trying to join the call.
+
+[05:16:10.0214] <Mathieu Hofman>
+I don't see why we're so willing to throw away the consistency of the language we have today
+
+[05:16:30.0383] <caridy>
+thanks
+
+[05:16:31.0511] <Rob Palmer>
+done
+
+[05:16:42.0198] <bakkot>
+because it's not an important consistency, especially when weighed against the cost of only being able to put `using async` inside `if` statements
+
+[05:16:49.0999] <bakkot>
+the second thing is much, much more important
+
+[05:17:03.0090] <rbuckton>
+> <@bakkot:matrix.org> right and I'm disagreeing with erights
+
+The relevant discussion can be found in https://github.com/tc39/proposal-explicit-resource-management/issues/101. This argument has been explicitly called out here:
+- https://github.com/tc39/proposal-explicit-resource-management/issues/101#issuecomment-1320609180
+- https://github.com/tc39/proposal-explicit-resource-management/issues/101#issuecomment-1320789790
+
+[05:17:31.0440] <shu>
+in general there are many surface consistency things we ought to trade off against other things
+
+[05:17:40.0251] <shu>
+argument order and coercion order and so forth is often another one
+
+[05:17:41.0571] <Mathieu Hofman>
+we consider `await` in conditional statements to be a footgun, so that doesn't have much weight in our opinion
+
+[05:17:46.0608] <bakkot>
+well
+
+[05:17:50.0007] <bakkot>
+that's...
+
+[05:17:52.0389] <bakkot>
+uh.
+
+[05:17:57.0529] <bakkot>
+not an opinion I agree with.
+
+[05:18:23.0398] <shu>
+well my response to that is, sorry you don't get to ship an implicit linter in the language
+
+[05:18:24.0833] <bakkot>
+you are welcome to not put `await` in conditional statements but I really do not approve of you designing the language to stop me from doing it
+
+[05:18:28.0982] <shu>
+yes
+
+[05:18:45.0196] <rbuckton>
+I don't understand that position either. `await` in a conditional doesn't "release zalgo", so such a constraint seems confusing.
+
+[05:18:46.0406] <Mathieu Hofman>
+right, I think we fundamentally disagree with the ability to reason about interleaving points. I don't see why an explicit block marker is so onerous
+
+[05:19:43.0652] <Mathieu Hofman>
+> <@rbuckton:matrix.org> I don't understand that position either. `await` in a conditional doesn't "release zalgo", so such a constraint seems confusing.
+
+it actually does because of the current unsafety of `PromiseResolve`
+
+[05:19:46.0006] <rbuckton>
+> <@shuyuguo:matrix.org> well my response to that is, sorry you don't get to ship an implicit linter in the language
+
+`??` would like to disagree with you. I was not in favor of requiring parens to disambiguate with `||` and `&&` given clear precedence rules, but here we are.
+
+[05:20:38.0911] <rbuckton>
+No, "releasing zalgo" is writing an API such that _consumers_ cannot safely reason over whether that API will execute synchronously or asynchronously.
+
+[05:21:39.0099] <rbuckton>
+If the function is async, it will always _complete_ in a later turn, but will start executing in _this turn_.
+
+[05:21:43.0213] <bakkot>
+Mathieu Hofman I think that most people have not found `await` in conditional statements to actually be a problem. so I think if you are reasoning about your code in a way where it is a problem, the appropriate way for you to enforce that is by writing your own linting rules, which forbid _both_ `await` in conditional statements _and_ `using async` in blocks, and let the rest of us have both of those things
+
+[05:23:06.0589] <Mathieu Hofman>
+anyway, I think we deviated a little, and the conditional thing is not that relevant to this discussion. `async using` is a declaration that the value has an async behavior. It does nothing to indicate that there will later, at the end of the current scope, be an interleaving point, which are today all marked with an explicit `await` keyword 
+
+[05:23:25.0060] <bakkot>
+it's a new piece of syntax, and you have to learn what it means
+
+[05:23:30.0619] <Mathieu Hofman>
+> <@bakkot:matrix.org> Mathieu Hofman I think that most people have not found `await` in conditional statements to actually be a problem. so I think if you are reasoning about your code in a way where it is a problem, the appropriate way for you to enforce that is by writing your own linting rules, which forbid _both_ `await` in conditional statements _and_ `using async` in blocks, and let the rest of us have both of those things
+
+we have
+
+[05:23:30.0913] <bakkot>
+I really don't think it's that hard to learn
+
+[05:24:25.0964] <bakkot>
+Mathieu Hofman: I accept that you have, but stand by my statement, and my position that the appropriate resolution for you is to have lint rules which enforce the stronger invariants that you apparently need; most people, in my experience, do not need them, so we should not bake them into the language.
+
+[05:26:09.0818] <Mathieu Hofman>
+again I'm simply asking for the language to stay consistent with itself and mark interleaving points at the location of interleaving
+
+[05:26:31.0837] <bakkot>
+and I'm saying I don't think that consistency is worth the cost of making `using async` harder to use.
+
+[05:26:48.0008] <bakkot>
+given that it is, in my opinion, really not that hard to learn what `using async` does.
+
+[05:27:09.0967] <Mathieu Hofman>
+what's insane to me is that adding a `async using` statement to a plain block introduces an interleaving point at a distance
+
+[05:27:15.0059] <rbuckton>
+> <@bakkot:matrix.org> Mathieu Hofman: I accept that you have, but stand by my statement, and my position that the appropriate resolution for you is to have lint rules which enforce the stronger invariants that you apparently need; most people, in my experience, do not need them, so we should not bake them into the language.
+
+My first response years ago to erights 's concern about explicit `await` was to use linter to require something like `// await using` at the end of a block, but that didn't seem to be sufficient at the time.
+
+[05:27:26.0872] <Mathieu Hofman>
+it's a refactor hazard
+
+[05:27:45.0067] <bakkot>
+it does not seem like any more of a refactoring hazard than the sync call to `Symbol.dispose()` is
+
+[05:27:50.0872] <bakkot>
+or at least not very much more
+
+[05:28:05.0707] <shu>
+let's take a step back, what is the thing that you are doing that makes you care so much about interleave points?
+
+[05:29:36.0431] <Mathieu Hofman>
+being able to reason when your synchronous execution has been interrupted, and thus your state may have gotten mutated.
+
+[05:30:00.0618] <shu>
+why is that not a concern with sync dispose
+
+[05:30:38.0275] <rbuckton>
+Any time you run code you run the risk of side effects. `+value` can have side effects. An implicit `await` would have side effects, but that's far easier to run into than a side-effecty `+value` or the like. 
+If you're writing code where an implicit async interleaving point could be a problem (i.e., potential state mutations in closed-over code), you have the same problem with any `await` and would likely need to use some type of async coordination primitive to synchronize access.
+
+[05:31:09.0243] <shu>
+like i agree this is a problem, which is why i added "can call user code", but that's not specific to async
+
+[05:31:21.0681] <rbuckton>
+One point in the favor of the explicit marker is that its harder to recognize you might need to coordinate access if the interleave point is implicit.
+
+[05:31:25.0238] <Mathieu Hofman>
+because you control the resource and what it does. You do not control what other promise jobs may have done if suspended
+
+[05:31:44.0818] <shu>
+"you control the resource" is in practice, not true
+
+[05:32:43.0280] <Jack Works>
+some thought for the current problem:
+
+[05:32:48.0401] <rbuckton>
+I attempted to make the point that a declaration like `async using x = ...` would be sufficient to indicate such coordination might be necessary.
+
+[05:32:59.0254] <Jack Works>
+```worker.addModule(module {}, import.meta.url)```
+
+[05:33:28.0866] <Mathieu Hofman>
+if your model allows you to trust all the objects you invoke synchronously, you don't have to worry about synchronous re-entrancy
+
+[05:34:10.0236] <Mathieu Hofman>
+ * if your model allows you to trust all the objects you invoke synchronously, you don't have to worry about synchronous re-entrancy
+
+[05:35:07.0320] <bakkot>
+I think the subset of programs in which people are sufficiently careful that they are able to make and maintain an accurate model which allows them to trust all the objects they invoke synchronously, but where the code is being read so quickly that `using async` does not suffice as a marker of an interleaving point, is quite small
+
+[05:35:25.0660] <shu>
+i daresay that subset of programs is exceedingly small
+
+[05:36:15.0844] <shu>
+Mathieu Hofman: ISTM your position is predicated on a very opinionated environment that does not generalize, and thus should not be baked into the language
+
+[05:40:48.0551] <Bradford Smith>
+Could someone let me back into the meeting? (My internet cut out, so I got dropped.)
+
+[05:41:54.0574] <Bradford Smith>
+thx
+
+[05:45:13.0835] <Rob Palmer>
+a heads up:  we are overrunning in this session.  therefore it is possible the meeting may end 15 minutes late in order to give shadow realms the full 60mins
+
+[05:46:51.0624] <danielrosenwasser>
+> <@rbuckton:matrix.org> `??` would like to disagree with you. I was not in favor of requiring parens to disambiguate with `||` and `&&` given clear precedence rules, but here we are.
+
+(btw ~3 years in since stage 4 and it turns out nobody cares)
+
+[05:47:34.0035] <shu>
+hm that's a good data point
+
+[05:48:06.0102] <rbuckton>
+I get frustrated by it every now and then.
+
+[05:48:18.0809] <rbuckton>
+So the number is non-zero, even if close to zero.
+
+[05:51:39.0137] <danielrosenwasser>
+Let it be known that Ron runs into it :D
+
+[05:55:49.0091] <snek>
+did iterator helpers get stage 3?
+
+[05:56:35.0080] <bakkot>
+snek: yes it did!
+
+[05:56:43.0336] <Ashley Claymore>
+https://twitter.com/robpalmer2/status/1598248214750191616?s=20&t=6pFlDUfZtj5hXI1s5l9ohw
+
+[05:56:49.0948] <snek>
+hypeeee
+
+[05:56:52.0580] <Michael Ficarra>
+snek: https://mastodon.social/@robpalmer/109437830520093382
+
+[05:57:25.0159] <snek>
+ooo now which one do I click on
+
+[06:00:48.0772] <Luca Casonato>
+Justin Ridgewell: I want to push back on the statement that module expressions are not useful without module declarations. I would argue that module expressions have very strong motivation, separate from motivation for module declaration.
+
+[06:01:26.0213] <rbuckton>
+Motivations aside, there is so much shared between them its difficult to talk about them independently.
+
+[06:01:46.0050] <Luca Casonato>
+> <@rbuckton:matrix.org> Motivations aside, there is so much shared between them its difficult to talk about them independently.
+
+I think it is reasonable to talk about expressions without declarations, but not the other way around.
+
+[06:01:48.0250] <caridy>
+the fact that the expressions cannot be used to import from, is sufficient for me to keep them independently.
+
+[06:02:19.0278] <Luca Casonato>
+> <@lucacasonato:matrix.org> I think it is reasonable to talk about expressions without declarations, but not the other way around.
+
+Reason being that there is a future where expressions get shipped, but not module declarations.
+
+[06:02:28.0855] <Luca Casonato>
+One can exist and be useful without the other
+
+[06:04:10.0196] <Robert Pamely>
+Are nested modules scoped to within the parent module?
+
+[06:04:16.0707] <Luca Casonato>
+> <@rpamely:matrix.org> Are nested modules scoped to within the parent module?
+
+Yes
+
+[06:04:32.0964] <Luca Casonato>
+Unless you explicitly export them
+
+[06:05:06.0806] <Jack Works>
+the real reason those proposals are separated IMO because they're initially separated presented to the committee (and back to days they're stage 0, they don't looks similar too much)
+
+[06:05:43.0255] <Robert Pamely>
+Are modules independently cachable in browsers? If Site A serves lodash, can Site B use that?
+
+[06:06:00.0373] <Jack Works>
+> <@rpamely:matrix.org> Are modules independently cachable in browsers? If Site A serves lodash, can Site B use that?
+
+nowadays I believe answer is not
+
+[06:06:05.0038] <Luca Casonato>
+Ie:
+
+```ts
+module foo {
+  module bar {}
+  export module baz {}
+}
+
+import bar; // Linking error
+import baz; // Linking error
+
+import { baz } from foo;
+import baz; // Success!
+```
+
+[06:06:18.0934] <Jack Works>
+I've heard browsers are shipping cross-site cache isolation to prevent tracking
+
+[06:06:22.0928] <Luca Casonato>
+ * Ie:
+
+```ts
+module foo {
+  module bar {}
+  export module baz {}
+}
+
+import bar; // Linking error
+import baz; // Linking error
+
+import { baz } from foo;
+import baz; // Success!
+```
+
+[06:07:00.0031] <ryzokuken>
+besides, practically speaking, due to the widespread use of bundlers it's not very likely
+
+[06:07:22.0785] <Jack Works>
+everyone bundles their own React 🤔
+
+[06:07:54.0715] <Robert Pamely>
+> <@usharma:igalia.com> besides, practically speaking, due to the widespread use of bundlers it's not very likely
+
+Right, but with module declarations you can now cache module based on some other identifier than URL
+
+[06:07:59.0949] <Robert Pamely>
+so bundled modules could be cached
+
+[06:08:08.0838] <Robert Pamely>
+security concerns aside
+
+[06:09:48.0797] <Jack Works>
+> <@rpamely:matrix.org> so bundled modules could be cached
+
+I strongly against to serialize a ModuleSource and store it on the disk for security reasons. 🆗 post message to Worker ⛔ store it in indexedDB and read it in the future
+
+[06:10:31.0326] <rbuckton>
+if we allowed over the wire or on disk serialization of module expressions we'd need a formal binary AST
+
+[06:11:03.0748] <Jack Works>
+> <@rbuckton:matrix.org> if we allowed over the wire or on disk serialization of module expressions we'd need a formal binary AST
+
+indexedDB does not show developers how data is stored so that's pure implementation detail.
+
+[06:11:30.0571] <Robert Pamely>
+Why is it any different than caching the react source from a CDN, if you cache the react source from a bundled site?
+
+[06:11:52.0388] <Robert Pamely>
+(I'm thinking out loud here)
+
+[06:13:16.0226] <Kris Kowal>
+I’m reasonably certain that module declarations would break new Module((module {}).source), which is key to user composition of module graphs.
+
+[06:13:23.0756] <ryzokuken>
+> <@rpamely:matrix.org> Right, but with module declarations you can now cache module based on some other identifier than URL
+
+yes! I wonder if this has interesting implications for, say, ad-blocking.
+
+[06:14:19.0908] <bakkot>
+> <@rpamely:matrix.org> Why is it any different than caching the react source from a CDN, if you cache the react source from a bundled site?
+
+there is no longer caching from CDNs https://github.com/whatwg/fetch/issues/904
+
+[06:14:24.0051] <danielrosenwasser>
+I'm not huge on needing a separate namespace per module (or bit per value) to track which exports are *module* exports that can be imported from vs. not
+
+https://gbracha.blogspot.com/2014/09/a-domain-of-shadows.html
+
+[06:16:03.0438] <danielrosenwasser>
+ * I'm not huge on needing a separate namespace per module (or bit per value) to track which exports are _module_ exports that can be imported from vs. not
+
+This blog post comes to mind https://gbracha.blogspot.com/2014/09/a-domain-of-shadows.html
+
+[06:16:29.0215] <Kris Kowal>
+Module declarations/expressions won’t compose because a module graph that consists of declarations coming from different module files cannot be consolidated into a single module handler, for the purposes of resolving stringly named module specifiers on their various referrers.
+
+[06:16:42.0241] <rbuckton>
+Curious about static importability and portability of `import module foo from ...` and `module bar { import foo; }`. Is that valid?
+
+[06:17:20.0705] <Robert Pamely>
+If I'm reading this correctly, the concern was that CDN sources were manipulated to add tracking code in them that got loaded into every site that uses them?
+
+[06:17:35.0445] <Robert Pamely>
+> <@bakkot:matrix.org> there is no longer caching from CDNs https://github.com/whatwg/fetch/issues/904
+
+ * If I'm reading this correctly, the concern was that CDN sources were manipulated to add tracking code in them that got loaded into every site that uses them?
+
+[06:17:49.0435] <leobalter>
+aren't module declarations top level only?
+
+[06:17:59.0009] <caridy>
+Slides: https://docs.google.com/presentation/d/183cYPeUjhzVRuZ0O-gwXqp6KtFYxxhgYodbr7XNo_9o/edit
+
+[06:18:15.0909] <rbuckton>
+And what about:
+```js
+const x = module { }
+const y = module { import x; }
+```
+There is so much inconsistency with the "two worlds" approach that breaks the decl/expr equivalence of function and class
+
+[06:18:48.0941] <nicolo-ribaudo>
+> <@leobalter:matrix.org> aren't module declarations top level only?
+
+The proposal as it is now allows you to do something like this:
+```js
+{
+  module x {}
+  await import(module { import x });
+}
+```
+
+[06:19:14.0758] <leobalter>
+thanks for the info
+
+[06:19:19.0765] <rbuckton>
+That's specific to just that case, not a general solution.
+
+[06:19:22.0759] <Kris Kowal>
+My other concern is that differentiating lexical and stringy module specifiers will be used to distinguish which modules should be serialized from which should be resolved from a remote worker’s import hooks, and will have ramifications on whether instances are shared. That’ll herd the module ecosystem in a weird direction, where portable libraries will generally have to export a module expression/declaration in order to give the user the choice of whether to link lazily or eagerly.
+
+[06:19:28.0040] <nicolo-ribaudo>
+> <@rbuckton:matrix.org> And what about:
+> ```js
+> const x = module { }
+> const y = module { import x; }
+> ```
+> There is so much inconsistency with the "two worlds" approach that breaks the decl/expr equivalence of function and class
+
+What would you expect to happen here if instead of `const x` you had a `let x`, that is later reassigned?
+
+[06:19:50.0121] <rbuckton>
+You could be importing a `module` dynamically from another module that exports it, but can't reference it in another `module` expression.
+
+[06:19:52.0408] <bakkot>
+Robert Pamely: no, the concern is, my site can tell you've visited another site by timing whether loading a resource which is also loaded by that site is cache-hit or not
+
+[06:19:57.0843] <bakkot>
+https://github.com/shivanigithub/http-cache-partitioning has a better explainer I think
+
+[06:19:58.0855] <Luca Casonato>
+I think it may be a reasonable to investigate using a seperate identifier namespace to clarify the difference between "regular values" and "module values". For example `module $foo {}; import $foo;`
+
+[06:20:38.0013] <Jack Works>
+> <@lucacasonato:matrix.org> I think it may be a reasonable to investigate using a seperate identifier namespace to clarify the difference between "regular values" and "module values". For example `module $foo {}; import $foo;`
+
+but module declarations should be able to `import($foo)`
+
+[06:20:48.0376] <Jack Works>
+so there is no need to separate a new namespace
+
+[06:20:59.0628] <nicolo-ribaudo>
+> <@rbuckton:matrix.org> Curious about static importability and portability of `import module foo from ...` and `module bar { import foo; }`. Is that valid?
+
+There is no spec text for this yet, but if import reflection reifies to a `Module` object it can be easily made to work.
+
+[06:21:15.0791] <Jack Works>
+we can think of, some values are just available eariler, before the execute
+
+[06:21:26.0809] <rbuckton>
+```js
+// foo.js
+export module A { }
+
+// bar.js
+export function maybeDoAThing() {
+  const A = await import("./foo.js").A;
+  const B = module { import A };
+  new Worker(B).postMessage(...);
+}
+```
+
+[06:21:36.0062] <Luca Casonato>
+> <@jackworks:matrix.org> we can think of, some values are just available eariler, before the execute
+
+this is difficult to explain to users though. using a separate namespace would make this clear
+
+[06:22:05.0043] <Jack Works>
+> <@rbuckton:matrix.org> ```js
+> // foo.js
+> export module A { }
+> 
+> // bar.js
+> export function maybeDoAThing() {
+>   const A = await import("./foo.js").A;
+>   const B = module { import A };
+>   new Worker(B).postMessage(...);
+> }
+> ```
+
+I believe this is a link error.
+
+[06:22:29.0024] <Luca Casonato>
+it's difficult to explain why this is the case:
+
+```js
+const a = module {};
+module b {};
+import a; // link error
+import b; // fine
+```
+
+[06:22:31.0511] <rbuckton>
+My point is that the "2nd world" approach makes module decls and module expressions inconsistent.
+
+[06:22:34.0810] <Luca Casonato>
+ * it's difficult to explain why this is the case:
+
+```js
+const a = module {};
+module b {};
+import a; // link error
+import b; // fine
+```
+
+[06:22:41.0448] <rbuckton>
+That's a refactoring hazard.
+
+[06:23:04.0168] <leobalter>
+Module expressions and declarations are among the most important changes coming to ECMAScript that positively affects web developers and code bundling in order to encourage a better usage of ES modules. I hope TC39 can dedicate more time for those topics in order to advance them without taking years.
+
+[06:23:15.0403] <Jack Works>
+> <@lucacasonato:matrix.org> it's difficult to explain why this is the case:
+> 
+> ```js
+> const a = module {};
+> module b {};
+> import a; // link error
+> import b; // fine
+> ```
+
+so maybe we can also accept `const ident = module {}`. no more complex
+
+[06:23:22.0208] <leobalter>
+ * Module expressions and declarations are among the most important changes coming to ECMAScript that positively affects web developers and code bundling in order to encourage a better usage of ES modules. I hope TC39 can dedicate more time for those topics in order to advance them without taking years.
+
+[06:23:40.0880] <nicolo-ribaudo>
+Thanks for the example, the only way it could work with this proposal is something like this (!!! semantics are different, but the intention is the same):
+
+```js
+// foo.js
+export module A { }
+
+// bar.js
+export function maybeDoAThing() {
+  const B = module { import { A } from "./foo.js"; import A };
+  new Worker(B).postMessage(...);
+}
+
+```
+
+It's worth investigating when modules should "capture" available modules from the other scope, but it would still only allow capturing other modules and not generic values.
+
+[06:23:58.0833] <Luca Casonato>
+> <@jackworks:matrix.org> so maybe we can also accept `const ident = module {}`. no more complex
+
+we can't hoist const bindings though. module declarations only work statically, because they are hoisted
+
+[06:24:07.0123] <nicolo-ribaudo>
+ * Thanks for the example, the only way it could work with this proposal is something like this:
+
+```js
+// foo.js
+export module A { }
+
+// bar.js
+export function maybeDoAThing() {
+  const B = module { import { A } from "./foo.js"; import A };
+  new Worker(B).postMessage(...);
+}
+
+```
+
+It's worth investigating when modules should "capture" available modules from the other scope, but it would still only allow capturing other modules and not generic values.
+
+[06:24:31.0166] <nicolo-ribaudo>
+ * Thanks for the example, the only way it could work with this proposal is something like this (!!! semantics are different, but the intention is the same):
+
+```js
+// foo.js
+export module A { }
+
+// bar.js
+export function maybeDoAThing() {
+  const B = module { import { A } from "./foo.js"; import A };
+  new Worker(B).postMessage(...);
+}
+
+```
+
+It's worth investigating when modules should "capture" available modules from the other scope, but it would still only allow capturing other modules and not generic values.
+
+[06:24:31.0873] <rbuckton>
+I think if we have two things called `module` where there is a declaration and an expression version, then what they contain and how they handle scoping should be consistent.
+
+[06:25:20.0740] <Mathieu Hofman>
+shu: currently the message and name access is specced to be non-observable, which mimics FF, but if there's an argument for otherwise, we could spec to always perform a Get
+
+[06:25:23.0354] <nicolo-ribaudo>
+> <@rbuckton:matrix.org> I think if we have two things called `module` where there is a declaration and an expression version, then what they contain and how they handle scoping should be consistent.
+
+Well, your examples are about scoping of module declarations and const declarations
+
+[06:25:51.0151] <Jack Works>
+> <@rbuckton:matrix.org> ```js
+> // foo.js
+> export module A { }
+> 
+> // bar.js
+> export function maybeDoAThing() {
+>   const A = await import("./foo.js").A;
+>   const B = module { import A };
+>   new Worker(B).postMessage(...);
+> }
+> ```
+
+Some thought:
+
+Link of module B in your example can be deferred to when `maybeDoAThing` is called. When the expression is evaluated, it checks if `A` is a Module and if it is a constant binding, if not, it failed to evaluate.
+
+[06:25:55.0654] <Mathieu Hofman>
+ * shu: currently the message and name access is specced to be non-observable, which mimics FF, but if there's an argument for otherwise, we could spec to always perform a Get
+
+[06:27:19.0316] <rbuckton>
+> <@nicolo-ribaudo:matrix.org> Well, your examples are about scoping of module declarations and const declarations
+
+Yes, because that could be a real use case. If you can dynamically import a module expression, then you can do so conditionally.
+
+[06:27:26.0407] <Michael Ficarra>
+uhhh censoring error stacks is already a proposal
+
+[06:30:18.0795] <ryzokuken>
+bakkot: `user land -> userland`
+
+[06:31:10.0977] <rbuckton>
+> <@jackworks:matrix.org> Some thought:
+> 
+> Link of module B in your example can be deferred to when `maybeDoAThing` is called. When the expression is evaluated, it checks if `A` is a Module and if it is a constant binding, if not, it failed to evaluate.
+
+Perhaps? This goes to my point about closures. You might, for example need to indicate if a given binding/value is either transparently serializable, replaceable (such as globals), or banned (i.e., non-serializable, non-global).
+
+[06:34:28.0499] <rbuckton>
+Accessing a serializable or replaceable binding in a module would be fine, but other bindings would not. There's a circularity issue there though:
+```js
+const a = module { export function f() { return import(b); } };
+const b = module { export function g() { return import(a); } };
+```
+This seems like a perfectly reasonable case, but you can't eagerly serialize `b` because it's not defined. You'd have to defer such serialization until it is needed, so you would again have to capture all bindings.
+
+[06:36:44.0693] <danielrosenwasser>
+`a` and `b` aren't capturable in that example though, right?
+
+[06:37:07.0672] <rbuckton>
+> <@danielrosenwasser:matrix.org> `a` and `b` aren't capturable in that example though, right?
+
+My contention is that they should be.
+
+[06:38:08.0176] <Jack Works>
+> <@rbuckton:matrix.org> Accessing a serializable or replaceable binding in a module would be fine, but other bindings would not. There's a circularity issue there though:
+> ```js
+> const a = module { export function f() { return import(b); } };
+> const b = module { export function g() { return import(a); } };
+> ```
+> This seems like a perfectly reasonable case, but you can't eagerly serialize `b` because it's not defined. You'd have to defer such serialization until it is needed, so you would again have to capture all bindings.
+
+I agree this becomes messy... `b` and `a` will be looked up in the global object of it's evaluator instead of links to the module
+
+[06:38:18.0983] <rbuckton>
+It would be extremely inconsistent if you cannot model with module expressions the same thing you can model with module declarations. This seems like a major stumbling block for adopters.
+
+[06:38:26.0600] <danielrosenwasser>
+oh, because they *would* be valid if it was written as 
+
+```
+module a { export function f() { return import(b); } };
+module b { export function g() { return import(a); } };
+```
+
+[06:38:27.0495] <apaprocki>
+Justin Ridgewell: they don't want `if (runningInShadowRealm)`
+
+[06:38:45.0833] <danielrosenwasser>
+wait...is **_that_** true though?
+
+[06:38:53.0904] <danielrosenwasser>
+ * ...is **_that_** true though?
+
+[06:39:09.0212] <rbuckton>
+If it isn't then we don't have the same kind of decl/expr parity that function and class have.
+
+[06:39:09.0787] <danielrosenwasser>
+ * wait...is **_that_** true though?
+
+[06:39:13.0541] <nicolo-ribaudo>
+> <@danielrosenwasser:matrix.org> oh, because they *would* be valid if it was written as 
+> 
+> ```
+> module a { export function f() { return import(b); } };
+> module b { export function g() { return import(a); } };
+> ```
+
+Yes, this would be valid
+
+[06:39:50.0472] <rbuckton>
+I'd almost prefer just having module declarations over having both, if only to prevent potential confusion by adopters due to the inconsistency.
+
+[06:39:55.0603] <nicolo-ribaudo>
+> <@rbuckton:matrix.org> If it isn't then we don't have the same kind of decl/expr parity that function and class have.
+
+Functions already don't have parity - they have different scoping rules. Only classes can be transparently replaced with `let className = class { ...`
+
+[06:40:17.0474] <danielrosenwasser>
+So if you're running `a` in a context where `globalThis.b` exists, then a captured `b` takes precedence?
+
+[06:42:45.0237] <rbuckton>
+> <@nicolo-ribaudo:matrix.org> Functions already don't have parity - they have different scoping rules. Only classes can be transparently replaced with `let className = class { ...`
+
+The difference in outer scoping is that a function declaration is hoisted, while a class has TDZ. 
+
+[06:42:53.0674] <Michael Ficarra>
+we could just advance the error stacks proposal...
+
+[06:43:42.0440] <Michael Ficarra>
+this would be a very small change on top of that
+
+[06:49:50.0676] <nicolo-ribaudo>
+> <@danielrosenwasser:matrix.org> So if you're running `a` in a context where `globalThis.b` exists, then a captured `b` takes precedence?
+
+If you have this code:
+```js
+module a { let b = getAModule(); await import(b); };
+module b { await import(a); };
+```
+the dynamic `import(b)` imports the result of `getAModule` and not the outer declaration. That looks expected.
+
+In this case:
+```js
+module a { globalThis.b = getAModule(); await import(b); };
+module b { await import(a); };
+```
+I see that it would be confusing, since `globalThis.b =` might be lexically somewhere else and not analyzable.
+
+How would you feel if bindings of module declarations where not captured, but only statically importable?
+```js
+module a {}
+module b { import a; } // ok
+```
+```js
+module a {}
+module b { console.log(a); } // ReferenceError: as every other type of bindings, you cannot capture bindings from the outer scope. You can only use them in import specifiers, which is not a generic "binding usage" position
+```
+Note: the current spec text throws the RandeError in this case, but just because it was easier to specify. We didn't have a reason to do one thing or the other, but this possible confusion seems to indicate what we should do.
+
+[06:50:20.0412] <nicolo-ribaudo>
+> <@danielrosenwasser:matrix.org> So if you're running `a` in a context where `globalThis.b` exists, then a captured `b` takes precedence?
+
+ * If you have this code:
+
+```js
+module a { let b = getAModule(); await import(b); };
+module b { await import(a); };
+```
+
+the dynamic `import(b)` imports the result of `getAModule` and not the outer declaration. That looks expected.
+
+In this case:
+
+```js
+module a { globalThis.b = getAModule(); await import(b); };
+module b { await import(a); };
+```
+
+I see that it would be confusing, since `globalThis.b =` might be lexically somewhere else and not discoverable.
+
+How would you feel if bindings of module declarations where not captured, but only statically importable?
+
+```js
+module a {}
+module b { import a; } // ok
+```
+
+```js
+module a {}
+module b { console.log(a); } // ReferenceError: as every other type of bindings, you cannot capture bindings from the outer scope. You can only use them in import specifiers, which is not a generic "binding usage" position
+```
+
+Note: the current spec text throws the RandeError in this case, but just because it was easier to specify. We didn't have a reason to do one thing or the other, but this possible confusion seems to indicate what we should do.
+
+[06:50:41.0107] <nicolo-ribaudo>
+ * If you have this code:
+
+```js
+module a { let b = getAModule(); await import(b); };
+module b { await import(a); };
+```
+
+the dynamic `import(b)` imports the result of `getAModule` and not the outer declaration. That looks expected.
+
+In this case:
+
+```js
+module a { globalThis.b = getAModule(); await import(b); };
+module b { await import(a); };
+```
+
+I see that it would be confusing, since `globalThis.b =` might be lexically somewhere else and not discoverable.
+
+How would you feel if bindings of module declarations where not captured, but only statically importable?
+
+```js
+module a {}
+module b { import a; } // ok
+```
+
+```js
+module a {}
+module b { console.log(a); } // ReferenceError: as every other type of bindings, you cannot capture bindings from the outer scope. You can only use them in import specifiers, which is not a generic "binding usage" position
+```
+
+Note: the current spec text throws the RandeError in this case, but just because it was easier to specify. We didn't have a reason to do one thing or the other, but this possible confusion seems to indicate what we should keep the error.
+
+[06:51:17.0339] <nicolo-ribaudo>
+ * If you have this code:
+
+```js
+module a { let b = getAModule(); await import(b); };
+module b { await import(a); };
+```
+
+the dynamic `import(b)` imports the result of `getAModule` and not the outer declaration. That looks expected.
+
+In this case:
+
+```js
+module a { globalThis.b = getAModule(); await import(b); };
+module b { await import(a); };
+```
+
+I see that it would be confusing, since `globalThis.b =` might be lexically somewhere else and not discoverable.
+
+How would you feel if bindings of module declarations where not captured, but only statically importable?
+
+```js
+module a {}
+module b { import a; } // ok
+```
+
+```js
+module a {}
+module b { console.log(a); } // ReferenceError: as every other type of bindings, you cannot capture bindings from the outer scope. You can only use them in import specifiers, which is not a generic "binding usage" position
+```
+
+Note: the current spec text throws the ReferenceError in this case, but just because it was easier to specify. We didn't have a reason to do one thing or the other, but this possible confusion seems to indicate what we should keep the error.
+
+[06:51:58.0042] <Michael Ficarra>
+this sounds like a topic for TG3...
+
+[06:52:44.0421] <Michael Ficarra>
+I'm not convinced by the hopelessness being expressed
+
+[06:53:13.0917] <apaprocki>
+Is this the only way that script can determine it's running in a shadow realm?
+
+[06:53:25.0723] <apaprocki>
+(currently known)
+
+[06:53:49.0241] <Michael Ficarra>
+I mean it's non-standard, there could be non-standard "amIRunningInAShadowReam" function
+
+[06:57:06.0525] <nicolo-ribaudo>
+(thanks btw danielrosenwasser and rbuckton for explaining your concerns with clear code examples!)
+
+[06:59:29.0141] <danielrosenwasser>
+> <@nicolo-ribaudo:matrix.org> If you have this code:
+> 
+> ```js
+> module a { let b = getAModule(); await import(b); };
+> module b { await import(a); };
+> ```
+> 
+> the dynamic `import(b)` imports the result of `getAModule` and not the outer declaration. That looks expected.
+> 
+> In this case:
+> 
+> ```js
+> module a { globalThis.b = getAModule(); await import(b); };
+> module b { await import(a); };
+> ```
+> 
+> I see that it would be confusing, since `globalThis.b =` might be lexically somewhere else and not discoverable.
+> 
+> How would you feel if bindings of module declarations where not captured, but only statically importable?
+> 
+> ```js
+> module a {}
+> module b { import a; } // ok
+> ```
+> 
+> ```js
+> module a {}
+> module b { console.log(a); } // ReferenceError: as every other type of bindings, you cannot capture bindings from the outer scope. You can only use them in import specifiers, which is not a generic "binding usage" position
+> ```
+> 
+> Note: the current spec text throws the ReferenceError in this case, but just because it was easier to specify. We didn't have a reason to do one thing or the other, but this possible confusion seems to indicate what we should keep the error.
+
+
+I think if we had module declarations, I would prefer the "do not implicitly capture" behavior, but it feels like that defeats a lot of what would make them "special". I'm not sure if that's the right answer, but I found the current behavior confusing because my mental model was "modules capture _nothing_"
+
+[06:59:49.0302] <apaprocki>
+> <@michaelficarra:matrix.org> I mean it's non-standard, there could be non-standard "amIRunningInAShadowReam" function
+
+Shipping a standard "amIRunningInAShadowRealm" would be the most extreme form of telling people script can change its behavior based upon how it is run, as opposed to relying on them reading spec text, implementation recommendation, or whatever it is called.
+
+[07:02:19.0209] <Mathieu Hofman>
+Here is the open issue about invariants: https://github.com/tc39/proposal-shadowrealm/issues/324
+
+[07:04:13.0885] <caridy>
+> <@michaelficarra:matrix.org> we could just advance the error stacks proposal...
+
+perfect, I will drop the ball into that bucket by opening an issue there :)
+
+[07:05:33.0232] <bakkot>
+i had enough in me to stay awake until 7, barely, but I am very close to falling asleep before we finish this item
+
+[07:06:24.0181] <Michael Ficarra>
+commiserations to everyone who ended up in the overflow
+
+[08:49:51.0483] <rbuckton>
+Could a chair help me by finishing the transfer of https://github.com/tc39-transfer/proposal-async-explicit-resource-management to the tc39 org to help with the async resource management split?
+
+[11:42:05.0142] <rbuckton>
+> <@rbuckton:matrix.org> Could a chair help me by finishing the transfer of https://github.com/tc39-transfer/proposal-async-explicit-resource-management to the tc39 org to help with the async resource management split?
+
+I still need owner access so that I can make changes to Settings and set up CI/publishing for the rendered spec.
+
+[12:00:06.0511] <ljharb>
+rbuckton: done
+
+[12:01:00.0862] <ljharb>
+ * rbuckton: done
+
+[12:01:37.0268] <rbuckton>
+Thanks!
+
+[13:59:06.0531] <littledan>
+> <@danielrosenwasser:matrix.org> I think if we had module declarations, I would prefer the "do not implicitly capture" behavior, but it feels like that defeats a lot of what would make them "special". I'm not sure if that's the right answer, but I found the current behavior confusing because my mental model was "modules capture _nothing_"
+
+Honestly it sounds like we're starting to get at, module fragments should be in a separate namespace. Neither variables nor strings, but a secret third thing. As an obviously unusable strawman, let's say they begin with `##` :). So the example would be:
+```js
+module ##a { let b = getAModule(); await import(b); /* obviously targets the lexically scoped variable */ }
+module ##b { import ##a; /* obviously targets the module declaration */ }
+```
+
+[13:59:40.0535] <littledan>
+this separate namespace could actually be usable in expression context (to get the Module object), just not the opposite: it would be impossible to make a runtime variable with the same name
+
+[14:00:02.0215] <littledan>
+so then we'd have a clear explanation: `module { }` closes over just the `##xyz` values, and nothing else
+
+[14:01:17.0415] <littledan>
+remember that we previously rejected strings specifiers for a couple reasons:
+
+- We wanted to leave 100% of the string specifier space to hosts. For example, we definitely didn't want to steal the fragment space of URLs, which already has other semantics.
+- At the same time, we wanted module declarations to have well-defined, reliable, host-independent semantics
+
+[14:02:23.0372] <littledan>
+ * remember that we previously rejected strings specifiers for a couple reasons:
+
+- We wanted to leave 100% of the string specifier space to hosts. For example, we definitely didn't want to steal the fragment space of URLs, which already has other semantics.
+- At the same time, we wanted module declarations to have well-defined, reliable, host-independent semantics
+
+[14:03:35.0421] <Alex Vincent>
+rbuckton: I do want to confer with you sometime in December (but not in the next few days) about the resource management, cancellation, and proxy revocation proposals.  Do you attend SES's strategy sessions occasionally?
+
+[14:24:06.0695] <ljharb>
+oof - a parallel namespace gives me all sorts of bad feelings. the committee reacted pretty strongly against that with hax's extensions proposal too, iirc
+
+[14:25:12.0562] <littledan>
+well, we made a separate namespace for private names :) Arguably the specifiers already *are* a separate namespace, as well. I think the viability depends a lot on if we can come up with an agreeable syntax.
+
+[14:26:04.0771] <littledan>
+also it depends whether a proposal "pays for itself" (introducing a significant enough new capability) and meets developer expectations (For extensions, I think developers hope it will magically work with `x.y()`)
+
+[14:29:22.0550] <ljharb>
+i would think dev expectations of module fragments/blocks is that they either capture everything, like a function, or nothing at all (in which case the way to "pass in" something would be like in php's `using` declaration on closures)
+
+[14:32:45.0356] <littledan>
+Yeah, another way around this is another top-level production/mimetype (like web bundles, but it has to be processable just by the JS engine). That introduces other issues, though.
+
+[14:33:44.0570] <littledan>
+> <@ljharb:matrix.org> i would think dev expectations of module fragments/blocks is that they either capture everything, like a function, or nothing at all (in which case the way to "pass in" something would be like in php's `using` declaration on closures)
+
+Honestly I don't understand how you arrived at such a strong analysis of developer expectations so quickly.
+
+[14:34:03.0775] <ljharb>
+"would think" is particularly strong?
+
+[14:34:16.0217] <littledan>
+never mind
+
+[14:35:13.0810] <ljharb>
+i would also think that any of us that have extensive experience interacting with devs in general would indeed have some sense, immediately, of what might be suitable, even tho more research is always helpful
+
+
+2022-12-02
+[16:23:45.0827] <rbuckton>
+> <@alex.vincent:matrix.org> rbuckton: I do want to confer with you sometime in December (but not in the next few days) about the resource management, cancellation, and proxy revocation proposals.  Do you attend SES's strategy sessions occasionally?
+
+I haven't so far, mostly due to time constraints. I can make some time though.
+
+[16:28:17.0138] <rbuckton>
+My suggestion was to just close over regular bindings, and when serializing determine if the binding is:
+
+1. rewritable (i.e., globals)
+2. serializable (such as another `module`)
+3. non-portable (anything else)
+and throw if there are any non-portable values.
+
+A side benefit would be that it would be an error to accidentally reference a variable that shadows a global.
+
+[16:28:40.0867] <rbuckton>
+ * My suggestion was to just close over regular bindings, and when serializing determine if the binding is:
+
+1. rewritable (i.e., globals)
+2. serializable (such as another `module`)
+3. non-portable (anything else)
+and throw if there are any non-portable values.
+
+A side benefit would be that it would be an error to accidentally reference a variable that shadows a global.
+
+[16:29:38.0541] <rbuckton>
+To further clarify, we'd determine if a _binding_ is rewritable or not rewritable, and if the binding is not rewritable, determine if its _value_ is portable (i.e., serializable) or non-portable.
+
+[16:30:06.0573] <littledan>
+When blöcks was presented, there was a lot of skepticism about this particular aspect of the proposal. It is very deliberate that module blocks omits it.
+
+[16:31:19.0235] <littledan>
+I honestly don’t understand how we could make this mechanism work well enough, given how dynamic JS is and how this committee tries to meet expectations of all the edge cases working well (eg with eval)
+
+[16:31:45.0546] <littledan>
+I like that you have some details spelled out though 
+
+[16:32:45.0145] <rbuckton>
+IIRC, the blöcks proposal wanted you to substitute the bindings explicitly when you instantiated the block 
+
+[16:32:57.0831] <littledan>
+In particular I don’t know how “rewritable” would work. Module blocks is content with just reevaluating in the other realm.
+
+[16:33:29.0309] <rbuckton>
+> <@littledan:matrix.org> In particular I don’t know how “rewritable” would work. Module blocks is content with just reevaluating in the other realm.
+
+That's exactly what I mean by rewritable: "these are the things that you just reevaluate in the other realm"
+
+[16:33:36.0922] <littledan>
+Ah Ok
+
+[16:34:05.0021] <rbuckton>
+The current proposal allows you to lexically reference another `module` and explicitly breaks that model, since you're not just looking up that name in another realm.
+
+[16:34:21.0843] <rbuckton>
+ * The current proposal allows you to lexically reference another `module` and explicitly breaks that model, since you're not just looking up that name in another realm.
+
+[16:34:38.0139] <littledan>
+So the other thing is, given module blocks, you can define a system which serializes a list of things and then passes them as arguments to a default-exported function. I guess a bit more unergonomic due to the duplication though.
+
+[16:35:16.0766] <rbuckton>
+> <@littledan:matrix.org> So the other thing is, given module blocks, you can define a system which serializes a list of things and then passes them as arguments to a default-exported function. I guess a bit more unergonomic due to the duplication though.
+
+I had thought of that approach when I discussed the proposal with my team on Monday.
+
+[16:35:30.0078] <littledan>
+> <@rbuckton:matrix.org> The current proposal allows you to lexically reference another `module` and explicitly breaks that model, since you're not just looking up that name in another realm.
+
+Yeah, I can empathize with this; this is why I raised the separate namespace idea above
+
+[16:36:02.0512] <rbuckton>
+Another approach would be to go the WASM route where you have to explicitly provide any external module references when instantiating the `Module`, which would mean no lexical scoping.
+
+[16:36:39.0013] <rbuckton>
+That would still work with bundlers, though they'd need to emit a chunk of code at the bottom of the file that linked all of the declarations together.
+
+[16:36:53.0662] <rbuckton>
+ * Another approach would be to go the WASM route where you have to explicitly provide any external module references when instantiating the `Module`, which would mean no lexical scoping.
+
+[16:37:12.0734] <littledan>
+Yeah, Nicolo has sketched out this chunk of code in a gist. It would work with module expressions + the importHook in the module constructor
+
+[16:37:41.0912] <littledan>
+I got the impression that V8 was highly skeptical of this hook. Module declarations are more limited in expressiveness; more “static”
+
+[16:37:59.0823] <littledan>
+Anyway there are probably bundler use cases that need the dynamic hook
+
+[16:38:49.0064] <rbuckton>
+If there was no lexical closure for modules, you could still have `import {} from id` but you'd need to define those ids when instantiating the module, i.e. `await import(module { import foo; }, { bindings: { foo: module {} } })`
+
+[16:39:01.0529] <Kris Kowal>
+> <@rbuckton:matrix.org> That would still work with bundlers, though they'd need to emit a chunk of code at the bottom of the file that linked all of the declarations together.
+
+This is consistent with what’s possible with just module expressions and the Module constructor.
+
+[16:39:22.0765] <rbuckton>
+That would be roughly analogous to the blocks proposal where you'd need to supply values for bindings.
+
+[16:40:17.0439] <rbuckton>
+ * That would be roughly analogous to the blöcks proposal where you'd need to supply values for bindings.
+
+[16:41:05.0712] <Kris Kowal>
+Concretely, this is Nicolò’s sketch of a module expression and Module constructor bundle generator https://gist.github.com/nicolo-ribaudo/81f18db096659ac8447ca94f50f2c37a
+
+[16:41:57.0487] <rbuckton>
+You could even do that with module declarations and stitch them together using a `with` clause:
+
+```js
+module foo { }
+module bar { import foo } // NOTE: not a closure, just an unsatisfied binding
+import bar with { bindings: { foo } };
+```
+
+[16:42:28.0024] <rbuckton>
+ * You could even do that with module declarations and stitch them together using a `with` clause:
+
+```js
+module foo { }
+module bar { import foo } // NOTE: not a closure, just an unsatisfied binding
+import bar with { bindings: { foo } };
+```
+
+[16:42:42.0206] <Kris Kowal>
+In my opinion, module expressions fully solve the bundling problem.
+
+[16:42:43.0277] <rbuckton>
+Its definitely not as convenient
+
+[16:43:15.0070] <Kris Kowal>
+Pardon module expressions + `Module` constructor.
+
+[16:44:05.0556] <Kris Kowal>
+(`ModuleSource` constructor not being necessary to that end and if the committee is intransigent about `ModuleSource` providing a path to `eval`, I’m in favor of further separation of layers.)
+
+[16:44:29.0504] <rbuckton>
+> <@kriskowal:matrix.org> In my opinion, module expressions fully solve the bundling problem.
+
+I assume that a pure module expression solution would do something like:
+```js
+const foo = module {}
+const bar = module { import "#foo"; }
+// replace resolver hook to resolve "#foo" with `foo`
+// ...
+// profit?
+```
+
+[16:45:19.0146] <Kris Kowal>
+Though, in my opinion, `ModuleSource` is no more egregious a path to `eval` than `<script type=module src=*>`. It is certainly not a direct-eval evil.
+
+[16:46:21.0090] <rbuckton>
+I mean, there's always `import("data:text/javascript,console.log('hello')")` :)
+
+[16:46:35.0002] <Kris Kowal>
+> <@rbuckton:matrix.org> I assume that a pure module expression solution would do something like:
+> ```js
+> const foo = module {}
+> const bar = module { import "#foo"; }
+> // replace resolver hook to resolve "#foo" with `foo`
+> // ...
+> // profit?
+> ```
+
+Close enough, though it won’t have to rewrite import specifiers. It can remap original specifiers to arbitrary other module blocks to effect the same linkage as occurred in the original physical locations. This is good because specifiers are typically scoped to not reveal the full physical location.
+
+[16:49:27.0539] <Kris Kowal>
+In any case, I think we get a lot of bang from the module harmony proposals even if `ModuleSource` is replaced with something like `Module.parse` that can confirm the integrity of a module string and reflect its import/export bindings. Bundlers need that and on the evaluator side, module expressions suffice. We would still want an `ModuleSource` inert constructor just to host the `prototype`, since module expressions have a `source` of that prototype. And, at the end of the day, that’s equivalent to what what we’d have with a full-power `ModuleSource` constructor under a no-unsafe-eval CSP.
+
+[16:50:44.0499] <Kris Kowal>
+Concretely though, `new Module((module { import './foo.js' }).source, { importHook() { return fooModule; })` does the trick of remapping an import to a particular `Module` instance. You can extrapolate from there.
+
+[16:51:03.0249] <Kris Kowal>
+ * Concretely though, `new Module((module { import './foo.js' }).source, { importHook() { return fooModule; })` does the trick of remapping an import to a particular `Module` instance. You can extrapolate from there.
+
+[16:52:13.0785] <Kris Kowal>
+In fact, module expressions are preferable to module declarations as a vessel for bundles because the module can be injected verbatim between the braces of a module expression.
+
+[16:53:05.0134] <Kris Kowal>
+Though, no doubt in every case that matters, there will be a minification pass and a sourcemap, so that advantage isn’t likely to be realized in any case that matters.
+
+[16:54:13.0916] <Kris Kowal>
+Where module declarations shine though is that they do not require `import()` to trampoline into user space `importHook` functions, which shu hinted could limit their usefulness in production.
+
+[16:56:04.0772] <Kris Kowal>
+But the downside is that they place a new cognitive burden on developers, who will now need to choose between using lexical or stringy module specifiers on a case-by-case basis, depending on whether they want the bundle (or worker payload!) to come with its own singleton of a module or exit to the host’s singleton of the module.
+
+[16:57:43.0913] <Kris Kowal>
+That’ll be an attractive nuisance for the worker case, since each time you “add” an entrypoint module expression/declaration to a worker, that entrypoint will retain a separate instance of its module declaration graph and connect to shared instances from the host for any remaining stringy specifiers.
+
+[16:59:34.0304] <Kris Kowal>
+I think that’ll have some negative consequences for the ecosystem, where libraries will be compelled to export a module declaration instead of their own API, so that the consumer can decide whether they want to instantiate it or transport it.
+
+[16:59:54.0282] <Kris Kowal>
+And in fact, they do not need module declarations to have that choice. They get the same facility from module import reflection.
+
+[17:02:05.0827] <Kris Kowal>
+That is, `postMessage` can send an array of `ModuleSources` with a description of their linkage and the receiver can rehydrate the graph with `Module` and a little machinery, just like a bundle.
+
+[17:21:36.0854] <littledan>
+> <@kriskowal:matrix.org> I think that’ll have some negative consequences for the ecosystem, where libraries will be compelled to export a module declaration instead of their own API, so that the consumer can decide whether they want to instantiate it or transport it.
+
+Well, maybe reflective imports would be the bridge here… oh but this only covers the top level, not nested dependencies 
+
+[17:24:40.0654] <Kris Kowal>
+Reflective imports would give you a module and module source, module bindings reflection would give you the shallow dependencies, import.meta.resolve would give you host resolution, recursive reflective imports would get you the whole working set.
+
+[17:25:23.0449] <Kris Kowal>
+Everything you need to construct a transportable artifact.
+
+[19:50:57.0163] <littledan>
+> <@rbuckton:matrix.org> That would still work with bundlers, though they'd need to emit a chunk of code at the bottom of the file that linked all of the declarations together.
+
+Yeah, it's exactly this chunk of code, which is implicit in what Kris is describing, that makes me feel uncertain about this direction, but in a way which is really hard to objectively back up at this point. Maybe, at some point, prototyping will give us more insight around performance issues about this. But beyond practicality, I was excited about having a fully declarative way to link modules together--probably the committee shouldn't attach much weight to this excitement.
+
+[21:19:38.0823] <Kris Kowal>
+Given that the stated scope of the proposal is bundling, limiting the reach of module expression and declaration imports to a single file would obviate all of my concerns. The names need not even be lexical, just file local.
+
+[23:57:52.0648] <sffc>
+Michael Ficarra: the Google i18n team is voicing explicit support for Well-Formed Unicode Strings
+
+[03:05:47.0843] <Rob Palmer>
+We are proposing to defer the January plenary meeting by one week to avoid overlap with Chinese New Year.
+
+https://github.com/tc39/Reflector/issues/453#issuecomment-1335074233
+
+[07:15:29.0629] <littledan>
+> <@kriskowal:matrix.org> Given that the stated scope of the proposal is bundling, limiting the reach of module expression and declaration imports to a single file would obviate all of my concerns. The names need not even be lexical, just file local.
+
+I keep hearing people say that module declarations are only for bundling, and although that was definitely the focus for my investigation there initially, the current proposal serves other goals as well. The most significant and commonly raised one is having server and client code in the same file. Anyway, this goal would be served by local and not lexical module declarations as well
+
+[07:16:25.0127] <littledan>
+I still don’t understand the concerns you have though, Kris
+
+[07:17:06.0616] <littledan>
+What I really disagree with is when people state that the feature is only for bundlers
+
+[08:18:25.0961] <Kris Kowal>
+Ah, Nicolò stated that the feature was primarily for bundlers. I agree that it would also be used for transmission to workers, which is really quite similar.
+
+[08:18:34.0621] <Kris Kowal>
+postMessage-as-bundler
+
+[08:19:21.0910] <Kris Kowal>
+ * Ah, Nicolò stated that the feature was primarily for bundlers. I agree that it would also be used for transmission to workers, which is really quite similar.
+
+[08:20:56.0967] <Kris Kowal>
+To wit, if we could postMessage into a file and revive it over HTTP, structured clone would be a bundle format.
+
+[08:40:30.0410] <littledan>
+Primarily != only
+
+[08:42:49.0404] <littledan>
+I need to think more about this ecosystem implications issue. I guess we already have an ecosystem thing going on where some people distribute bundled packages…
+
+[09:14:52.0191] <Kris Kowal>
+I’ll make a point not to misrepresent the intent. Regardless of the intent, Hyrum’s Law applies. It’ll be used in any way it’s found useful.
+
+[14:23:47.0951] <ljharb>
+bakkot: is there a reason that `union` makes sure `other` has a callable `has` method, when it doesn't use it?
+
+[15:01:28.0609] <bakkot>
+ljharb: for consistency with the other methods
+
+[15:01:37.0563] <bakkot>
+we decided they should all have exactly the same expected arguments
+
+[15:02:56.0292] <ljharb>
+hm, ok. i haven't looked at the others yet, so i'm assuming some of the methods use all three, some two, some one, but all of them require all three as you indicated
+
+[15:03:03.0931] <bakkot>
+yup
+
+[15:03:34.0828] <bakkot>
+also some of them switch which ones get used depending on the relative sizes of the receiver vs the argument
+
+[15:03:40.0904] <bakkot>
+ * also some of them switch which ones get used depending on the relative sizes of the receiver vs the argument
+
+[15:04:23.0127] <ljharb>
+ah right, ok
+
+
+2022-12-03
+[07:10:36.0306] <Jack Works>
+try to build a language service for ecmarkup
+
+[07:13:11.0893] <rbuckton>
+I have one I started years ago, but haven't had much time for it in awhile. That's looking good
+
+[07:14:53.0274] <Jack Works>
+looking good +1 but that's slow because there is no incremental parsing/etc for ecmarkup
+
+[07:29:31.0825] <linusg>
+> <@ljharb:matrix.org> linusg: any chance of making a binary for mac? :-)
+
+https://github.com/devsnek/esvu/pull/44 should solve that (cc snek)
+
+[07:30:54.0459] <snek>
+nice
+
+[07:31:03.0611] <snek>
+would it make sense to move esvu into tc39 org?
+
+[08:49:37.0773] <bakkot>
+Jack Works if you publish that somewhere I can try to ensure ecmarkup doesn't accidentally break it
+
+[08:49:58.0144] <bakkot>
+I do change the internals around fairly frequently (though hopefully that's mostly done now) so decent odds it will break otherwise
+
+
+2022-12-04
+[05:29:53.0850] <ryzokuken>
+> <@devsnek:matrix.org> would it make sense to move esvu into tc39 org?
+
+sounds like a nice idea overall, but I think we need to come up with a good plan for how to maintain these projects if we do this for a few
+
+[05:29:56.0131] <ryzokuken>
+eg. tcq
+
+[07:32:18.0210] <Jack Works>
+> <@bakkot:matrix.org> Jack Works if you publish that somewhere I can try to ensure ecmarkup doesn't accidentally break it
+
+Thanks! I'm still struggling with some engineering problems (vsce does not work with pnpm) and I cannot bundle grammarkdown with ESBuild so I still need some time before publishing it on vscode store
+
+[09:51:16.0193] <ryzokuken>
+> <@jackworks:matrix.org> try to build a language service for ecmarkup
+
+nice
+
+[09:51:55.0064] <ryzokuken>
+rbuckton: Jack Works maybe we could unify efforts for this? Avoid repeating the work?
+
+[09:52:59.0659] <Jack Works>
+> <@usharma:igalia.com> rbuckton: Jack Works maybe we could unify efforts for this? Avoid repeating the work?
+
+I'm using his grammarkdown to parse things
+
+[09:54:00.0784] <ryzokuken>
+ah nice
+
+[09:54:51.0260] <rbuckton>
+> <@jackworks:matrix.org> I'm using his grammarkdown to parse things
+
+When I have some time next week I'll get in touch. I wrote a grammarkdown language service for vscode that's designed to be embedded in another language service, similar to how the html and CSS language services work
+
+
+2022-12-06
+[03:17:47.0329] <littledan>
+Good news everyone: Ecma approved stenography funding for TC39 plenary meetings!
+
+[04:37:06.0824] <nicolo-ribaudo>
+Thanks to everyone who worked on that!
+
+[09:00:41.0758] <Luca Casonato>
+A note-taker strike narrowly avoided!!
+
+[10:02:42.0792] <Ashley Claymore>
+if we give TCQ a mapping from GH user to acronym too. We'd be solid 
+
+[10:27:35.0350] <Luca Casonato>
+Nicolo and me tried to set up TCQ locally to add a timebox countdown, but we couldn't get it running. I'd be happy to work on TCQ to add some of these features if someone could explain how to get a dev env running locally 😅
+
+[14:52:56.0582] <ljharb>
+bakkot: i think that the iterator helpers spec might be missing `Symbol.iterator` on `Iterator.prototype`?
+
+[14:58:00.0376] <bakkot>
+ljharb: it's already there
+
+[14:58:28.0125] <bakkot>
+https://tc39.es/ecma262/multipage/control-abstraction-objects.html#sec-%iteratorprototype%-@@iterator
+
+[15:01:06.0175] <ljharb>
+ohhhh duh ok, i was only looking in the proposal repo (－‸ლ) 
+
+[15:01:08.0143] <ljharb>
+thanks
+
+
+2022-12-07
+[00:07:13.0302] <Rob Palmer>
+The date change for the January plenary meeting is confirmed. The meeting will begin on 30th January.
+
+https://github.com/tc39/Reflector/issues/453#issuecomment-1340542815
+
+
+2022-12-09
+[14:31:12.0807] <ljharb>
+bakkot: in https://tc39.es/proposal-iterator-helpers/#sec-iteratorprototype.filter step 3.b.iii, if IteratorValue completes abruptly, is that a case of a misbehaving iterator, and thus why we don't take care to close the iterator?
+
+[14:49:15.0149] <ljharb>
+i'm asking in particular because in some methods, IteratorNext and IteratorValue being abrupt *doesn't* close the iterator, but in other methods, it does. it seems like it should consistently be one or the other?
+
+[14:49:56.0695] <ljharb>
+ * Michael Ficarra snek bakkot: in https://tc39.es/proposal-iterator-helpers/#sec-iteratorprototype.filter step 3.b.iii, if IteratorValue completes abruptly, is that a case of a misbehaving iterator, and thus why we don't take care to close the iterator?
+
+[14:54:51.0147] <bakkot>
+ljharb: correct, iteratorstep and iteratorvalue throwing is considered misbehaving and so does not close the iterator
+
+[14:55:09.0535] <bakkot>
+if there are cases where those things throw and the iterator is still closed, that's a bug 
+
+[14:55:19.0865] <bakkot>
+(but you might be looking at flatMap, which is a special case because there are two iterators)
+
+[14:55:24.0006] <ljharb>
+yes - in take/drop
+
+[14:55:37.0948] <ljharb>
+the two throwing AOs are done in a oneliner, so the abrupt check isn't separated
+
+[14:55:39.0726] <ljharb>
+i can make a PR
+
+[14:55:50.0652] <bakkot>
+which step in take/drop?
+
+[14:56:03.0731] <ljharb>
+eg 6.c.iii in drop
+
+[14:56:08.0339] <ljharb>
+ * eg 6.c.iii in drop
+
+[14:56:18.0755] <bakkot>
+look closer
+
+[14:56:21.0407] <ljharb>
+in that case maybe it's just that the check should be removed?
+
+[14:56:31.0538] <ljharb>
+ohhhh i see
+
+[14:56:36.0966] <ljharb>
+it's just the Yield completion
+
+[14:56:40.0272] <bakkot>
+indeed
+
+[14:57:02.0857] <bakkot>
+i.e., when someone calls `.return()` or `.throw()` on the iterator produced by `.drop()`
+
+[14:57:05.0575] <ljharb>
+what kind of code would make Yield throw?
+
+[14:57:06.0636] <ljharb>
+ahhh
+
+[14:57:24.0750] <bakkot>
+(via GeneratorResumeAbrupt IIRC)
+
+[14:57:25.0185] <ljharb>
+so if they've *already* called those, then yield would throw then?
+
+[14:57:46.0189] <bakkot>
+what do you mean by "already called"?
+
+[14:58:48.0429] <ljharb>
+maybe i'm not understanding. to get to 6.c.iii in drop, you've received an object from the next call. the IteratorValue call means that the Get of `value` has succeeded. when would return/throw factor in?
+
+[14:59:12.0452] <ljharb>
+is it that `next` or a `value` getter could have called `.return` or `.throw`, setting the GeneratorState to completed, thus causing Yield to throw?
+
+[14:59:15.0331] <bakkot>
+the call to the `Yield` AO pauses the "generator"
+
+[14:59:45.0725] <bakkot>
+and while it is paused, someone calling `.throw()` on the iterator causes return value returned by the `Yield` AO to be a throw completion
+
+[14:59:53.0626] <bakkot>
+this is the same as for an actual generator
+
+[14:59:56.0461] <ljharb>
+ahhh ok, that's the part i'm missing, thanks
+
+[15:00:15.0733] <ljharb>
+obv in my polyfill i'm doing some nasty stuff to simulate generators, so there's probably some of the basic mechanics that i still need to polish
+
+[15:00:24.0226] <bakkot>
+the value returned by the `Yield` AO is the thing passed by the consumer of the generator, as an argument to `.next()` or `.return()` or `.throw()`
+
+[15:00:55.0595] <bakkot>
+ * the value returned by the `Yield` AO is the thing passed by the consumer of the generator, as an argument to `.next()` or `.return()` or `.throw()`
+
+[15:01:01.0516] <ljharb>
+i think i get it. i am looking forward to these test cases being written :-) since i think that will clear it up for me much faster
+
+[15:05:40.0593] <bakkot>
+simple test for this example:
+
+```
+let manualIter = {
+  next(){ console.log('next'); },
+  throw(){ console.log('not hit'); },
+  return() { console.log('closing'); },
+};
+
+let taken = Iterator.from(manualIter).take(10);
+taken.next(); // prints 'next'
+try { taken.throw('err'); } catch (e) { console.log('caught', e); } // prints 'closing' and then 'caught err'
+```
+
+[15:31:44.0938] <ljharb>
+hm, neither IteratorPrototype nor WrapForValidIteratorPrototype have a Symbol.toStringTag, which makes debugging with them super annoying (ie, with the wrapper from Iterator.from). can one or both of these get a toStringTag?
+
+[15:36:24.0076] <bakkot>
+IteratorPrototype has a toStringTag: https://tc39.es/proposal-iterator-helpers/#sec-iteratorprototype-@@tostringtag
+
+
+2022-12-10
+[19:30:27.0126] <ljharb>
+oh ok great, not sure how i missed that too
+
+[21:23:05.0642] <ljharb>
+altho its property descriptor isn't properly specified; it just says in a note that it's writable. i assume it's configurable and nonenumerable?
+
+[22:06:43.0573] <bakkot>
+ljharb: yes; see the second-last paragraph of https://tc39.es/ecma262/multipage/ecmascript-standard-built-in-objects.html#sec-ecmascript-standard-built-in-objects
+
+[22:13:04.0925] <ljharb>
+right, but that's a non-normative note on top of the normative default. when the descriptor isn't default, it's supposed to be specified in its entirety, like https://tc39.es/ecma262/#sec-%throwtypeerror% etc
+
+[22:16:04.0881] <ljharb>
+so in this case, `taken.next()` will throw because `next` returns a non-Object, and the wrapper throws on that; if i modify next to return an empty object
+
+[22:16:34.0639] <ljharb>
+but also, the iterator helper wrapper, nor Iterator.prototype, seems to specify a `throw` method, so `taken.throw` doesn't exist
+
+[22:16:56.0238] <ljharb>
+should there be a default `throw` method, or getter, that refers to the wrapped iterator's throw method when present?
+
+[23:24:31.0392] <bakkot>
+> when the descriptor isn't default, it's supposed to be specified in its entirety
+
+right, but it is default, so it's not specified at all
+
+[23:24:58.0126] <bakkot>
+"Every other data property described in clauses 19 through 28 and in Annex B.2 has the attributes { [[Writable]]: true, [[Enumerable]]: false, [[Configurable]]: true } unless otherwise specified."
+
+[23:26:20.0924] <bakkot>
+> <@ljharb:matrix.org> so in this case, `taken.next()` will throw because `next` returns a non-Object, and the wrapper throws on that; if i modify next to return an empty object
+
+ah yeah sorry, `next` should return `{ done: false, value: null }` or something
+
+[23:26:32.0096] <bakkot>
+so should `return` for that matter
+
+[23:26:52.0554] <bakkot>
+ * simple test for this example:
+
+```
+let manualIter = {
+  next(){ console.log('next'); return { done: false, value: null } },
+  throw(){ console.log('not hit'); },
+  return() { console.log('closing'); return {}; },
+};
+
+let taken = Iterator.from(manualIter).take(10);
+taken.next(); // prints 'next'
+try { taken.throw('err'); } catch (e) { console.log('caught', e); } // prints 'closing' and then 'caught err'
+```
+
+[23:26:57.0918] <bakkot>
+updated my snippet
+
+[23:27:37.0478] <bakkot>
+> <@ljharb:matrix.org> but also, the iterator helper wrapper, nor Iterator.prototype, seems to specify a `throw` method, so `taken.throw` doesn't exist
+
+hm, ok, I guess it's just `.return` then
+
+[23:28:11.0986] <bakkot>
+which does not cause an exception, but does still cause an abrupt completion
+
+[23:29:03.0348] <bakkot>
+ * simple test for this example:
+
+```
+let manualIter = {
+  next(){ console.log('next'); return { done: false, value: null } },
+  throw(){ console.log('not hit'); },
+  return() { console.log('closing'); return {}; },
+};
+
+let taken = Iterator.from(manualIter).take(10);
+taken.next(); // prints 'next'
+taken.return(); // prints 'closing'
+taken.next(); // returns { done: true }
+```
+
+[23:29:24.0745] <bakkot>
+that makes it a little harder for a test to clearly demonstrate what's going on, but updated my snippet anyway
+
+[23:29:39.0347] <bakkot>
+writing tests without code to run them against is hard
+
+[15:18:39.0558] <ljharb>
+any reason not to name the functions some/every/filter/find take to "predicate"? "filterer" seems unnecessarily specific, and "fn" seems unnecessarily vague
+
+
+2022-12-11
+[20:23:04.0734] <Jack Works>
+https://marketplace.visualstudio.com/items?itemName=MagicWorks.ecmarkup
+
+ecmarkup language extension for vscode.
+
+[20:23:31.0697] <Jack Works>
+emu-* HTML tags definition
+
+[20:24:18.0844] <Jack Works>
+code snippet for verbose spec clause
+
+[20:25:08.0405] <Jack Works>
+alg highlight (still improving)
+
+[20:27:06.0714] <Jack Works>
+type check & lint result from ecmarkup cli
+
+[20:29:03.0332] <Jack Works>
+Warning: Low performance; May crash; bugs
+I'm going to rewrite it in the future
+
+[22:31:52.0242] <ljharb>
+*should* it also be throw?
+
+[00:13:26.0401] <bakkot>
+Jack Works: very nice!
+
+[00:14:13.0692] <bakkot>
+ljharb: we decided no - iterator helpers only forward the _iteration_ parts of the generator protocol, meaning calls to `next` and `return`, and not even the values passed to those things
+
+[00:14:22.0357] <bakkot>
+nothing in the language calls `.throw`
+
+[00:14:33.0197] <bakkot>
+so leaving it out doesn't really affect anything
+
+[00:16:31.0168] <bakkot>
+as I understand it `.throw` is part of the generator protocol mostly to explain stuff like, if you think of async functions as a fancy kind of generator, well, `await` can throw, so there needs to be something in the protocol which explains that
+
+[00:16:41.0419] <bakkot>
+which is cool and all but is not relevant to iterators
+
+[07:18:03.0106] <Kris Kowal>
+Yeah, indeed. `Q.async` straddled both the modern and old Firefox generator functions. The `throw` and `return` methods made it possible to shim `async` functions elegantly. https://github.com/kriskowal/q/blob/master/q.js#L1253-L1327
+
+[07:19:28.0919] <Kris Kowal>
+ * Yeah, indeed. `Q.async` straddled both the modern and old Firefox generator functions. The `throw` and `return` methods made it possible to shim `async` functions elegantly. https://github.com/kriskowal/q/blob/master/q.js#L1253-L1327
+
+
+2022-12-12
+[13:43:24.0865] <ljharb>
+bakkot: it seems like `it.map(f)` and `it.flatMap(f)`, for an `f` that doesn't return an iterator, aren't the same - iow, it seems like a mapper of `x => x` will throw in GetIteratorFlattenable if `x` isn't an Object. was that an intentional decision?
+
+[13:47:00.0626] <bakkot>
+yes
+
+[13:47:43.0921] <bakkot>
+https://github.com/tc39/proposal-iterator-helpers/pull/59
+
+
+2022-12-13
+[16:01:44.0517] <ljharb>
+oof, that is a super gross user experience :-/
+
+[16:02:35.0166] <ljharb>
+so everyone basically has to wrap their return in `[]`, ugh
+
+[16:04:53.0933] <littledan>
+point 2 of https://github.com/tc39/proposal-iterator-helpers/issues/55 sold me on those semantics, personally
+
+[16:05:20.0854] <ljharb>
+yes - but since the time that decision was made in 2019, iterator helpers now (in from i think) only treats Object iterables as iterable
+
+[16:05:28.0698] <ljharb>
+meaning, strings would not be auto-flattened, which resolves point 2
+
+[16:05:58.0589] <ljharb>
+iow, if flatMap only considered Object as potential iterables, and all primitives were allowed, i think it'd maximize usability without causing any of the footguns mentioned
+
+[16:06:45.0985] <bakkot>
+I am still confused about, why would you be returning something which is not already iterable from flatMap?
+
+[16:06:51.0100] <bakkot>
+like
+
+[16:06:59.0596] <bakkot>
+if you don't do that, you don't need to wrap
+
+[16:07:05.0412] <bakkot>
+and I don't know why you would do that
+
+[16:08:01.0862] <bakkot>
+in any case I consider the third item in the issue linked above (i.e., auto-boxing means adding Symbol.iterator is basically always a breaking change) to be sufficient on its own
+
+[16:08:13.0384] <ljharb>
+specifically because i don't want to have to care if the item i'm returning is iterable or not
+
+[16:08:28.0809] <bakkot>
+I guess we already had this conversation in this thread
+
+[16:08:31.0092] <ljharb>
+that is also addressed by disallowing a non-iterable Object
+
+[16:08:34.0551] <bakkot>
+don't need to repeat it
+
+[16:08:45.0663] <ljharb>
+iow, currently you're allowed "only iterable objects", i'd like to see "primitive, or iterable objects"
+
+[16:08:56.0736] <bakkot>
+but... why
+
+[16:08:58.0599] <bakkot>
+that's even weirder
+
+[16:09:10.0551] <ljharb>
+why? a common case of a mapper is to produce a primitive
+
+[16:09:23.0495] <bakkot>
+yeah but if you are mapping you use `.map`, not `.flatMap`
+
+[16:09:32.0477] <ljharb>
+not if i sometimes want to return an array
+
+[16:09:34.0524] <bakkot>
+flatMap is for when you are producing a sequence
+
+[16:09:38.0255] <ljharb>
+map and flatMap on arrays already work this way
+
+[16:09:47.0046] <ljharb>
+yes, flatMap is for when i want to produce a sequence at the end
+
+[16:09:54.0171] <ljharb>
+it is NOT for "each callback produces a sequence"
+
+[16:09:59.0445] <bakkot>
+yes it is
+
+[16:10:02.0018] <bakkot>
+that is what it is for
+
+[16:10:08.0661] <bakkot>
+that is, very definitively, what it is for
+
+[16:10:13.0505] <ljharb>
+it's for "each callback *might* produce a sequence", which is why the one on arrays works that way
+
+[16:10:22.0265] <bakkot>
+we did not invent flatMap
+
+[16:10:56.0791] <ljharb>
+i realize that. but this makes the iterator flatMap different from the array one in a way that harms usability - it means i can't transparently refactor between map and flatMap without also changing the mapper - something i can already do on arrays, and very very often do.
+
+[16:11:02.0178] <bakkot>
+the only reason the one on arrays works that way is for symmetry with `.flat`, which does not exist on iterator helpers
+
+[16:11:34.0986] <ljharb>
+ok but flat and flatMap now exist on Arrays. the reason for array flatMap's behavior isn't really relevant - the two flatMaps are now inconsistent
+
+[16:11:56.0267] <bakkot>
+"primitives or iterables" would not restore the consistency with Array that you're looking for
+
+[16:12:08.0196] <ljharb>
+true. it would bring it closer tho.
+
+[16:12:23.0365] <bakkot>
+that's not always a good thing
+
+[16:12:33.0208] <littledan>
+sorry what was the change in how non-objects were handled?
+
+[16:12:35.0213] <ljharb>
+agreed. i fail to see why this wouldn't be a good thing tho
+
+[16:12:56.0906] <ljharb>
+littledan: in array flatMap, if the callback return is an array, it's flattened; if not, it's just used as-is
+
+[16:13:12.0802] <ljharb>
+in iterator flatMap, if the callback return is a non-iterable, it always throws - instead of just being used as-is
+
+[16:13:33.0351] <bakkot>
+littledan: right now, `flatMap` throws if you return anything other than an iterable object; ljharb proposes that instead it throw if you return anything other than an iterable object _or a primitive_, and that in the latter case it auto-box
+
+[16:13:34.0499] <ljharb>
+in particular this introduces a refactoring hazard for arrays
+
+[16:14:02.0533] <ljharb>
+`arr.map(x).filter(y).flatMap(z)` to `Iterator.from(arr).map(x).filter(y).flatMap(z)` won't work as intended
+
+[16:14:03.0317] <bakkot>
+the refactoring hazard is there either way, though; making the hazard more subtle (i.e. only relevant for non-primitives) is not an improvement IMO
+
+[16:14:40.0301] <bakkot>
+also Array.prototype.flatMap flattens _arrays_, and _not_ iterables
+
+[16:14:44.0262] <bakkot>
+they're just fundamentally different operations
+
+[16:14:45.0106] <ljharb>
+i suppose if you were returning a non-array iterable in the array case, the hazard is indeed always there
+
+[16:15:09.0831] <ljharb>
+but the only non-array iterable i would think is commonly returned from a mapper is strings
+
+[16:15:32.0892] <ljharb>
+ * but the only non-array iterable i would think is commonly returned from a mapper is primitive strings
+
+[16:15:40.0252] <bakkot>
+I think that Set and Map are not unusual data structures to be working with, personally
+
+[16:15:56.0643] <ljharb>
+it's not like, surprising or bad code to have a mapper that returns those, ofc. but i doubt it's at all common.
+
+[16:17:32.0136] <bakkot>
+ok but I think that having a `flatMap` function that returns a primitive is also not common
+
+[16:17:54.0507] <bakkot>
+I know you do this but I do not expect that most people reaching for flatMap would do that
+
+[16:18:14.0367] <bakkot>
+and of the people who would, it's not going to be that unusual to sometimes return an object instead
+
+[16:18:46.0430] <ljharb>
+i do expect most flatMap functions are also map functions
+
+[16:18:48.0233] <bakkot>
+I really think we should just expect people to learn that `X.prototype.flatMap` is for returning and flattening `X`s, and not try to guess what they meant if they return a non-X
+
+[16:18:54.0468] <bakkot>
+that's, uh.
+
+[16:18:57.0678] <bakkot>
+not an expectation I share
+
+[16:19:08.0023] <ljharb>
+i agree with the X.prototype.flatMap flattens X's argument
+
+[16:19:15.0519] <bakkot>
+again, we did not invent flatMap
+
+[16:19:30.0132] <ljharb>
+but the precedent *we already have* is that if you return a non-X, it's automatically somethinged into an X containing that non-X
+
+[16:19:37.0174] <ljharb>
+i forget the haskelly term for "something"
+
+[16:19:55.0539] <ljharb>
+auto-somethinged maybe
+
+[16:20:03.0725] <bakkot>
+I agree that Arrays work this way, and you are increasingly convincing me that it's a mistake, but we are agreed that iterators _cannot work that way_
+
+[16:20:17.0680] <ljharb>
+i don't understand why not
+
+[16:20:26.0414] <ljharb>
+adding Symbol.iterator to anything is already a breaking change
+
+[16:20:46.0715] <ljharb>
+adding a protocol to anything that didn't previously have it is always a breaking change, and must always be considered as one
+
+[16:20:53.0985] <bakkot>
+well
+
+[16:20:56.0974] <ljharb>
+ * adding a protocol to anything that didn't previously have it is always a breaking change, and must always be considered as one
+
+[16:21:04.0661] <bakkot>
+that is an opinion you can have but I am talking about, like, actually breaking in practice
+
+[16:21:17.0529] <bakkot>
+and in real life people add Symbol.iterator to existing classes all the time without breaking anything
+
+[16:21:22.0246] <bakkot>
+web platform just did that with streams and it was fine
+
+[16:21:27.0312] <ljharb>
+i'm saying that "i can't use a map callback on iterator flatmap" has already broken me in practice, today
+
+[16:21:31.0159] <ljharb>
+which is why i brought it up
+
+[16:21:46.0445] <ljharb>
+and if adding Symbol.iterator to things is fine, then it would still be fine even if it changed how flatMap worked
+
+[16:21:55.0579] <bakkot>
+"I did not know how this API worked" is not at all as serious of a problem as "I am permanently prevented from adding a feature to my library"
+
+[16:22:08.0798] <ljharb>
+agreed. why would it be a permanent obstacle?
+
+[16:22:12.0601] <ljharb>
+that's what semver is for
+
+[16:22:32.0158] <ljharb>
+the language and platform already are hopefully risk-averse enough to be very cautious adding existing protocols to anything
+
+[16:22:58.0920] <bakkot>
+I think you're the only person I have ever met who is of the opinion that adding a protocol to a thing that didn't previously have it is always a breaking change
+
+[16:23:15.0607] <ljharb>
+i mean, potentially. obv not in practice, just like any breaking change might not be
+
+[16:23:27.0859] <bakkot>
+literally every change is potentially brekaing
+
+[16:23:40.0497] <bakkot>
+I have had things depend on the literal source text of a function and break because I changed that
+
+[16:23:45.0540] <bakkot>
+this is not what is normally meant by "breaking change"
+
+[16:23:48.0754] <ljharb>
+i don't think that's true, but that's not really a useful debate
+
+[16:24:10.0197] <ljharb>
+oh sure, there's a line like "changing source text" isn't breaking
+
+[16:25:00.0355] <ljharb>
+i would love to see a concrete example of an object type, that someone is returning from a flatMap callback, that makes sense to suddenly make iterable later, and where the breakage caused is difficult to debug or fix.
+
+[16:25:07.0195] <bakkot>
+streams!
+
+[16:25:15.0506] <bakkot>
+streams literally just did this!
+
+[16:25:26.0269] <bakkot>
+and by "just" I mean "sometime in the last few years" but still
+
+[16:25:49.0155] <ljharb>
+did streams predate iteration, or was it a mistake to not have them iterable in the first place?
+
+[16:26:10.0260] <bakkot>
+neither? they just didn't start out being iterable, and then evolved, as is very often the case
+
+[16:26:10.0920] <bakkot>
+https://github.com/whatwg/streams/pull/980
+
+[16:26:29.0547] <ljharb>
+oh well i'm sure web streams predated async iteration
+
+[16:26:32.0460] <ljharb>
+i meant normal iteration
+
+[16:26:48.0774] <bakkot>
+flatMap also exists on async iterables so I don't understand why you are drawing a distinction
+
+[16:27:11.0524] <ljharb>
+i'm not really thinking about async rn, because the usability problem i'm running into is primarily on sync
+
+[16:27:46.0003] <ljharb>
+so why would auto-whatevering primitives be a problem for flatMap?
+
+[16:28:29.0924] <ljharb>
+"wrap" i guess but there's another term i'm forgetting
+
+[16:28:36.0203] <bakkot>
+"box", possibly
+
+[16:28:43.0680] <bakkot>
+or "pure"
+
+[16:29:07.0701] <ljharb>
+pure! i think that's the term michael used
+
+[16:29:07.0735] <bakkot>
+anyway: because once we get to the point that we're not being exactly consistent with Arrays, we need to choose different semantics anyway, and I think the only coherent option is "reject things you can't flatten"
+
+[16:29:21.0042] <bakkot>
+"reject things you can't flatten, except primitives for some reason" is not very coherent
+
+[16:29:33.0587] <ljharb>
+"can't flatten, but allow things that are already flat"
+
+[16:29:48.0982] <bakkot>
+`{}` is already flat
+
+[16:29:54.0097] <bakkot>
+arguably
+
+[16:30:41.0375] <ljharb>
+except that the existing semantics say that only Objects are flattenable, so `{}` is _potentially_ flat or not, depending on what Object.prototype has on it. primitives are always flat, by the current semantics of the proposal.
+
+[16:30:51.0659] <ljharb>
+ * except that the existing semantics say that only Objects are flattenable, so `{}` is _potentially_ flat or not, depending on what Object.prototype has on it. primitives are always flat, by the current semantics of the proposal.
+
+[16:31:07.0779] <bakkot>
+I don't really see why a user would be thinking about whether something is "potentially" flat
+
+[16:31:43.0900] <ljharb>
+well sure, but i also don't think they're going to be thinking about whether something is iterable or not. they're going to assume it works like array concat/flatMap and "just work" with non-iterables
+
+[16:32:44.0321] <bakkot>
+and they will be wrong for at least objects, in the "we are special-casing primitives" world, so they are going to have to correct their misconception at some point anyway
+
+[16:32:59.0624] <bakkot>
+why not make the misconception easier to correct, by making the rule simpler and more obvious?
+
+[16:33:23.0610] <ljharb>
+i don't think the current thing is more obvious
+
+[16:33:25.0340] <ljharb>
+ * i don't think the current thing is more obvious
+
+[16:33:30.0346] <ljharb>
+or i'd have brought it up during plenary
+
+[16:33:45.0711] <ljharb>
+it literally took me implementing it to discover this confusing behavvior
+
+[16:34:01.0787] <bakkot>
+you don't think it's more obvious than special-casing primitives?
+
+[16:34:11.0494] <bakkot>
+I think it is definitely more obvious than that; we are unlikely to reconcile on that point
+
+[16:34:24.0622] <ljharb>
+i totally accept that it's a simpler thing to explain as-is
+
+[16:34:37.0773] <ljharb>
+but that's not the same thing as which is more surprising and frustrating
+
+[16:34:58.0763] <bakkot>
+I think it's both less surprising and less frustrating as-is
+
+[16:36:04.0757] <bakkot>
+the only way you can run into the special case is if you return a primitive, and while I accept that you personally do that on purpose, I think that for a typical user that's going to be a bug which they would prefer to be notified of
+
+[16:36:07.0954] <bakkot>
+moreover I think even the person who _does_ want the auto-boxing behavior is going to want to know as early as possible that their assumption about the behavior is wrong, and they will learn that faster if primitives are not special-cased
+
+[16:41:27.0054] <littledan>
+> <@ljharb:matrix.org> yes - but since the time that decision was made in 2019, iterator helpers now (in from i think) only treats Object iterables as iterable
+
+sorry, I was asking about the change ljharb was referencing here
+
+[16:43:27.0994] <bakkot>
+littledan: ah, specifically, `Iterator.prototype.flatMap` throws if your mapper function returns a string, instead of spreading its code points
+
+[16:43:38.0206] <bakkot>
+ * littledan: ah, specifically, `Iterator.prototype.flatMap` throws if your mapper function returns a string, instead of spreading its code points
+
+[16:43:46.0597] <bakkot>
+no one was particularly happy about this decision but it seems pragmatic
+
+[16:43:51.0601] <littledan>
+oh, I thought ljharb was saying that there was some other decision made which would have some impact on that decision
+
+[16:44:04.0330] <littledan>
+and so the point 2 I referenced is no longer relevant
+
+[16:45:22.0605] <ljharb>
+i'd be opposed to any argument that would make strings auto-spread, for the hopefully obvious reasons :-)
+
+[16:45:49.0981] <littledan>
+as would I, but I was just having trouble understanding what you meant by that comment I quoted
+
+[16:46:23.0183] <littledan>
+special-casing primitives seems weird--wouldn't it be natural to want pojos to have this sort of behavior as well?
+
+[16:47:09.0738] <littledan>
+from there, I'm kinda synpathetic to the argument that it'd be weird if *adding* an implementation of a protocol were a compat hazard
+
+[16:49:26.0362] <ljharb>
+my claim is that adding a *pre-existing* protocol to an object is a potential breaking change, since it could cause the object to travel a different code path than previously
+
+[16:50:11.0231] <ljharb>
+(this is the same argument browsers used to say that it would not be web compatible to have a predicate that changed its response to an input over time, ftr)
+
+[16:50:48.0823] <bakkot>
+it's true that it's a _potential_ breaking change, but by making `flatMap` auto-flatten we would radically increase the likelihood of it being breaking _in practice_
+
+[16:51:05.0044] <bakkot>
+in particular I strongly suspect it would have meant that Streams could never have been made iterable
+
+[16:52:02.0881] <bakkot>
+(had things been sequenced in that order)
+
+[17:55:41.0207] <Michael Ficarra>
+> <@ljharb:matrix.org> pure! i think that's the term michael used
+
+`pure` is a way to "wrap" a thing without caring what kind of "wrapper" you need (inferring from the type system), NOT a way to "wrap" only things that are not already "wrapped"
+
+[17:55:50.0931] <Michael Ficarra>
+so `pure ∘ pure` is not the same as `pure`
+
+[17:57:38.0997] <Michael Ficarra>
+additionally, I find it to be a much bigger refactoring hazard that I could not change `a.flatMap(b => 0)` to `a.flatMap(b => c)` where `c` is a non-primitive
+
+[17:59:14.0834] <littledan>
+I guess the word breaking is used different ways in different contexts, but observable change != webcompat issue
+
+[17:59:46.0704] <littledan>
+The implication only goes <=
+
+[07:02:19.0379] <Jack Works>
+tmLanguage is so <del>pain</del> fun
+
+[11:05:12.0438] <ljharb>
+rickbutton: is there a R&T call today? i'm getting "invalid meeting ID" on the zoom
+
+[11:05:38.0641] <ljharb>
+ah nvm, i see the doc
+
+[11:05:38.0766] <Ashley Claymore>
+Sorry yes, the link died
+
+[11:05:44.0969] <Ashley Claymore>
+yeah, new link in the doc
+
+[11:05:47.0582] <ljharb>
+i'll update the invite
+
+[11:05:51.0302] <Ashley Claymore>
+thank you
+
+[11:06:09.0274] <littledan>
+also feel free to DM to ask for the new zoom link for the R&T call
+
+[13:52:15.0248] <TabAtkins>
+bakkot: I'm finally getting back to specifying map/list iteration in Infra (https://github.com/whatwg/infra/pull/451), and I'm looking over Array iteration behavior. It looks like forEach snapshots the list length at the beginning, so items adding mid-iteration won't be visited (https://tc39.es/ecma262/#sec-array.prototype.foreach), but an array iterator recalculates the length each iteration, so it *will* see mid-iteration additions (https://tc39.es/ecma262/#sec-createarrayiterator). Is this a correct reading? If so, do you have an opinion on which behavior I should prefer? Maps do the "recalculate on each iteration" thing for both forEach and iteration so I'm leaning that way as well.
+
+[15:16:26.0590] <bakkot>
+TabAtkins: my reading matches yours (and also engines), and I also share your preference for matching the behavior of the newer APIs i.e. recalculating length. that said I am not super worried about trying to pick the "right" semantics for code which is mutating a collection while iterating over that collection, as long as it is specified and implemented consistently, so if there's some other reason (e.g. implementability) to prefer the "cache length up front" semantics I wouldn't object to that either
+
+[15:27:19.0838] <TabAtkins>
+Cool 🙏
+
+
+2022-12-14
+[11:14:33.0963] <shu>
+Mathieu Hofman: did you have a proof of concept for the object reference leak for `Error.prepareStackTrace`? i'm trying to write a counterexample and am not sure how it's possible, actually
+
+[11:15:17.0452] <shu>
+because wrapped functions (in both directions) throw fresh TypeErrors if the wrapped function throws, the fresh TypeErrors don't have outside stacks anyway
+
+[11:16:48.0112] <shu>
+as specced today it doesn't seem to me like we can ever get striped stacks at all, just because of how it falls out of the fresh error creation
+
+[11:17:49.0620] <shu>
+ * as specced today it doesn't seem to me like we can ever get striped stacks at all, just because of how it falls out of the fresh error creation
+
+[11:18:19.0689] <shu>
+if, for DX reasons, we start wanting to stitch together .stacks even through the fresh error creation, then this may become a problem
+
+[11:20:06.0863] <littledan>
+> <@shuyuguo:matrix.org> as specced today it doesn't seem to me like we can ever get striped stacks at all, just because of how it falls out of the fresh error creation
+
+Huh? How so?
+
+[11:20:18.0448] <shu>
+how do you get a striped stack?
+
+[11:20:31.0714] <shu>
+sorry, more specifically, how do you get a striped `.stack`?
+
+[11:20:52.0269] <shu>
+where should i throw a `new Error()` to get a striped `.stack`?
+
+[11:21:53.0070] <shu>
+(you can clearly get striped execution stacks, i'm just talking about the observable `.stack` thing v8 does)
+
+[11:23:23.0172] <littledan>
+from https://v8.dev/docs/stack-trace-api I don't understand why the `.stack` wouldn't contain at least function names that are striped
+
+[11:23:40.0571] <shu>
+because of step 11 here: https://tc39.es/proposal-shadowrealm/#sec-ordinary-wrapped-function-call
+
+[11:24:12.0220] <shu>
+any time you call a wrapped function, there's an implicit try-catch around it, and you throw a *new* `TypeError`
+
+[11:24:22.0359] <shu>
+and that new `TypeError` doesn't have the `.stack` of the original error
+
+[11:24:47.0657] <shu>
+like, this is the same reason for the `.message` normative change, because that was also just disappeared
+
+[11:24:50.0091] <littledan>
+that's not what we've been talking about; this is immediately when the error is thrown, if you observe its .stack, you can see it's striped
+
+[11:24:58.0329] <littledan>
+ * that's not what we've been talking about; this is immediately when the error is thrown, if you observe its .stack, you can see it's striped
+
+[11:25:06.0892] <littledan>
+*before* it crosses any boundaries
+
+[11:25:14.0755] <shu>
+wait what
+
+[11:25:21.0344] <littledan>
+I'm not claiming this is a reference leak
+
+[11:25:26.0575] <littledan>
+but this is what the presentation last meeting was about
+
+[11:26:07.0035] <littledan>
+like you do `/* inside of a deep striped stack context */ try { throw new Error() } catch (e) { console.log(e) }`
+
+[11:26:17.0232] <littledan>
+rather than catching after you've moved out into a different place
+
+[11:26:45.0262] <littledan>
+if you did that in conjunction with patching `prepareStackTrace`, that's where any hypothetical reference leak would be
+
+[11:28:29.0885] <shu>
+ah, right
+
+[11:29:41.0512] <shu>
+i guess v8's current implementation with its "context switching" (what it calls global scopes) is preventing any striped stacks from showing up at all
+
+[11:29:44.0594] <shu>
+i wonder what it does for iframes
+
+[11:29:53.0295] <shu>
+like, in either direction
+
+[11:36:02.0726] <shu>
+hm, iframes display the striped stacks fine
+
+[11:36:12.0787] <shu>
+sorry for the noise, i need to investigate further
+
+[11:36:23.0533] <littledan>
+well, only same-origin iframes can call each other's functions, so it's not really a same-origin-model barrier, just a "context switch"
+
+[11:37:01.0502] <shu>
+right, i imagine an origin nonce or something isn't being passed
+
+[11:59:51.0117] <shu>
+ah doh, it's just d8 being buggy and forgetting the set the same security token as the incubator realm
+
+[11:59:53.0334] <shu>
+sorry for all the confusion
+
+[13:41:31.0509] <Mathieu Hofman>
+shu: I'm not sure where the confusion stemmed from by as littledan said, just creating an error inside the shadow realm and observing its stack there is the issue. Here is a potential example:
+
+```
+const child = new ShadowRealm();
+child.evaluate(`
+const originalPrepare = Error.prepareStackTrace;
+Error.prepareStackTrace = function(error, structuredStackTrace) {
+  for (const callSite of structuredStackTrace) {
+    console.log(callSite.getFunctionName(), callSite.getFunction());
+  }
+  return originalPrepare(error, structuredStackTrace);
+});
+`);
+const getStack = child.evaluate(`function() {
+  try { null.error } catch (e) { return e.stack; }
+}`);
+console.log(getStack());
+```
+
+[13:42:37.0387] <Mathieu Hofman>
+ * shu: I'm not sure where the confusion stemmed from by as littledan said, just creating an error inside the shadow realm and observing its stack there is the issue. Here is a potential example:
+
+```
+const child = new ShadowRealm();
+child.evaluate(`
+const originalPrepare = Error.prepareStackTrace;
+Error.prepareStackTrace = function(error, structuredStackTrace) {
+  for (const callSite of structuredStackTrace) {
+    console.log(callSite.getFunctionName(), callSite.getFunction());
+  }
+  return originalPrepare(error, structuredStackTrace);
+});
+`);
+const getStack = child.evaluate(`function() {
+  try { null.error } catch (e) { return e.stack; }
+}`);
+console.log(getStack());
+```
+
+[13:44:00.0707] <shu>
+Mathieu Hofman: the confusion was my not observing any striped stacks in practice, which turned out to be an implementation issue with the `d8` testing shell
+
+[14:35:22.0777] <littledan>
+sorry but my production environment depends on the current d8 observable behavior, you can't change that
+
+[14:35:42.0426] <littledan>
+ * sorry but my production environment depends on the current d8 observable behavior, you can't change that
+
+
+2022-12-19
+[08:54:12.0391] <littledan>
+Does the Code of Conduct have an active listing of committee members? It still lists Jory at her bocoup.com address!
+
+[10:08:20.0210] <ljharb>
+the list is still accurate afaik, but certainly that email address needs to be updated. i'll ping jory
+
+[11:36:16.0016] <littledan>
+Are all the people on the list still regular attendees of the meeting? If not, maybe we should prune it a bit.
+
+[11:36:38.0938] <littledan>
+e.g., if someone hasn't participated for 6 months
+
+[14:22:56.0184] <Mathieu Hofman>
+shu: regarding https://bugs.chromium.org/p/v8/issues/detail?id=11989#c22 and https://docs.google.com/document/d/1aXEy4YCC9CduxLs7MGw-UOm0P4OuG7W-cScBnLG3ALI/edit?usp=sharing
+> When calling getThis or getFunction inside code executing in a ShadowRealm, if the receiver or the callee is not from the current ShadowRealm...
+
+
+[14:23:47.0709] <Mathieu Hofman>
+This is not sufficient, as an `Error.prepareStackTrace` in the root realm (which is a legacy realm) should similarly not be able to access functions or receivers from a shadow realm
+
+[14:24:37.0056] <shu>
+ah good catch! let me fix that case as well
+
+[14:24:42.0932] <Mathieu Hofman>
+ * This is not sufficient, as an `Error.prepareStackTrace` in the root realm (which is a legacy realm) should similarly not be able to access functions or receivers from a shadow realm
+
+[14:24:52.0764] <shu>
+i guess that's something like, passing in a callback into a wrapped function that calls prepareStackTrace?
+
+[14:26:12.0338] <Mathieu Hofman>
+Yeah something like that
+
+[14:31:47.0375] <Mathieu Hofman>
+I think the following should do
+```
+const originalPrepare = Error.prepareStackTrace;
+Error.prepareStackTrace = function(error, structuredStackTrace) {
+  for (const callSite of structuredStackTrace) {
+    console.log(callSite.getFunctionName(), callSite.getFunction());
+  }
+  return originalPrepare(error, structuredStackTrace);
+});
+const child = new ShadowRealm();
+const wrap = child.evaluate(`function(callback) {
+  return function(...args) { return callback(...args); };
+}`);
+const wrapped = wrap(function() {
+  try { null.error } catch (e) { return e.stack; }
+});
+console.log(wrapped());
+```
+
+
+2022-12-20
+[17:32:24.0128] <shu>
+Mathieu Hofman: https://chromium-review.googlesource.com/c/v8/v8/+/4115657 if you'd like to take a look
+
+[19:48:13.0102] <snek>
+> <@shuyuguo:matrix.org> Mathieu Hofman: https://chromium-review.googlesource.com/c/v8/v8/+/4115657 if you'd like to take a look
+
+I wonder how this will go with nodejs relying on this api internally (well not getThis specifically but the CallSite api in general)
+
+[19:50:02.0076] <snek>
+* I wonder how this will go with nodejs relying on this api internally (well not getThis specifically but the CallSite api in general)
+
+[08:25:44.0694] <shu>
+snek: the decision to throw was to nudge folks to stop relying on getFunction/getThis
+
+[08:26:01.0524] <shu>
+if that becomes untenable we can reconsider returning `undefined` like what happens for strict functions today
+
+[15:39:23.0547] <ljharb>
+does anyone have thoughts on https://github.com/tc39/proposal-explicit-resource-management/pull/117#issuecomment-1360473420 ? specifically, that on SuppressedError instances have an `.error` - the cause of the suppression - and can also have a `.cause`, which is ??? what exactly
+
+
+2022-12-21
+[18:48:38.0554] <littledan>
+Looks like cause is purposely omitted right?
+
+[18:49:58.0141] <littledan>
+I don’t see it defined in the spec text, and Ron indicated in an earlier comment that not all errors need it
+
+[19:30:03.0213] <rbuckton>
+My main reason to avoid `cause` is that it essentially has a special meaning in errors, and in those cases is optionally defined. I wanted to avoid any potentially confusing overlap. 
+
+[19:35:51.0854] <littledan>
+> <@rbuckton:matrix.org> My main reason to avoid `cause` is that it essentially has a special meaning in errors, and in those cases is optionally defined. I wanted to avoid any potentially confusing overlap. 
+
+Yeah, I like this cautious design
+
+[22:05:12.0865] <ljharb>
+its special meaning tho is "this is what caused the error"
+
+[22:05:26.0603] <ljharb>
+in the case of SuppressedError, you literally described the `error` argument as "the cause of the suppression"
+
+[22:05:52.0789] <ljharb>
+iow, they already overlap, 1:1, because they both mean the same thing
+
+[22:06:06.0814] <ljharb>
+also, every one of the args to SuppressedError is already optional (in the sense that you can omit them and still get an error)
+
+[22:06:25.0070] <ljharb>
+ * also, every one of the args to SuppressedError is already optional (in the sense that you can omit them and still get an error)
+
+[22:08:07.0369] <ljharb>
+if the `error` argument were removed, you'd do `new SuppressedError(suppressed, message, { cause: error })`, there's no chance of confusion when both error and cause are supplied, and all args remain identically optional/required. you could even make the options bag part of the `.length` which would imply that it's required
+
+[22:11:17.0473] <ljharb>
+i think this needs to be brought up in plenary explicitly, so i added a topic for it to the january agenda
+
+
+2022-12-22
+[13:21:20.0150] <shu>
+so i realized while implementing is/toWellFormed that, while web engines today with 1-byte and 2-byte strings can make `isWellFormed` constant time trivially for 1-byte strings, optimizing for 2-byte strings is actually fairly involved
+
+[13:21:54.0325] <shu>
+does anyone have any intuitions on the performance expectations and usage patterns?
+
+[13:22:06.0993] <shu>
+for 2-byte strings, that is
+
+[13:30:30.0041] <guybedford>
+@shu I'm not sure there are any major expectations for an initial implementation, but there certainly were hopes that this is something that could have optimization potential in time so that it could be used as a guard / check without too much perf overhead. How involved is it looking?
+
+[13:33:46.0804] <Andreu Botella>
+couldn't it be optimized opportunistically? ­maybe caching the result, and setting it at first if a string was created from UTF-8, for example
+
+[13:33:53.0477] <Andreu Botella>
+ * couldn't it be optimized opportunistically? ­maybe caching the result, and setting it at first if a string was created from UTF-8, for example
+
+[13:34:54.0875] <littledan>
+I'd sort of expect that its usage would ramp up over time (if it becomes widely used at all), so the optimizations that shu and Andreu are thinking of could wait
+
+[13:35:31.0744] <guybedford>
+The absolute bare minimum might be a boolean flag, acting as a cache of the result, that is invalidated on mutations
+
+[13:35:52.0903] <guybedford>
+so that at least there's some internal concept of the check that in theory could be an optimization target in future
+
+[13:35:56.0214] <littledan>
+It's hard to predict whether caching/precomputing vs optimizing the actual calculation would be more important
+
+[13:38:24.0551] <littledan>
+(I imagine Shu is thinking about the latter if it's seen as involved? One could imagine fancy SIMD stuff to search for the forbidden surrogates...)
+
+[13:44:16.0536] <shu>
+i'm thinking of the former, the ladder i agree can definitely wait
+
+[13:44:34.0737] <shu>
+i'm mainly thinking about removing the cliff between 1-byte and 2-byte strings for `isWellFormed`
+
+[13:44:50.0644] <shu>
+caching a bit requires space to cache the bit, and that is what's involved
+
+[13:45:06.0478] <shu>
+ * i'm thinking of the former, the latter i agree can definitely wait
+
+[13:46:08.0826] <guybedford>
+no bits to spare...!? or lots of wiring?
+
+[13:46:22.0240] <shu>
+we're in a perpetual state of no bits to spare :)
+
+[13:46:34.0208] <shu>
+but in this case, mainly lots of wiring, yeah
+
+[13:47:20.0271] <shu>
+web engines today have a 1-bit encoding state: 1-byte or 2-byte
+
+[13:47:50.0040] <shu>
+you now need 2-bits with 4 states: 1-byte, 2-byte-of-unknown-well-formedness, 2-byte-well-formed, 2-byte-ill-formed
+
+[13:48:16.0358] <shu>
+you have something of a combinatorial explosion by propagating that through to every string type (rope/cons, slice/view, etc)
+
+[13:48:45.0282] <shu>
+you can compute it in sub-linear time for all the non-direct (i.e. don't own their own char buffer) string types, except for slices, which i don't know how to do
+
+[13:49:19.0651] <shu>
+i think you always have to re-iterate sliced strings in some cases
+
+[13:49:31.0864] <guybedford>
+is it not possible to add something as a placeholder that is basically just "well-formed | unknown" where the default is "unknown", and then it can be ignored by the other types for now?
+
+[13:50:26.0507] <guybedford>
+for slices, I think the thinking was that careful checking of the slice ends could be done for surrogate splits, if you know the string being sliced is valid
+
+[13:50:26.0683] <shu>
+that is pretty much the same amount of wiring, no?
+
+[13:50:40.0671] <shu>
+right, if the underlying of a slice is well-formed, you just need to check the beginning and the end
+
+[13:50:52.0368] <shu>
+if the underlying is not well-formed you have to re-iterate afaict
+
+[13:51:25.0903] <guybedford>
+well everything could ignore the well-formed bit and just recompute by default without that being wiring?
+
+[13:51:32.0695] <guybedford>
+or does even just adding the bit add overhead there?
+
+[13:51:55.0099] <shu>
+well, if everything just ignores it why add a bit? reserve it now you mean?
+
+[13:52:57.0398] <shu>
+for V8 there's also the grossness of external strings, where the embedder can choose to take ownership of the character buffer
+
+[13:53:15.0381] <shu>
+1-byte or 2-byte encodings are exposed for external string data, and well-formedness would need to be as well i guess?
+
+[13:54:09.0640] <guybedford>
+`const s = "well-formed 😊"; s.isWellFormed()` could in theory still benefit as some kind of baseline if the initial static string could pass the bit
+
+[13:54:31.0200] <shu>
+how is the initial static string well-formedness computed?
+
+[13:54:37.0332] <guybedford>
+yeah this affects webidl as well
+
+[13:54:56.0157] <guybedford>
+although again, you're way ahead - the initial expectation was just to keep it simple very much so
+
+[13:55:15.0971] <shu>
+yeah this can probably all wait pending real world usage data
+
+[13:55:16.0147] <guybedford>
+when the original encoding pass is taking place?
+
+[13:55:42.0237] <shu>
+ah, yeah, there are places where we would iterate strings anyway and we might be able to piggyback the well-formedness checks
+
+[13:56:06.0578] <shu>
+determining 1-byte is one of them, computing hash codes is another
+
+[13:56:38.0009] <guybedford>
+yeah, in theory external strings might want to set this stuff themselves if they can be trusted to provide that information
+
+[13:57:00.0009] <shu>
+i think this is all to say the "implementations can make this sub-linear and fast today without much work" only holds for 1-byte strings, which means we'll ship with a performance cliff
+
+[13:57:22.0120] <shu>
+which is fine (but isn't ideal) and wasn't something i realized
+
+[13:57:41.0251] <Andreu Botella>
+sub-linear? aren't 1-byte strings always well-formed?
+
+[13:57:52.0826] <shu>
+yes, that's what i mean, it's constant time for 1-byte strings
+
+[13:58:05.0160] <shu>
+but there were vague discussions of its being able to be sublinear for 2-byte as well
+
+[13:58:16.0525] <shu>
+and i kinda thought oh okay that sounds plausible without thinking about it much
+
+[14:00:58.0566] <guybedford>
+I guess the only concern is if this gets put as something that is considered a "cliff" and no one tackles it...?
+
+[14:01:17.0235] <shu>
+yeah, and that's a pretty generic concern
+
+[14:01:20.0228] <guybedford>
+having some idea of what the cliff is and how to approach it in future would certainly help... so it's interesting to hear what you think here
+
+[14:02:04.0260] <shu>
+(i'm more remarking on the interestingness of the problem space here, do not take what i've said as implementation concerns for shipping)
+
+[14:03:43.0566] <shu>
+well, the cliff for the naive implementation (constant time for 1-byte, flattening + linear time always for 2-byte) is fairly stark, so for large strings apps can definitely notice
+
+[14:04:14.0545] <shu>
+as for how to approach, the ideas we've talked about here all sound reasonable to try out
+
+[14:04:38.0882] <shu>
+that is, caching bit and piggybacking on other operations that already need to iterate the code units anyway
+
+[14:05:37.0145] <guybedford>
+glad to hear constant time doesn't sound untenable, which wasn't clear when these were purely hypothetical discussions
+
+[14:06:01.0819] <shu>
+amortized constant time?
+
+[14:06:04.0086] <guybedford>
+definitely makes sense to think about the integration points of this
+
+[14:06:24.0962] <shu>
+well i guess even for 1-byte it's amortized constant time
+
+[14:06:36.0311] <guybedford>
+Rust <> JS string sharing are cases where these expectations are important
+
+[14:08:32.0057] <shu>
+remind me again, rust strings are... wtf8?
+
+[14:09:09.0046] <guybedford>
+oh no, this is the point - they are strictly valid UTF8
+
+[14:09:16.0156] <bakkot>
+the more relevant thing is wasm strings, which will be list-of-usv, I believe
+
+[14:09:41.0069] <bakkot>
+list-of-usv implies no unpaired surrogates
+
+[14:09:58.0958] <Andreu Botella>
+> <@shuyuguo:matrix.org> remind me again, rust strings are... wtf8?
+
+you might be thinking of `OsString` (for filesystem paths) which in Windows is WTF-8
+
+[14:10:19.0850] <Andreu Botella>
+> <@shuyuguo:matrix.org> remind me again, rust strings are... wtf8?
+
+ * you might be thinking of `OsString` (for filesystem paths, etc.) which in Windows is WTF-8
+
+[14:10:53.0184] <shu>
+yes let's see how far stringref gets
+
+[14:11:43.0530] <guybedford>
+also note Wasm components will also want this kind of guarantee for strings
+
+[14:11:55.0397] <bakkot>
+wasm components is the thing I meant yeah
+
+[14:13:01.0804] <guybedford>
+but in short, we don't need to worry too much about it initially, but it would be nice if there's a clear implementation path to speak to here
+
+[14:13:51.0877] <shu>
+i believe there is for v8
+
+[14:14:11.0044] <shu>
+given that it's non-trivial if you care about the performance in the limit, should confirm with others
+
+[14:14:56.0918] <guybedford>
+I mean there's no reason to be doing non-trivial work before christmas...
+
+[14:15:05.0080] <guybedford>
+but glad to hear that
+
+[14:15:20.0231] <littledan>
+I think Wasm strings integration into various toolchains are likely to be a lot more important for performance than this function
+
+[14:16:29.0736] <shu>
+true enough, i'm not sure how important the JS integration performance is for any performance-critical wasm workloads right now
+
+[14:16:40.0825] <shu>
+in the future i expect this to be important
+
+[14:16:48.0539] <shu>
+ * in the future i expect this to be important
+
+[14:28:42.0901] <bakkot>
+seems plausible that you might end up wanting to keep track of the "are there surrogates" bit for wasm integration anyway
+
+[15:51:40.0587] <littledan>
+I think deeper JS/Wasm integration and Wasm component model are sort of a similar order of magnitude away from being performance-critical issues (that is to say, probably not today)
+
+[15:52:05.0710] <littledan>
+but that doesn't mean we shouldn't design towards it
+
+
+2022-12-27
+[10:02:27.0524] <ljharb>
+are any member companies considering helping to fund matrix? https://matrix.org/blog/2022/12/25/the-matrix-holiday-update-2022/
+
+
+2022-12-30
+[15:33:55.0046] <snek>
+how should i start the process of figuring out if esvu could be moved into tc39 ownership? should i have an agenda item? it doesn't really seem like a plenary thing...
+
+
+2022-12-31
+[22:55:09.0401] <ljharb>
+snek: i can just do it if you want - move the repo to tc39-transfer, and npm owner add me and i'll make sure it's added to the tc39 org
+
+[10:45:23.0107] <littledan>
+I'm not opposed to moving esvu into the TC39 org, but what would it mean? For example, who will have permissions to land patches, and who will have responsibility to act as maintainer? Maybe you could write an Admin-and-Business issue describing the plan?
+
+[15:02:59.0704] <snek>
+> <@littledan:matrix.org> I'm not opposed to moving esvu into the TC39 org, but what would it mean? For example, who will have permissions to land patches, and who will have responsibility to act as maintainer? Maybe you could write an Admin-and-Business issue describing the plan?
+
+this sounds reasonable, i'll do that at some point 👍️
+

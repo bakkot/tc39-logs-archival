@@ -1,0 +1,265 @@
+2024-01-12
+[21:10:34.0455] <Andreu Botella>
+Hey, I was looking for some issue in the repo about why we made AsyncContext per-agent rather than per-realm, and I remember some SES concern playing into that, but there doesn't seem to be any issue on the AsyncContext repo about that
+
+[21:10:45.0101] <Andreu Botella>
+is that discussion logged somewhere?
+
+[22:17:03.0970] <Chengzhong Wu>
+https://github.com/tc39/notes/blob/main/meetings/2023-01/feb-01.md#:~:text=cross%2Drealm%20per%2Dagent
+
+[22:18:20.0670] <Chengzhong Wu>
+ * https://github.com/tc39/notes/blob/main/meetings/2023-01/feb-01.md#:~:text=inherently%20cross%2Drealm%2C%20and%20per%2Dagent.
+
+[22:18:59.0418] <Chengzhong Wu>
+ * https://github.com/tc39/notes/blob/main/meetings/2023-01/feb-01.md#conclusion
+
+[22:19:18.0860] <Chengzhong Wu>
+The conclusion was captured back in notes of 2023-01
+
+[00:45:22.0722] <Mathieu Hofman>
+My understanding is that, thanks to the transform into continuation passing style to explain why async context is not really introducing observable global mutable state, it also shows that the context info is shared any time a call is made. Since calls can happen cross realm, it means that when modeling async context as a global state, that has to be shared for the whole agent.
+
+[00:50:32.0031] <Mathieu Hofman>
+Looking at the notes, Mark actually was/is concerned about speccing AsyncContext in terms of global mutable state, but that's a general concern, and making it cross realm is even scarier. I suspect however that speccing it in terms of continuation passing would be too large of a change in the spec.
+
+[09:30:05.0410] <littledan>
+Maybe we can specify AsyncContext without global mutable state when anything else about JS execution is specified that way…
+
+[10:44:36.0539] <Mathieu Hofman>
+I'm confused. What is currently specified as global mutable state besides the symbol registry?
+
+[10:51:35.0977] <littledan>
+The execution context?
+
+[10:52:05.0665] <littledan>
+AsyncContext would attach to that
+
+[10:53:07.0249] <littledan>
+The important thing is that it is used in a structured way; the editorial point is unactionable unless we change a lot more stuff
+
+[10:54:55.0317] <littledan>
+we push things onto the execution context stack... that is a mutation
+
+
+2024-01-18
+[04:33:35.0036] <Andreu Botella>
+I wonder if it makes sense to add a method to the C++ embedder API for `AsyncContext.Snapshot` to tell whether two objects represent the same underlying map
+
+[04:40:44.0155] <Andreu Botella>
+also to create an `AsyncContext.Snapshot` with an empty map (well, with the map being `undefined` in my V8 implementation)
+
+[05:05:55.0485] <littledan>
+Do you have use cases for those in mind?
+
+[05:06:21.0053] <littledan>
+For the latter, I really don’t want to expose that to JS, and I wonder why it would ever be valid to do 
+
+[05:17:28.0973] <Andreu Botella>
+not to JS, to embedders
+
+[05:31:27.0120] <Andreu Botella>
+because of reasons involving the architecture of Blink, task attribution is using a `std::unique_ptr<Scope>` as an RAII scope for the equivalent of `snapshot.run()`
+
+[05:33:07.0221] <Andreu Botella>
+it has to be an allocation because users of this scope can't depend on the actual C++ files calling into V8, so `Scope` there has to be an abstract class that is implemented elsewhere
+
+[05:33:47.0715] <Andreu Botella>
+you can save the allocation if you can be sure that the snapshot you'd be running is the same as the current one, and if there's nothing new to set task allocation-wise that wasn't there before
+
+[05:34:21.0423] <Andreu Botella>
+by returning a null `unique_ptr`
+
+[05:36:30.0963] <Andreu Botella>
+the snapshot with an empty map, I just realized I don't actually need it for Blink
+
+[05:36:38.0500] <Andreu Botella>
+ * the snapshot with an empty map, I just realized I don't actually need it in Blink
+
+[13:01:31.0604] <littledan>
+> <@abotella:igalia.com> the snapshot with an empty map, I just realized I don't actually need it in Blink
+
+Right, I was thinking, I couldn't think of any reason why a web spec or other embedder would ever validly want to get an empty snapshot. Anyway if we don't have a use case in mind yet, then that problem can be stashed for later.
+
+[13:03:05.0606] <littledan>
+> <@abotella:igalia.com> because of reasons involving the architecture of Blink, task attribution is using a `std::unique_ptr<Scope>` as an RAII scope for the equivalent of `snapshot.run()`
+
+Yeah, we were going to make the API look like that too, weren't we?
+
+[13:03:54.0970] <littledan>
+> <@abotella:igalia.com> you can save the allocation if you can be sure that the snapshot you'd be running is the same as the current one, and if there's nothing new to set task allocation-wise that wasn't there before
+
+How could we do this RAII pattern only conditionally? Anyway couldn't this optimization be contained within the implementation of .run/the RAII equivalent?
+
+[13:14:33.0232] <rbuckton>
+I take it you're not talking about an RAII pattern in JS, correct? I saw RAII and immediately thought of `using` declarations. If that's unrelated, feel free to disregard this.
+
+[13:28:06.0841] <Andreu Botella>
+> <@littledan:matrix.org> Yeah, we were going to make the API look like that too, weren't we?
+
+Not with a `std::unique_ptr`. You could do the same with the embedder APIs we have by wrapping them in `std::optional`, but you're still using that memory. With `unique_ptr` you can save the allocation if not needed.
+
+[13:29:26.0324] <Andreu Botella>
+> <@littledan:matrix.org> How could we do this RAII pattern only conditionally? Anyway couldn't this optimization be contained within the implementation of .run/the RAII equivalent?
+
+Task attribution uses a combined snapshot and variable `run`, and it would only save on the allocation if both are unnecessary. The embedder API could also do that, if it has a combined RAII scope for snapshot and variable `run`. Not otherwise.
+
+[13:39:39.0509] <Justin Ridgewell>
+> <@rbuckton:matrix.org> I take it you're not talking about an RAII pattern in JS, correct? I saw RAII and immediately thought of `using` declarations. If that's unrelated, feel free to disregard this.
+
+Correct, just C++
+
+[13:41:02.0112] <littledan>
+I'm really confused, why not just unconditionally stack-allocate this memory?
+
+[13:41:07.0199] <littledan>
+it's not very much, is it?
+
+[13:41:30.0611] <littledan>
+it's just to remember to restore to the previous snapshot (if there was a change)
+
+[13:59:03.0832] <Andreu Botella>
+I'm having to explain implementation decisions about task attribution that don't make sense outside of Blink (not even V8)
+
+[14:00:50.0451] <Andreu Botella>
+it's because of the way Blink prevents dependencies between different parts of the code, so the task attribution scope as exposed by the task attribution API must be an abstract class, with a subclass elsewhere in the code that can depend on the relevant things
+
+[14:03:16.0190] <Andreu Botella>
+I'm not sure it's even worth it though
+
+[14:03:28.0628] <Andreu Botella>
+ * I'm not sure it's even worth skipping that allocation though
+
+[14:03:53.0935] <littledan>
+oh, the linking structure prevents you from stack-allocating it? OK
+
+[14:05:14.0639] <littledan>
+in a lot of cases, Blink builds somewhat complicated layers on top of V8 to make it suitable for Blink. I imagine that this would be a pretty simple layer to build on top of the snapshot class, right? Could this just live in Blink?
+
+[14:05:59.0978] <Andreu Botella>
+the intent was for it to live in Blink
+
+[14:06:17.0888] <littledan>
+ah OK. this is just about the underlying primitives needed to make that
+
+[14:06:21.0340] <Andreu Botella>
+yep
+
+[14:06:51.0916] <littledan>
+OK, that seems fine to me, to add the comparison function, if it's useful for this
+
+[14:07:42.0162] <Andreu Botella>
+the alternative is for `v8::AsyncContext::Snapshot` to represent the internal map rather than a JS object, and that way you could compare them directly with the equals operator
+
+[14:09:06.0467] <littledan>
+oh, that too--I don't think it needs to represent the JS object
+
+[14:09:47.0210] <littledan>
+we should avoid allocating a JS object when it's never going to be exposed to JS anyway
+
+[14:09:59.0858] <Andreu Botella>
+yeah, I suspect my refactor of task attribution on top of AsyncContext might leak realms because of that
+
+[14:10:15.0462] <Justin Ridgewell>
+Ditto. Us repurposing CPED requires a JS Object, but with a real API we should be using C++ datastructures
+
+[14:11:17.0494] <Andreu Botella>
+ * yeah, I suspect my refactor of task attribution on top of AsyncContext might end up leaking realms because of that
+
+
+2024-01-19
+[09:09:15.0079] <Justin Ridgewell>
+There were some chats from the Google chat last night, reading through everything now to summarize
+
+[09:19:03.0296] <Justin Ridgewell>
+- Not clear the extent of APIs that need to support snapshot/restore, would be nice to have a (probably non-exhaustive) list:
+    - `setTimeout`, `addEventListener`, …
+    - Any in TC39 side? I don't think so, only Promise APIs
+- There's some pessimism that the long tail of old libraries won't support AC automatically through our patched Web APIs, won't be updated with `Snapshot` capturing, and so we'll have a ton of code that breaks context propagation
+- Recommend that we add `wrap` method (static, maybe both static and prototype)
+- Expand prior art section, explaining the difference between the current AC proposal
+- Section detailing how to handle libraries that don't support and aren't updated to support propagation
+- Section detailing alternatives:
+    - Every closure captures a snapshot (ie, like Generator now does, but **everything**)
+    - `await` hook so userland could implement instead of directly in language
+
+[09:20:15.0841] <Justin Ridgewell>
+ * There's some pessimism that the long tail of old libraries won't support AC automatically through our patched Web APIs, won't be updated with `Snapshot` capturing, and so we'll have a ton of code that breaks context propagation
+
+Recommendations:
+- Not clear the extent of APIs that need to support snapshot/restore, would be nice to have a (probably non-exhaustive) list:
+
+    - `setTimeout`, `addEventListener`, …
+    - Any in TC39 side? I don't think so, only Promise APIs
+- Add `wrap` method (static, maybe both static and prototype)
+- Expand prior art section, explaining the difference between the current AC proposal
+- Section detailing how to handle libraries that don't support and aren't updated to support propagation
+- Section detailing alternatives:
+
+    - Every closure captures a snapshot (ie, like Generator now does, but **everything**)
+    - `await` hook so userland could implement instead of directly in language
+
+
+2024-01-23
+[09:56:54.0713] <Chengzhong Wu>
+https://docs.google.com/document/d/1WJpNPg9j7h9CKSd3NmlNmivOHDtQ-LGP7mJcwDvNLa8/edit 
+
+[09:57:05.0190] <Chengzhong Wu>
+Please feel free to correct the note :)
+
+[09:57:08.0264] <Chengzhong Wu>
+Thank you!
+
+[10:03:23.0458] <Chengzhong Wu>
+The next call is on the plenary week so we are going to cancel it.
+
+
+2024-01-25
+[03:25:25.0159] <Andreu Botella>
+I was updating my engine262 implementation, and I noticed that a side effect of https://github.com/tc39/proposal-async-context/pull/41 was that `FinalizationRegistry` callbacks don't propagate the context anymore
+
+[03:52:50.0817] <Justin Ridgewell>
+Because it doesn’t do a default HostMakeJobCallback anymore?
+
+[03:53:30.0923] <Justin Ridgewell>
+Shouldn’t this be capturing the context at register anyways?
+
+[03:59:52.0816] <Andreu Botella>
+we made it so `HostCallJobCallback` doesn't set the snapshot, instead leaving that to `NewPromiseReactionJob` and `NewPromiseResolveThenableJob`, which are of course not called on FinalizationRegistry callbacks
+
+[06:59:30.0269] <Mathieu Hofman>
+I always expected the finalization registry callback to capture the time the corresponding registry entry was added.
+
+[07:01:56.0585] <Mathieu Hofman>
+Afaik this and atomics are the only 2 APIs with custom scheduling logic, and atomics ends up using a promise
+
+[07:05:40.0996] <Andreu Botella>
+> <@mhofman:matrix.org> I always expected the finalization registry callback to capture the time the corresponding registry entry was added.
+
+agreed, but I didn't realize this was an issue in the PR, and then I only checked it after Justin merged it
+
+[08:52:06.0583] <littledan>
+OK, sounds like we all agree on the bug fix, and there isn't any controversy. Does this need an engine262 change, or also a spec change?
+
+[09:02:10.0979] <Mathieu Hofman>
+Sounds like it needs a spec change to capture and restore the context for finalization registry jobs?
+
+[10:15:27.0203] <Justin Ridgewell>
+Yup
+
+[10:18:27.0117] <Justin Ridgewell>
+Though, we also need to fix `Atomis.waitAsync`'s rejection context
+
+
+2024-01-26
+[16:20:35.0097] <Justin Ridgewell>
+`waitAsync` won't reject during timeout, only resolve, so nothing to fix there.
+
+
+2024-01-29
+[10:36:22.0019] <ljharb>
+ok if i cancel your meeting during plenary week?
+
+[10:46:07.0195] <Justin Ridgewell>
+Yes
+

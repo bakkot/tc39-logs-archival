@@ -1,0 +1,56 @@
+2022-01-13
+[10:09:40.0480] <Richard Gibson>
+I will be joining the meeting about 30 minutes late
+
+
+2022-01-26
+[10:40:11.0612] <ryzokuken>
+Hello!
+
+[10:40:21.0428] <ryzokuken>
+You folks attending this item?
+
+[10:40:33.0283] <ryzokuken>
+Would someone like to get this tool working with 402? 
+
+[10:40:47.0002] <ryzokuken>
+Perhaps we could even make it work for newer proposals, not sure yet
+
+
+2022-01-27
+[21:56:04.0789] <justingrant>
+Hi 402 friends, we recently had two bugs reported on the Temporal polyfill which turned out to be caused by Firefox regressions in DateTimeFormat#formatToParts output.
+* https://bugzilla.mozilla.org/show_bug.cgi?id=1751833
+* https://bugzilla.mozilla.org/show_bug.cgi?id=1752253
+
+What's a good way to find out if these are problems caused by the latest ICU data or if the issues are limited to Firefox's implementation so the other browsers won't be affected? If the former, then what's the best way to ensure that the same bugs won't show up in Chrome and Safari?
+
+[09:42:04.0659] <sffc>
+The first issue is probably not going to be fixed, since Greg found its origin in CLDR data. I think what the polyfill needs is a map from English month name strings to numbers.
+
+[09:43:40.0003] <sffc>
+For the second bug, we should just be more lenient with our parsing of the era name
+
+[09:45:40.0324] <sffc>
+In general, it's very brittle to rely on formatToParts output. The spec makes very few guarantees about it. It just means that we need to update our polyfill code whenever there's a new browser release that breaks an assumption that worked on previous browser versions. Hopefully we can stop doing this once Temporal proper is implemented.
+
+[09:51:49.0186] <sffc>
+We should case-fold all input strings and have a dictionary from potential strings to their resolved values. This would solve both bugs
+
+
+2022-01-28
+[10:56:15.0099] <justingrant>
+> For the second bug, we should just be more lenient with our parsing of the era name
+
+Yep, easy workaround. I'll PR that into the polyfill when I have a chance. 
+
+> I think what the polyfill needs is a map from English month name strings to numbers.
+
+What I'm not sure about is whether there's enough information in the names. The numbers (if I remember correctly; need to check the code to be sure) tell you the month index in that particular year.  The names could be different indexes depending on whether it's a leap year or not. The problem is still solveable (first need to determine if it's a leap year, then interpret the names differently depending on leap or not) but it's more than just simply mapping names to numbers.  
+
+Also, this CLDR change breaks any other apps that are relying on it to know the month index (or were simply relying on `'numeric'` to be numeric) so IMHO I'm not sure this is a wise change to make in the platform.
+
+> very brittle to rely on formatToParts output
+
+Yep. Glad that Temporal (polyfill or native) can be used instead of relying on Intl hacks to get Hebrew month indexes. 
+

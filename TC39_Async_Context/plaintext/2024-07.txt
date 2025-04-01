@@ -1,0 +1,2361 @@
+2024-07-01
+[06:11:12.0632] <Andreu Botella>
+I was thinking that the unhandled rejection context here is `"foo"`, not `"baz"`:
+```js
+asyncVar.run("foo", main);
+
+async function main() {
+	await asyncVar.run("bar", async () => {
+		await asyncVar.run("baz", async () => {
+			throw new Error();
+		});
+	});
+}
+```
+
+[06:11:25.0492] <Andreu Botella>
+so shouldn't it be the same for sync errors?
+
+[06:11:30.0581] <Andreu Botella>
+ * so shouldn't it be the same for sync unhandled errors?
+
+[06:29:00.0985] <littledan>
+I don't understand what you're getting at; the async/await case is different since it corresponds to a bunch of nested try/catch/rethrow patterns.
+
+[06:30:51.0055] <Andreu Botella>
+will that be obvious to developers?
+
+[06:31:28.0305] <littledan>
+no, developers will expect that the inner place where the error inside the async/await is the source. But making it "also broken" for sync exceptions won't fix that expectation.
+
+[13:29:35.0348] <Steve Hicks>
+Are we talking about the callback's context or the one that's hung on the `unhandledrejection`/`error` event?  If the former, I'm arguing it should always be registration context.  Would it be possible for `event.errorSnapshot` to be `"baz"` even for the `unhandledrejection` case?
+
+[13:32:37.0245] <Steve Hicks>
+I've come around to the view that one of the advantages of heterogeneous access to causal contexts (which I was arguing against a few weeks ago) is that you can target more clearly exactly which context you get.
+
+[13:32:38.0071] <littledan>
+I think we're talking about the supplemental context that exists as a property
+
+[13:32:57.0470] <littledan>
+even for that there's a lot of decisions to make!
+
+[13:33:07.0685] <Steve Hicks>
+yes there are
+
+[13:33:30.0695] <littledan>
+we *could* expose a whole bunch of them, but IMO one of them will probably be good enough to start, and people won't really be so great at choosing between a bunch of them anyway
+
+[13:33:50.0641] <Steve Hicks>
+so i guess i'm asking, is there a reasonable way to spec it so that the unhandled rejection is _also_ baz?
+
+[13:34:05.0267] <Steve Hicks>
+right, I don't think we should expose a ton
+
+[13:34:47.0900] <littledan>
+> <@stephenhicks:matrix.org> so i guess i'm asking, is there a reasonable way to spec it so that the unhandled rejection is _also_ baz?
+
+I have a huge amount of trouble understanding how that'd work. BUT we could make it so that error objects have a causal context when they're allocated or thrown for the first time, and maybe that'd solve most of the problem.
+
+[13:35:00.0275] <Stephen Belanger>
+IMO error construction should capture a context snapshot and you can read out of that later by accessing some property on that error.
+
+[13:35:10.0582] <littledan>
+jinx
+
+[13:35:25.0876] <Stephen Belanger>
+Yeah.
+
+[13:35:28.0026] <littledan>
+(I prefer allocated better than first thrown too)
+
+[13:35:43.0444] <Steve Hicks>
+i think that's a good balance
+
+[13:36:16.0217] <Stephen Belanger>
+First thrown is a bit mysterious but possibly more correct. You need extra logic to detect if it already HAS a context on a rethrow though.
+
+[13:36:52.0379] <littledan>
+first thrown is sad-feeling because it means mutating an object. what if the same thing is thrown twice? anyway that is not very pragmatic knowledge, it's my theorist side talking
+
+[13:37:00.0970] <littledan>
+ * first thrown is sad-feeling because it means mutating an object. what if the same thing is thrown twice? anyway that is not very pragmatic motivation, it's my theorist side talking
+
+[13:37:49.0990] <Stephen Belanger>
+Yeah. Almost makes more sense to not be attached to the Error object, but then where would you put it?
+
+[13:37:50.0577] <littledan>
+but we might still need a causative context for unhandled rejections in case they aren't error objects
+
+[13:38:04.0627] <Stephen Belanger>
+True.
+
+[13:38:09.0280] <littledan>
+> <@stephenbelanger:matrix.org> Yeah. Almost makes more sense to not be attached to the Error object, but then where would you put it?
+
+it could be on the event (but still, requires extra machinery in implementations)
+
+[13:38:49.0832] <Stephen Belanger>
+For unhandledRejection we probably _would_ need the point it throws and not an Error property given you _can_ throw non-errors and unfortunately sometimes people do. 😐
+
+[13:39:03.0264] <Steve Hicks>
+unhandledrejection isn't dispatched synchronously, so it's a little more awkward
+
+[13:39:29.0808] <Steve Hicks>
+ideally it could reuse the same mechanism for synchronous events (i.e. dispatchEvent captures the snapshot)
+
+[13:40:22.0246] <littledan>
+as we've previously reasoned, we could either store the context when the Promise is allocated (as in Node) or rejected (as in the current spec). I guess in either case, it could be in the Promise itself, and then it's only read by the unhandled rejection thing.
+
+[13:41:16.0861] <Stephen Belanger>
+Capturing on dispatchEvent also means we could have _anything_ be able to access both register time _and_ call time contexts. 🤔
+
+[13:41:20.0821] <littledan>
+I previously convinced myself that the rejected-time context is definitely way better, but now, with distance, I could see that either could be OK...
+
+[13:41:38.0037] <littledan>
+> <@stephenbelanger:matrix.org> Capturing on dispatchEvent also means we could have _anything_ be able to access both register time _and_ call time contexts. 🤔
+
+lots of stuff isn't dispatchEvent...
+
+[13:41:44.0945] <littledan>
+unless you mean the internal equivalent
+
+[13:41:55.0627] <Stephen Belanger>
+Yes, internal equivalent.
+
+[13:42:00.0217] <Steve Hicks>
+reject-time means you're not making as many unused snapshots
+
+[13:42:33.0598] <littledan>
+> <@stephenbelanger:matrix.org> Yes, internal equivalent.
+
+yeah so conversations with DOM people like Anne seemed to point to, we'd only get this little by little, for particular things where it made sense, since it's complicated and depends on that particular API's details
+
+[13:42:46.0476] <littledan>
+> <@stephenhicks:matrix.org> reject-time means you're not making as many unused snapshots
+
+but "making a snapshot" is copying a pointer
+
+[13:43:02.0838] <littledan>
+we're *not* doing an allocation, in particular
+
+[13:43:08.0714] <Steve Hicks>
+is there a concern about lifetime management?
+
+[13:43:31.0951] <littledan>
+> <@stephenhicks:matrix.org> is there a concern about lifetime management?
+
+well, IMO we should give a fresh object identity for the snapshot each time you use it, so we don't have to worry about that
+
+[13:43:47.0404] <littledan>
+via the getter
+
+[13:43:47.0976] <Stephen Belanger>
+> <@littledan:matrix.org> yeah so conversations with DOM people like Anne seemed to point to, we'd only get this little by little, for particular things where it made sense, since it's complicated and depends on that particular API's details
+
+I mean…that’s possibly fine? We just need to make a bunch of individual cases for each API, which it seemed like Andreu was already doing the research work for?
+
+[13:43:57.0816] <littledan>
+or maybe that's too weird and un-getter-like?
+
+[13:44:37.0878] <littledan>
+the alternative is, you eagerly stash a pointer to the underlying data structure, but somehow you can dynamically type check that, and on first access, you replace it with a snapshot in place, and subsequent accesses notice that it's already a snapshot
+
+[13:45:01.0687] <Steve Hicks>
+> <@littledan:matrix.org> well, IMO we should give a fresh object identity for the snapshot each time you use it, so we don't have to worry about that
+
+Not sure we're talking about the same thing?  IIUC there was concern about when a snapshot was no longer reachable (hence all the explicit resource management discussions) and if we've got a never-will-be-used snapshot hanging on a long-lived promise, that could confuse it
+
+[13:45:50.0463] <littledan>
+> <@stephenbelanger:matrix.org> I mean…that’s possibly fine? We just need to make a bunch of individual cases for each API, which it seemed like Andreu was already doing the research work for?
+
+yes, though there's still the question of, "are we doing this now or 'later'". IMO we should identify the cases where we believe it's needed *now* (e.g., some of this error stuff) and document why it's needed, and expect that the initially shipped version doesn't include so many of these
+
+[13:46:24.0810] <littledan>
+> <@stephenhicks:matrix.org> Not sure we're talking about the same thing?  IIUC there was concern about when a snapshot was no longer reachable (hence all the explicit resource management discussions) and if we've got a never-will-be-used snapshot hanging on a long-lived promise, that could confuse it
+
+oh oops I was talking about a superficial object identity issue, totally separate. For lifetime.... yeah just leak?
+
+[13:46:34.0680] <littledan>
+I don't see a solution to this lifetime question
+
+[13:46:55.0726] <Stephen Belanger>
+Selfishly, APM’s probably won’t care as we’re focused on servers where most of those APIs don’t exist anyway. 😅
+
+[13:47:33.0257] <littledan>
+well, some people care about client-side performance monitoring, but I take it that's not your team
+
+[13:47:57.0653] <littledan>
+I guess the lifetime thing might be especially bad for something like Error objects, where it might be really non-obvious what you're keeping around
+
+[13:48:02.0726] <Steve Hicks>
+you could have HostPromiseRejectionHandler add/remove it?
+
+[13:48:05.0848] <littledan>
+and you can imagine keeping errors around
+
+[13:48:16.0820] <littledan>
+> <@stephenhicks:matrix.org> you could have HostPromiseRejectionHandler add/remove it?
+
+it would modify the error?
+
+[13:48:37.0602] <Steve Hicks>
+> <@littledan:matrix.org> well, some people care about client-side performance monitoring, but I take it that's not your team
+
+this is our use case
+
+[13:49:20.0500] <Steve Hicks>
+> <@littledan:matrix.org> it would modify the error?
+
+no, the promise
+
+[13:50:13.0722] <littledan>
+> <@stephenhicks:matrix.org> no, the promise
+
+oh, right... yeah that makes sense, the unhandled rejection can only happen once. (In fact, maybe the spec doesn't even say any of this.) But this doesn't handle the error issue.
+
+[13:50:19.0719] <Justin Ridgewell>
+> <@stephenbelanger:matrix.org> For unhandledRejection we probably _would_ need the point it throws and not an Error property given you _can_ throw non-errors and unfortunately sometimes people do. 😐
+
+I’d honestly be happy saying that’s an anti-pattern and you don’t get the correct context in this case.
+
+[13:50:27.0921] <littledan>
+> <@stephenhicks:matrix.org> no, the promise
+
+ * oh, right... yeah that makes sense, the unhandled rejection can only happen once. (In fact, maybe the spec doesn't even say any of this, since it's implied by unreachability.) But this doesn't handle the error issue.
+
+[13:50:56.0132] <Justin Ridgewell>
+> <@littledan:matrix.org> as we've previously reasoned, we could either store the context when the Promise is allocated (as in Node) or rejected (as in the current spec). I guess in either case, it could be in the Promise itself, and then it's only read by the unhandled rejection thing.
+
+I don’t think this helps in Andreu’s code sample, unless we’re expecting the `”foo”` context
+
+[13:50:57.0957] <littledan>
+> <@jridgewell:matrix.org> I’d honestly be happy saying that’s an anti-pattern and you don’t get the correct context in this case.
+
+actually we care a lot about this case at Bloomberg, but maybe for reasons which don't deserve to be prioritized
+
+[13:51:23.0217] <littledan>
+> <@jridgewell:matrix.org> I don’t think this helps in Andreu’s code sample, unless we’re expecting the `”foo”` context
+
+that's right, I'm discussing strategies for getting "foo"
+
+[13:51:32.0696] <Steve Hicks>
+Google also cares about throwing non-errors, but we believe the solution is "Don't do that" rather than bloating the standards to account for it
+
+[13:52:06.0461] <littledan>
+well, maybe we can look into the "don't do that" path... maybe Chengzhong can follow up on this?
+
+[13:52:10.0625] <littledan>
+Chengzhong Wu: ^
+
+[13:53:55.0953] <Steve Hicks>
+> <@littledan:matrix.org> well, maybe we can look into the "don't do that" path... maybe Chengzhong can follow up on this?
+
+(aside) in particular, one strategy we're consider is to transpile all `throw x`s to `throw trackNonError(x)` that throws a real error with a stack trace asynchronously so as to at least get some logging in place to identify all the offenders
+
+[13:54:25.0584] <Justin Ridgewell>
+Are you suggesting we attach the context onto the error instead of just running the `unhandledRejectionHandler` in the correct context?
+
+[13:54:52.0443] <Steve Hicks>
+> <@jridgewell:matrix.org> Are you suggesting we attach the context onto the error instead of just running the `unhandledRejectionHandler` in the correct context?
+
+Yes?
+
+[13:55:28.0157] <Steve Hicks>
+at that point, maybe there's not as much of a reason to even attach a context to `unhandledrejection`?
+
+[13:55:28.0402] <littledan>
+> <@jridgewell:matrix.org> Are you suggesting we attach the context onto the error instead of just running the `unhandledRejectionHandler` in the correct context?
+
+well, we're somewhat deep into this thread of "run everything in registration context, and the 'correct' context is off to the side somewhere", and so we're trying to reason about whether the error's context is enough, or if we also need the rejection's context
+
+[13:55:41.0581] <littledan>
+if we get the rejection's context, it could be exposed in the event
+
+[13:57:00.0576] <Steve Hicks>
+I'm still hopeful that maybe we can get a more general resolution context for promises, but my understanding is that littledan has reason to think that's not feasible
+
+[13:58:34.0663] <littledan>
+I think a general resolution context for all promises would be seen as an information leak, but again that's not a very pragmatic reason for anything. Definitely it's easier to *just* capture the context where resolve()/reject() was done, rather than have that somehow be propagated across .then() as we've previously discussed.
+
+[14:02:40.0135] <littledan>
+with the semantics I'm picturing for capturing causal contexts for all Promises, for async functions, the resolve/reject context would be boring: it would be the context when the async function was called
+
+[14:03:31.0930] <littledan>
+it would only be something different if you call the promise constructor/withResolvers
+
+[14:06:54.0639] <Chengzhong Wu>
+> <@littledan:matrix.org> well, maybe we can look into the "don't do that" path... maybe Chengzhong can follow up on this?
+
+I am not a fan of granting "throw" super power in spec to recover stacks and contexts either. Definitely, people can throw primitive values, just don't do that
+
+[14:07:24.0570] <littledan>
+> <@legendecas:matrix.org> I am not a fan of granting "throw" super power in spec to recover stacks and contexts either. Definitely, people can throw primitive values, just don't do that
+
+OK, but how does this apply to unhandled rejections?
+
+[14:08:38.0166] <Chengzhong Wu>
+I think it could be a property of PromiseRejectionEvent/ErrorEvent, as documented in https://github.com/tc39/proposal-async-context/pull/94/files#diff-85367a6a792209cf5826726990ddd1f0fd7a572bac4162097bc5e7e192aa625cR295, updated today
+
+[14:09:18.0877] <Chengzhong Wu>
+Well, I think this could be definitely in its own piece of document expansion.
+
+[14:09:36.0788] <littledan>
+isn't putting it in ErrorEvent giving those superpowers?
+
+[14:09:45.0474] <littledan>
+ * isn't putting a context in ErrorEvent giving those superpowers?
+
+[14:10:14.0561] <Chengzhong Wu>
+ErrorEvents are errors captured at the top level
+
+[14:10:23.0356] <Chengzhong Wu>
+"throw" itself doesn't have this superpower
+
+[14:10:36.0444] <Chengzhong Wu>
+so this won't have a re-throw problem
+
+[14:10:53.0190] <Chengzhong Wu>
+ * ErrorEvents are errors captured at the host level
+
+[14:38:53.0069] <Steve Hicks>
+Hosts already compute stack traces at error construction time, so it seems pretty reasonable to also copy the context pointer at the same time.  But I'm a little fuzzy on how this proposal interacts with that, since EcmaScript doesn't even mention `stack` anywhere, even non-normatively.
+
+[14:39:21.0802] <Steve Hicks>
+Where are we planning on documenting the various DOM interactions?
+
+[14:39:48.0996] <Chengzhong Wu>
+> <@stephenhicks:matrix.org> Hosts already compute stack traces at error construction time, so it seems pretty reasonable to also copy the context pointer at the same time.  But I'm a little fuzzy on how this proposal interacts with that, since EcmaScript doesn't even mention `stack` anywhere, even non-normatively.
+
+it's being worked at https://github.com/tc39/proposal-error-stacks.
+
+[14:40:16.0488] <littledan>
+> <@stephenhicks:matrix.org> Where are we planning on documenting the various DOM interactions?
+
+we'll need to do so in places linked from https://github.com/whatwg/html/issues/10432 . I believe Andreu Botella is working on a document for this.
+
+[14:42:05.0389] <littledan>
+> <@legendecas:matrix.org> it's being worked at https://github.com/tc39/proposal-error-stacks.
+
+"Being worked on" is generous for this proposal; the champions do not plan to work in a way that meets the (reasonable, IMO) requirements of browsers for spec work in this area. So we should definitely not depend on it.
+
+[14:42:24.0567] <littledan>
+I don't think there's active work in that repo either, given that browsers expressed requirements and that was demotivating
+
+[14:43:04.0814] <Chengzhong Wu>
+😅 "stalled for years"
+
+[14:48:03.0750] <littledan>
+yeah I think if you don't really get to make a big point about this happening "for years" when it's a reasonable thing requested and you just decided to not do it. "stalled for years" implies that something is actually happening.
+
+[15:03:42.0676] <Stephen Belanger>
+> <@littledan:matrix.org> well, some people care about client-side performance monitoring, but I take it that's not your team
+
+Not my team, but also client monitoring has not generally had that level of capability yet, so it’s still a feature add even without all the things covered. Of course completeness is the ideal, but it’s a difficult spec so I can see it being hard to cover everything at once.
+
+[15:35:41.0208] <littledan>
+client monitoring in general? I'm curious whether Steve Hicks 's effort is for refining present monitoring, or making a new system that doesn't exist yet.
+
+[15:38:11.0554] <littledan>
+My goal is to build a reasonable basis for client-side monitoring, not reaching either extreme of "focus on server side now, do client side later" or "expose everything interesting that goes on in the client"
+
+
+2024-07-02
+[17:13:39.0180] <Stephen Belanger>
+> <@littledan:matrix.org> client monitoring in general? I'm curious whether Steve Hicks 's effort is for refining present monitoring, or making a new system that doesn't exist yet.
+
+In general. There’s some degree of browser tracing presently, but not nearly the maturity of servers. I agree that considering all runtime types is best though. Just pointing out server tracers won’t care so much about some of these concerns at they will not impact us.
+
+[17:14:09.0550] <Stephen Belanger>
+> <@littledan:matrix.org> client monitoring in general? I'm curious whether Steve Hicks 's effort is for refining present monitoring, or making a new system that doesn't exist yet.
+
+ * In general. There’s some degree of browser tracing presently, but not nearly the maturity of servers. I agree that considering all runtime types is best though. Just pointing out server tracers won’t care so much about some of these concerns as they will not impact us.
+
+[05:32:53.0805] <Andreu Botella>
+I have a PR for the spec infra for the `error` event, PTAL: https://github.com/tc39/proposal-async-context/pull/95
+
+[05:54:50.0006] <littledan>
+> <@abotella:igalia.com> I have a PR for the spec infra for the `error` event, PTAL: https://github.com/tc39/proposal-async-context/pull/95
+
+did we decide what the semantics would be at runtime for the error event on the web? Is that documented somewhere?
+
+[05:56:51.0579] <Andreu Botella>
+I don't think we reached a decision, but that PR does what you would expect, even for primitive exceptions
+
+
+2024-07-03
+[18:54:28.0096] <Steve Hicks>
+> <@littledan:matrix.org> client monitoring in general? I'm curious whether Steve Hicks 's effort is for refining present monitoring, or making a new system that doesn't exist yet.
+
+It's mostly the latter - we have some very limited client-side monitoring via explicit tracer propagation, but we've found it to be difficult for a few reasons: it's easy to forget to pass the tracer along, or to use it improperly, and it's viral, requiring every function signature to adapt to pass it along, so it's impractical to adopt in products that aren't already using it.  Our experience with server languages is that it really needs to be implicit, so that's why we're really interested in AsyncContext, and are experimenting with building out some new reporting systems based on that approach.  To that end, we're certainly not looking for "exposing everything that goes on" - but we _do_ need to make sure that we can integrate the tracing system into the framework at all, which we know is going to require avoiding registration-time snapshotting in at least some userland APIs, and possibly also some builtins.
+
+[18:54:40.0924] <Steve Hicks>
+> <@littledan:matrix.org> client monitoring in general? I'm curious whether Steve Hicks 's effort is for refining present monitoring, or making a new system that doesn't exist yet.
+
+ * It's mostly the latter - we have some very limited client-side monitoring today via explicit tracer propagation, but we've found it to be difficult for a few reasons: it's easy to forget to pass the tracer along, or to use it improperly, and it's viral, requiring every function signature to adapt to pass it along, so it's impractical to adopt in products that aren't already using it.  Our experience with server languages is that it really needs to be implicit, so that's why we're really interested in AsyncContext, and are experimenting with building out some new reporting systems based on that approach.  To that end, we're certainly not looking for "exposing everything that goes on" - but we _do_ need to make sure that we can integrate the tracing system into the framework at all, which we know is going to require avoiding registration-time snapshotting in at least some userland APIs, and possibly also some builtins.
+
+[18:58:55.0197] <Steve Hicks>
+> <@abotella:igalia.com> I have a PR for the spec infra for the `error` event, PTAL: https://github.com/tc39/proposal-async-context/pull/95
+
+I'm confused - it looks like that PR is adding a whole new runtime semantics section for try statements, but shouldn't it be modifying the existing one?
+
+[19:00:10.0103] <Steve Hicks>
+oh wait, I think I see - it's modifying the version that's already in the proposal...
+
+[19:00:17.0810] <Steve Hicks>
+which doesn't have that section at all yet
+
+[19:00:33.0209] <Steve Hicks>
+Is there an easy way to see it as a diff from the current standard?
+
+[19:01:57.0799] <Andreu Botella>
+the rendered spec has the differences as red and green `<ins>` and `<del>` sections
+
+[19:02:06.0189] <Andreu Botella>
+you can check out the PR and do `npm run build`
+
+[19:02:21.0315] <Andreu Botella>
+ * the rendered spec has the differences with the current standard as red and green `<ins>` and `<del>` sections
+
+[19:05:58.0798] <Steve Hicks>
+Does anything else AsyncContext-related live in the Agent Record at this point?  I don't think it's a problem, but I've been casually implementing the spec in my spare time and so far haven't touched the Agent Record yet (and at this point I've got almost the entire core language done, with just most of the runtime libraries missing).
+
+[19:07:50.0740] <Steve Hicks>
+(and to answer my own question - yes... AsyncContextMapping lives there)
+
+[22:24:20.0550] <snek>
+does anyone have info on how many ALS variables tend to be in use in applications that make do use of them? my assumption atm is not very many but I'd love hard data.
+
+[22:24:38.0976] <snek>
+* does anyone have info on how many ALS variables tend to be in use in applications that do make use of them? my assumption atm is not very many but I'd love hard data.
+
+[04:13:14.0494] <littledan>
+oh yeah I thought we'd use the execution context to hold this kind of thing
+
+[04:14:12.0505] <littledan>
+> <@devsnek:matrix.org> does anyone have info on how many ALS variables tend to be in use in applications that do make use of them? my assumption atm is not very many but I'd love hard data.
+
+Yeah, I hope people use tens to hundreds at most (I don't have data)
+
+[09:10:40.0894] <Stephen Belanger>
+10+ is not uncommon, but more than 100 would be very rare. For the most part there’s a single store for each observability project, which often people have a couple installed, and then one in most routing frameworks, which there’s generally not more than one or two of installed. Sometimes companies build their own internally, which I don’t have numbers for how many instances they use internally there, but would assume similarly using a single store for their purpose.
+
+[09:11:27.0092] <littledan>
+I agree that >100 should be rare--it'd generally be a bug. I want to make sure we're considering React Context-type stuff in our analyses though.
+
+[09:39:17.0895] <Andreu Botella>
+Since we're thinking of exposing the causal/originating context as a nullable property on event objects, we should pick a property name
+
+
+2024-07-04
+[18:17:22.0960] <snek>
+> <@littledan:matrix.org> oh yeah I thought we'd use the execution context to hold this kind of thing
+
+wouldn't that mean every time the execution context changes we need to copy the value over
+
+[18:21:34.0794] <snek>
+wrt number of variables... should we put bounds on the algorithmic complexity of variable.run/get like we do for Map/Set? 
+
+[19:40:05.0555] <littledan>
+> <@devsnek:matrix.org> wrt number of variables... should we put bounds on the algorithmic complexity of variable.run/get like we do for Map/Set? 
+
+You mean, tell everyone they are expected to optimize for >100 variables? I am not sure; maybe it is OK for people to decide that they are slow. We don’t do this for objects.
+
+[19:40:47.0714] <snek>
+well specifically just because we specify them with lists
+
+[19:40:55.0237] <littledan>
+> <@devsnek:matrix.org> wouldn't that mean every time the execution context changes we need to copy the value over
+
+I think in this throw case you don’t want to copy
+
+[19:41:25.0840] <littledan>
+> <@devsnek:matrix.org> well specifically just because we specify them with lists
+
+What if we include a note saying “btw you can implement this with a hamt”
+
+[19:45:42.0402] <snek>
+> Maps must be implemented using either hash tables or other mechanisms that, on average, provide access times that are sublinear on the number of elements in the collection. The data structure used in this specification is only intended to describe the required observable semantics of Maps. It is not intended to be a viable implementation model.
+
+[19:46:41.0056] <snek>
+something like this could be reasonable i think
+
+[19:46:43.0589] <snek>
+i guess i can open an issue
+
+[20:02:10.0476] <Steve Hicks>
+> <@devsnek:matrix.org> wrt number of variables... should we put bounds on the algorithmic complexity of variable.run/get like we do for Map/Set?
+
+My understanding is that v8 is intending to actually use a linked list, under the assumption that the number will be pretty small, so requiring sublinear complexity may be a (bit of a) nonstarter for them.
+
+[20:02:44.0459] <snek>
+they're planning to start with a linked list but they've outlined a few other implementation strategies to try next
+
+[20:03:01.0562] <snek>
+either way, if we expect react apps to have 100 of these, O(n) might not be great
+
+[20:04:11.0719] <Steve Hicks>
+> <@devsnek:matrix.org> wouldn't that mean every time the execution context changes we need to copy the value over
+
+IIUC, it would make function calls slightly more expensive (one more pointer to copy) but async context switches less expensive.  But since function calls are likely more common, it seems like the right trade-off to put it on the agent record.
+
+[20:07:07.0391] <Steve Hicks>
+> <@devsnek:matrix.org> either way, if we expect react apps to have 100 of these, O(n) might not be great
+
+Even if there's 100s, if they're not all active at once it may not matter.  I'd expect any variables involved in rendering one component shouldn't escape into unrelated calls (under the current flow-around semantics).
+
+[20:07:50.0604] <Steve Hicks>
+But I'm not against speccing defensively here
+
+[04:01:26.0822] <littledan>
+I think we should not spec asymptotic behavior here. First priority for engines should be to optimize the <100 common case. Better to just make a suggestion in a note.
+
+[04:01:58.0559] <littledan>
+> <@devsnek:matrix.org> they're planning to start with a linked list but they've outlined a few other implementation strategies to try next
+
+Note that they = Andreu and Chengzhong ;)
+
+
+2024-07-08
+[12:04:27.0649] <Justin Ridgewell>
+> <@devsnek:matrix.org> either way, if we expect react apps to have 100 of these, O(n) might not be great
+
+React Contexts do not need AC, and I don’t think they’re even compatible beacuse of React’s fiber batching mechanism.
+
+[12:06:02.0477] <Justin Ridgewell>
+> <@stephenhicks:matrix.org> IIUC, it would make function calls slightly more expensive (one more pointer to copy) but async context switches less expensive.  But since function calls are likely more common, it seems like the right trade-off to put it on the agent record.
+
+Sorry, what new thing are we putting on the agent record?
+
+[12:26:36.0173] <Steve Hicks>
+The proposal as written puts `[[AsyncContextMapping]]` on the agent record, and #95 also adds `[[ThrowAsyncContextMapping]]`.
+
+[12:27:43.0101] <Steve Hicks>
+to what extent that's just an implementation detail is unclear to me - if an engine wanted to hold it on the execution context, that might be just as feasible?
+
+[12:46:00.0340] <Andreu Botella>
+I think for `[[AsyncContextMapping]]`, it'd be implementable as a property of the execution context
+
+[12:47:18.0694] <Andreu Botella>
+for `[[ThrowAsyncContextMapping]]` too I think (or I hope)
+
+[12:48:18.0544] <Andreu Botella>
+HTML needs abrupt completions to hold information related to when the exception was thrown, that currently isn't passed along in the spec
+
+[12:48:41.0871] <Andreu Botella>
+the idea would be that in a future where that is added to the JS spec, the throw context would be part of that data
+
+[12:49:49.0169] <Andreu Botella>
+I haven't fully checked whether the behavior with #95 would be equivalent to that, but ideally it would be
+
+[12:54:12.0685] <littledan>
+> <@jridgewell:matrix.org> React Contexts do not need AC, and I don’t think they’re even compatible beacuse of React’s fiber batching mechanism.
+
+Can you elaborate on this? I know it doesn’t *need* it, but I thought it might be a good fit if async await were to ever be enabled on the client side in conjunction with hooks
+
+[13:04:22.0748] <Justin Ridgewell>
+Component functiosn aren’t executed recusively, they’re pushed into a stack to be processed later on. When you return the `<Ctx.Provider value=…><Foo /></Ctx.Provider>` VDOM, that `Foo` component won’t be executed within the sync execution of `Ctx.Provider`. If `Foo` were to `useContext(Ctx)`, that would be tracked as part of the component’s internal state (which itself is stored in a AC), it woulnd’t store the context on its own AC variable.
+
+[13:07:02.0751] <Justin Ridgewell>
+[Searching React’s codebase](https://github.com/search?q=repo%3Afacebook%2Freact+%22AsyncLocalStorage%3C%22&type=code) leads me to think there’ll be a single AC/ALS for the VDOM (and another specifically for Server request state)
+
+[13:07:30.0336] <Justin Ridgewell>
+Which is exactly how I would implement this.
+
+[13:35:35.0024] <snek>
+that's good to hear
+
+
+2024-07-09
+[00:21:16.0417] <littledan>
+> <@jridgewell:matrix.org> Component functiosn aren’t executed recusively, they’re pushed into a stack to be processed later on. When you return the `<Ctx.Provider value=…><Foo /></Ctx.Provider>` VDOM, that `Foo` component won’t be executed within the sync execution of `Ctx.Provider`. If `Foo` were to `useContext(Ctx)`, that would be tracked as part of the component’s internal state (which itself is stored in a AC), it woulnd’t store the context on its own AC variable.
+
+I don’t get it; isn’t this what AsyncContext.Snapshot is for?
+
+[00:22:14.0315] <littledan>
+I thought, in the server, an AsyncContext variable for the hooks state
+
+[00:27:57.0138] <littledan>
+In general, I think conceptually, React Context is doing the same thing as AsyncContext. It just depends on the framework saving and restoring snapshots all over the place 
+
+[00:30:34.0410] <littledan>
+This is an important question because if we wanted to use AsyncContext variables for other things, like having an ambient AbortSignal, we would be depending on frameworks doing this snapshotting. Otherwise it wouldn’t work.
+
+[09:00:53.0115] <Steve Hicks>
+right, this is basically "the ecosystem adoption problem".
+
+[09:03:34.0894] <Chengzhong Wu>
+We are on the call now
+
+[10:23:11.0769] <littledan>
+How did the call go? I am having some trouble understanding the strength of the requirement that Matteo and Stephen were talking about in the notes
+
+[10:23:44.0968] <littledan>
+I couldn’t really understand why taking a callback as a parameter wouldn’t work for those cases
+
+[10:23:50.0541] <littledan>
+Sorry I missed it
+
+[10:25:12.0349] <Andreu Botella>
+it's not that it wouldn't work, but that it wouldn't be idiomatic, or it'd take a lot more boilerplate than the alternative
+
+[10:25:15.0732] <littledan>
+I actually don’t understand what is being asked for. How broad should the .set take effect?
+
+[10:25:28.0600] <Andreu Botella>
+for tests, if you have set/enterWith, you could set the context in `beforeEach`
+
+[10:25:54.0296] <littledan>
+Sure, I can see that, I guess what I don’t understand is *how* bad it is
+
+[10:26:14.0002] <littledan>
+How bad would it be if we deferred enterWith/set for “later”?
+
+[10:28:23.0586] <littledan>
+In general, there is an idiom where you store a mutable object in the asynccontext variable, and accessing the variable gets that object and then gets what it is wrapping. Every time you are tempted to do .set, you .get the variable and then set what it is wrapping. Are these semantics what we want for enterWith, or is it supposed to take effect within a more narrow scope?
+
+[10:29:23.0976] <littledan>
+This is the difference between “trivial” and “a massive design change”
+
+[10:29:43.0179] <Andreu Botella>
+I think Stephen was arguing for a more narrow scope
+
+[10:29:58.0444] <littledan>
+(Because we could make some sugar for the idiom I described, if desired)
+
+[10:30:33.0890] <littledan>
+> <@abotella:igalia.com> I think Stephen was arguing for a more narrow scope
+
+It would be good to hear from both Stephen Belanger and Matteo Collina here
+
+[10:30:59.0841] <littledan>
+If you do want a narrower scope: how would you like to define that scope?
+
+[10:33:47.0534] <littledan>
+(In case I wasn’t clear: the broad scoped version is easier)
+
+[10:34:02.0755] <Stephen Belanger>
+> <@abotella:igalia.com> it's not that it wouldn't work, but that it wouldn't be idiomatic, or it'd take a lot more boilerplate than the alternative
+
+No, there’s a lot of cases where taking a callback just doesn’t work. The example of storing a database connection in the top-level of one file and then trying to use it in another, for example. A common bootstrapping practice with top-level await.
+
+There are also quite a few cases where APMs need to use enterWith because we just don’t have the ability to wrap a desired scope in any sort of callback—we can’t change how user code behaves yet need to be able to flow context around it.
+
+[10:35:16.0799] <littledan>
+> <@stephenbelanger:matrix.org> No, there’s a lot of cases where taking a callback just doesn’t work. The example of storing a database connection in the top-level of one file and then trying to use it in another, for example. A common bootstrapping practice with top-level await.
+> 
+> There are also quite a few cases where APMs need to use enterWith because we just don’t have the ability to wrap a desired scope in any sort of callback—we can’t change how user code behaves yet need to be able to flow context around it.
+
+Great, do you think you could reference a case where DataDog needs to do this? I had trouble tracing through what it was used for in the open source code
+
+[10:35:52.0489] <littledan>
+ it definitely is used there, I just don’t understand the usage 
+
+[10:35:53.0495] <Stephen Belanger>
+As I described in the call, the semantics are essentially the same—the scopes still exist—just decoupling the changing of the value from the providing of a scope means the scope can be raised upward or made implicit in many cases. An implicit scope around the execution of the application, for example, would solve the database connection sharing problem.
+
+[10:36:36.0311] <littledan>
+“The scopes still exist” when is a scope created?
+
+[10:36:55.0589] <Stephen Belanger>
+I need to find time to write up a proper explanation of exactly how and why this works…hopefully I can find some time for that at some point…
+
+[10:37:28.0337] <littledan>
+Maybe you can fill in parts of the notes if you said something that wasn’t captured
+
+[10:38:41.0473] <littledan>
+I don’t understand what an implicit scope around the application means… doesn’t the default value handle that?
+
+[10:40:58.0981] <Andreu Botella>
+not if the `AsyncContext.Variable` is created by a tracing library rather than by user code
+
+[10:42:09.0351] <littledan>
+What is the difference in what the tracing library does, in this case?
+
+[10:42:16.0708] <littledan>
+Is it one variable shared for many things?
+
+[10:43:14.0467] <littledan>
+I mean, are we running multiple applications in the same process? 
+
+[10:44:08.0862] <Stephen Belanger>
+Imagine a variable is created in fastify for it to manage its context. A user then wants to store their database connection in that after the fastify app has already been constructed and therefore already has its variable set up. They then expect that database connection to be readable in the top-level of another file that runs after that point.
+
+[10:44:52.0242] <Stephen Belanger>
+You can’t do that without an implicit scope, and default values don’t work either because the variable already exists.
+
+[10:48:06.0337] <littledan>
+Is the scope narrower than global here? Is this per request/response? Just trying to understand the scenario 
+
+[10:48:43.0214] <littledan>
+Is Fastify in a position to say, “this is the outer bounds, so future set calls apply only here”?
+
+[10:49:01.0646] <littledan>
+What I don’t understand is where implicit scope bounds need to be set
+
+[15:00:19.0094] <snek>
+this is about whether the proposal should support an api like AsyncLocalStorage#enterWith? What's the reason to not support it?
+
+[15:16:49.0626] <Steve Hicks>
+For the `beforeEach` case, I expect test runners could adapt pretty easily by providing a wrapping adapter - something like
+```
+aroundEach((test) => {
+  v.run(value, test);
+});
+```
+would get the job done.
+
+[15:17:09.0515] <Steve Hicks>
+ * For the `beforeEach` case, I expect test runners could adapt pretty easily by providing a wrapping adapter - something like
+
+```
+aroundEach((test) => v.run(value, test));
+```
+
+would get the job done.
+
+[15:32:10.0938] <Steve Hicks>
+> <@devsnek:matrix.org> this is about whether the proposal should support an api like AsyncLocalStorage#enterWith? What's the reason to not support it?
+
+The reason is that it breaks encapsulation.  The current proposal means that you have strong guarantees that a variable won't change during the course of a function, but if a child task can `enterWith` a new value, then it can affect the parent task in unexpected ways.  It also runs afoul of the requirements imposed by SES, and is unlikely to be accepted by the committee.
+
+That said, if you want to make your own `enterWith`able variable, it's easy enough:
+
+```
+class EnterableVar<T> {
+  private readonly internal: AsyncContext.Variable<[T]>;
+  constructor(opts = {}) {
+    this.internal = new AsyncContext.Variable({...opts, defaultValue: [opts.defaultValue]});
+  }
+  run(val, fn) {
+    return this.internal.run([val], fn);
+  }
+  get() {
+    return this.internal.get()[0];
+  }
+  enterWith(val) {
+    this.internal.get()[0] = val;
+  }
+}
+```
+
+[16:54:52.0428] <Stephen Belanger>
+> <@stephenhicks:matrix.org> The reason is that it breaks encapsulation.  The current proposal means that you have strong guarantees that a variable won't change during the course of a function, but if a child task can `enterWith` a new value, then it can affect the parent task in unexpected ways.  It also runs afoul of the requirements imposed by SES, and is unlikely to be accepted by the committee.
+> 
+> That said, if you want to make your own `enterWith`able variable, it's easy enough:
+> 
+> ```
+> class EnterableVar<T> {
+>   private readonly internal: AsyncContext.Variable<[T]>;
+>   constructor(opts = {}) {
+>     this.internal = new AsyncContext.Variable({...opts, defaultValue: [opts.defaultValue]});
+>   }
+>   run(val, fn) {
+>     return this.internal.run([val], fn);
+>   }
+>   get() {
+>     return this.internal.get()[0];
+>   }
+>   enterWith(val) {
+>     this.internal.get()[0] = val;
+>   }
+> }
+> ```
+
+That's not necessarily true with implicit scopes. If any function call is made an implicit scope then breaking out would be impossible.
+
+
+2024-07-10
+[17:18:19.0803] <Steve Hicks>
+> <@stephenbelanger:matrix.org> That's not necessarily true with implicit scopes. If any function call is made an implicit scope then breaking out would be impossible.
+
+My understanding is that this would add an unacceptable amount of overhead to _every_ function call, rather than just async functions, so it's basically a non-starter.
+
+[17:18:33.0575] <Steve Hicks>
+(but I could be wrong about that)
+
+[17:20:00.0245] <Steve Hicks>
+i'm a little more confident that it's an unacceptable overhead for polyfilling/transpilation
+
+[17:20:58.0956] <Steve Hicks>
+(which, admittedly isn't a reason not to do it... but it would probably cause us to give up on using AsyncContext any time in the foreseeable future)
+
+[17:21:33.0006] <Stephen Belanger>
+It actually shouldn't because then your "scope" can be held as a stack variable and just rely on stack semantics to manage where sets/gets route to.
+
+[17:24:36.0004] <Stephen Belanger>
+It's actually _faster_ to put it in the function header as otherwise you're _always_ doing heap operations whereas treating it as a stack variable lets you both locate the stack slot to modify it and also do captures on async tasks or nested scopes as stack operations.
+
+[17:30:59.0735] <Steve Hicks>
+polyfilling would require adding wrapping every function body (or every function call), which is just too expensive.  Also, this wouldn't help with the `beforeEach` situation, nor would it help achieve flow-through semantics.  So it's just a (dubious) ergonomics win.
+
+[18:45:13.0863] <Stephen Belanger>
+It doesn't help `beforeEach` on its _own_. It _does_ help with flow-through semantics though.
+
+[18:46:09.0368] <Steve Hicks>
+> <@stephenbelanger:matrix.org> It doesn't help `beforeEach` on its _own_. It _does_ help with flow-through semantics though.
+
+How? If the child function binds its own scope, then the calling scope won't observe any changes to it.
+
+[18:47:24.0441] <Stephen Belanger>
+By linking the scopes to propagate between them. That's the whole _point_ of raising out the scopes like that--you have both something you can propagate _from_ but also something to propagate _to_ using the same construct.
+
+[18:48:32.0712] <Stephen Belanger>
+It's not exactly a boundary around the _function_ though, it's a boundary around a sync segment of code. As with async/await boundaries, you need to produce a graph around _calls_ just as you would with _awaits_.
+
+[18:49:04.0266] <Stephen Belanger>
+Which, again, _also_ benefits from happening on the stack.
+
+[18:50:34.0982] <Stephen Belanger>
+When a call would be made, you can capture the current state, inside the function you can continue that context. On exiting a function you can allow the context to flow out to the caller and then the caller stack can decide if it wants to retain that context or restore what it captured before the call.
+
+[18:50:58.0798] <Stephen Belanger>
+And you can do all that with the stack frames.
+
+[18:51:22.0283] <Steve Hicks>
+how is that decision expressed?
+
+[18:53:07.0878] <Stephen Belanger>
+We can generate additional code around any `call` instruction to do the capture before and after it can decide what to do with the context value as it is at the time of that call exiting--that could be to _keep_ that value if we want flow-through, or it could be to grab the reference out of the stack from _before_ the call and restore that.
+
+[18:53:34.0158] <Stephen Belanger>
+To be clear, I mean putting all that in the generated bytecode, not user-controllable code.
+
+[18:54:23.0042] <Steve Hicks>
+What I'm unclear on is _what_ determines whether it flows through or restores?  Is it something about the call?  Something about the variable?
+
+[18:56:49.0717] <Stephen Belanger>
+A snapshot is stored in the captured before the call, and the current state just gets left as-is when the nested function exits. We can then send that current state to some API to tell it if we want to continue flowing that forward, and we can send the snapshot to another API for anything that wants to flow _around_. We can also have some logic to detect if there even _is_ any active stores to delete the code that does that unless there actually _is_ a store.
+
+[18:57:14.0514] <Stephen Belanger>
+That's already done for PromiseHooks--it only injects the lifecycle event code if there's actually registered hooks.
+
+[19:04:56.0009] <Steve Hicks>
+But _who_ decides?  Is it user code that runs somewhere (which is a non-starter performance-wise)?  I'm trying to understand concretely what you're suggesting, so I'll give a (wrong) concrete example.
+
+```
+const result1 = await func1(param);
+const result2 = await func2(result1);
+```
+
+Suppose the first one should flow through and the second call should flow around.  Then there's gotta be something different somewhere - can you give a mock-up of what that difference might look like?
+
+[19:06:13.0103] <Stephen Belanger>
+No, this is all purely runtime code. If we have two variables, as has been suggested, the snapshot and the current state can get passed to the machinery that handles the flows for those two variables and does whatever it needs to do--which is generally just a pointer-copy.
+
+[19:07:50.0218] <Stephen Belanger>
+This is all generated code I'm talking about. Nothing user-facing. We'd still be applying our own flow semantics, whatever those happen to be. Just we could do that on the stack generally, if we design the system carefully.
+
+[19:07:51.0903] <Steve Hicks>
+ok so now I think you're saying there's two different types of variables that have built-in different propagation strategies.  IIUC merges need to be O(1) in the number of variables.
+
+[19:08:17.0915] <Steve Hicks>
+which means O(1) different semantics
+
+[19:09:58.0508] <Stephen Belanger>
+Merges are a separate problem, which I don't think is _actually_ all that important. We just need _a_ correct branch to link back to. Building merge contexts would be the ideal for APMs, but we can work around their absence well enough. We _can't_ work around having _no_ branch to link to though.
+
+[19:10:42.0550] <Stephen Belanger>
+Ideally merges would be solved too, but that's much lower priority to me.
+
+[07:19:13.0002] <Matteo Collina>
+> <@stephenhicks:matrix.org> The reason is that it breaks encapsulation.  The current proposal means that you have strong guarantees that a variable won't change during the course of a function, but if a child task can `enterWith` a new value, then it can affect the parent task in unexpected ways.  It also runs afoul of the requirements imposed by SES, and is unlikely to be accepted by the committee.
+> 
+> That said, if you want to make your own `enterWith`able variable, it's easy enough:
+> 
+> ```
+> class EnterableVar<T> {
+>   private readonly internal: AsyncContext.Variable<[T]>;
+>   constructor(opts = {}) {
+>     this.internal = new AsyncContext.Variable({...opts, defaultValue: [opts.defaultValue]});
+>   }
+>   run(val, fn) {
+>     return this.internal.run([val], fn);
+>   }
+>   get() {
+>     return this.internal.get()[0];
+>   }
+>   enterWith(val) {
+>     this.internal.get()[0] = val;
+>   }
+> }
+> ```
+
+Unfortunately that does not work to "fix" the use case. I don't see how you can think it would. You lose any sense of "globality" of the variable.
+
+[08:55:26.0888] <Andreu Botella>
+Now that I think some more about the web needs for cross-realm keys in the mapping, I think those keys would always be mapped to values which aren't JS values but spec-internal records 🤔
+
+[08:55:39.0176] <Andreu Botella>
+ * Now that I think some more about the web needs for cross-realm keys in the mapping, I think those keys could be mapped to values which aren't JS values but spec-internal records 🤔
+
+[08:55:45.0331] <Andreu Botella>
+how do we encode that into the spec?
+
+[08:56:58.0924] <Andreu Botella>
+I guess we could just assert on `.get()` that the value is a JS value
+
+[09:03:39.0050] <Steve Hicks>
+> <@mcollina:matrix.org> Unfortunately that does not work to "fix" the use case. I don't see how you can think it would. You lose any sense of "globality" of the variable.
+
+I don't understand - can you give a concrete example where it behaves differently/non-globally?
+
+[09:12:32.0018] <Steve Hicks>
+> <@abotella:igalia.com> I guess we could just assert on `.get()` that the value is a JS value
+
+Are you thinking about 5.6.3.4-5.a where it says "if SameValueZero(p.[[AsyncContextKey]], _asyncVariable_) is true, ..."?  As far as I'm aware, there's no idea of reference equality for records anywhere else in the spec, so that might be a new concept that we probably don't want to have to define.
+
+[09:13:36.0328] <Andreu Botella>
+I was thinking on the *values* being records, the comparison on keys would not change
+
+[09:13:42.0136] <Steve Hicks>
+maybe PrivateName does something like that, though?
+
+[09:13:55.0960] <Andreu Botella>
+it'd be an assertion after that line, checking that the value is an ECMAScript language value
+
+[09:15:36.0009] <Andreu Botella>
+well, it'd be turning that line into a multiline if
+
+[09:15:45.0048] <Andreu Botella>
+and having the assertion inside the if, before returning
+
+[09:15:57.0022] <Andreu Botella>
+ * and having the assertion inside the then, before returning
+
+[09:16:00.0355] <Steve Hicks>
+I just checked and PrivateName is indeed a record that's compared by reference, e.g. https://tc39.es/ecma262/#sec-privateelementfind
+
+[09:16:43.0267] <Steve Hicks>
+(but maybe I'm a step or two behind you here)
+
+[09:17:11.0518] <Steve Hicks>
+what does mapping _to_ records do to help with crloss-realm keys?
+
+[09:17:25.0426] <Steve Hicks>
+ * what does mapping _to_ records do to help with cross-realm keys?
+
+[09:17:55.0536] <Steve Hicks>
+> <@abotella:igalia.com> I guess we could just assert on `.get()` that the value is a JS value
+
+ * Are you thinking about 5.6.3.4-5.a where it says "if SameValueZero(p.\[\[AsyncContextKey\]\], _asyncVariable_) is true, ..."?  ~~As far as I'm aware, there's no idea of reference equality for records anywhere else in the spec, so that might be a new concept that we probably don't want to have to define.~~
+
+[09:18:02.0317] <Steve Hicks>
+ * Are you thinking about 5.6.3.4-5.a where it says "if SameValueZero(p.\[\[AsyncContextKey\]\], _asyncVariable_) is true, ..."?  ~As far as I'm aware, there's no idea of reference equality for records anywhere else in the spec, so that might be a new concept that we probably don't want to have to define.~
+
+[09:18:09.0415] <Steve Hicks>
+ * Are you thinking about 5.6.3.4-5.a where it says "if SameValueZero(p.\[\[AsyncContextKey\]\], _asyncVariable_) is true, ..."?  As far as I'm aware, there's no idea of reference equality for records anywhere else in the spec, so that might be a new concept that we probably don't want to have to define.
+
+[09:19:54.0929] <Andreu Botella>
+well, the reason I was thinking of cross-realm keys was because of web specs using AsyncContext internally, and their keys might need to be cross-realm
+
+[09:20:17.0344] <Andreu Botella>
+but the same kind of use case might also need records as values, since those keys would not ever be exposed to JS
+
+[09:20:39.0900] <Andreu Botella>
+it's not directly to help with cross-realm keys, it's to help with the problem *that* solves
+
+[09:21:01.0725] <Andreu Botella>
+it's better than having to wrap those records on a JS object
+
+[09:21:10.0483] <Andreu Botella>
+ * it's better than having to wrap those records into a JS object somehow
+
+[09:21:50.0565] <Steve Hicks>
+ah gotcha, so if the web spec isn't exposing the AsyncContext at all but just storing a random record as the value type - that makes sense
+
+[09:22:17.0748] <Steve Hicks>
+That seems worth a textual note somewhere
+
+[09:22:37.0660] <Steve Hicks>
+since otherwise just reading the ES spec would make it very confusing why the assertion is there
+
+[09:22:47.0766] <Andreu Botella>
+definitely
+
+[09:25:14.0774] <Steve Hicks>
+ * ah gotcha, so if the web spec isn't exposing the AsyncContext.Variable at all but just storing a random record as the value type - that makes sense
+
+[09:45:39.0735] <nicolo-ribaudo>
+> <@abotella:igalia.com> it's better than having to wrap those records into a JS object somehow
+
+What is the problem with doing this?
+
+[09:46:00.0741] <nicolo-ribaudo>
+An object with an internal slot holding the record
+
+[09:48:17.0342] <Andreu Botella>
+> <@nicolo-ribaudo:matrix.org> What is the problem with doing this?
+
+it's less ergonomic, especially for web specs, and if implemented literally it might keep a reference to the realm the object is created when there's no need for it
+
+[09:49:05.0433] <Andreu Botella>
+I don't expect a lot of specs to use this, but it wouldn't only be used by, say, HTML
+
+[09:49:19.0160] <Andreu Botella>
+`scheduler.yield()` does seem to have a clear use case for it
+
+[09:50:43.0051] <Andreu Botella>
+but maybe that's niche enough that specs that use it can do the extra work
+
+[09:52:58.0669] <nicolo-ribaudo>
+For specs there could be an AO StoreRecordInAsyncContext and GetRecordFromAsyncContext, that abstracts away the wrapping 
+
+[09:53:30.0524] <nicolo-ribaudo>
+This is more of a decision for the spec editor though, let's discuss it during the editors stage 2.7 reviews :)
+
+[10:34:39.0568] <Andreu Botella>
+I'm currently working on an explainer that would describe how web specs would have to deal with AsyncContext
+
+[10:35:30.0022] <Andreu Botella>
+I'll go with "this is the complicated way that you have to do this currently, but we expect to add AOs to make things more ergonomic in the futuure"
+
+[14:40:35.0642] <Justin Ridgewell>
+> <@littledan:matrix.org> I don’t get it; isn’t this what AsyncContext.Snapshot is for?
+
+How would you capture it? Components return VDOM, not snapshots. Even ignoring that, the way React implements Context via special handling of the VDOM structure, it would require invoking the batched queue within new function calls, breaking the purpose of the batching code (to avoid recursion)
+
+[14:47:15.0785] <Justin Ridgewell>
+> <@abotella:igalia.com> for tests, if you have set/enterWith, you could set the context in `beforeEach`
+
+I remember this being brought up in https://github.com/nodejs/node/issues/53037#issuecomment-2136202299. It seems like the test frameworks could just add an API that allows set a `Snapshot` instance that test will be run within.
+
+[15:02:45.0231] <Justin Ridgewell>
+Something like:
+```js
+describe("asynct context", () => {
+  const ctx = new AsyncContext.Variable();
+
+  beforeEach(() => {
+    ctx.run(1, () => {
+      jest.setSnapshot(new AsyncContext.Snapshot());
+    });
+  });
+
+  it('run in snapshot', () => {
+    expect(ctx.get()).toBe(1);
+  });
+});
+```
+
+[15:22:12.0206] <Stephen Belanger>
+That seems to kind of defeat the _point_ of AsyncContext which is to _not_ need to change APIs and pass things around manually. 😅
+
+[15:26:27.0089] <Justin Ridgewell>
+I think `beforeEach` is already a weird API, becuase it’s purpose is to do setup work that would be done by the user’s code already by the time the call is being made. Having a `setSnapshot` API allows the user’s real code to not change and still keep a strong encapsulation of the variable.
+
+[15:29:26.0486] <Stephen Belanger>
+That also doesn’t solve that this problem is not unique to test frameworks, it’s a generalized _pattern_ of wanting to share data across disconnected but sequential async systems. This whole scenario is what _most_ use of ALS in Node.js has been.
+
+[15:30:13.0618] <Stephen Belanger>
+You get the same problem with middleware layers in routing frameworks.
+
+[15:31:01.0038] <Stephen Belanger>
+And also most lifecycle event plugin systems.
+
+[15:31:41.0560] <Stephen Belanger>
+And of course most APM instrumentation, which is the source of my concern specifically.
+
+[15:32:57.0306] <Stephen Belanger>
+Through flow is what most existing context users expect.
+
+
+2024-07-11
+[09:11:41.0769] <Steve Hicks>
+> <@mcollina:matrix.org> Unfortunately that does not work to "fix" the use case. I don't see how you can think it would. You lose any sense of "globality" of the variable.
+
+Bumping this - can you elaborate on what you mean by "globality"?  I'm clearly missing something because I don't understand what's missing with the approach of indirecting via a mutable holder object.
+
+[09:25:08.0204] <littledan>
+> <@jridgewell:matrix.org> How would you capture it? Components return VDOM, not snapshots. Even ignoring that, the way React implements Context via special handling of the VDOM structure, it would require invoking the batched queue within new function calls, breaking the purpose of the batching code (to avoid recursion)
+
+you could put an AsyncContext.Snapshot instance in each VDOM node, to be restored when rendering? maybe that's too expensive.
+
+[09:26:35.0570] <littledan>
+For tests, as well as middleware: what if there were a context object that you could set variables on, and then when running the inner thing, you do the series of .run calls? this gives you a more ergonomic way to do what Justin suggested above.
+
+[09:27:58.0402] <littledan>
+```js
+ const ctx = new AsyncContext.Variable();
+
+  beforeEach(() => {
+    jest.setAsyncContextVariable(ctx, 1);
+  });
+
+  it('run in snapshot', () => {
+    expect(ctx.get()).toBe(1);
+  });
+});
+```
+
+[09:28:19.0441] <littledan>
+ * ```js
+describe("asynct context", () => {
+ const ctx = new AsyncContext.Variable();
+
+  beforeEach(() => {
+    jest.setAsyncContextVariable(ctx, 1);
+  });
+
+  it('run in snapshot', () => {
+    expect(ctx.get()).toBe(1);
+  });
+});
+```
+
+[09:31:00.0545] <littledan>
+> <@stephenhicks:matrix.org> Bumping this - can you elaborate on what you mean by "globality"?  I'm clearly missing something because I don't understand what's missing with the approach of indirecting via a mutable holder object.
+
++1 I'm also trying to understand here. If we're looking for just globality, I don't see how this approach fails--just call enterWith and not run, and you'll be altering the thing in the outer scope. The only thing is, it doesn't give you a callback-less *narrowing* of the scope.
+
+
+2024-07-15
+[03:47:51.0887] <Chengzhong Wu>
+FYI: https://github.com/tc39/proposal-async-context/pull/98 defines the module top level context
+
+
+2024-07-18
+[05:26:37.0114] <Andreu Botella>
+so for events in the web integration, the current idea (since we discussed it with various web platform folks in the Web Engines Hackfest) is to add a property to the event object containing the `AsyncContext.Snapshot` for the originating/causal event (possibly `null`)
+
+[05:27:19.0611] <Andreu Botella>
+does anyone want to pitch in with ideas for the name of that property? `originatingContext`? `causalContext`? `causalContextSnapshot`?
+
+[05:27:28.0587] <Andreu Botella>
+I'm not sure any of those are great, does anyone have ideas?
+
+[06:04:56.0887] <littledan>
+I vote that we try to consistently use the term “snapshot” when referring to context maps
+
+[06:05:17.0514] <littledan>
+But there are many possible ways to call this while including that word
+
+[09:31:52.0926] <Steve Hicks>
+Relevant words: origin(al|ating)?, trigger(ing)?, causal, dispatch(-time)?, unrestored, outer, source, init(ial|iating), starting, previous, flow(-through)?
+
+[09:33:04.0643] <Steve Hicks>
+I'm partial to `originSnapshot`, `dispatchSnapshot`, or `initialSnapshot`, I think.
+
+[09:37:04.0780] <nicolo-ribaudo>
+Origin already has a meaning on the web, I would prefer anything else
+
+[09:48:10.0770] <Steve Hicks>
+Ok, then `originalSnapshot`, `originatingSnapshot`, `dispatchSnapshot`, or `initialSnapshot`.
+
+[10:51:28.0544] <snek>
+`asyncContextSnapshot`
+
+[10:58:27.0701] <Stephen Belanger>
+`dispatchContext` makes sense to me in this specific context as it indicates it's specifically when the event dispatch call happened.
+
+[11:00:39.0164] <Steve Hicks>
+ * Ok, then (1) `originalSnapshot`, (2) `originatingSnapshot`, (3) `dispatchSnapshot`, or (4) `initialSnapshot`.
+
+[11:06:46.0914] <snek>
+i would be extremely sad if this didn't include at least "async" in it
+
+[11:07:17.0524] <snek>
+dispatchAsyncContextSnapshotNotAnOriginDoNotConfuseWithAnOrigin
+
+[11:16:40.0210] <snek>
+ * i would be sad if this didn't include at least "async" in it
+
+[11:27:58.0856] <Steve Hicks>
+The deadline for adding agenda items for advancement at the August plenary is tomorrow - are we still on target to present something?
+
+[11:28:52.0549] <Steve Hicks>
+ * Tomorrow is the deadline for adding agenda items for advancement at the August plenary - are we still on target to present something?
+
+[12:10:57.0721] <nicolo-ribaudo>
+I've seen from the outside how much work has gone in the web integration, I think a status update on that would be very valuable 
+
+[12:13:46.0909] <Justin Ridgewell>
+To everyone not following the TC39 General room, there’s been some discussion on `AsyncContext`:
+- https://matrixlogs.bakkot.com/TC39_General/2024-07-16
+- https://matrixlogs.bakkot.com/TC39_General/2024-07-17
+- https://matrixlogs.bakkot.com/TC39_General/2024-07-18
+
+[12:23:05.0176] <Justin Ridgewell>
+In particular, @bakkot has some dislike of through-await continuation semantics in:
+- https://matrixlogs.bakkot.com/TC39_General/2024-07-17#L56
+- https://matrixlogs.bakkot.com/TC39_General/2024-07-17#L67
+- https://matrixlogs.bakkot.com/TC39_General/2024-07-17#L75
+
+Which had to be resolved in https://matrixlogs.bakkot.com/TC39_General/2024-07-17#L80-L81
+
+[12:49:43.0317] <bakkot>
+specifically, the thing I don't want:
+
+```js
+async function f() {
+  await scheduler.yield();
+  await someLibrary.doWork();
+  await scheduler.yield(); // this should not be affected by the `doWork` call
+}
+```
+as long as that's maintained, I'm not worried
+
+[12:50:38.0397] <bakkot>
+obviously if `doWork` closes over an async context variable which has a mutable object or whatever then it can affect it, just like if it closed over a regular variable; that's fine
+
+[12:50:52.0778] <bakkot>
+ * specifically:
+
+```js
+async function f() {
+  await scheduler.yield();
+  await someLibrary.doWork();
+  await scheduler.yield(); // this should not be affected by the `doWork` call
+}
+```
+
+as long as that's maintained, I'm not worried
+
+[12:51:18.0563] <bakkot>
+(assuming there aren't any such which exist by default)
+
+[12:51:48.0684] <Justin Ridgewell>
+For the last few weeks, we’ve been discussion Contunation variables which behave differnetly than `AsyncContext.Variable` does: https://github.com/tc39/proposal-async-context/pull/94
+
+[12:52:00.0027] <Justin Ridgewell>
+* For the last few weeks, we’ve been discussing Contunation variables which behave differnetly than `AsyncContext.Variable` does: https://github.com/tc39/proposal-async-context/pull/94
+
+[12:54:48.0337] <Justin Ridgewell>
+```js
+const aVar = new AsyncContext.Variable();
+const cVar = new ContinuationVariable();
+
+async function foo() {
+  return aVar.run(2, () => {
+    return cVar.run(2, () => {
+      // aVar.get() === 2
+      // cVar.get() === 2
+    });
+  });
+}
+
+aVar.run(1, () => {
+  cVar.run(1, async () => {
+      // aVar.get() === 1
+      // cVar.get() === 1
+
+      await foo();
+
+      // aVar.get() === 1
+      // cVar.get() === 2
+  });
+});
+```
+
+[12:56:46.0940] <Justin Ridgewell>
+Continuation variables keep the data that’s set when the promise resolves (in this case, the `async foo`’s internal promise), while `AsyncContext.Variable`s keep the data that’s set immediately before awaiting a promise.
+
+[12:57:35.0618] <Justin Ridgewell>
+* ```js
+const aVar = new AsyncContext.Variable();
+const cVar = new ContinuationVariable();
+
+function foo() {
+  return aVar.run(2, () => {
+    return cVar.run(2, () => {
+      // aVar.get() === 2
+      // cVar.get() === 2
+      return Promise.resolve();
+    });
+  });
+}
+
+aVar.run(1, () => {
+  cVar.run(1, async () => {
+      // aVar.get() === 1
+      // cVar.get() === 1
+
+      await foo();
+
+      // aVar.get() === 1
+      // cVar.get() === 2
+  });
+});
+```
+
+[12:57:51.0849] <Justin Ridgewell>
+* Continuation variables keep the data that’s set when the promise resolves, while `AsyncContext.Variable`s keep the data that’s set immediately before awaiting a promise.
+
+[12:58:28.0126] <Justin Ridgewell>
+* Continuation variables keep the data that’s set when the promise resolves (like a callback passing data), while `AsyncContext.Variable`s keep the data that’s set immediately before awaiting a promise (like a parameter).
+
+[12:59:38.0917] <bakkot>
+surely it should be called `set` or something in that case, yes? there's no reason to use the `run(val, cb)` pattern if the value is persisted after the callback finishes
+
+[13:00:19.0899] <Chengzhong Wu>
+It's not "persist" as you'd expect after the callback finishes
+
+[13:01:24.0432] <Justin Ridgewell>
+Yah, there’s a difference between sync mutation (which SES folks very much disliked) and the Promise holding contex data from it’s resolution (which SES folks maybe won’t object to)
+
+[13:01:34.0524] <Chengzhong Wu>
+```js
+const cv = new ContinuationVariable();
+
+const p = asyncFunction();
+cv.get();
+
+await p;
+cv.get();
+```
+
+[13:01:38.0311] <Justin Ridgewell>
+* Yah, there’s a difference between sync mutation (which SES folks very much disliked) and the Promise holding context data from its resolution (which SES folks maybe won’t object to)
+
+[13:02:52.0884] <Justin Ridgewell>
+Continuation _could_ be implmemented via mutation, but doesn’t _need_ to be.
+
+[13:03:38.0850] <Chengzhong Wu>
+ * ```js
+const cv = new ContinuationVariable();
+
+const p = asyncFunction();
+cv.get();
+await p;
+cv.get();
+```
+
+[13:05:26.0387] <Chengzhong Wu>
+ * ```js
+const cv = new ContinuationVariable();
+
+const p = cv.run(1, () => asyncFunction());
+cv.get(); // undefined
+await p;
+cv.get(); // 1
+```
+
+[13:05:56.0756] <Chengzhong Wu>
+ * ```js
+const cv = new ContinuationVariable();
+
+const p1 = cv.run(1, () => asyncFunction());
+const p2 = cv.run(2, () => asyncFunction());
+cv.get(); // undefined
+await p1;
+cv.get(); // 1
+await p2;
+cv.get(); // 2
+```
+
+[13:08:19.0830] <Chengzhong Wu>
+ * ```js
+const cv = new ContinuationVariable();
+
+const p1 = cv.run(1, () => asyncFunction());
+const p2 = cv.run(2, () => asyncFunction());
+cv.get(); // undefined
+await p1;
+cv.get(); // 1
+await p2;
+cv.get(); // 2
+```
+
+or...
+
+```js
+const cv = new ContinuationVariable();
+
+const p1 = cv.run(1, () => asyncFunction());
+const p2 = cv.run(2, () => asyncFunction());
+cv.get(); // undefined
+await p1;
+cv.get(); // 1
+await p2;
+cv.get(); // 2
+```
+
+[13:08:45.0584] <Chengzhong Wu>
+ * ```js
+const cv = new ContinuationVariable();
+
+const p1 = cv.run(1, () => asyncFunction());
+const p2 = cv.run(2, () => asyncFunction());
+cv.get(); // undefined
+await p1;
+cv.get(); // 1
+await p2;
+cv.get(); // 2
+```
+
+or...
+
+```js
+const cv = new ContinuationVariable();
+
+cv.set(1);
+const p1 = asyncFunction();
+cv.set(2);
+const p2 = asyncFunction();
+cv.get(); // 2
+await p1;
+cv.get(); // 1
+await p2;
+cv.get(); // 2
+```
+
+[14:05:33.0383] <Steve Hicks>
+> <@bakkot:matrix.org> (assuming there aren't any such which exist by default)
+
+So you're saying that if there were a global `AsyncContext.Variable<AbortSignal>` that might be a problem?  IIUC this is something littledan and I are interested in pursuing.  On the other hand, maybe it's fine because the signal itself is read-only, and you need access to the controller to actually mutate it...?
+
+[14:06:37.0018] <bakkot>
+I'd have to think more about that but it's mostly the mutable cases I'm concerned about yes
+
+[14:07:33.0399] <bakkot>
+but signals are not frozen
+
+[14:07:40.0229] <bakkot>
+ * but signals are not frozen objects
+
+[14:07:51.0307] <Steve Hicks>
+no, but you need additional access to effect a mutation on them
+
+[14:07:56.0191] <bakkot>
+no you don't
+
+[14:08:07.0821] <Steve Hicks>
+oh, you mean a side channel like adding a prop
+
+[14:08:14.0524] <bakkot>
+```
+x = (new AbortController).signal; x.y = 0; x.y // 0
+```
+
+[15:15:52.0929] <littledan>
+one option is just to let you add reactions to the signal, and not actually expose it
+
+[15:17:14.0290] <littledan>
+like imagine https://gist.github.com/littledan/47b4fe9cf9196abdcd53abee940e92df?permalink_comment_id=5094185#implicit-propagation-of-abortsignal but there's no `ambient` getter and only the whenAborted call
+
+
+2024-07-19
+[04:10:51.0362] <Andreu Botella>
+I wonder if `dispatchSnapshot` as a property of events would be clear to developers who have no clue what AsyncContext even is or what it's meant for
+
+[04:11:01.0788] <Andreu Botella>
+well, I guess we don't need it to be clear, we just need them not to use it
+
+[04:11:44.0797] <Andreu Botella>
+ * well, I guess we don't need it to be clear, we just need them not to use it by mistake
+
+[05:46:21.0335] <littledan>
+An important thing is that it’s 
+googleable
+
+[05:47:17.0000] <littledan>
+We could be very explicit and say causalAsyncContextSnapshot. Too long?
+
+[05:59:14.0728] <littledan>
+Anyway, all of these options should be googleable/searchable in mdn so this name search doesn’t have a big downside risk 
+
+[06:04:51.0366] <Chengzhong Wu>
+I think it is ok to have a single property name to be generic but specifically searchable with its holder's name
+
+[06:06:20.0755] <littledan>
+It might be acceptable, but will be not as convenient for some people
+
+[06:07:09.0872] <littledan>
+Especially here, this will come up on a lot of autocompletes and people will be trying to figure out what it is
+
+[10:49:54.0174] <Andreu Botella>
+Hey, we're discussing whether any of you have use cases for having the dispatch snapshot on user-created events
+
+[10:51:31.0785] <Andreu Botella>
+So 1) should it be there at all, and 2) if so, should the default behavior would be to take the snapshot, or to have it as null
+
+[10:52:02.0485] <Andreu Botella>
+One use case is polyfills, but the property could be added with `Object.defineProperty`
+
+[10:52:43.0157] <Steve Hicks>
+For user-created events, could you define `class SnapshottingEvent extends Event { dispatchSnapshot = new AsyncContextSnapshot(); }` and then just dispatch that?
+
+[10:53:37.0506] <Andreu Botella>
+yeah
+
+[10:54:02.0447] <Andreu Botella>
+so I guess the discussion is rather, are there use cases for having the `dispatchSnapshot` property populated by default?
+
+[10:54:07.0166] <Steve Hicks>
+So then the question is whether the dispatching code should need to be concerned about it
+
+[10:57:51.0416] <Steve Hicks>
+I don't have a good sense here...  putting it on the Event constructor wouldn't be exactly accurate w.r.t. being the _dispatch_ snapshot, if event objects are shared or preallocated.  To really be accurate, you'd want `dispatchEvent` to populate it, but then what does that function use to decide whether to populate it or not...?
+
+[11:01:35.0747] <Andreu Botella>
+usually the creation and dispatch times is the same, and even for web platform events the spec text I'm proposing would set it when the event is created (not sure if that is ever not the same as when it's dispatched)
+
+[11:01:50.0414] <Andreu Botella>
+so I guess technically `dispatchSnapshot` wouldn't be an accurate name
+
+[11:02:15.0188] <Andreu Botella>
+ * usually the creation and dispatch times is the same, and even for web platform events the spec text I'm proposing would set it when the event is created (not sure if that difference would be observable)
+
+[11:02:24.0477] <Andreu Botella>
+ * usually the creation and dispatch times is the same, and even for web platform events the spec text I'm proposing would set it when the event is created (not sure if that difference would be observable for any event)
+
+[11:05:02.0574] <Steve Hicks>
+event creation time seems very reasonable
+
+[11:05:18.0548] <Steve Hicks>
+what's the reasoning to not put a snapshot on _every_ event?
+
+[11:05:51.0376] <littledan>
+well, we don't want to use the registration-time snapshot--the we are back to Zalgo fallback logic
+
+[11:05:55.0390] <littledan>
+(if we care about that)
+
+[11:06:06.0883] <littledan>
+many events only have one relevant snapshot, and that's the registration-time one
+
+[11:06:32.0882] <Steve Hicks>
+sure, but for those the dispatchSnapshot (name tbd) would just be empty
+
+[11:07:03.0390] <littledan>
+that was another point that Andreu and I were chatting about: should the property be missing, or filled in with null? Andreu convinced me the latter is better
+
+[11:07:16.0590] <littledan>
+it's more consistent to say, it's an attribute of Event
+
+[11:07:23.0519] <Steve Hicks>
+or filled in with the top-level snapshot?
+
+[11:07:32.0871] <littledan>
+> <@stephenhicks:matrix.org> what's the reasoning to not put a snapshot on _every_ event?
+
+some events would require quite some complexity around various specs to find the right one
+
+[11:07:47.0043] <littledan>
+what we don't want to do is *change* the logic defining the snapshot *later*
+
+[11:07:55.0905] <littledan>
+> <@stephenhicks:matrix.org> or filled in with the top-level snapshot?
+
+why would this be useful?
+
+[11:08:12.0453] <littledan>
+I thought we wanted to let people know whether there was a more interesting causal snapshot
+
+[11:08:20.0151] <littledan>
+ * I thought we wanted to let people know *whether* there was a more interesting causal snapshot
+
+[11:08:59.0436] <Steve Hicks>
+> <@littledan:matrix.org> some events would require quite some complexity around various specs to find the right one
+
+I don't imagine doing any searching here - for consistency this property is just the snapshot when the event is created.  If there's another snapshot that's more relevant, it would need a different property
+
+[11:09:28.0625] <Stephen Belanger>
+As APMs tend to view what we are patching somewhat generically, it'd be in _our_ interest for the snapshot to _always_ be there regardless of origin.
+
+[11:09:35.0827] <Andreu Botella>
+> <@stephenhicks:matrix.org> I don't imagine doing any searching here - for consistency this property is just the snapshot when the event is created.  If there's another snapshot that's more relevant, it would need a different property
+
+the issue is that for spec-internal async algorithms, there would be a lot of internal tracking that would need to be done
+
+[11:09:46.0385] <Andreu Botella>
+and that's not trivial
+
+[11:10:02.0969] <littledan>
+there's always a snapshot used when running the event handler, there's just not always an *additional* causal snapshot presented
+
+[11:10:03.0738] <Andreu Botella>
+the idea is to handle that for a subset of use cases in the initial rollout
+
+[11:10:09.0086] <Andreu Botella>
+and then incrementally increase that set
+
+[11:10:26.0423] <littledan>
+if we always provided one, we'd want to change some of them later as we incrementally increase accuracy
+
+[11:10:42.0540] <littledan>
+but the other option is for it to be null, to say "no additional causal information to see here"
+
+[11:10:52.0589] <Steve Hicks>
+> <@littledan:matrix.org> I thought we wanted to let people know *whether* there was a more interesting causal snapshot
+
+I see where you're going with this, but I'm concerned about the consistency of whether we're in an empty snapshot or not in a snapshot at any given time
+
+[11:10:55.0755] <littledan>
+this field is not a feature that ordinary programmers should use
+
+[11:11:01.0652] <Stephen Belanger>
+> <@littledan:matrix.org> there's always a snapshot used when running the event handler, there's just not always an *additional* causal snapshot presented
+
+That's the registration time though, right? APMs need the dispatch context.
+
+[11:11:06.0035] <littledan>
+> <@stephenhicks:matrix.org> I see where you're going with this, but I'm concerned about the consistency of whether we're in an empty snapshot or not in a snapshot at any given time
+
+there is never an empty snapshot
+
+[11:11:13.0932] <Steve Hicks>
+this seems like it would be implying that the event loop runs outside of any snapshot
+
+[11:11:16.0683] <littledan>
+the event runs in the registration time snapshot
+
+[11:11:20.0121] <littledan>
+no
+
+[11:11:29.0549] <littledan>
+we're talking about the *additional* causal snapshot, which you can .run if you want
+
+[11:11:33.0119] <Steve Hicks>
+s/empty snaphot/host-created initial snapshot/ whatever
+
+[11:11:41.0361] <littledan>
+yeah that doesn't come up here
+
+[11:11:50.0981] <littledan>
+that only comes up for modules
+
+[11:12:01.0544] <Andreu Botella>
+> <@stephenbelanger:matrix.org> That's the registration time though, right? APMs need the dispatch context.
+
+I don't see making sure that the dispatch context is tracked for every single event with an asynchronous source as feasible in a short amount of time
+
+[11:12:03.0923] <Stephen Belanger>
+> <@littledan:matrix.org> we're talking about the *additional* causal snapshot, which you can .run if you want
+
+Yes, that is the one APMs need. The registration time snapshot is not useful to us.
+
+[11:12:17.0529] <littledan>
+> <@stephenbelanger:matrix.org> That's the registration time though, right? APMs need the dispatch context.
+
+right, so we're talking about the details for how to provide that information
+
+[11:12:35.0445] <Steve Hicks>
+> <@littledan:matrix.org> that only comes up for modules
+
+IIUC scripts also load an initial snapshot via the same operation
+
+[11:12:42.0979] <littledan>
+yes that too, but not events
+
+[11:13:09.0475] <Stephen Belanger>
+> <@abotella:igalia.com> I don't see making sure that the dispatch context is tracked for every single event with an asynchronous source as feasible in a short amount of time
+
+I mean, if the plan is to reserve a slot for it to _be there_ but just not having all sources _supported_ immediately, that's probably fine. Most APMs don't really do full structural tracing in the browser yet anyway. 🤷
+
+[11:13:41.0268] <littledan>
+> <@stephenbelanger:matrix.org> I mean, if the plan is to reserve a slot for it to _be there_ but just not having all sources _supported_ immediately, that's probably fine. Most APMs don't really do full structural tracing in the browser yet anyway. 🤷
+
+yes, that's the idea. Rather than getting it wrong sometimes, we'll have the value be null for cases where the browser hasn't figured out yet how to provide the information.
+
+[11:13:45.0687] <Stephen Belanger>
+I mostly just want to be sure we're going in a direction that one block us from being able to support that in the future.
+
+[11:14:00.0616] <Stephen Belanger>
+ * I mostly just want to be sure we're going in a direction that won't block us from being able to support that in the future.
+
+[11:14:30.0558] <littledan>
+I worry that if we always provide something for the sake of it, it could disrupt existing programs to change that snapshot. By contrast, the contract for "null" would be "the platform might give you something later, but not now"
+
+[11:14:56.0268] <littledan>
+because if we always give you something for the sake of it, we'd end up using the registration time snapshot as the fallback
+
+[11:15:01.0205] <Stephen Belanger>
+Yeah, that seems acceptable to me.
+
+[11:15:10.0463] <littledan>
+(but you don't need to be given that--you're already running in the registration time snapshot)
+
+[11:15:27.0482] <Steve Hicks>
+My thought here is that any given property should have a clear and easily-understandable rule for where its snapshot comes from
+
+[11:15:34.0592] <Stephen Belanger>
+For more _immediate_ term we mostly only care that async/await is handled appropriately, thus my push on through-flow.
+
+[11:15:49.0865] <Steve Hicks>
+so if it's anything other than "the snapshot when the event was (created|dispatched)" then it should be a _different_ property
+
+[11:16:08.0835] <Stephen Belanger>
+All the _other_ asynchrony is Node.js-provided, so we can just make whatever changes we need to make to Node.js to capture and restore in the correct places.
+
+[11:17:09.0850] <Steve Hicks>
+what I want to avoid is "for event X, .dispatchSnapshot comes from Y, for event Z, .dispatchSnapshot comes from W, for event U, .dispatchSnapshot is null, etc"
+
+[11:17:39.0246] <Steve Hicks>
+this would be a nightmare both to reason about and to polyfill.
+
+[11:17:50.0539] <littledan>
+The idea is, there is no property for the registration time (it just gets run in that snapshot) and there is a property for this causal one (often null, but the rules for filling it are complex and evolving)
+
+[11:17:57.0211] <littledan>
+We could also expose the registration time
+
+[11:18:01.0499] <Steve Hicks>
+On the other hand, if (say) we wanted to expose the .sendSnapshot for XHR events, that could be a different property with different rules
+
+[11:18:09.0071] <littledan>
+Causal snapshots are just inherently complex but they may be useful 
+
+[11:18:09.0622] <Stephen Belanger>
+There are some subtleties like timers which we implement and so those should probably follow the spec for how flow works, but _technically_ we implement those ourselves so we can violate the spec a bit if we need to for our use case. 😅
+
+[11:18:19.0220] <Andreu Botella>
+> <@stephenhicks:matrix.org> so if it's anything other than "the snapshot when the event was (created|dispatched)" then it should be a _different_ property
+
+For browser-internal asynchronous events, this "creation/dispatch time" would be propagated browser-internally, as if there were awaits inside the browser
+
+[11:18:24.0016] <littledan>
+* We could also expose the registration time snapshot as a property
+
+[11:18:40.0799] <Andreu Botella>
+for XHR, you could imagine `.send()` as starting a background fetch, and creating the event after that await
+
+[11:18:55.0724] <littledan>
+> <@abotella:igalia.com> For browser-internal asynchronous events, this "creation/dispatch time" would be propagated browser-internally, as if there were awaits inside the browser
+
+This is exactly the complex case where Anne is worried about trying to do too much at first
+
+[11:19:18.0274] <Steve Hicks>
+> <@abotella:igalia.com> for XHR, you could imagine `.send()` as starting a background fetch, and creating the event after that await
+
+yes, which is why I don't see it as appropriate to use the same snapshot property for this use case
+
+[11:19:38.0199] <littledan>
+We could make two properties, I was just talking about the causal one
+
+[11:19:51.0359] <Steve Hicks>
+I think "causal" is too loaded a name
+
+[11:20:13.0968] <littledan>
+Ugh I don’t care what we call it, the complex one
+
+[11:20:49.0826] <littledan>
+I just thought there was no need to expose the registration time snapshot in a property
+
+[11:20:57.0331] <littledan>
+Since we are already running the event there
+
+[11:21:03.0891] <Andreu Botella>
+> <@stephenhicks:matrix.org> yes, which is why I don't see it as appropriate to use the same snapshot property for this use case
+
+so if you were trying to polyfill XHR based on fetch (maybe to run some browser code on Node.js), you'd have to change the value of those properties?
+
+[11:21:08.0538] <littledan>
+But we could if it is useful 
+
+[11:21:26.0454] <Steve Hicks>
+but that's what I'm saying - we've simplified the rules for which snapshot to run in to _not_ be complex, I think we can do the same for these properties by keeping them similarly well-defined, and deferring the logic of selecting which one is needed to the holder of the event object
+
+[11:22:20.0618] <Steve Hicks>
+> <@littledan:matrix.org> I just thought there was no need to expose the registration time snapshot in a property
+
+who's talking about registration snapshot as a property?
+
+[11:23:01.0344] <Stephen Belanger>
+I think part of the problem is that AsyncContext seems to be viewed as an isolated data type rather than a runtime feature. For example, I went through and watched all the SES review meetings the other day and they circled a whole lot around the idea of the internal context map being a mutable global, but if you consider it as a runtime-level thing there are _lots_ of mutable globals. They eventually figured out it's like passing an implicit parameter, but didn't get _quite_ so far as realizing that it's essentially just a reserved register for passing context same as you would do for passing lexical scope.
+
+[11:24:10.0997] <Stephen Belanger>
+And for through flow, it's the same as just having an extra reserved register for multiple-return with one return value reserved for outward flowing context.
+
+[11:26:16.0515] <Stephen Belanger>
+If you think of it at the level of being a runtime feature the internals of the type actually become kind of irrelevant from the SES perspective.
+
+[11:26:29.0232] <Andreu Botella>
+> <@stephenhicks:matrix.org> but that's what I'm saying - we've simplified the rules for which snapshot to run in to _not_ be complex, I think we can do the same for these properties by keeping them similarly well-defined, and deferring the logic of selecting which one is needed to the holder of the event object
+
+in every case I've looked at, when there is a synchronous dispatch context, there is no asynchronous dispatch context
+
+[11:26:42.0249] <Andreu Botella>
+so it would be two properties where at least one of them would always be null
+
+[11:27:12.0978] <Andreu Botella>
+> <@stephenhicks:matrix.org> but that's what I'm saying - we've simplified the rules for which snapshot to run in to _not_ be complex, I think we can do the same for these properties by keeping them similarly well-defined, and deferring the logic of selecting which one is needed to the holder of the event object
+
+ * in every case I've looked at, when there is a synchronous dispatch context, there is no relevant asynchronous dispatch context
+
+[11:28:10.0458] <Stephen Belanger>
+Considering it at the runtime level also makes the context segments between awaits make a lot more sense as you can then visualize it alongside the execution DAG and flowing context along the same edges as the execution data would flow.
+
+[11:28:23.0278] <Stephen Belanger>
+Context is very much a _runtime_ feature, _not_ a data type.
+
+[11:28:35.0635] <Steve Hicks>
+> <@abotella:igalia.com> so it would be two properties where at least one of them would always be null
+
+I'm not quite sure I understand what you mean by each of those two terms (synchronous vs asynchronous dispatch context), but could it ever be useful to know which it is?  Or is there value in simplifying the rules so that you don't need to do complex logic to figure out how to populate it?
+
+[11:29:22.0795] <Andreu Botella>
+if you call into some API from JS, and that synchronously dispatches an event, that is a synchronous dispatch context (e.g. `el.click()`)
+
+[11:29:57.0942] <Andreu Botella>
+the async dispatch context is when you call into some API that causes some async operation behind the scenes that eventually fires an event
+
+[11:30:28.0820] <Steve Hicks>
+gotcha, so async would be like xhr send.  And in some cases there's neither (like a UI click)
+
+[11:30:33.0763] <Andreu Botella>
+right
+
+[11:32:30.0092] <Andreu Botella>
+there are some cases where there are multiple possible async dispatch contexts, but those are the extreme minority (in the subset of events I've looked at, this can only happen for media events, and would not be the usual case)
+
+[11:33:12.0146] <Steve Hicks>
+Is anyone else tracking what I'm saying about trying not to be smart here, though?  It still seems like a pretty big win in terms of future direction/flexibility if we keep the scope narrow by simply saying .dispatchSnapshot is this-and-only-this, and if we need something else in the future, it will be a different property.  This lets us be _very_ consistent with applying it immediately to all events, while still have flexibility to add different snapshots later.  The alternative means we need to be very conservative.
+
+[11:34:02.0276] <Steve Hicks>
+how many different async dispatch contexts have you identified?
+
+[11:34:18.0500] <Andreu Botella>
+for media events?
+
+[11:34:21.0648] <Steve Hicks>
+(in short, I'm allergic to special cases)
+
+[11:34:29.0669] <Steve Hicks>
+no, across all events
+
+[11:34:57.0668] <Andreu Botella>
+what do you mean by "different async dispatch contexts"? how would you categorize them?
+
+[11:35:30.0634] <Steve Hicks>
+e.g. xhr send would be one, media events is one or a few
+
+[11:36:17.0171] <Steve Hicks>
+what other events have dispatches triggered asynchronously from a concrete point in code?
+
+[11:36:46.0638] <Steve Hicks>
+are there a bunch more, or is it just a small handful?
+
+[11:37:00.0562] <Andreu Botella>
+there are a bunch more
+
+[11:37:14.0834] <Andreu Botella>
+a lot of events are dispatched asynchronously
+
+[11:37:32.0156] <Andreu Botella>
+e.g. setting `img.src` eventually fires a `load` event
+
+[11:40:23.0060] <Andreu Botella>
+some events are sometimes dispatched synchronously and sometimes asynchronously – e.g. `window.print()` will print synchronously if the page is fully loaded, but it will wait if it's not loaded yet, so the `beforeprint` and `afterprint` events can be dispatched sync or async
+
+[11:41:34.0369] <Andreu Botella>
+I don't have a list in front of me of different event behaviors, but many (maybe most?) that are triggered by some JS code are asynchronous
+
+[11:41:38.0721] <littledan>
+> <@stephenhicks:matrix.org> who's talking about registration snapshot as a property?
+
+the only thing that can be reliable is the registration time one, because the other one is very context-dependent and complex, and sometimes involves API designers making a subjective choice between a couple options
+
+[11:42:19.0255] <littledan>
+so if you want a reliable property, we can add the registration one, but that wouldn't give us this other information
+
+[11:43:28.0505] <Andreu Botella>
+I think the only cases where there would be a subjective choice would be cases like the media events, those would be the minority
+
+[11:43:36.0211] <Andreu Botella>
+ * I think the only cases where there would be a subjective choice would be cases like the media events, those would be the extreme minority I think
+
+[11:44:55.0113] <Steve Hicks>
+> <@littledan:matrix.org> the only thing that can be reliable is the registration time one, because the other one is very context-dependent and complex, and sometimes involves API designers making a subjective choice between a couple options
+
+right, but there's no point because it's already the one the callback is run in.  What I'm saying is that we can maybe reduce the complexity and context-dependence by defining many narrowly-scoped properties, such that each individual one is simple, well-defined, and straightforward, even if it usually doesn't apply.
+
+[11:46:25.0254] <Steve Hicks>
+I think we need to put ourselves in the shoes of someone who's accessing these properties.  Are they likely to be looking for "just give me any meaningful causal context, I don't care where it comes from" or will they tend to know exactly the property they need in order to get a specific shapshot from a single well-defined point in time?
+
+[11:46:39.0227] <Steve Hicks>
+(I don't have an answer to this)
+
+[11:47:35.0054] <Andreu Botella>
+In cases where you have multiple async dispatch contexts, like media events, I don't think you can split them out into narrowly scoped types of contexts
+
+[11:47:38.0979] <Andreu Botella>
+> An example of this is HTML media playback events, where if the user clicks play, and in short succession JS code calls videoEl.load() and then videoEl.play() in two different contexts, all three data flow branches will merge, resulting in a single load event being fired.
+
+
+[11:47:45.0849] <Andreu Botella>
+this is essentially a merge, just inside the browser
+
+[11:48:08.0985] <Andreu Botella>
+how would you narrowly scope those branches?
+
+[11:49:11.0936] <Steve Hicks>
+would either or both `videoEl.load()` and/or `videoEl.play()` by itself have triggered the event?
+
+[11:49:17.0932] <Andreu Botella>
+yeah
+
+[11:49:20.0721] <Andreu Botella>
+both
+
+[11:49:28.0908] <Andreu Botella>
+IIRC, but I'm fairly sure
+
+[11:50:09.0268] <Steve Hicks>
+naively, I'd suggest `loadSnapshot` and `playSnapshot` would be analogous to XHR's `sendSnapshot`, and one or both may be populated depending on the circumstances?
+
+[11:50:45.0722] <Steve Hicks>
+(for transparency, I don't have a particular horse in this race, I'm just trying to make sure we're considering all the options)
+
+[11:50:58.0047] <Andreu Botella>
+okay, I guess I didn't explain this clearly enough
+
+[11:51:50.0426] <Andreu Botella>
+if a video is stopped, IIRC `.load()` will start fetching it, `.play()` will start fetching and then play when ready. But only one `load` event is fired, when the load starts(?)
+
+[11:51:58.0775] <Andreu Botella>
+so you could call `.play()` multiple times
+
+[11:52:05.0126] <Andreu Botella>
+and that would result in a single load event
+
+[11:52:09.0040] <Steve Hicks>
+ah
+
+[11:52:18.0905] <Steve Hicks>
+so it's a debouncing issue
+
+[11:52:24.0882] <Andreu Botella>
+exactly
+
+[11:52:53.0650] <Steve Hicks>
+seems reasonable to go with the first one?
+
+[12:20:44.0571] <littledan>
+> <@stephenhicks:matrix.org> right, but there's no point because it's already the one the callback is run in.  What I'm saying is that we can maybe reduce the complexity and context-dependence by defining many narrowly-scoped properties, such that each individual one is simple, well-defined, and straightforward, even if it usually doesn't apply.
+
+oh, I see. So, for example, if we initially are interested in a causal context for where errors were thrown or promises were rejected, we could have a property name which is specifically for that, like evt.throwSnapshot
+
+[12:21:03.0823] <littledan>
+I like this idea!
+
+[12:21:14.0853] <littledan>
+then it should be easier to find docs which describe where that comes from
+
+[12:21:31.0340] <littledan>
+I imagine it should be just as usable by APMs right?
+
+[16:33:46.0973] <Stephen Belanger>
+_Probably_ fine. Might be some challenges with selecting the appropriate context in some cases, but we do _generally_ need to be able to better support context merges, so that's somewhat an _us_ problem that needs to be dealt with.
+
+[16:57:17.0450] <littledan>
+So this is (hopefully) a primitive that gives you both (sometimes) so it’s a good basis?
+
+
+2024-07-20
+[17:19:16.0883] <Steve Hicks>
+(aside: I assume we did whatever we needed to to get on the agenda for next month?)
+
+[17:28:32.0154] <Steve Hicks>
+What about null vs "empty"?  I think the important example to consider here is the dispatchSnapshot for an event dispatched directly from the event loop, rather than programmatically.  I'll say upfront that I think having it be null for this case is desirable, since there's no good way to determine that some non-null value is "empty".  But I can also see a consistency argument for it being `HostGetTopLevelAsyncContextMapping(null)` - this is the initial value for agentRecord.[[AsyncContextMapping]], and is therefore presumably its value at the exact time that the event is created/dispatched.  So any other value (including `null`) is presumably more complicated to spec (and also more challenging to polyfill).
+
+[18:57:50.0348] <Andreu Botella>
+Polyfills are a reason why I think, regardless of what we end up doing by default, there needs to be a way to opt into having `dispatchSnapshot` be null
+
+[18:58:06.0867] <Andreu Botella>
+ * Polyfills are a reason why I think, regardless of what we end up doing by default, there needs to be a way to have `dispatchSnapshot` be null
+
+[18:58:56.0412] <Andreu Botella>
+the event constructor's second argument is an options bag, that could be an additional option there
+
+[19:02:55.0956] <Andreu Botella>
+about challenging to spec, since we're considering a small initial rollout, events would have a null snapshot by default, with an option in the spec to use the current context instead
+
+[19:03:47.0609] <Andreu Botella>
+so distinguishing null vs the empty context would not be complicated, because only event dispatches that could have a causal context would be updated to use that option
+
+[19:33:24.0987] <Steve Hicks>
+What I was suggesting before was that we might not need to do a small initial rollout if we just scope it narrowly - instead, _every_ event gets a `dispatchSnapshot`, and we handle other use cases with different properties.
+
+[19:38:36.0502] <Andreu Botella>
+wouldn't there still have to be a small initial rollout for those other properties?
+
+[19:39:25.0340] <Steve Hicks>
+maybe?  but they would also be narrowly-scoped so it should also be possible to roll them out 100%
+
+[19:39:59.0036] <Steve Hicks>
+though they would only ever include a small subset of events
+
+[19:40:09.0614] <Steve Hicks>
+i.e. `throwSnapshot` only makes sense on error/rejection events
+
+[19:41:36.0080] <Andreu Botella>
+if we think of the future when we've achieved 100% rollout, I don't think the distinction between the different scopes will make sense
+
+[19:43:53.0649] <Steve Hicks>
+Ultimately the difference is in conceptualizing what `fooSnapshot` means.  What I'm suggesting is that for any given `foo` you can look up _exactly_ what it means, whereas the alternative is that you need to puzzle through "okay, this is a 'bar' event, so _its_ `fooSnapshot` comes from when such-and-such happened"
+
+[19:45:41.0440] <Steve Hicks>
+it's an argument for homogeneity and comprehensibility.
+
+[19:47:01.0458] <Andreu Botella>
+for homogeneity, wouldn't that also have to apply to events which are dispatched synchronously from some API? `el.click` for example
+
+[19:47:17.0503] <Steve Hicks>
+i guess homogeneity is a matter of perspective, because the property names themselves would be heterogeneous, but the meaning of any given property is homogeneous
+
+[19:47:46.0945] <Steve Hicks>
+but yes, I would include those as well - el.click would set the dispatchSnapshot to the snapshot in which click was called.
+
+[19:48:02.0860] <Andreu Botella>
+why dispatchSnapshot? why not clickSnapshot?
+
+[19:48:41.0427] <Steve Hicks>
+every event gets a dispatch snapshot and it's always defined the same way - since click dispatches synchronously, it doesn't need a separate snapshot
+
+[19:49:19.0496] <Andreu Botella>
+but wouldn't you also have to look up what exactly that means for each event if you're trying to use it?
+
+[19:51:29.0233] <Steve Hicks>
+No, you just need to know whether the event is dispatched while executing ecmascript code or else by the event loop.  If the former, it's always going to be whatever snapshot was active when the event started dispatching, and if the latter then it's always null (or possibly but hopefully not HostGetTopLevelAsyncContextMapping)
+
+[19:52:44.0463] <Steve Hicks>
+The bit about null is slightly problematic because as it's currently spec'd, the `[[AsyncContextMapping]]` _isn't_ set to null during the event loop, so it would require a bit of special casing, which I'd rather avoid
+
+[19:53:13.0199] <Andreu Botella>
+if you're a developer trying to use the snapshot of an event for something, you would usually be writing code that works for multiple different event dispatches, and you'd also need to know what web API call dispatches the current event
+
+[19:53:21.0487] <Andreu Botella>
+I don't see how that's different for async dispatches
+
+[19:53:23.0047] <Steve Hicks>
+If the mapping lived on the execution context, it might be easier to make it null during the event loop
+
+[19:56:13.0700] <Steve Hicks>
+I assume you already know what event you're responding to, and you certainly know you're in an event handler at all, since you need to read something off of an event object in the first place.  But that's what I was getting at before - are you more likely to just want _whatever_ non-null snapshot you can get, or are you more likely to want fine-grained control to get the snapshot from a particular time?
+
+[19:56:33.0669] <Steve Hicks>
+And as I said above, I don't know the answer to that.
+
+[19:57:10.0081] <Steve Hicks>
+but userland code could easily maintain a mapping from event types to property names, if it wanted to
+
+[19:58:09.0431] <Steve Hicks>
+whereas putting that special casing directly in the engine (and polyfills) is unconditionally expensive and cuts off expressibility and understandability
+
+[20:00:23.0056] <Andreu Botella>
+Yes, you know you're in an event handler, and you know what event you're responding to. But if you're saying that for async dispatches developers might need to know which web API call's context is the dispatch snapshot, I don't see why that is not also the case for sync dispatches. The fact that the event is dispatched synchronously doesn't change anything other than possibly the current state of non-local variables the event listener might have access to.
+
+[20:01:06.0768] <Andreu Botella>
+You're registering the event in a completely different place from where it is dispatched in both cases
+
+[20:01:17.0653] <Andreu Botella>
+ * You're registering the event in a different place from where it is dispatched in both cases
+
+[20:02:14.0736] <Steve Hicks>
+I think the difference is that async dispatches are inherently heterogeneous, whereas sync dispatches have a lot more in common between them.  Also, async dispatches are _much_ more likely to prefer the default registration context anyway.
+
+[20:04:56.0861] <Steve Hicks>
+One theory I have is that one-time callbacks are more likely to want registration-snapshot, while multiply-called callbacks are more likely to want a causal snapshot.  I also believe async dispatches tend to correlate more with one-time listeners.
+
+[20:05:33.0560] <Steve Hicks>
+(this isn't a hard rule, of course - abort event is one-time and synchronous, for instance)
+
+[20:07:35.0248] <Steve Hicks>
+But what it sounds like you're worried about is an async-dispatch event where neither the registration snapshot, nor whatever synchronous dispatch snapshot if there is one, is correct - but I can't come up with any examples of that.
+
+[20:08:00.0539] <Steve Hicks>
+ * But what it sounds like you're worried about is an async-dispatch event where neither the registration snapshot, nor whatever synchronous dispatch snapshot if there happens to be one, is correct - but I can't come up with any examples of that.
+
+[20:09:21.0554] <Steve Hicks>
+i mean, i guess that's the point of the follow-ups - throwSnapshot, or sendSnapshot, etc
+
+[20:09:52.0997] <Andreu Botella>
+I don't think there would be any cases where an event would have both non-null synchronous and asynchronous dispatch snapshots
+
+[20:09:55.0925] <Steve Hicks>
+but again, I think those are niche cases where you probably know exactly what you need
+
+[20:12:12.0578] <Andreu Botella>
+> <@stephenhicks:matrix.org> One theory I have is that one-time callbacks are more likely to want registration-snapshot, while multiply-called callbacks are more likely to want a causal snapshot.  I also believe async dispatches tend to correlate more with one-time listeners.
+
+that makes sense, but shouldn't it be up to the event listener to use the snapshot or not depending on whether it's one-time?
+
+[20:12:41.0413] <Andreu Botella>
+the event listener knows that far better than the browser/spec
+
+[20:14:15.0262] <Andreu Botella>
+I can see how for error and unhandledrejection, using the same property might be confusing, and maybe there it makes sense
+
+[20:15:57.0896] <Andreu Botella>
+huh, I think I see where the disconnect between us is
+
+[20:16:11.0385] <Andreu Botella>
+you're seeing the whole of XHR boilerplate as one single thing that you do to set up the XHR events
+
+[20:16:36.0901] <Andreu Botella>
+and so creating the XHR object vs `xhr.load()` vs `xhr.send()` are just parts of that process
+
+[20:16:54.0910] <Andreu Botella>
+and you'd have to look up exactly what part of that causes the event
+
+[20:18:40.0857] <Andreu Botella>
+but in that case, is there any need for developers to distinguish between those snapshots, since they'll almost always happen in the same context?
+
+[20:19:05.0900] <Steve Hicks>
+right, which is also the same context that the listener is registered in
+
+[20:19:37.0129] <Andreu Botella>
+well, I think you can reuse an XHR object for multiple connections
+
+[20:19:39.0362] <Steve Hicks>
+so in most cases, no, the difference is irrelevant - but it's still a difference that people just won't know or have a good sense of
+
+[20:19:41.0578] <Andreu Botella>
+but that's not commonly done
+
+[20:19:42.0416] <Steve Hicks>
+you can
+
+[20:20:03.0403] <Steve Hicks>
+and in that case, the distinction would matter
+
+[20:20:44.0855] <Andreu Botella>
+the distinction between registration and load/send, yes, but not between load and send
+
+
+2024-07-23
+[10:01:02.0924] <Andreu Botella>
+Hey, I opened a PR with a detailed write-up of the web integration, PTAL: https://github.com/tc39/proposal-async-context/pull/100
+
+
+2024-07-24
+[08:29:38.0846] <littledan>
+Awesome! Let's get this on a WHATNOT agenda soon.
+
+[15:00:26.0141] <Steve Hicks>
+I got some feedback from Peter Burns (of Web Components and Lit): https://docs.google.com/document/d/1nAgNZni5F2zU6ET88suvtwSu15y5sEFMngF75tkc8Hk/edit
+
+[15:02:54.0920] <Steve Hicks>
+tl;dr is that the current proposal isn't particularly helpful in his estimation - partly due to the always-registration-time semantics, and partly due to a mismatch where the DOM tree and the execution tree aren't necessarily aligned 1:1, and they tend to favor the former over the latter.
+
+[15:04:42.0114] <Steve Hicks>
+what he'd like to see is a bifurcation of functions where some (e.g. schedulers) would use registration contexts and others would just "do nothing" - i.e. just use whatever synchronous context was already there, don't do any restoration.
+
+[15:04:54.0347] <Steve Hicks>
+And the web component lifecycle callbacks would want to be the latter
+
+[15:06:21.0534] <Steve Hicks>
+My take on all this is that we may still have some iterating to do on the dom integration... :-/
+
+[15:07:56.0431] <littledan>
+"do nothing" isn't always so easy to define because it may come after some async step--there isn't always JS on the stack immediately before
+
+[15:08:30.0099] <littledan>
+for web component lifecycle, sometimes there is and sometimes there isn't JS on the stack, right?
+
+[15:09:06.0597] <littledan>
+like for parser-constructed DOM
+
+[15:09:47.0437] <littledan>
+anyway if we can define these cases, I think it'd be fine to add that to the definitions
+
+[15:10:01.0972] <littledan>
+ * anyway if we can define these cases, I think it'd be fine to add that to the spec. It'd be some kind of WebIDL extended attribute.
+
+[15:13:44.0259] <littledan>
+anyway this seems to be swinging back in a direction which I proposed previously: that we apply the snapshot with the "most information", that is, to "do nothing" when it can possibly make sense. The downsides to this were (1) complexity of getting this all figured out on the first go (2) "Zalgo"/it's complicated for people to mentally model what's going on
+
+[15:27:30.0012] <Steve Hicks>
+The zalgo situation is the most concerning part. I'd be more comfortable if it's statically determined per API. So something like - lifecycle callbacks are always unwrapped, events are always wrapped. Unwrapped callbacks have an opt-out by manually wrapping them. Wrapped callbacks _may_ have an opt-out via a snapshot property. I'm still not convinced that it's a problem to sometimes run a callback in the top-level/initial snapshot (e.g. if it's dispatched from the parser).
+
+[15:34:33.0678] <Stephen Belanger>
+The safest escape from Zalgo is generally just not create it in the first place, so I feel like if we _consistently_ “do nothing” it might be okay. Some Web APIs are just detached from any reasonable context flow and so would probably be fair to propagate nothing unless a manual wrap is made. 🤷
+
+[15:37:25.0692] <Stephen Belanger>
+From a _technical purity_ perspective I’d like to think of the as the root/unit context which all else descends from, but _thinking_ of it in that way doesn’t necessarily require making any specific _action_ to describe it that way programmatically. Rather, it requires explicitly _not_ doing something as Dan says where we may _reach_ a point where a thing could trigger synchronously and so we may way to specify those APIs to explicitly _bail out_ from the current context.
+
+[15:37:45.0532] <Stephen Belanger>
+* From a technical purity perspective I’d like to think of that as a root/unit context which all else descends from, but thinking of it in that way doesn’t necessarily require making any specific action to describe it that way programmatically. Rather, it requires explicitly not doing something as Dan says where we may reach a point where a thing could trigger synchronously and so we may way to specify those APIs to explicitly bail out from the current context.
+
+[15:38:15.0905] <Stephen Belanger>
+* From a technical purity perspective I’d like to think of that as a root/unit context which all else descends from, but thinking of it in that way doesn’t necessarily require making any specific action to describe it that way programmatically. Rather, it requires explicitly not doing something as Dan says where we may reach a point where a thing could trigger synchronously and so we may want to specify those APIs to explicitly bail out from the current context.
+
+[16:19:46.0190] <Steve Hicks>
+Maybe the most constructive thing to do would be to comment on #100?
+
+[16:45:24.0373] <Justin Ridgewell>
+I don’t think AC is really useful for Lit’s design, because everything is easily accessible from the `Element` (`this`) instance
+
+[16:46:21.0165] <Justin Ridgewell>
+React’s functional components + hooks are the best example of need, because the API doesn’t use a context object to place values on, it has to be ambient.
+
+
+2024-07-25
+[19:11:30.0241] <Stephen Belanger>
+I think React is actually kind of a _bad_ basis in a way, because I feel it’s pointing us down a road that is only useful for functional code and not so much for procedural code.
+
+[19:44:56.0831] <littledan>
+> <@stephenhicks:matrix.org> The zalgo situation is the most concerning part. I'd be more comfortable if it's statically determined per API. So something like - lifecycle callbacks are always unwrapped, events are always wrapped. Unwrapped callbacks have an opt-out by manually wrapping them. Wrapped callbacks _may_ have an opt-out via a snapshot property. I'm still not convinced that it's a problem to sometimes run a callback in the top-level/initial snapshot (e.g. if it's dispatched from the parser).
+
+I don’t understand why running it in the top level snapshot wouldn’t also amount to Zalgo to the same extent as using the registration context is
+
+[19:51:00.0632] <littledan>
+“Consistently do nothing” just isn’t an option for certain APIs which people have been bringing up here
+
+[19:51:11.0540] <littledan>
+> <@stephenhicks:matrix.org> The zalgo situation is the most concerning part. I'd be more comfortable if it's statically determined per API. So something like - lifecycle callbacks are always unwrapped, events are always wrapped. Unwrapped callbacks have an opt-out by manually wrapping them. Wrapped callbacks _may_ have an opt-out via a snapshot property. I'm still not convinced that it's a problem to sometimes run a callback in the top-level/initial snapshot (e.g. if it's dispatched from the parser).
+
+ * I don’t understand why running it in the top level snapshot wouldn’t also amount to Zalgo to the same extent as falling back to the registration context is
+
+[19:54:36.0602] <Stephen Belanger>
+> <@littledan:matrix.org> I don’t understand why running it in the top level snapshot wouldn’t also amount to Zalgo to the same extent as falling back to the registration context is
+
+There’s not really a way to bind _out_ of registration-time. The other option being “have no context at all” is maybe not super helpful or intuitive, but you can at least fix that. Whereas if there is an _expectation_ of not having a context then that seems like a reasonable solution to me.
+
+[19:54:45.0680] <Stephen Belanger>
+But yes, an imperfect solution.
+
+[20:01:21.0216] <littledan>
+I’ve been polling framework authors. Everyone is excited about AsyncContext, they all think it will work well for them for one or two variables like Justin said, and no one thinks it would be especially important to build stuff like React Context on top of
+
+[20:01:57.0482] <littledan>
+So I think we can forget about my point about needing saving and restoring contexts from JS to be extremely cheap 
+
+[20:02:10.0100] <littledan>
+* So I think we can forget about my point about needing saving and restoring contexts from JS to avoid an allocation 
+
+[20:10:02.0475] <Stephen Belanger>
+We literally just landed that exact capability for CPED in V8 because AsyncLocalStorage in Node.js, Deno, and Cloudflare all _need_ it. 😅
+
+[20:48:51.0209] <littledan>
+> <@stephenbelanger:matrix.org> We literally just landed that exact capability for CPED in V8 because AsyncLocalStorage in Node.js, Deno, and Cloudflare all _need_ it. 😅
+
+Which capability?
+
+[20:49:26.0733] <Stephen Belanger>
+Saving and restoring context from JS.
+
+[20:50:49.0728] <Stephen Belanger>
+We just landed some code to generate turbofan code for set and getting the context slot from pure generated code so we don’t have to go to native/builtins.
+
+[20:51:03.0476] <Stephen Belanger>
+* We just landed some code to generate turbofan code for setting and getting the context slot from pure generated code so we don’t have to go to native/builtins.
+
+[21:07:50.0013] <littledan>
+So how are you setting the cped?
+
+[21:14:21.0724] <Stephen Belanger>
+See: https://github.com/v8/v8/commit/7857eb34db42f339b337c6bdfb0d10deb14862f3
+
+[21:17:57.0052] <Stephen Belanger>
+Basically we’re generating code to be able to interact with the context slot on the isolate from optimizable JS code.
+
+[21:21:17.0085] <Stephen Belanger>
+Node.js very frequently needs to set and get the stored value from both native and JS side. We have lots of native handles for async code that needs to capture when they are constructed and restore when their callback runs. We also have lots of JS-side things like the timer queue which needs to be able to do the same captures and restores from JS efficiently.
+
+[21:46:03.0435] <Steve Hicks>
+> <@littledan:matrix.org> I don’t understand why running it in the top level snapshot wouldn’t also amount to Zalgo to the same extent as falling back to the registration context is
+
+It's not zalgo because it's statically determinable from the registration site. If you register a lifecycle hook in a particular context you know for certain that it will *not* hold onto a reference of that context - that's valuable. The alternative is that it holds onto a reference in case the lifecycle event is caused externally - that's the unpredictability/inconsistency I'm worried about.
+
+[22:02:50.0476] <Justin Ridgewell>
+> <@stephenbelanger:matrix.org> Node.js very frequently needs to set and get the stored value from both native and JS side. We have lots of native handles for async code that needs to capture when they are constructed and restore when their callback runs. We also have lots of JS-side things like the timer queue which needs to be able to do the same captures and restores from JS efficiently.
+
+I think this is separate? This reads to me as optimizing the JS <-> C++ interface. If you were to have this optimized interface and then wrap the return value in a pure JS object, would that cause a large performance regression? That’s essentially what Dan suggested.
+
+[22:05:27.0695] <Justin Ridgewell>
+In the last meeting Dan suggested changing the `new Snapshot()` API (that returns a new object wrapping the internal context mapping) with a `getSnapshot()` immutable API that always returns the same object.
+
+[22:05:51.0377] <Justin Ridgewell>
+Purely as a performance optimization for frameworks that need to take lots of snapshots.
+
+[22:21:29.0764] <James M Snell>
+For workers, like node.js we have lots of things that are implemented entirely in c++ that need to be able to grab and preserve and manually propagate the current context across non-javascript async boundaries. For instance, any time we perform native I/o we have to grab a reference to the current snapshot and manually restore that when we are entering back into JS to continue. We build on v8's cped API for this. It's not an optimization as there are some things we use this for that only exist at the c++ layer... That is, we effectively have a c++ API equivalent to AsyncLocalStorage for things like metrics, etc
+
+[22:33:03.0094] <Stephen Belanger>
+Yes, the C++ side is certainly a requirement. I was more referring to the JS equivalent interfaces though which don’t call into native code and so don’t incur the native barrier cost. We _can_ just expose the C++ API to JS, but it’s _much_ slower.
+
+[22:34:12.0566] <Stephen Belanger>
+Thus the effort to expose generated code versions of setting and getting the context slot. My benchmarks show it being up to 120x faster than the native interface.
+
+[22:34:26.0348] <James M Snell>
+Yep, we absolutely need both with as little cost as possible.
+
+[22:34:38.0021] <Stephen Belanger>
+Which makes the difference between ALS being viable and _not_ viable in many companies.
+
+[22:36:48.0611] <James M Snell>
+The new API absolutely won't be viable for us in workers unless we have both. There's no doubt about it 
+
+[22:39:36.0102] <Stephen Belanger>
+Yep, same for many of our Node.js customers. The overhead of ALS is way too expensive, and the _majority_ of the cost is just in how frequently that set and get are called—especially the get. That’s just about the hottest code in all of Node.js. 😅
+
+[22:40:59.0533] <Stephen Belanger>
+My rewrite should make it more viable for a lot of customers, but even still, it’s hard to convince some customers when they see single digit overhead numbers in other languages and then like 30%+ sometimes in Node.js. 😐
+
+[22:44:36.0070] <Stephen Belanger>
+Anyway, point is: it needs to be _fast_ or it doesn’t help us. Server JS environments are doing _way_ more frequent async activity than any browser environment ever would, so performance will impact us significantly.
+
+[02:17:24.0927] <Chengzhong Wu>
+Host APIs on manipulating the snapshot can definitely be optimized without strict 1:1 map to the public JS APIs. CPED extras binding is this kind of optimization that is not restricted by the ecma262
+
+[02:20:15.0922] <Chengzhong Wu>
+ * Host APIs on manipulating the snapshot can definitely be optimized without strict 1:1 map to the JS built-ins. CPED extras binding is this kind of optimization that is not restricted by the ecma262
+
+[11:25:24.0715] <littledan>
+> <@stephenhicks:matrix.org> It's not zalgo because it's statically determinable from the registration site. If you register a lifecycle hook in a particular context you know for certain that it will *not* hold onto a reference of that context - that's valuable. The alternative is that it holds onto a reference in case the lifecycle event is caused externally - that's the unpredictability/inconsistency I'm worried about.
+
+the same lifecycle event might be called without a JS context (from the parser directly loading an html file after a blocking script which registers the element) or from one (calling a constructor or setting innerhtml)
+
+[11:26:08.0410] <littledan>
+> <@jasnell:matrix.org> For workers, like node.js we have lots of things that are implemented entirely in c++ that need to be able to grab and preserve and manually propagate the current context across non-javascript async boundaries. For instance, any time we perform native I/o we have to grab a reference to the current snapshot and manually restore that when we are entering back into JS to continue. We build on v8's cped API for this. It's not an optimization as there are some things we use this for that only exist at the c++ layer... That is, we effectively have a c++ API equivalent to AsyncLocalStorage for things like metrics, etc
+
+makes sense, I think browsers need the same
+
+[11:27:09.0251] <littledan>
+> <@stephenbelanger:matrix.org> Anyway, point is: it needs to be _fast_ or it doesn’t help us. Server JS environments are doing _way_ more frequent async activity than any browser environment ever would, so performance will impact us significantly.
+
+yeah, so I think we all agree on this. The question then is: does AsyncContext lend itself to fast implementation? (e.g., do we need enterWith/set to fix performance?)
+
+[11:43:39.0983] <Stephen Belanger>
+`enterWith`/`set` is not about performance, it's about usability. There _are_ some cases where it can eliminate additional closures, but it's much more about a lot of patterns being difficult or impossible to express effectively when a closure is required--like you need to nest for both async functions and generators, and you need these additional closures in a lot of places where the given scope would exactly match what the runtime could have given itself automatically.
+
+[11:45:13.0262] <Stephen Belanger>
+Also, flowing forward makes a lot more _sense_ with a `set` style interface as it is treated more like an actual _variable_ reference and not some callback thing pretending like it's a variable.
+
+[11:46:58.0128] <Stephen Belanger>
+It also better matches the reality that context is actually a _runtime capability_ not a _type_. Context variables are just interfaces to the runtime semantics the same as regular variables are to lexical scope.
+
+[11:48:01.0293] <Stephen Belanger>
+Treating context as an isolated type and not a runtime capability leads to poor usability designs.
+
+[13:42:53.0838] <littledan>
+For the slides: I put a slide about web framework feedback in the deck, as the first slide, since it might make sense for that to come before the issues
+
+
+2024-07-29
+[09:33:13.0557] <Steve Hicks>
+> <@littledan:matrix.org> the same lifecycle event might be called without a JS context (from the parser directly loading an html file after a blocking script which registers the element) or from one (calling a constructor or setting innerhtml)
+
+Exactly - I think we may have opposite understandings of what "zalgo" means in this case.  We agree on the facts that the same callback may be called from either a JS or a non-JS context, but we differ on our understandings of what it means to not release zalgo given that fact.  It sounds like you're saying that the callback's execution context should be stable/predictable independent of the circumstances that triggered it, while I'm saying that the _relationship between_ the callback's execution context and the circumstances that triggered it should be stable.  I don't think the former is actually viable, because the only thing that's stable is that there _is_ a snapshot, but the actual snapshot is still unpredictable.
+
+One point of clarification - my proposal would allow escaping your calling environment and getting access to the HostGetTopLevelAsyncContextSnapshot if you can listen to an event that you know will get called from non-JS.  Is that a problem?  I still see it as more consistent, so if this does pose a problem, them I'm at a bit of a loss as to the correct way to deal with it.
+
+[12:36:26.0850] <littledan>
+I don’t see how falling back to the top level context (or a null context) makes the relationship stable
+
+[12:37:22.0389] <littledan>
+I am not claiming that Zalgo is the most important thing, just that I don’t see a different in Zalgo-ness between “fall back to top level” vs “fall back to registration time”. In either case you will be tempted to just use that snapshot.
+
+[12:37:46.0485] <littledan>
+* I am not claiming that Zalgo is the most important thing, just that I don’t see a different in Zalgo-ness between “fall back to top level” vs “fall back to registration time”. In either case you will be tempted to just use that snapshot, and it will be missing the information you are hoping for some of the time
+
+[14:06:58.0604] <littledan>
+let's see if we can have a call and discuss this soon. Sorry I often have conflicts with my work schedule with the regular asynccontext call.
+
+[14:07:12.0458] <littledan>
+maybe inviting Peter Burns
+
+[14:07:17.0583] <littledan>
+or maybe just us, either way
+
+
+2024-07-31
+[13:20:46.0365] <Steve Hicks>
+I haven't had a chance to work through the zalgo question any further due to some work travel, but I'll see if I can get Peter on a call maybe on Monday
+
+[14:03:31.0482] <littledan>
+that'd be great, I'd be happy to join such a call
+

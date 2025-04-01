@@ -1,0 +1,740 @@
+2022-09-01
+[23:42:39.0969] <yulia>
+> <@tabatkins:matrix.org> And then `a` creates a binding but `b` doesn't, which feels weird. Testing for a property's existence should consistently add a binding or not, I think.
+
+this isn't true of the current specification, which is why i tried this
+
+[23:44:13.0304] <yulia>
+from our last conversation, i understood that this only creates one binding, an alias `{b: {c: {d: e}}}`
+
+[23:45:28.0957] <TabAtkins>
+It is true in the current spec.
+
+[23:45:38.0074] <yulia>
+you would have bindings for b, c, and d there?
+
+[23:45:46.0875] <TabAtkins>
+No?
+
+[23:46:13.0877] <yulia>
+then i am a little lost about your comment
+
+[23:46:36.0161] <TabAtkins>
+In the current spec it's consistent. Testing for a property never adds a binding.
+
+[23:46:48.0880] <yulia>
+unless it is an unconditional match
+
+[23:46:52.0190] <yulia>
+which is testing for a property
+
+[23:46:52.0556] <TabAtkins>
+You have to establish a binding via a pattern 
+
+[23:47:18.0256] <TabAtkins>
+? Do you mean like {a}?
+
+[23:47:21.0217] <yulia>
+or it has an and -- which is also incredibly hard to understand
+
+[23:47:22.0017] <yulia>
+yes
+
+[23:47:44.0927] <yulia>
+finally there is aliasing
+
+[23:47:48.0890] <yulia>
+which is not a test
+
+[23:47:59.0303] <yulia>
+rather it is an "unconditional property check"
+
+[23:48:47.0399] <TabAtkins>
+That expands into {a:a}, exactly like every other instance of the object literal pattern in the language, so it's testing *and* then doing an ident matcher.
+
+[23:49:30.0334] <yulia>
+so it is not either or. it is either test or test and bind but only in certain circumstances
+
+[23:49:54.0778] <yulia>
+and sometimes alias, through the same syntax used for test only
+
+[23:50:19.0856] <TabAtkins>
+No, it's perfectly consistent. The syntax has a shortcut shared across the language, which is well known and familiar to authors.
+
+[23:50:40.0349] <TabAtkins>
+There is no "certain circumstances"
+
+[23:51:28.0802] <yulia>
+yes, and is obviously already in the language
+
+[23:53:02.0118] <yulia>
+lets take this down a notch. I read your initial language as rather dismissive so i became defensive
+
+[23:53:21.0570] <TabAtkins>
+If it's midnight and I'm in my phone in bed trying to type on a phone keyboard
+
+[23:53:26.0950] <TabAtkins>
+Zero hostility intended
+
+[23:53:32.0653] <TabAtkins>
+*oh it's
+
+[23:53:42.0564] <yulia>
+ok, sorry to keep you up!
+
+[23:55:13.0074] <yulia>
+the syntax isn't ultimately that important, I was just trying something
+
+[23:55:25.0564] <TabAtkins>
+I don't understand what you mean by "sometimes alias". This seems to imply you're seeing a *third* case in the syntax?
+
+[23:56:01.0532] <yulia>
+in the case of { a: b } 
+
+[23:56:31.0310] <yulia>
+i just really dislike this double use of the right hand side for both test and alias, thats what i've been trying to address
+
+[23:57:33.0518] <TabAtkins>
+Still confused - what on the rhs is doing a test there?
+
+[23:57:41.0270] <yulia>
+in that case it isn't
+
+[23:57:50.0885] <yulia>
+its unconditional
+
+[23:58:28.0044] <yulia>
+i am fine with {a, b, c: { e: f}} as a pattern I am less fine if we mix in test values like  {a: 500, b, c: { e: f}}
+
+[23:58:34.0783] <yulia>
+so for the test value i was proposing `::`
+
+[23:58:45.0906] <yulia>
+`{a :: 500, b, c: { e: f}}`
+
+[23:59:50.0392] <yulia>
+i was under the impression that a would be bound in either case -- sorry for that. it does put a bit of a damper in what i was hoping for which was that this could be used universally for enforcing values, but yes, not having `c :: etc` is also inconsistent
+
+[00:00:01.0133] <TabAtkins>
+What is {e:f} if not a test value as well, tho?
+
+[00:00:11.0729] <yulia>
+but the above would allow something like `(if let a :: 100 = b) { ...}`
+
+[00:00:26.0001] <yulia>
+> <@tabatkins:matrix.org> What is {e:f} if not a test value as well, tho?
+
+this works exactly like destructuring, so this is an alias from e to f
+
+[00:00:55.0379] <TabAtkins>
+Right, but it's also testing the value of the c property for an e property, right?
+
+[00:01:28.0399] <yulia>
+yes
+
+[00:02:27.0925] <TabAtkins>
+So I think this is where I'm getting confused. You seem to be drawing a distinction between patterns that I can't wrap my head around?
+
+[00:02:55.0078] <yulia>
+`::` i guess i am thinking of this as an exclusive match
+
+[00:03:21.0599] <yulia>
+where as something like the destructuring short hand is a partial match looking for certain properties on an object
+
+[00:04:02.0457] <yulia>
+but now that i think of it, `let a : Int = 500` may be possible, though i haven't considered other cases
+
+[00:04:36.0153] <yulia>
+it just wouldn't work on objects themselves
+
+[00:04:47.0981] <yulia>
+though i wasn't thinking of that before anyway
+
+[00:05:41.0297] <yulia>
+this can also be addressed with the match keyword. I was just hoping that it would be recognizable as the same thing in all cases
+
+[00:09:30.0818] <TabAtkins>
+What I mean is you seem to be treating `100` as a fundamentally different construct in the syntax from `{c:d}`, such that the matcher needs to be written with a different introductory glyph. I still haven't grasped what that distinction you're making is. (In the current spec they're the same sort of thing - both patterns, of different types.) 
+
+But I really do need to get to sleep so I'll pick this up async in the morning. 😃
+
+[00:11:46.0979] <yulia>
+sure, it was just a thought experiment to address comments i got in our call
+
+[10:51:16.0072] <TabAtkins>
+All right, at my desk and done with the office fire drill. ^_^
+
+[10:54:05.0501] <TabAtkins>
+So my final comment is where I'm at right now. It seems clear that you (@yulia) have a mental model that separates "does the matchable equal this value" (like `100`) and "does the matchable have these properties" (like `{c: d}`). I'd like to dive into that, because I think I've circled around to that being the *fundamental* disagreement, and I don't understand what the distinction you're drawing is (so, I can't actually discuss its upsides or downsides).
+
+[10:54:15.0651] <TabAtkins>
+Could you go into more detail about your thoughts there?
+
+[10:54:33.0542] <TabAtkins>
+yulia: ^^^ (sorry, for some reason it didn't tag you in the previous message)
+
+[11:57:48.0999] <rbuckton>
+FYI: I've just put up a PR to add Extractors (nee. "Extractor Objects") to the September meeting agenda. It primarily focuses on extractors in Binding and Assignment patterns, as I expect any discussion related to pattern matching implications would happen in the pattern matching proposal.
+
+
+2022-09-02
+[01:10:27.0675] <yulia>
+TabAtkins: maybe lets sit down and get into the details. From my perspective there isn't so much of a fundamental disagreement, but a usecase discussion to be had. I don't necessarily think i have the answer to it, for what it is worth
+
+[09:54:48.0437] <TabAtkins>
+Spoilers: Yulia and I had a great discussion and I'll try to get a writeup together very soon.
+
+
+2022-09-03
+[07:01:12.0708] <TabAtkins>
+Okay here's the write-up https://gist.github.com/tabatkins/74c66e216bfa0a3cf03d2b5e762557a9
+
+[10:37:49.0650] <rbuckton>
+> <@tabatkins:matrix.org> Okay here's the write-up https://gist.github.com/tabatkins/74c66e216bfa0a3cf03d2b5e762557a9
+
+I'll try to take some time to give this my undivided attention after the holiday. I'm also working on a write-up to capture my own thoughts on pattern matching as well, breaking things down into core tenets and exploring the kind of layering yulia has proposed. 
+
+[10:41:39.0388] <rbuckton>
+While I have strong reservations about the _syntax_ yulia proposed (and the example syntax used in the writeup), I do strongly agree with the _capabilities_ that she's seeking. 
+
+[10:46:04.0437] <rbuckton>
+It would help to have a syntax-free breakdown of the specific capabilities. I think it might be easier to get agreement on specific capabilities to support before bikeshedding on syntax (even if it is intended to be illustrative). In fact, it might be better to discuss such capabilities in terms of equivalent existing syntax in _other_ languages (if it exists), since those will often have well understood semantics that can inform the discussion (i.e., "why does language X do it this way?", "what kinds of consequences would changes to these semantics have if we needed to make changes to match JS?", etc.)
+
+[10:50:22.0701] <rbuckton>
+I know I tend to lean heavily on prior art, but I also see no sense in re-inventing the wheel. Prior art should be informative, we should understand the historical reasons and rationale behind the features adopted by other languages, as well as the benefits and consequences those features have within that language. From there we can determine whether such features and semantics are compatible with JS, whether to break from those semantics to align with JS, or whether to build something new from whole cloth.
+
+[13:50:35.0233] <rbuckton>
+Are there any other languages that have an interpolation mechanism (like the proposed `${}`) as part of their pattern matching syntax? 
+
+
+2022-09-04
+[22:58:35.0687] <Jack Works>
+That's an interesting problem
+
+
+2022-09-07
+[10:19:53.0652] <TabAtkins>
+I believe it's rare to have a full "escape back to normal expression syntax" switch. It seems that most just allow for idents and possibly identifier descent (dotted/etc), referring to bindings visible from the outside.
+
+[10:21:13.0254] <TabAtkins>
+Tho note that interpolation *mostly* exists to distinguish the ident space from irrefutable matchers. The ability to do arbitrary expressions is a nice benefit that we layered on *since* we have a well-defined boundary (and it's what the syntax does in template strings).
+
+[15:40:49.0450] <rbuckton>
+I've been discussing interpolation with some other members of the TypeScript team. One of the strong opinions I've heard is that interpolation shouldn't be necessary if we have clear semantics around how identifiers are resolved, especially if an explicit syntax is necessary to declare bindings:
+
+```
+when (Foo): ...; // look up `Foo` in scope, match the input to it (either a primitive value or a custom matcher)
+when ({ x }): ...; // either a syntax error, or merely tests for the presence of the property
+when ({ x: let x }): ...; // declare `x` and bind it. `let x` is an irrefutable matcher (always matches)
+when ({ x: x }): ...; // look up `x` in scope, match property `x` to it (either a primitive value or a custom matcher)
+when ({ x: Infinity }): ...; // look up `Infinity` in scope, match the input to it.
+when ({ x: -Infinity }): ...; // look up `Infinity` in scope, negate it, match the input to it.
+when ({ x: undefined }): ...; // look up `undefined` in scope, match the input to it.
+```
+There's no ambiguity here: Bindings are explicit (via `let`/`const` patterns), and shorthand property patterns are either illegal, or merely test for presence (i.e., property exists but value doesn't matter). The resolution rules for identifiers remain the same as anywhere else in JS.
+
+[15:43:17.0354] <rbuckton>
+Alternatively, there's also Rust's `@`-like syntax for bindings:
+```
+when ({ x@x }): ...; // bind `x` property to variable `x`
+```
+But I'd like to be able to control whether the binding is mutable or immutable, and I'd be concerned about `@` conflicting with some other future decorator target.
+
+[15:44:32.0129] <TabAtkins>
+Those last three are all primitive matchers, but otherwise yes, if we move irrefutable matchers to a separate syntax then we can resolve idents by as references instead.
+
+[15:45:02.0124] <TabAtkins>
+Tho that limits us to *just* idents (and possible dotted-ident sequences), meaning you might ahve to prepare some matcher values into temp variables beforehand.
+
+[15:45:19.0246] <rbuckton>
+I don't think it makes sense to treat `Infinity`, `NaN`, or `undefined` any differently than any other Identifier, since that's how resolution works everywhere else.
+
+[15:47:17.0157] <rbuckton>
+> <@tabatkins:matrix.org> Tho that limits us to *just* idents (and possible dotted-ident sequences), meaning you might ahve to prepare some matcher values into temp variables beforehand.
+
+I definitely want qualified named (i.e., `a.b`) as well. And I'm fine with preparing matchers beforehand. I'd rather not have `when ({ x: ${value => arbitraryCondition} }): ...;` as it significantly reduces readability.
+
+[15:57:30.0357] <TabAtkins>
+Well, `-Infinity` needs to be treated specially, since it's *not* an identifier, it's an unary-minus expression whose argument is `Infinity`.
+
+[15:57:43.0171] <TabAtkins>
+(Same for all negative numbers, in fact.)
+
+[15:58:50.0978] <TabAtkins>
+And so either we treat `-Infinity` as a baked-in pattern (and for consistency, do the same for `Infinity`), or we have to recognize unary-minus expressions *in general*, so `-foo` is also valid.
+
+[16:00:08.0319] <TabAtkins>
+(unary-plus as well)
+
+[16:01:14.0264] <TabAtkins>
+While stashing functions into the interpolation pattern isn't great (you should indeed just extract that and give it a name), things like `${foo+"bar"}` aren't unreasonable to match against, I think.
+
+[16:02:29.0391] <TabAtkins>
+Also, being able to call functions, or refer to things with `[]` syntax, both seem reasonable to me.
+
+[16:09:10.0259] <rbuckton>
+`-Infinity` could be `` `-` SomeMoreRestrictiveMatchPattern `` that allows numeric literals and identifiers, and just performs a `ToNumber` on the identifiers.
+
+[16:14:26.0370] <rbuckton>
+I don't see why `-foo` shouldn't be viable. Lets say we allow identifier patterns to reference anything in scope, and that non-Object values match using SameValue (or SameValueZero), while Object values match as custom matchers. Why wouldn't you want to allow:
+```js
+const SOME_CONSTANT = 1;
+match (input) {
+  when (SOME_CONSTANT): ...;
+  when (-SOME_CONSTANT): ...;
+}
+```
+I don't think it makes sense to extend any further than prefix `+`/`-`, though maybe bitmasks/bit shifts could maybe be a thing?
+
+[16:15:53.0310] <rbuckton>
+bitmasks could be kind of useful with numeric enums, i.e.:
+```js
+match (node.modifierFlags) {
+  when (ModifierFlags.Export | ModifierFlags.Default): ...; // default export
+  when (ModifierFlags.Export): ...; // named export
+}
+```
+
+[16:18:29.0101] <rbuckton>
+But that would also be possible with a guard, so its not that much of an issue.
+
+[16:27:00.0786] <TabAtkins>
+Right, this is the slippery slope I'd prefer to not get into. Mixing expression syntax into pattern syntax will make things a *lot* more complicate.d
+
+[16:28:25.0723] <rbuckton>
+I put together a document detailing five core tenets that I believe could serve as a guide to discussions about pattern matching syntax and semantics. I've intentionally avoided using any syntax from the current pattern matching proposal or yulia's suggestions to instead focus on the underlying driving principles of pattern matching. All examples instead use syntax from Rust, Scala, C#, or F# for reference. I'd appreciate commentary and feedback and whether this makes sense to adopt as a set of principles for the proposal: https://gist.github.com/rbuckton/fca8b4ecc4eb16422b01f2557203082b
+
+[16:29:43.0128] <rbuckton>
+I think it could be useful as a reference for any future discussion about pattern matching syntax or potential layering.
+
+[16:36:03.0415] <rbuckton>
+(I considered changing Tenet 1 to be "epigrammatic" instead of "concise", but that seemed a bit ironic)
+
+
+2022-09-08
+[17:07:29.0200] <TabAtkins>
+rbuckton: Your gist seems very good!
+
+[17:08:14.0773] <TabAtkins>
+And I quite like your layering of concerns, particularly the "Being explicit should not unduly prevent us from remaining concise. Being explicit should not unduly prevent us from remaining expressive."
+
+[17:08:37.0118] <TabAtkins>
+(In regards to complaints about size of the proposal, for instance.)
+
+[20:41:17.0275] <ljharb>
+I don’t think your list is exhaustive tho. The readme already contains our core tenets, which i think already include this gist?
+
+[08:46:10.0784] <rbuckton>
+I don't see anything like it in the proposal's README. The README contains motivations, priorities, and syntax solutions but I don't feel like it addresses "why" those solutions are the answer. 
+
+[08:47:54.0534] <rbuckton>
+The gist I wrote up is a bit of a reframing. Its intent would be to serve as a set of guiding principles for how those priorities should be chosen and what those syntax solutions should look like.
+
+[08:57:47.0169] <ljharb>
+I'm talking about https://github.com/tc39/proposal-pattern-matching#priorities-for-a-solution
+
+[08:58:16.0720] <ljharb>
+iow, we already came up with a set of guiding principles, which *led* us to the current solution (and that doesn't mean the current solution is the only one, ofc)
+
+[09:06:25.0171] <rbuckton>
+I read that, and its a somewhat different purpose though it has some overlap.
+
+[13:17:54.0469] <rbuckton>
+i.e., "subsumption of `switch`" doesn't seem like a guiding principle, and "be better than `switch`" is fairly ambiguous. But either way, these tenets are not intended to be at odds with the current proposal, as they mostly agree.
+
+[13:37:44.0105] <ljharb>
+It’s a guiding principle in that any switch use cases need to work for pattern matching 
+
+[13:54:35.0339] <rbuckton>
+I don't necessarily agree. They are similar in that they conditionally branch, but so does `if`. Whether or not `switch` could be modified to support pattern matching is something that would fall out from the guiding principles and limitations imposed on backwards compatibility with new syntax. To me it feels like more of an "in the weeds" concern than a guiding principle.
+
+[13:54:59.0574] <rbuckton>
+ * I don't necessarily agree. They are similar in that they conditionally branch, but so does `if`. Whether or not `switch` could be modified to support pattern matching is something that would fall out from the guiding principles and limitations imposed on backwards compatibility with new syntax. To me it feels like more of an "in the weeds" concern than a guiding principle.
+
+[14:48:09.0784] <ljharb>
+it's ok that we disagree there. personally i think if pattern matching can't subsume switch, it's not worth adding it to the language at all.
+
+
+2022-09-09
+[12:33:52.0786] <rbuckton>
+I just put up another gist of some explorations I've been doing into different ways to introduce pattern matching to JS: https://gist.github.com/rbuckton/df6ade207eecad4fc94cedc3aae79ceb its not exhaustive, but covers a lot of the topics from yulia | OOO until sept 26th's layering proposal. 
+
+I didn't go into great detail on the `match` expression, because that's fairly well covered by the current proposal. This document explores several interesting themes, however:
+
+- Building pattern matching into destructuring (i.e., "any assignment is a pattern" like in Rust and Scala)
+- Borrowing `if-let` and `while-let` from Rust
+- Various mechanisms of gradually introducing pattern matching via `switch`
+- `function` overloading (similar to what Yulia has discussed)
+- `catch` guards
+- infix `is` expressions (i.e., `expr is pattern`)
+- `let` patterns
+
+Not all of the explored syntax alternatives are compatible with each other, though some are interrelated.
+
+From that exploration, I see two different paths:
+- Reuse destructuring for pattern matching (similar to Rust/Scala)
+- Treat pattern matching as something distinct from destructuring (similar to current proposal)
+
+In general I'd favor choosing one path over trying to implement some amalgamation of both.
+
+[12:34:37.0752] <rbuckton>
+While I generally favor the "keep it distinct" path, there are some interesting features of the "reuse destructuring" path that are compelling.
+
+[12:37:01.0709] <rbuckton>
+The downside of reusing destructuring is that such patterns would not have strict property or element checks by default (i.e., `const { x, y } = { x: 0, y: 1, z: 2 };` needs to continue to work), as well as that you need mechanisms for distinguishing from introducing a binding vs referencing an identifier (i.e., `const { x: Infinity } = { x: 0 }` is already legal). But the upside is that we could have a single unified pattern syntax that we could easily shoehorn into `catch` guards and `function` overloads if we so wished.
+
+[12:48:50.0139] <rbuckton>
+Some examples of the "reuse destructuring" approach:
+
+```js
+let { x: 0, y } = obj; // match obj.x to 0, bind y to obj.y, loose property matching
+let {| x: 0, y |} = obj; // match obj.x to 0, match obj.y to anything, no extra properties, bind y to obj.y
+let { x: x@0, y } = obj; // rust-style `@` binding. match obj.x to 0, bind x to obj.x, bind y to obj.y
+
+if (let Option.Some(value) = opt) ...; // `if-let` + extractors
+while (let Option.Some(message) = getNext()) ...; // `while-let` + extractors
+ 
+if (let x = foo(); x.bar) ...; // `if-let` plus C++ 17's `if-with-initializer` syntax
+while (let x = foo(); x.bar) ...; // `while-let` plus C++ 17's `if-with-initializer` syntax
+
+try { ... }
+catch (e@FileNotFoundError) { ... } // rust-style `@` and custom matcher
+catch (@TypeError) { ... } // `@` without binding and custom matcher. Needed to distinguish from id
+catch (HttpError{ statusCode: 404 }) { ... } // no need for `@` due to extractor syntax
+catch (Error{ cause: e@ReferenceError }) { ... } // `@` binding and extractors
+```
+
+It's very compelling, but requires workarounds like `@` to be backwards compatible, making it easy to make mistakes (like `{ x: NaN }`).
+
+[12:57:02.0438] <rbuckton>
+Another thing I explored is the possibility of gradually introducing pattern matching to existing syntax so as not to require complete refactors. this included ways to gradually introduce pattern matching to `switch` without requiring a complete refactor to `match` (though ljharb seems opposed to this). The "keep pattern matching distinct" version of this looks like:
+
+```js
+// adds a `case?` clause to a normal `switch` that performs pattern matching
+switch (expr) {
+  case 0: ...; // normal case
+  case? { x: 1 }: ...; // pattern matching case (block scoped, no fall-through in or out)
+}
+```
+
+While the "reuse destructuring" version looks like the following, instead:
+```js
+// adds a `case let` clause (to match `if-let`, `while-let`):
+switch (expr) {
+  case 0: ...; // normal case
+  case let { x: 1 }: ...; // pattern matching case (block scoped, no fall-through in or out)
+}
+```
+
+This would *not* change the semantics of `switch` (i.e., `switch` can still be non-exhaustive, normal cases can still have fall-through, etc.).
+
+[12:58:13.0761] <rbuckton>
+(there *is* a potential parser ambiguity with `case let[x]` in non-strict mode, however)
+
+[15:27:59.0890] <TabAtkins>
+While I agree with and appreciate a lot of the other stuff you're talking about, I'm still strongly with Jordan on the "switch is entirely unredeemable and we should barely mention it except as a warning of how not to design such a feature". ^_^
+
+[15:34:00.0623] <TabAtkins>
+"Reusing destructuring" is similarly a no-go for precisely the reason you gave. If something as basic as an object pattern *doesn't actually test for the existence of the specified properties*, then that's not pattern-matching and isn't fit for purpose.
+
+[16:06:03.0285] <TabAtkins>
+Reading thru your gist, I think the complexities with the "extend destructuring" really are quite bad. It sticks us with the current "{x: y} means binding to y" behavior, and gives us the weird/bad "{x: Infinity} just binds to Infinity, doesn't test against Infinity" stuff unless you remember to write it out, while `{x: 0}` properly tests by default. We really need an explicit flag to indicate we're in pattern syntax, not destructuring syntax, like the `match` keyword from Yulia's docs.
+
+[16:13:39.0186] <TabAtkins>
+Oh gosh and "reuse destructuring" means that `{x:Infinity}` gets us the no-op binding (technically binds to `Infinity`, but that doesn't actually accomplish anything), but `{x:-Infinity}` gets us a value test (since it's an invalid destructuring pattern). Yeah this is just completely and totally a no-go.
+
+[16:14:10.0835] <TabAtkins>
+ * Oh gosh and "reuse destructuring" means that `{x:Infinity}` gets us the no-op binding (technically binds to `Infinity`, but that doesn't actually accomplish anything), but `{x:-Infinity}` gets us a value test (since it's an invalid destructuring pattern). Yeah this is just completely and totally a no-go.
+
+
+2022-09-13
+[06:30:48.0130] <littledan>
+While I might make some syntactic choices differently from Ron, as well as differently from the main pattern matching proposal, it feels like there is a lot in common between these various attempts and we just need to work out some agreeable details/slicing up of the space. There are a lot of options for the choice of which level(s) the “opt in” happens to the “new mode” of pattern matching as opposed to destructuring/switch, and it’s great that Ron is exploring the area.
+
+[06:32:05.0707] <littledan>
+Extractors seem like a great place to start; maybe preceding their invocation with some syntactic element indicating that we are switching into pattern matching mode is part of the solution.
+
+[06:37:24.0083] <littledan>
+E.g. `let when Option.Some(x) = y`
+
+[06:37:36.0709] <littledan>
+IMO this is a post Stage 1 question 
+
+[06:38:30.0008] <littledan>
+`is` seems like a fine name for this keyword, as in Ron’s gist, or maybe `matches`
+
+[06:42:10.0439] <littledan>
+The question of how to match against variables like Infinity remains tricky; there are real downsides to everything proposed so far. It’s far from clear to me that a mode switch relates to the solution very much, since both destructuring and pattern matching bind variables. And special casing three variable names feels ad hoc, though maybe it’s a good compromise
+
+[06:42:27.0647] <littledan>
+* The question of how to match against variables like Infinity remains tricky; there are real downsides to everything proposed so far. It’s far from clear to me that a mode switch relates to the solution very much, since both destructuring and pattern matching bind variables. And special casing three variable names feels ad hoc, though maybe it’s a good compromise
+
+[14:30:17.0101] <TabAtkins>
+I do think it's a good compromise; *nobody* actually binds to Infinity or undefined (or when they do bind to the latter, it's to set it to undefined); to a first approximation (and arguably a second) they're constants.
+
+[14:31:06.0855] <TabAtkins>
+That said, based on the last meeting we had with Yulia, we might moot the issue anyway, if we move binding to a different form and let plain idents work as custom matchers.
+
+[14:31:34.0112] <TabAtkins>
+actually let me actually go file those issues
+
+[14:39:10.0898] <littledan>
+I’m looking forward to seeing a description of that, since I don’t understand what you mean
+
+[14:41:24.0265] <littledan>
+> <@tabatkins:matrix.org> I do think it's a good compromise; *nobody* actually binds to Infinity or undefined (or when they do bind to the latter, it's to set it to undefined); to a first approximation (and arguably a second) they're constants.
+
+Really, this is a very small point and not at all central to the difference between Ron’s post and the pattern matching proposal, IMO 
+
+[14:41:44.0510] <TabAtkins>
+agreed
+
+[14:42:21.0277] <TabAtkins>
+Above I was just arguing against the "do pattern matching within destructuring", because there are too many ways that goes very wrong.
+
+[14:46:11.0039] <littledan>
+Hmm, do think the explicit keyword to set it off provides a good mitigation?
+
+[14:46:28.0440] <littledan>
+I guess I am having trouble understanding the ways it goes wrong
+
+
+2022-09-15
+[08:36:45.0930] <TabAtkins>
+The example I gave shows it off well - a trivial case like `{x: Infinity}` does *not* do what it looks like if we operate by "destructure unless it's a syntax error" rules. Rather than testing the x property against the value Infinity, it does a no-op assignment of the x property's value to the Infinity binding.
+
+[08:37:04.0692] <TabAtkins>
+While `{x: 0}` and `{x: -Infinity}` would both work perfectly fine, since they're both invalid destructuring.
+
+[08:37:39.0002] <TabAtkins>
+Not to mention the *generic* mismatch in strictness between destructuring and identical patterns; `[a, b]` needs to fail in patterns if the matchable is anything other than length 2.
+
+[08:39:08.0501] <TabAtkins>
+In general, destructuring and the current pattern matching syntax exist in purposely *very similar* conceptual spaces, which is intended to help with learning and general skill transfer, but they are different in many small details that are important to have pattern matching work right.
+
+[09:00:04.0188] <ljharb>
+> <@tabatkins:matrix.org> While `{x: 0}` and `{x: -Infinity}` would both work perfectly fine, since they're both invalid destructuring.
+
+anything where `{ x: Infinity }` and `{ x: -Infinity }` don't do the same conceptual thing seems like an obvious nonstarter
+
+[09:00:17.0099] <TabAtkins>
+yup exactly
+
+
+2022-09-16
+[18:52:56.0004] <TabAtkins>
+Okay finally finished up the issue for moving irrefutable matchers to a different pattern, so plain idents can be custom matchers: https://github.com/tc39/proposal-pattern-matching/issues/283
+
+[18:53:45.0280] <TabAtkins>
+This also completely removes the need to have primitive matchers as a *concept*; they just fall into this case of "interpolation patterns without the `${}` wrapper".
+
+[20:23:05.0616] <rkirsling>
+I can't say I like that (though I had not considered the -2 thing before)
+
+[20:23:19.0794] <rkirsling>
+ * I can't say I like that (though I had not considered the -2 thing before)
+
+[20:25:10.0476] <rkirsling>
+ * I can't say I like that (though I had not considered the -2 thing before) -- it seems bad if `when([x])` isn't how you match a singleton array 🤔
+
+[20:26:55.0274] <rkirsling>
+ * I can't say I like that (though I had not considered the -2 thing before) -- it seems bad if `when([x])` isn't how you bind against the first element of an array 🤔
+
+[20:28:45.0873] <rkirsling>
+ * I can't say I like anything about that (though I had not considered the -2 thing before) -- it seems bad if `when([x])` isn't how you bind against the first element of an array 🤔
+
+[20:29:08.0098] <rkirsling>
+and `when([as x])` or `when([let x])`just looks like "what would that even mean" in spite of being a very basic thing to do
+
+[03:30:16.0635] <littledan>
+I am sad to give that a + because it is a very sensible way to define things
+
+[03:32:26.0871] <littledan>
+Overall, I'm not really convinced it's so important to pattern match on Infinity/-Infinity, NaN or undefined... it would be good for me to learn more background on how/why you've been weighing that as you have.
+
+[10:11:34.0895] <ljharb>
+they're values, and there's use cases to pattern match on every single kind of value
+
+[10:27:59.0553] <littledan>
+well, it's hard for me to understand why we want to enable pattern matching for those kinds of data in a different way from user-defined constants
+
+[10:28:30.0864] <littledan>
+(it seems like an OK compromise, not saying it's terrible, but also am not convinced it's the only way)
+
+[11:19:18.0356] <ljharb>
+i feel like we'd want to enable pattern matching for every kind of data. it's hard for me to understand why we'd want to target a subset
+
+[11:19:33.0588] <ljharb>
+ * i feel like we'd want to enable pattern matching for every kind of data. it's hard for me to understand why we'd want to target a subset
+
+[15:02:44.0954] <TabAtkins>
+> <@littledan:matrix.org> well, it's hard for me to understand why we want to enable pattern matching for those kinds of data in a different way from user-defined constants
+
+Requiring `when([${3}])` to test if the first item of the array is 3 is more fussiness than looks reasonable; every other pattern-matching syntax *in existence*, afaict, makes this sort of thing as easy as `when([3])`.
+
+[15:03:17.0666] <TabAtkins>
+But also note that `when([foo])` (where `foo` is `3`) *does* work if we accept my proposal, which is somewhat the point.
+
+[15:03:47.0355] <TabAtkins>
+It's *current spec* where `const foo = 3; ...when([foo])` and `when([3])` are different.
+
+[15:04:00.0495] <TabAtkins>
+(The former just binds to `foo` with no test.)
+
+[15:07:10.0671] <TabAtkins>
+And fwiw I think it's *incredibly* important to not only be able to match on undefined (and to a lesser extent, NaN and Infinity), but do so in a non-confusing way. If `when(3)` tests the matchable against 3, but `when(undefined)` *does a no-op binding without a test*, then that's fundamentally broken, in terms of usability.
+
+[15:08:42.0964] <TabAtkins>
+Or perhaps more cogently, `when(null)` vs `when(undefined)` - the former is a keyword (and thus value-tests) the latter is not (and thus, using destructuring semantics, would do a no-op bind without testing the value). That would be, pardon my french, _hot garbage_.
+
+[15:32:10.0452] <rkirsling>
+> <@tabatkins:matrix.org> But also note that `when([foo])` (where `foo` is `3`) *does* work if we accept my proposal, which is somewhat the point.
+
+but working should mean binding to the first element, whatever it is
+
+[15:32:34.0526] <rkirsling>
+there is no more characteristic example of a pattern match than `x:xs`
+
+[15:32:36.0366] <rkirsling>
+ * there is no more characteristic example of a pattern match than `x:xs`
+
+[15:32:50.0179] <TabAtkins>
+Note that that is a precisely opposite characterization of "working" from littledan
+
+[15:32:53.0172] <TabAtkins>
+which is the problem, of course
+
+[15:37:44.0448] <littledan>
+I can see that it is really good to match against literals; the part I am having trouble with is the judgement that user-defined constants aren’t similarly important. But I don’t have a solution in mind, given that an explicit let looks too weird
+
+[15:40:38.0406] <littledan>
+Anyway I totally agree that we should syntactically differentiate normal lhs from failure-prone matching 
+
+[15:41:07.0999] <littledan>
+I think this can still generalize to lots of lhs’es
+
+[15:41:59.0234] <littledan>
+I would suggest that we use a keyword like `matches` or `case` for this, rather than `when`
+
+[15:43:00.0720] <littledan>
+Like `let matches Option.Some(x) = y`
+
+[15:43:10.0703] <littledan>
+Wdyt 
+
+[15:43:18.0730] <littledan>
+* Wdyt 
+
+[15:43:49.0350] <littledan>
+This would let us do our special casing of Infinity, NaN and undefined, and check array lengths 
+
+[15:44:57.0737] <littledan>
+Also… if we did want to generalize switch statements as well… `switch (x) { matches y: z }`
+
+[15:46:29.0935] <littledan>
+/me runs 
+
+[15:52:05.0435] <littledan>
+Anyway sorry I don’t want to be in here sniping, I really think you all have done a good job formulating this proposal
+
+[16:56:11.0975] <TabAtkins>
+I'm unclear how what you just said connects to the previous topic.
+
+
+2022-09-17
+[17:54:31.0789] <TabAtkins>
+(that is to say, yes, we will need some sort of keyword to distinguish pattern-matching from destructuring in contexts like variable assignment, when we add pattern matching there. but that's not connected to the question of how irrefutable matchers are spelled, afaict?)
+
+[21:56:58.0359] <rbuckton>
+> <@tabatkins:matrix.org> Oh gosh and "reuse destructuring" means that `{x:Infinity}` gets us the no-op binding (technically binds to `Infinity`, but that doesn't actually accomplish anything), but `{x:-Infinity}` gets us a value test (since it's an invalid destructuring pattern). Yeah this is just completely and totally a no-go.
+
+I completely agree, but it was worth investigating to show exactly how bad the situation is. I'm firmly in the camp of "don't try to shoehorn pattern matching into existing destructuring syntax".
+
+[22:07:41.0120] <rbuckton>
+The pattern matching syntax I'd primarily favor consists of:
+- literal constant patterns (`0`, `true`, `null`, `"foo"`, etc.)
+- object patterns (`{ x, y }`), more specifically _exhaustive_ object patterns (i.e., `{ x, y }` won't match `{ x, y, z }`, but `{ x, y, ... }` would.)
+- array patterns (`[x, y]`), more specifically _exhaustive_ array patterns (i.e., `[x, y]` won't match `[x, y, z]`, but `[x, y, ...]` would.)
+- qualified name patterns (`a` references in-scope `a`, `a.b` references in-scope `a` with property `b`, `undefined`, `Infinity`, `NaN`, `Number.MAX_SAFE_INTEGER`, etc.)
+- unary numeric prefix patterns (`+Infinity`, `-a`, `-1`, etc.)
+- extractor patterns (`a(b)`, `a{ b }`)
+- logical and grouping patterns (`a and b`, `a or b`, `not a`, `(a)`)
+- lexical binding patterns (`let a`/`const a` - always match, bind `a` to subject)
+- regex patterns
+
+And as a stretch goal/follow-on/nice-to-have:
+- relational patterns (`< a`, `<= a`, `> a`, `>= a`)
+- `is` expressions for lightweight pattern matching in conditionals (as opposed to `if-let`/`while-let`)
+
+
+[22:48:54.0316] <rbuckton>
+For example:
+```js
+// extractor patterns and custom matchers
+const containsExport = { [Symbol.matcher](modifiers) { return modifiers?.some(isExportModifier); } };
+const containsDefault = { [Symbol.matcher](modifiers) { return modifiers?.some(isDefaultModifier); } };
+
+match (node) {
+    when FunctionDeclaration{ modifiers: containsExport and containsDefault }: ..., // export default function ...
+    when FunctionDeclaration{ modifiers: containsExport }: ..., // export function ...
+    when ClassDeclaration{ modifiers: containsExport and containsDefault }: ..., // export default class ...
+    when ClassDeclaration{ modifiers: containsExport }: ..., // export class ...
+    when VariableStatement{ modifiers: containsExport }: ..., // export let/const/var ...
+}
+
+// logical patterns
+match (jsonRpcRequest) {
+    when { id: not (null or undefined) }: processRequest(jsonRpcRequest),
+    default: processNotification(jsonRpcRequest)
+}
+
+// relational patterns
+match (response) {
+    when { status: >= 500 }: "server error",
+    when { status: >= 400 }: "client error",
+    when { status: >= 300 }: "redirect",
+    when { status: >= 200 }: "success",
+    when { status: >= 100 }: "informational",
+}
+
+// lexical binding patterns
+match (opt) {
+    when Option.Some(let value): ...,
+    when Option.None: ...,
+}
+
+match (command) {
+    when { kind: "move", x: let x, y: let y }: ...,
+    when { kind: "speak", text: let message }: ...,
+}
+```
+
+[03:51:00.0109] <Jack Works>
+I am wondering if we can gradually introduce those new fresh things into the current version proposal to gradually evolve it. For example, we can introduce `expr is pattern` expression into the current spec
+
+
+2022-09-19
+[19:12:26.0676] <rbuckton>
+The pattern matching syntax I envision is very much based on the current proposal.
+
+
+2022-09-21
+[11:04:56.0188] <TabAtkins>
+Jack Works: Yeah, all stuff in the form of "new patterns" can be added gradually. The base proposal just needs to make sure the syntax space is well-defined and we cover the 90% use-cases that'll make the feature immediately useful enough for authors to adopt.
+
+
+2022-09-24
+[00:16:16.0580] <Jack Works>
+https://github.com/tc39/proposal-pattern-matching/pull/284
+
+
+2022-09-29
+[11:48:21.0549] <TabAtkins>
+I'm fine with this, tho do we want to have it as part of the main proposal, or layered as a "next step"?
+
+[12:54:44.0388] <ljharb>
+i think that's the biggest open question that blocks merging it, tbh
+
+[12:55:52.0724] <ljharb>
+altho i do see an argument for `expr is pattern` (and the protocol, and the builtins' impls of that protocol) being a lower-level building block before the match construct itself
+

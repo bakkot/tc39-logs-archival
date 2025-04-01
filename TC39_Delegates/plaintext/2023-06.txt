@@ -1,0 +1,1280 @@
+2023-06-01
+[17:11:34.0425] <bakkot>
+new question: should `Math.sum` do kahan summation
+
+[17:11:42.0279] <bakkot>
+acceptable answers are "yes" and "of course"
+
+[03:50:37.0198] <Jack Works>
+https://github.com/terser/terser/blob/master/test/compress/labels.js#L84-L104
+
+[03:51:14.0409] <Jack Works>
+Does anyone know why? These two codes have the same observable semantics to me
+
+[07:40:08.0579] <Justin Ridgewell>
+That could be changed
+
+[08:56:08.0537] <Michael Ficarra>
+yes, but there's basically an unlimited number of variants of Kahan's that track an additional N compensation vars, so what should our N be for a reasonable precision/perf trade-off?
+
+[08:56:21.0727] <Michael Ficarra>
+something like 3 is probably ideal
+
+[08:58:33.0101] <bakkot>
+my vote is to just do whatever Python does
+
+[08:58:37.0311] <bakkot>
+for fsum
+
+[08:58:54.0142] <bakkot>
+which appears to be... 32
+
+[08:59:00.0357] <bakkot>
+https://github.com/python/cpython/blob/a241003d048f33c9072d47217aa6e28beb7ac54f/Modules/mathmodule.c#L1284
+
+[08:59:07.0394] <bakkot>
+32 might be overkill...
+
+[09:00:25.0457] <Michael Ficarra>
+holy crap, 32?!
+
+[09:04:03.0406] <bakkot>
+java uses just the basic (one partial) kahan if I'm reading this right https://github.com/openjdk/jdk/blob/e8271649e00771a8bbee240aa1bbbc27a672b22a/src/java.base/share/classes/java/util/stream/Collectors.java#L717
+
+[09:08:06.0526] <bakkot>
+ok no python uses an unbounded number of partials
+
+[09:08:09.0853] <bakkot>
+that's wild
+
+[09:08:51.0352] <bakkot>
+they do this so that it's actually correct
+
+[09:08:58.0191] <bakkot>
+like, _actually_ correct, not just bounded error
+
+[09:09:00.0089] <bakkot>
+https://code.activestate.com/recipes/393090/
+
+[09:09:27.0422] <bakkot>
+while attractive I think that probably is in fact overkill
+
+[09:10:05.0350] <Michael Ficarra>
+I mean, I'm up for it if implementers are
+
+
+2023-06-02
+[01:00:25.0117] <eemeli>
+A `Math.sum` that does Kahan summation actually sounds exactly like the sort of thing I think we ought to add to JS. It's a bit tricky to get right, and it solves a problem that's not necessarily obvious for a developer to realise is a problem or that the solution even exists.
+
+[13:45:05.0442] <Justin Ridgewell>
+Related: https://github.com/swc-project/swc/pull/7478
+
+
+2023-06-03
+[08:53:25.0963] <Hemanth H.M>
+👏 which is the best way to set up an incubator call? 
+
+
+2023-06-05
+[22:53:26.0025] <bakkot>
+why do the dataview methods default to big-endian 
+
+[22:54:15.0558] <bakkot>
+who is running JS on big-endian systems and why did we decide they should get the simpler form
+
+[22:56:33.0893] <bakkot>
+sidebar: we should probably expose endianness as a constant somewhere
+
+[22:57:00.0461] <bakkot>
+it is kind of unfortunate that it's implementation-defined but since it is we at least ought to let you test for it without having to write a value and read it back
+
+[01:54:43.0510] <littledan>
+> <@bakkot:matrix.org> who is running JS on big-endian systems and why did we decide they should get the simpler form
+
+Internet protocols??
+
+[01:55:07.0755] <littledan>
+> <@bakkot:matrix.org> it is kind of unfortunate that it's implementation-defined but since it is we at least ought to let you test for it without having to write a value and read it back
+
+Sure but is there an actual (valid) use case for that?
+
+[08:10:06.0652] <bakkot>
+> <@littledan:matrix.org> Sure but is there an actual (valid) use case for that?
+
+if you're using DataView methods you need to be explicit about it 
+
+[08:10:41.0408] <bakkot>
+since they don't fall back to the platform default
+
+[08:11:39.0410] <bakkot>
+bare `float64Array[x] = y` does fall back to the platform default, so if you write a value using that syntax and then want to read it with a DataView you need to know which endianness to specify for the DataView methods
+
+[12:38:04.0217] <littledan>
+Sure but who is forcing you to use the DataView methods?
+
+[13:32:55.0251] <ljharb>
+lol is that a serious question? there's a reason dataview exists
+
+[13:50:53.0457] <littledan>
+Well, I don’t really see any particular logic to the system beyond, TypedArray is for when you want to use native endianness, and DataView is when you want explicit endianness
+
+[14:01:41.0481] <Kris Kowal>
+Unfortunately, DataView is not that orthogonal to other TypedArrays in its design. It’s also useful for heterogenous data like a serial protocol buffer, for which big-endian is indeed a great default, or an allocation arena for structs, where little-endian would be a great default.
+
+[14:06:45.0096] <littledan>
+Well, it’s unergonomic but can’t you superimpose different TypedArrays on top of the same arraybuffer to do that heterogeneous, native endian access?
+
+[14:07:02.0134] <littledan>
+If we enable more, it seems like ergonomics would be the motivation, right?
+
+[14:11:54.0436] <Kris Kowal>
+You also need to superimpose your Uint64Array at 8 initial offsets, and do some math to choose.
+
+[14:12:07.0413] <Kris Kowal>
+So, yes, ergonomics.
+
+[14:12:45.0097] <Kris Kowal>
+As opposed to contortion.
+
+[14:14:01.0614] <littledan>
+So, sure, I have nothing against an ergonomics-motivated way to get at the platform endianness, for the sake of passing into the DataView methods
+
+[14:14:17.0649] <littledan>
+*BigUint64Array
+
+[14:14:52.0318] <littledan>
+Also when you use that API please write a note to the poor implementers who did all the work and weren’t sure if it was useful
+
+
+2023-06-08
+[16:04:27.0350] <ljharb>
+it seems weird to me that there's no DataView methods for getUint8C and setUint8C - it's the only typed array type that doesn't have them
+
+[16:16:16.0796] <bakkot>
+`get` doesn't really make sense
+
+[16:16:25.0189] <bakkot>
+the special behavior is only when setting
+
+[16:48:00.0767] <Michael Ficarra>
+the setter seems pretty well motivated, especially since it's not all that easy to write the round-ties-to-even behaviour of ToUint8Clamped
+
+[16:48:59.0292] <Michael Ficarra>
+ * the setter seems pretty well motivated, especially since it's not all that easy to write the round-ties-to-even behaviour of ToUint8Clamp
+
+[16:49:22.0251] <Michael Ficarra>
+ * the setter seems pretty well motivated, especially since it's not all that easy to write the round-ties-to-even behaviour of ToUint8Clamp yourself
+
+
+2023-06-09
+[17:03:18.0020] <bakkot>
+ehhh... I feel like the dataview methods only tend to make sense when you have data of mixed types in a buffer, and I don't think that's very likely for Uint8ClampedArray data
+
+[17:04:02.0956] <bakkot>
+wouldn't be opposed though
+
+[22:06:56.0671] <ljharb>
+any reason not to have the get tho, for consistency?
+
+[22:07:00.0153] <ljharb>
+ * any reason not to have the get tho also, for consistency?
+
+[22:23:54.0267] <bakkot>
+I feel like it is misleading? or like... allows people who are confused to lean into their confusion instead of discovering it
+
+[22:24:16.0355] <bakkot>
+it is better to notice what you are doing and just use getUint8 if you actually want it
+
+[22:24:35.0384] <bakkot>
+if someone reaches for it and it's not there, and then they stop and think about why that is, that's good
+
+[23:14:51.0927] <leftmostcat>
+I think it's rare that toolboxes are complete enough that most devs will think, "Should I not be doing this?" if the tool is missing, so that intent would need to be well-documented.
+
+[05:50:03.0246] <littledan>
+I think Clamped is good to leave out; it is just some weird canvas legacy
+
+[08:37:54.0889] <ljharb>
+it’s there everywhere else tho
+
+[10:21:59.0153] <ljharb>
+ok well i made https://github.com/ljharb/proposal-dataview-get-set-uint8c and put it on the agenda, we can see what everyone thinks :-)
+
+[10:26:09.0057] <Michael Ficarra>
+the get method makes me pretty uncomfortable
+
+[10:27:46.0567] <ljharb>
+why?
+
+[10:34:35.0990] <Michael Ficarra>
+because it's no different than the regular Uint8 getter
+
+[10:34:51.0991] <Michael Ficarra>
+and someone will be confused by its existence
+
+[10:36:54.0512] <ljharb>
+seems like just part of the confusion of Uint8ClampedArray existing itself
+
+[10:38:58.0499] <bakkot>
+It is kind of weird that Uint8Clamped exists, but it at least does a coherent, non-duplicative thing
+
+[10:39:06.0208] <bakkot>
+ * It is kind of weird that Uint8ClampedArray exists, but it at least does a coherent, non-duplicative thing
+
+[10:39:10.0878] <bakkot>
+but getUint8Clamped would be duplicative
+
+[10:40:31.0187] <ljharb>
+`[0]` on a Uint8Array and Uint8ClampedArray is duplicative too, no?
+
+[10:41:24.0716] <ljharb>
+adding the set without the get is still improving consistency imo, but i really don't see the harm here of having it be duplicative.
+
+[10:43:51.0196] <bakkot>
+> `[0]` on a Uint8Array and Uint8ClampedArray is duplicative too, no?
+
+... no? I mean if you have a Uint8ClampedArray you do need to be able to read from it
+
+[10:46:08.0388] <ljharb>
+right but i mean that there's no difference in reading values from both of the uint8 arrays
+
+[10:47:00.0203] <bakkot>
+yes but you can't provide Uint8ClampedArray without the ability to read from it
+
+[10:47:13.0908] <bakkot>
+so it does not make sense to say that `[0]` is duplicative
+
+[10:47:41.0689] <bakkot>
+"ability to read from a Uint8Array" and "ability to read from a Uint8ClampedArray" are distinct operations even though they implement the same logic
+
+[10:48:05.0109] <bakkot>
+but "read a Uint8 from an ArrayBuffer" is not a distinct operation from "read a Uint8Clamped from an ArrayBuffer"
+
+[10:48:20.0735] <ljharb>
+fair
+
+[10:48:48.0733] <ljharb>
+the current state means i have to special-case my code that dynamically builds the dataview method name, because Uint8C isn't there
+
+[10:48:59.0298] <ljharb>
+so for me, having it missing is what's confusing
+
+[10:50:58.0213] <bakkot>
+I think that case is probably pretty niche
+
+[10:52:26.0304] <ljharb>
+sure, but i'd bet in a similar bucket of niche as using the dataview methods at all
+
+[11:49:44.0302] <rbuckton>
+> <@ljharb:matrix.org> sure, but i'd bet in a similar bucket of niche as using the dataview methods at all
+
+Just for `Uint8` or in general? `ar[0]` uses native endianness. `dataView.get*` and `dataView.set*` use big-endian/native byte order by default, and allows you to specify little-endian if needed, so they're pretty useful for decoding binary-format files without having to detect endianness and adjust
+
+[11:50:01.0970] <rbuckton>
+> <@ljharb:matrix.org> sure, but i'd bet in a similar bucket of niche as using the dataview methods at all
+
+ * Just for `Uint8` or in general? `ar[0]` uses native endianness. `dataView.get*` and `dataView.set*` use big-endian/native byte order by default, and allows you to specify little-endian if needed, so they're pretty useful for decoding binary-format files without having to detect endianness and adjust manually
+
+[11:50:05.0359] <ljharb>
+fair
+
+[11:50:16.0630] <ljharb>
+ * fair, altho i think that's not a common use case :-)
+
+[11:50:30.0653] <ljharb>
+not saying they're not useful, just not common
+
+[11:50:47.0826] <ljharb>
+the ability to specify endianness is why i'm using them
+
+[11:51:04.0186] <rbuckton>
+I would venture to guess folks using web sockets would disagree that it's not common.
+
+[12:07:41.0803] <Michael Ficarra>
+anybody processing any binary network protocols, really
+
+[12:38:06.0372] <rbuckton>
+Of course, then there's me, using `DataView` to parse a PE header to find the base address of a Windows executable (which are encoded in little-endian)...
+
+
+2023-06-13
+[21:46:18.0276] <rkirsling>
+so I've never attended a general assembly meeting, but since there's one happening in Tokyo, I was like "oh cool let's check that out", yet
+
+[21:46:57.0924] <rkirsling>
+the invite appears to correspond to the CEST work day?
+
+[21:53:06.0378] <rkirsling>
+ah digging through my emails, it literally is in Geneva
+
+[21:53:12.0500] <rkirsling>
+what the heck happened there
+
+[03:31:38.0993] <littledan>
+Oh it was going to be in Tokyo but then people didn’t sign up for it so it will be in Geneva 
+
+[03:31:52.0004] <littledan>
+In a few weeks, right?
+
+[03:32:20.0234] <littledan>
+We had an email thread about this among frequent GA attendees… that clearly should’ve included more people 
+
+[03:32:33.0697] <littledan>
+Where did you see the erroneous mention of Tokyo? We should fix that.
+
+[07:14:54.0933] <rkirsling>
+> <@littledan:matrix.org> Where did you see the erroneous mention of Tokyo? We should fix that.
+
+oh no it's just that I had responded months ago to Patrick's request for Tokyo attendance and then I never heard about it being changed
+
+[07:16:43.0240] <rkirsling>
+so then a Doodle came last week and I glanced at it and it was on CEST schedule so I was like "well clearly the Tokyo one must be some other time...but wait, when the heck was that meant to be anyway" and sure enough it was the same timeframe
+
+[07:17:21.0626] <rkirsling>
+ * so then a Doodle came last week and I glanced at it and it was on CEST schedule so I was like "well clearly the Tokyo one must be some other time" and ignored it until today when I was like "...but wait, when the heck was that meant to be anyway" and sure enough, it's the same one
+
+[07:18:58.0240] <rkirsling>
+it's not a big deal; I had merely felt that it would be for me to _not_ go and see how GA is conducted if it's so nearby
+
+[07:19:04.0028] <rkirsling>
+ * it's not a big deal; I had merely felt that it would be a waste for me to _not_ go and see how GA is conducted if it's so nearby
+
+[08:12:22.0590] <littledan>
+well, I hope you call into the GA so you can see how it's conducted!
+
+[12:54:37.0031] <TabAtkins>
+Yeah, I knew that summation error due to FP roundoff was a thing, but I actually wasn't aware there was a general (and pretty easy) technique for correcting this.
+
+
+2023-06-14
+[18:59:16.0567] <rkirsling>
+that's fair, it is a pretty reasonable time for me
+
+[01:16:37.0292] <Rob Palmer>
+Hey all, I realize for the Norway July meeting there is no specific designated hotel because "they are all good". But just in case folk wish to coordinate, does anyone wish to share a suggestion?
+
+[01:18:37.0480] <nicolo-ribaudo>
+Igalians are all at Citybox 
+
+[01:24:19.0066] <Rob Palmer>
+Thanks.  There are two CityBox:  Bergen to the north of the University, and Danmarksplass to the south over the bridge.  Both look a similar distance.  which did you pick?
+
+[01:26:49.0373] <nicolo-ribaudo>
+The one north, which has the advantage of also being closer to the city center 
+
+[06:53:46.0765] <Michael Ficarra>
+I chose Scandic Byparken
+
+[06:54:55.0783] <Michael Ficarra>
+there's a nearby bike share that I plan to take full advantage of while I'm there
+
+[08:00:08.0179] <eemeli>
+Dan and I ended up at Hotel Park Bergen.
+
+[09:01:57.0698] <littledan>
+> <@michaelficarra:matrix.org> I chose Scandic Byparken
+
+I'm there too
+
+[10:26:58.0436] <Rob Palmer>
+I went with Norge by Scandic which is nearby them. 
+
+[13:40:50.0063] <Michael Ficarra>
+how much of this decision was based on them having a pool?
+
+[14:16:03.0713] <shu>
+ugh you know what i forgot to instrument for import assertions `assert`, the dynamic import case
+
+[14:18:49.0476] <Ashley Claymore>
+What does "instrument" mean in this case?
+
+[14:19:06.0820] <Ashley Claymore>
+Performance?
+
+[14:19:15.0918] <shu>
+use counters to see if we can unship `assert`
+
+[14:19:19.0256] <shu>
+in favor of `with`
+
+[14:19:29.0102] <shu>
+i only added use counters for the static syntax :(
+
+[14:19:29.0286] <Ashley Claymore>
+Oh right. That was going to be my second guess 
+
+[14:19:41.0538] <Ashley Claymore>
+We forgive you!
+
+[14:19:50.0276] <shu>
+the good news is that there's diminishingly small use of the static syntax at least
+
+[14:20:21.0357] <Kris Kowal>
+That’s a good signal. We can expect dynamic import to be even less.
+
+[14:20:33.0331] <shu>
+i hope so
+
+[14:21:54.0189] <shu>
+i don't know if that implication usually holds though
+
+[14:22:10.0878] <shu>
+wouldn't there be a bunch more dynamic imports because you can use that from classic script?
+
+[14:22:10.0912] <Kris Kowal>
+very curious to see data, for sure
+
+[14:25:35.0840] <Kris Kowal>
+since you’re looking at real figures, can you verify it’s too late to unship ESM ;-)
+
+[14:30:08.0600] <shu>
+yes
+
+[14:30:19.0680] <shu>
+more than 4% of page visits use dynamic import alone
+
+[14:30:41.0792] <Kris Kowal>
+nice. that’s not 0!
+
+[14:30:50.0471] <shu>
+that is like, 140MM daily page visits
+
+[14:31:57.0053] <Kris Kowal>
+this is a good figure to have in my back pocket if anyone asks me why i’m working with what we have and not suggesting we go back to 2010 and start over.
+
+
+2023-06-15
+[00:29:53.0239] <Rob Palmer>
+Didn't know they had a pool. I went more by Google Maps rating.
+
+[00:39:59.0785] <Rob Palmer>
+> <@shuyuguo:matrix.org> more than 4% of page visits use dynamic import alone
+
+Is it possible to know what % of page loads are using other user-land module systems? I.e. webpack chunks or require.js.
+
+Because 4% of all page loads is good, but if we knew that 50% of all page loads were basic HTML docs that didn't use any module system, then we could say that adoption amongst the target audience is more like 8% (twice as good).
+
+[00:49:33.0917] <Jesse>
+FYI the decimal proposal will be hosting an incubator call on Thursday, July 29, at 15:00 UTC. Anyone interested in (decimal) numbers is welcome to attend. The meeting will last at most one hour. https://github.com/tc39/incubator-agendas/pull/30
+
+[07:40:47.0638] <shu>
+it is not
+
+[07:41:06.0170] <shu>
+use counters are, how do i say, "very dumb"
+
+[07:41:44.0186] <shu>
+i don't think it's feasible to add any _browser_-level instrumentation for any userland pattern
+
+[09:28:40.0548] <ljharb>
+july? or june?
+
+[09:29:06.0603] <TabAtkins>
+Ehhh it depends, but generally yes. You can do some surprising amounts of detection, but it has to be relatively cheap. (CSS stuff, for example, is already expensive enough that use counters can do a decent amount before they become troublesome.)
+
+[09:29:56.0287] <TabAtkins>
+July 29th is a Saturday, so I assume they meant June.
+
+[09:32:08.0448] <Michael Ficarra>
+the PR correctly says June: v
+
+[09:32:16.0237] <Michael Ficarra>
+ * the PR correctly says June: https://github.com/tc39/incubator-agendas/pull/30/files
+
+[11:13:37.0093] <Rob Palmer>
+Hello all, the Interest Survey for Tokyo plenary is now posted.
+
+https://github.com/tc39/Reflector/issues/478
+
+Please fill it in by 25th June. It takes 60 seconds. 
+
+[13:07:55.0906] <ljharb>
+i'm indeed assuming the matrix message is wrong, but wanted to confirm
+
+
+2023-06-16
+[23:31:10.0122] <Jesse>
+oops, yes, I meant June, sorry
+
+[13:45:33.0259] <shu>
+one unfortunate about grouping being static methods is that the fast path got more tricky to reason about
+
+[13:47:30.0411] <shu>
+because of the iterables thing
+
+[13:49:37.0512] <bakkot>
+shu: would it get easier if we froze the `next` method on ArrayIteratorPrototype
+
+[13:49:45.0548] <bakkot>
+if so can we just do that
+
+[13:50:02.0716] <bakkot>
+(also also the `Symbol.iterator` method on Array.prototype I guess)
+
+[13:50:05.0277] <bakkot>
+ * (and also the `Symbol.iterator` method on Array.prototype I guess)
+
+[13:51:44.0304] <shu>
+well we already cache an IteratorRecord so mutations to the iterator or the prototype during iteration won't be reflected
+
+[13:52:21.0688] <shu>
+i don't think we need to do anything, i'm just venting
+
+[14:13:43.0782] <ljharb>
+We wouldn’t have to freeze it if we made IsArray things that weren’t proxies or subclasses always call the intrinsic next/Symbol.iterator :-p
+
+[15:46:54.0164] <littledan>
+> <@ljharb:matrix.org> We wouldn’t have to freeze it if we made IsArray things that weren’t proxies or subclasses always call the intrinsic next/Symbol.iterator :-p
+
+This would be a very implementation-friendly change (well, a lot to do at this point but it would allow engines to rip out a number of annoying fast paths)
+
+[15:47:39.0837] <littledan>
+Except I don’t understand the “that aren’t proxies or subclasses” part, what the line would be
+
+[15:47:54.0920] <littledan>
+No idea if any change there is web compatible 
+
+[15:53:33.0510] <ljharb>
+i mean like, a proxy to an array would still need to generate the Gets, as would a subclass, to be web compatible
+
+
+2023-06-20
+[17:04:21.0731] <bakkot>
+question for implementers: the current design of the base64 proposal, in the streaming case, allocations a new Uint8Array window (of a pre-existing buffer) once per chunk. is that actually expensive enough to warrant reconsidering the design? I would have assumed that new views of existing buffers would be cheap
+
+[17:04:24.0445] <bakkot>
+cc shu ^
+
+[00:02:52.0345] <snek>
+there is more logic than there used to be, cuz of resizable array buffers, but its essentially just a couple checks for detached and alignment and then making an allocation. seems reasonable to me 🤷
+
+[00:29:41.0522] <shu>
+bakkot: for v8 it's probably okay, and i imagine there to be relatively few chunks per streaming session?
+
+[00:30:21.0949] <shu>
+i'd check with SpiderMonkey, i don't remember exactly but i kind of recall that each buffer kept a list of views pointing to it?
+
+[00:30:23.0629] <shu>
+mgaudet: ^
+
+[04:09:34.0952] <Rob Palmer>
+This is a reminder to please fill in [**the Interest Survey**](https://github.com/tc39/Reflector/issues/478) for the Sept/Nov in-person plenary meeting in Tokyo.
+
+It only take 60s to complete.  The deadline is Sunday 25th June (five days time).
+
+Thank you to the 23 people who have already completed it 👍
+
+[04:48:36.0471] <Jesse>
+do we by chance have any snapshots (whether text or screenshot) of old TCQ states? In other words, the state of the queue after a certain presentation
+
+[05:43:27.0248] <Ashley Claymore>
+sometimes the note takers will take a screen shot and paste into the google doc
+
+[05:43:42.0032] <Ashley Claymore>
+if it's not there then I would guess: no
+
+
+2023-06-21
+[00:10:48.0497] <justingrant>
+One of the entrance requirements for Stage 3 is "All ECMAScript editors have signed off on the current spec text". How should champions go about getting that signoff? I'm asking because we're hoping to ask for Stage 3 for proposal-canonical-tz at the July TC39 meeting.
+ 
+For Stage 3 reviewers, I've been creating issues like https://github.com/tc39/proposal-canonical-tz/issues/33 and https://github.com/tc39/proposal-canonical-tz/issues/35. 
+
+Should I do the same for each of the ECMA-262 editors? Should I open one issue and tag @tc39/ecma262-editors?  Something else?
+
+[00:17:06.0588] <nicolo-ribaudo>
+Tagging ecma262-editors is enough to get their attention. I recommend doing it as early as possible to make it easier for them, because reviewing proposals is very time consuming
+
+[08:17:23.0445] <Michael Ficarra>
+justingrant: Yeah, you can simply ping `@tc39/ecma262-editors` on a tracking issue. Personally, I prefer to review as a PR against tc39/ecma262 (you're going to have to open one eventually anyway), but that's not necessary.
+
+[08:20:06.0321] <Michael Ficarra>
+Every editor call, we check the agenda for proposals marked for advancement to stage 3/4 to prepare for reviews. If a lot of stuff gets added just before the deadline for advancement, it can get pretty hard to get reviews in on time. It's why we've had to do "conditional advancement" a few times, though we'd prefer not to have to do that again. So the earlier you let us know about it, the better.
+
+[08:23:10.0141] <Michael Ficarra>
+Also you can ask us questions any time in #tc39-editors:matrix.org 
+
+[08:23:34.0830] <mgaudet>
+> <@bakkot:matrix.org> question for implementers: the current design of the base64 proposal, in the streaming case, allocations a new Uint8Array window (of a pre-existing buffer) once per chunk. is that actually expensive enough to warrant reconsidering the design? I would have assumed that new views of existing buffers would be cheap
+
+Sorry - meant to reply yesterday. It sounds like we're mostly ok with it. The creation of many short lived objects isn't amazing, but it's not a reason to be substantially less ergonomic (translating for team, errors mine)
+
+[08:35:58.0593] <shu>
+mgaudet: does SM keep a list of views from each array buffer? perhaps i'm misremembering
+
+[08:36:33.0437] <mgaudet>
+shu: AIUI a hash set, but yes
+
+[08:37:03.0549] <shu>
+that's the thing i wasn't sure is acceptable, not so much the short-lived objects part
+
+[08:37:49.0200] <mgaudet>
+Mostly it should be ok unless we have to resize; but that's the cost of amortized cost data structures
+
+[08:49:23.0992] <rbuckton>
+bakkot, Michael Ficarra: The Async Iterator Helpers proposal uses the term "async method" to allow `Await()` in its algorithm steps without the heavy lifting of manually writing out interactions with PromiseCapability, but this isn't formalized either in that proposal or in ECMA-262 proper. I've been considering how I could use that to simplify the algorithm steps of `AsyncDisposableStack.prototype.disposeAsync()`, so I was wondering if any formal description of "async method" had been written yet, since I couldn't find one in https://tc39.es/proposal-async-iterator-helpers/. 
+
+[09:09:48.0913] <Michael Ficarra>
+rbuckton: it's here: https://github.com/tc39/ecma262/pull/2942
+
+[09:11:52.0125] <rbuckton>
+Thanks!
+
+[09:12:46.0300] <Michael Ficarra>
+we're still trying to figure out whether we actually want to allow this form in the spec though: https://github.com/tc39/ecma262/pull/2942#issuecomment-1515412109
+
+[09:13:04.0806] <Michael Ficarra>
+Shu has some concerns
+
+[09:19:01.0805] <shu>
+i lean towards "this is our (V8)'s problem to solve, not really the spec's", but there's also a principled argument to be made about maximizing interop likelihood for multiple implementation techniques
+
+[09:20:26.0516] <shu>
+there is also some evidence that the act of speccing at the high level of async functions or generators gives rise to blind spots, like in iterator helpers
+
+[10:12:00.0096] <snek>
+time to add `await` to torque
+
+[12:14:37.0216] <justingrant>
+> <@michaelficarra:matrix.org> Also you can ask us questions any time in #tc39-editors:matrix.org
+
+Thanks Michael, will do... except I get a "You do not have permission to post to this room" error in Matrix after joining that room. Expected?
+
+[12:15:22.0577] <littledan>
+> <@justingrant:matrix.org> Thanks Michael, will do... except I get a "You do not have permission to post to this room" error in Matrix after joining that room. Expected?
+
+yeah that's what I get too... I assumed it was a channel for you all to chat with each other
+
+[12:38:20.0223] <Michael Ficarra>
+oh, I didn't know that not everyone could post in the editors channel
+
+[12:38:25.0042] <Michael Ficarra>
+I'll see what we can do about hat
+
+[12:38:31.0541] <Michael Ficarra>
+ * I'll see what we can do about that
+
+[13:31:11.0213] <ljharb>
+the original intention was to be just for editors to speak, but i can open it up to anyone easily. to only open it up to delegates would require manually adding everyone, and also updating the onboarding/offboarding templates.
+
+[13:34:10.0220] <Michael Ficarra>
+I would only want delegates. I'll ask the other editors about it during today's call.
+
+[13:43:53.0134] <bakkot>
+probably this is possible to automate
+
+[13:44:03.0719] <bakkot>
+the API is fairly simple
+
+[13:59:24.0186] <ljharb>
+if you can automate it for the delegates channel too, based on the github team, that'd help out a lot :-)
+
+[14:03:59.0104] <bakkot>
+not without a canonical machine-readable mapping between github usernames and matrix handles
+
+[14:04:03.0978] <bakkot>
+given such a thing it's probably easy enough
+
+[14:13:51.0376] <ljharb>
+the info is largely contained in Admin and Business github issues, but it'd be reasonable enough to move it to a file or wiki page or something in that repo
+
+
+2023-06-22
+[20:02:05.0126] <bakkot>
+how do people feel about bit packing?
+
+like if I want to represent 0, 2, or 4 booleans, I could do that by having a `{ length: 0 | 2 | 4, value: 0-16 }` pair, or I could do it by having a single int32 where the first 2 bits indicate the number of booleans and the next 0-4 bits represent the booleans themselves
+
+[20:02:19.0298] <bakkot>
+this doesn't come up much (ever?) on the web platform but is very common in other spaces
+
+[20:08:01.0050] <rbuckton>
+We do that all the time in the TypeScript compiler, and there are more than a few packages built with TS that use bitflags-based enums
+
+[20:09:00.0130] <rbuckton>
+Well, not exactly as you described I suppose
+
+[20:17:16.0967] <bakkot>
+yeah, flags specifically is a slightly different case, I think
+
+[20:17:30.0450] <bakkot>
+here it's a combination of a flag and a (small) int
+
+[20:17:38.0709] <bakkot>
+ * here it's a combination of a flag-like thing and a (small) int
+
+[21:16:34.0657] <bakkot>
+to be clear this would be specifically for a standard library API (https://github.com/tc39/proposal-arraybuffer-base64/issues/21#issuecomment-1601938101), not just in general
+
+[23:35:25.0859] <Ashley Claymore>
+Genuine q: Is it common to do that in languages that don't have unions/typed-structs/low-bit-width-integers? Feels more like the type of thing I would see in C/Rust style languages, (as a first reaction)
+
+[01:09:25.0056] <shu>
+bakkot: bit packing into object fields?
+
+[01:09:39.0526] <shu>
+i think that makes more sense in structs than in ordinary objects
+
+[02:53:09.0624] <Rob Palmer>
+🇯🇵🇯🇵🇯🇵 ***Reminder***  🇯🇵🇯🇵🇯🇵
+
+- Please fill in [the Interest Survey](https://github.com/tc39/Reflector/issues/478) for the Sept/Nov in-person plenary meeting in Tokyo.
+
+- It only take 60s to complete. The deadline is Sunday 25th June (three days time).
+
+- Thank you to the 26 people who have already completed it 👍
+
+
+[07:19:17.0092] <littledan>
+> <@robpalme:matrix.org> 🇯🇵🇯🇵🇯🇵 ***Reminder***  🇯🇵🇯🇵🇯🇵
+> 
+> - Please fill in [the Interest Survey](https://github.com/tc39/Reflector/issues/478) for the Sept/Nov in-person plenary meeting in Tokyo.
+> 
+> - It only take 60s to complete. The deadline is Sunday 25th June (three days time).
+> 
+> - Thank you to the 26 people who have already completed it 👍
+> 
+
+Note, TC39 in Japan is at risk of not happening unless we see more interest. So please fill this out.
+
+Even if you aren’t sure about your availability, it would be good to hear that (it is an option in the survey). If you are aware of whether someone else is likely to attend, but they are unable to fill this out (e.g. they are on leave), let’s get that communicated somehow as well.
+
+[07:36:04.0726] <shu>
+does 262 require denormals to be supported?
+
+[07:36:10.0528] <shu>
+the Number section reads like yes, but https://tc39.es/ecma262/#sec-number.min_value reads like no
+
+[09:06:50.0015] <bakkot>
+> <@shuyuguo:matrix.org> bakkot: bit packing into object fields?
+
+no, I mean, the options are either bit packing (into a single Number), or object fields
+
+[09:07:17.0132] <bakkot>
+the space of values to represent in this case is small enough to fit into a Uint32, so we could just use a Number, but that's more opaque for consumers than using separate object fields
+
+[10:29:42.0632] <Michael Ficarra>
+> <@shuyuguo:matrix.org> the Number section reads like yes, but https://tc39.es/ecma262/#sec-number.min_value reads like no
+
+6.1.6.1 tells us exactly how many inhabitants the Number type has, so subnormals must be supported
+
+[10:30:06.0411] <Michael Ficarra>
+should we normative PR to change the Number.MIN_VALUE requirements?
+
+[10:31:14.0538] <bakkot>
+no, we should add a clarifying note
+
+[10:31:31.0390] <bakkot>
+per https://esdiscuss.org/topic/denormalized-numbers
+
+[10:32:21.0900] <Michael Ficarra>
+so like... if your implementation is not compliant, please make it non-compliant in this way?
+
+[10:32:24.0793] <bakkot>
+yes
+
+[10:32:29.0987] <bakkot>
+"Implementations are required to support denormalized numbers. However, non-conforming implementations which do not denormalized numbers should set Number.MIN_VALUE to the smallest value they are capable of representing"
+
+[10:33:07.0138] <Michael Ficarra>
+it would still be normative IMO to replace that sentence with a note
+
+[10:33:14.0899] <Michael Ficarra>
+we should needs-consensus PR that
+
+[10:33:50.0753] <bakkot>
+I really do not think that's normative
+
+[10:33:58.0062] <bakkot>
+it's what it already says, for one thing
+
+[10:37:38.0593] <Michael Ficarra>
+I guess it's fine since it is only talking about non-conforming implementations, which doesn't really have any jurisdiction over
+
+[10:37:50.0824] <Michael Ficarra>
+and the statement it's making, on behalf of committee, is already being made today
+
+[10:38:05.0481] <Michael Ficarra>
+ * I guess it's fine since it is only talking about non-conforming implementations, which the committee doesn't really have any jurisdiction over
+
+[10:54:20.0497] <littledan>
+I don't understand what normative change you want to make
+
+[10:54:40.0340] <littledan>
+couldn't we just add a note that says "hey, to be clear, denormals are really supported in JS"
+
+[10:54:47.0644] <littledan>
+(if we consider the current text to be unclear)
+
+[10:56:03.0269] <littledan>
+> <@littledan:matrix.org> Note, TC39 in Japan is at risk of not happening unless we see more interest. So please fill this out.
+> 
+> Even if you aren’t sure about your availability, it would be good to hear that (it is an option in the survey). If you are aware of whether someone else is likely to attend, but they are unable to fill this out (e.g. they are on leave), let’s get that communicated somehow as well.
+
+tbh I'm surprised to see not that many responses from TC39 delegates who live in East Asia. Should we do more to make this survey visible to that group?
+
+[10:59:03.0631] <Michael Ficarra>
+> <@littledan:matrix.org> I don't understand what normative change you want to make
+
+There is text in the Number.MIN_VALUE section that is in normative position that we would be removing (by moving to a non-normative note), though it doesn't apply to any conformant implementation, so it should be fine to do without approval by committee
+
+[11:00:18.0869] <littledan>
+it's kinda discouraged to say "should" in a note... but anyway, yes, I'm fine with the editors just deciding on whatever sort of change here would be the clearest
+
+[11:00:54.0069] <Michael Ficarra>
+> <@littledan:matrix.org> tbh I'm surprised to see not that many responses from TC39 delegates who live in East Asia. Should we do more to make this survey visible to that group?
+
+Same. The whole point of having meetings be geographically distributed was to lower the attendance barrier for people in that region. If we don't get attendance for people from that region, we should just have all the meetings on US west since that's where most delegates are.
+
+[11:02:28.0863] <Michael Ficarra>
+On that point, Bergen is kinda out of the way, even for Europeans, so I'm not sure how much we really succeeded with lowering the barrier with that choice of venue
+
+[11:02:45.0406] <littledan>
+well, we had a vote comparing multiple locations and chose Bergen, right?
+
+[11:03:02.0463] <littledan>
+like Barcelona was also in the running but wasn't selected
+
+[11:03:14.0809] <littledan>
+there are many EU-based delegates
+
+[11:03:24.0394] <Michael Ficarra>
+Barcelona would be way better for accomplishing the accessibility goal IMO
+
+[11:06:55.0945] <Michael Ficarra>
+before the venue selection goes to a vote next time, the chairs should make sure they all meet our accessibility goals (not saying they didn't here, just that for me it doesn't appear to have met the bar)
+
+[11:09:13.0326] <Michael Ficarra>
+Tokyo, on the other hand, should be very easy to get to from anywhere in APAC
+
+[11:15:35.0035] <TabAtkins>
+> <@littledan:matrix.org> it's kinda discouraged to say "should" in a note... but anyway, yes, I'm fine with the editors just deciding on whatever sort of change here would be the clearest
+
+I'll be stricter: "should" absolutely should not be used in non-normative text in anything even remotely 2119-adjacent (which JS is). There's plenty of alternate words in English that don't carry 2119 semantics.
+
+[11:16:34.0759] <littledan>
+Note: One shouldn't use should in non-normative text
+
+[11:40:40.0612] <Michael Ficarra>
+TabAtkins: We can't impose any requirements at all on non-conforming implementations, so what do you think the note should say?
+
+[11:41:12.0904] <TabAtkins>
+Sure you can. They just won't be a tested comformance class
+
+[11:41:33.0740] <TabAtkins>
+We put normative requirements on *authors* sometimes 
+
+[11:42:41.0568] <TabAtkins>
+(not that tougyh necessarily need to make this normative; just saying)
+
+[11:42:56.0522] <TabAtkins>
+* (not that you necessarily need to make this normative; just saying)
+
+[11:47:47.0490] <bakkot>
+yes sorry I did not mean a literal note
+
+[11:47:58.0826] <bakkot>
+I just meant that we add those sentences to the existing prose, which is not currently a note
+
+[12:06:18.0156] <littledan>
+yes the concept of "multiple conformance classes" is necessary to make sense of the statement currently in the spec
+
+[12:06:36.0548] <littledan>
+> <@tabatkins:matrix.org> We put normative requirements on *authors* sometimes
+
+We never do this in JS FWIW
+
+[12:45:10.0448] <shu>
+i don't even know what it means to put normative requirements on authors
+
+[12:45:30.0338] <shu>
+do i put "conformant JS dev" on my resume
+
+[12:45:41.0082] <TabAtkins>
+It means you tell them what to do (or more likely dont' do) and then are allowed to snark at them on social media when they do it anyway)
+
+[12:46:00.0049] <shu>
+but at the same time do not build such a check into the language/API itself?
+
+[12:46:06.0313] <shu>
+or is it like, an uncheckable requirement?
+
+[12:47:47.0406] <bakkot>
+I have never needed permission to snark at people though I guess I generally avoid doing so on social media
+
+[12:48:04.0966] <shu>
+yes, i like to do it to their face
+
+[12:54:25.0119] <littledan>
+remember when we almost said that JS developers should use semicolons?
+
+[12:55:19.0824] <Chris de Almeida>
+ASI was a mistake
+
+[12:57:06.0690] <TabAtkins>
+Yeah authors just aren't a testable conformance class, it's fine
+
+[13:02:28.0134] <Andreu Botella>
+it's more like the opposite, authors imposing a testable conformance class onto JS spec editors, what with the multiple `Array.p.group` renames
+
+[13:06:14.0838] <Rob Palmer>
+My impression is that the anti-semicolon movement has mostly gone away. I follow many trendy JS influencers and their code is littered with semicolons. 
+
+[16:08:43.0904] <ljharb>
+imo we missed the window to be ahead of the game by declining to tell people to write code properly :-/
+
+
+2023-06-23
+[00:33:06.0697] <Rob Palmer>
+🇯🇵🇯🇵🇯🇵 Reminder 🇯🇵🇯🇵🇯🇵
+
+- Please fill in the Interest Survey for the Sept/Nov in-person plenary meeting in Tokyo.
+
+- It only take 60s to complete. The deadline is Sunday 25th June (two days time).
+
+- Thank you to the 30 people who have already completed it 👍
+
+[01:00:56.0513] <nicolo-ribaudo>
+> <@robpalme:matrix.org> 🇯🇵🇯🇵🇯🇵 Reminder 🇯🇵🇯🇵🇯🇵
+> 
+> - Please fill in the Interest Survey for the Sept/Nov in-person plenary meeting in Tokyo.
+> 
+> - It only take 60s to complete. The deadline is Sunday 25th June (two days time).
+> 
+> - Thank you to the 30 people who have already completed it 👍
+
+- For people that come in-person, depending on which date we end up choosing, you might have the opportunity to celebrate my birthday with me! 😛
+
+[02:18:47.0898] <Rob Palmer>
+ * 🇯🇵🇯🇵🇯🇵 Reminder 🇯🇵🇯🇵🇯🇵
+
+- Please fill in [the Interest Survey](https://github.com/tc39/Reflector/issues/478) for the Sept/Nov in-person plenary meeting in Tokyo.
+- It only take 60s to complete. The deadline is Sunday 25th June (two days time).
+- Thank you to the 30 people who have already completed it 👍
+
+[09:54:14.0415] <nicolo-ribaudo>
+I'm preparing slides for https://github.com/nicolo-ribaudo/ecma262/pull/4, and I'm wondering if it would be better to go through the proposal process or as a needs-consensus normative PR
+
+[09:54:26.0349] <nicolo-ribaudo>
+ * I'm preparing slides for https://github.com/nicolo-ribaudo/ecma262/pull/4, and I'm wondering if it would be better to go through the proposal process or as a needs-consensus normative PR. Does anyone have opinions?
+
+[09:55:47.0010] <ljharb>
+i think we'd need a plenary discussion at least before deciding on that; i think "needs consensus" would only be if the semantics and motivation are so compelling and uncontroversial that we're all confident there's nothing else normative to discuss
+
+[09:55:58.0909] <ljharb>
+ * i think we'd need a plenary discussion at least before deciding on that; i think "needs consensus" would only be if the semantics and motivation are so compelling and uncontroversial that we're all confident there's basically nothing else normative to discuss
+
+[09:56:32.0546] <nicolo-ribaudo>
+Ok I can end the slides asking "stage 1/2 or normative PR?"
+
+[09:56:37.0521] <nicolo-ribaudo>
+ * Ok, I can end the slides asking "stage 1/2 or normative PR?"
+
+[09:58:39.0243] <Michael Ficarra>
+definitely stage process from me
+
+[11:21:42.0928] <littledan>
+We considered this capability for optional chaining way back when, and decided we didn't have strong enough use cases (though contrary arguments were made IIRC).
+
+[11:22:02.0928] <littledan>
+I agree that this deserves to be treated as a staged feature
+
+[11:23:25.0528] <nicolo-ribaudo>
+> <@littledan:matrix.org> We considered this capability for optional chaining way back when, and decided we didn't have strong enough use cases (though contrary arguments were made IIRC).
+
+Right, I'm bringing it up again because now we have a lot of real-world experience with using optional chaining
+
+[11:25:07.0177] <littledan>
+Yeah I'm glad you're bringing this up
+
+[11:25:16.0132] <littledan>
+I support the proposal personally
+
+[11:25:55.0122] <Lea Verou>
+Great to see work in that direction, huge +1! From an author perspective, there is no obvious mental model that explains why optional chaining doesn't work for assignment. Entirely anecdotal but as an author myself, I stumble on this on the regular and still cannot internalize the restriction.
+
+[11:26:21.0638] <littledan>
+It'd be interesting to go through all the other cases that were excluded; IIRC there are like 8 separate things
+
+[11:26:24.0469] <Lea Verou>
+ * Great to see work in that direction, huge +1! From an author perspective, there is no obvious mental model that explains why optional chaining doesn't work for assignment. Entirely anecdotal but as an author myself, I stumble on this on the regular and still cannot internalize the restriction. Looking at the proposal, at least 1-5 seems to match expectaitons.
+
+[11:27:03.0249] <littledan>
+(Last time it was discussed, I wasn't quite convinced that we should include absolutely everything out of consistency, but I also don't see huge downsides to including more cases.)
+
+[11:27:52.0211] <nicolo-ribaudo>
+Listed at https://github.com/nicolo-ribaudo/ecma262/pull/4 :)
+
+[11:28:09.0573] <littledan>
+This analysis was particularly persuasive to me, in making the past decisions: https://github.com/tc39/proposal-optional-chaining/issues/17
+
+[11:28:40.0068] <littledan>
+Heh sorry for not reviewing all of this yet
+
+[11:31:12.0978] <littledan>
+so, for example, are we comfortable continuing to omit `new x?.()`?
+
+[11:31:23.0558] <littledan>
+(I am)
+
+[11:32:09.0951] <nicolo-ribaudo>
+I personally never found a case where I needed it
+
+[11:32:44.0396] <littledan>
+> <@nicolo-ribaudo:matrix.org> I personally never found a case where I needed it
+
+Yeah, I think this is a good reason to omit the feature, but if we want to go by the lens that Lea Verou just raised, we might consider it another way.
+
+[11:34:38.0150] <littledan>
+in particular, if we want to design around considering generalizing "there is no obvious mental model that explains why optional chaining doesn't work for assignment."
+
+[11:35:05.0611] <littledan>
+e.g., maybe we want to support `x?.y++`--that one stands out as useful, even if I like your reason for omitting it
+
+[11:35:15.0324] <Lea Verou>
+> <@nicolo-ribaudo:matrix.org> I personally never found a case where I needed it
+
+same
+
+[11:35:44.0529] <littledan>
+(sorry for putting words in your mouth there)
+
+[11:55:47.0950] <bakkot>
+peetk: you should probably remove the bit from your slide about `promise = Promise.withResolvers()`; that API shape is not going to happen and there's not much point bringing it to committee to get rejected
+
+[16:39:16.0544] <Chris de Almeida>
+https://doodle.com/meeting/participate/id/boyykLYe
+
+@room looking to convene TG3 next week.  please complete the above doodle.  keeping it short for now (30m slot), and this doodle isn't meant for recurring cadence.  rough agenda:
+
+- chair(s) vacancy
+- consideration of future meeting frequency and length
+- review of previous agendae
+- crafting of future agenda
+
+
+2023-06-24
+[03:59:06.0818] <Jack Works>
+if I want to be present IRL, can I get some help in visa materials? for example https://www.mofa.go.jp/files/000137089.pdf
+
+[04:05:27.0924] <Rob Palmer>
+I'm happy to try and help with that, Jack. Either by originating the invitation from Ecma or the hodt. 
+
+[04:05:50.0895] <Rob Palmer>
+* I'm happy to try and help with that, Jack. Either by originating the invitation from Ecma or the host (Bloomberg). 
+
+[04:06:57.0231] <Jack Works>
+thanks! I'll prepare for the visa after which meeting in Japan is decided
+
+[04:27:51.0573] <Rob Palmer>
+Excellent. I hope to meet you there in real life. 
+
+[04:28:53.0215] <Rob Palmer>
+Do you think there might be other people unsure of attendance due to visa uncertainty?
+
+[05:48:59.0226] <Jack Works>
+I'm not heard of that
+
+
+2023-06-25
+[20:07:32.0212] <Lea Verou>
+> <@leaverou:matrix.org> Great to see work in that direction, huge +1! From an author perspective, there is no obvious mental model that explains why optional chaining doesn't work for assignment. Entirely anecdotal but as an author myself, I stumble on this on the regular and still cannot internalize the restriction. Looking at the proposal, at least 1-5 seems to match expectaitons.
+
+Aand here’s some quick data: 41% of the people who use OC forget and try assignment at least sometimes (14% "all the time") https://twitter.com/LeaVerou/status/1672315249238614041
+
+[16:51:41.0458] <Justin Ridgewell>
+The AsyncContext code examples have had an optional assignment for a while: https://github.com/tc39/proposal-async-context#determine-the-initiator-of-a-task
+
+[16:51:49.0610] <Justin Ridgewell>
+```
+  span?.endTime = Date.now();
+```
+
+
+2023-06-26
+[02:23:11.0228] <littledan>
+Reminder: All Ecma member organizations (whether "ordinary" or another category) are welcome to join the Ecma GA starting tomorrow at 9 AM, Swiss time. DM me for a Zoom link, agenda or other meeting materials.
+
+[02:23:45.0641] <littledan>
+Be sure to either attend or send in your voting intentions form if you will be absent.
+
+[10:03:06.0598] <Michael Ficarra>
+When do you think we will make the go/no-go call on this? I'd like to start planning my Sept/Oct travel.
+
+[11:08:29.0756] <Chris de Almeida>
+today
+
+[11:21:38.0227] <shu>
+what's with these calendar issues
+
+[11:29:38.0065] <ljharb>
+they're all for the public calendar that Chris de Almeida is making
+
+[11:30:13.0501] <Chris de Almeida>
+https://github.com/tc39/how-we-work/issues/94#issuecomment-1522496596
+
+[11:30:52.0715] <Chris de Almeida>
+tl;dr -- it's up to each meeting's participants whether or not they want the item to appear on the public calendar
+
+[11:46:27.0296] <shu>
+ah okay, cool, thanks for doing the work
+
+[12:38:32.0637] <Chris de Almeida>
+note that something being on the public calendar does not mean the meeting itself is public
+
+[12:55:10.0363] <Michael Ficarra>
+I'm confused. Chris de Almeida are you asking for the owners of those meetings to comment on the issue about whether they should be public?
+
+[12:55:34.0664] <Michael Ficarra>
+If so, you probably should've messaged that somewhere.
+
+[12:57:21.0480] <Chris de Almeida>
+there is a plenary agenda item for it. and yes, under `meeting participants' tasks` the idea is that the meeting participants decide how to proceed
+
+[13:38:53.0484] <shu>
+bakkot: i'm confused by the symmetricDifference spec
+
+[13:39:20.0740] <shu>
+why is `inResult` needed?
+
+[13:39:37.0138] <shu>
+oh because of side effects of the iterator?
+
+[13:40:13.0207] <shu>
+love too javascript
+
+[14:08:00.0239] <bakkot>
+yyyyyyeah
+
+[14:08:12.0000] <bakkot>
+also the iterator can return the same value multiple times
+
+[14:08:47.0541] <bakkot>
+even in the absence of side effects
+
+[14:08:56.0096] <shu>
+yeah
+
+[14:09:20.0862] <shu>
+JS, the groverhaus of mathematics
+
+[14:11:26.0210] <bakkot>
+I'm not totally sure why I am still using `O.[[SetData]]` in step 7.b.iv though
+
+[14:11:40.0780] <bakkot>
+instead of a copy
+
+[14:11:54.0358] <bakkot>
+hm, no, I guess `intersection` does as well, so that's consistent
+
+[14:12:00.0110] <bakkot>
+don't want to make more copies than necessary
+
+
+2023-06-27
+[22:24:18.0236] <justingrant>
+> <@michaelficarra:matrix.org> justingrant: Yeah, you can simply ping `@tc39/ecma262-editors` on a tracking issue. Personally, I prefer to review as a PR against tc39/ecma262 (you're going to have to open one eventually anyway), but that's not necessary.
+
+FYI, I tagged the editors in a tracking issue here: https://github.com/tc39/proposal-canonical-tz/issues/37. Sorry for the spam in this channel; hopefully the permissions issue will be resolved in the editors' channel soon so I can post questions there next time. Thanks!
+
+[00:05:06.0484] <littledan>
+Ecma GA starting now--DM me for call-in information
+
+[00:27:37.0680] <bakkot>
+ljharb: here's a basic script for updating matrix permissions: https://gist.github.com/bakkot/3afb87b181210ca8d9535f6ec67db3fd
+
+[00:27:46.0249] <bakkot>
+hopefully it is sufficiently self-explanatory
+
+[00:28:21.0020] <bakkot>
+I don't know for sure if you can set power levels for people in a room without them having joined a room, but I think you probably can
+
+[01:37:32.0775] <Rob Palmer>
+The chair's update on the September Tokyo meeting is posted.  Please wait before making non-refundable travel plans.
+
+https://github.com/tc39/Reflector/issues/478#issuecomment-1609028288
+
+[07:09:18.0425] <ljharb>
+> <@bakkot:matrix.org> I don't know for sure if you can set power levels for people in a room without them having joined a room, but I think you probably can
+
+I’ve always had to invite them before setting it
+
+[07:10:06.0051] <Rob Palmer>
+We now have full confirmation that the September meeting will be in-person in Tokyo 🎉
+
+https://github.com/tc39/Reflector/issues/478#issuecomment-1609586014
+
+[08:31:55.0649] <Michael Ficarra>
+you should be able to post in the editors' channel now
+
+[08:36:10.0538] <Michael Ficarra>
+are you going for stage 3 at the upcoming meeting?
+
+[08:36:16.0392] <Michael Ficarra>
+I don't see you on the agenda
+
+[09:42:18.0017] <rbuckton>
+waldemar, shu : I'm not sure if you saw this, but I could use a review on https://github.com/tc39/proposal-explicit-resource-management/pull/163 for a part of the async resource management spec that I neglected to copy into the previous PR for the merged proposal. 
+
+[10:59:35.0642] <ljharb>
+rickbutton: the R&T monthly call is scheduled for right now, but the zoom link in the event says "invalid meeting ID"
+
+[11:03:26.0923] <Ashley Claymore>
+whoops, just created a new link
+
+[11:03:31.0973] <Ashley Claymore>
+on the doc
+
+[14:42:24.0966] <davethegr8>
+Checking my understanding: The deadline for proposal advancements is 10 days before plenary right? I don't see that in the Bergen reflector issue so wanting to make sure.
+
+[14:46:06.0546] <bakkot>
+davethegr8: correct; you can find it on the agenda: https://github.com/tc39/agendas/blob/main/2023/07.md
+
+[14:47:07.0760] <davethegr8>
+> <@bakkot:matrix.org> davethegr8: correct; you can find it on the agenda: https://github.com/tc39/agendas/blob/main/2023/07.md
+
+Thanks, I knew it was somewhere. 🙃
+
+
+2023-06-28
+[14:50:59.0483] <bakkot>
+shu: you should probably get the resizable buffers spec PR up if you want to go for stage 4
+
+[14:51:22.0546] <bakkot>
+it's part of the supporting materials and the deadline is coming up in two days
+
+[14:51:37.0955] <bakkot>
+also general PSA the deadline for adding agenda items for advancement is in just over 2 days
+
+
+2023-06-29
+[18:52:10.0518] <bakkot>
+just added the following not-very-modest proposal to the agenda: https://docs.google.com/presentation/d/1m5R5J98W6adegghgkAlbSuFgAYJDT52yyFVdAqLjm00/edit
+
+[18:52:24.0700] <bakkot>
+looking forward to arguing this with all of you at 4 in the morning next month
+
+
+2023-06-30
+[21:43:52.0052] <snek>
+bakkot have u considered that this will destroy code golfing
+
+[21:43:55.0080] <snek>
+think of the golfers
+
+[21:48:28.0844] <snek>
+hot take can we stop using threads until they get better? you can't see what they are about or mark them as read without going through each one 
+
+[11:18:06.0266] <rbuckton>
+waldemar, shu, or any of the other ecma262 editors, could you briefly look over https://github.com/tc39/proposal-explicit-resource-management/pull/166 for me? There should be no normative changes as this is just to align the spec text in the proposal repository with the current spec text from ECMA-262.
+
+[11:19:00.0159] <rbuckton>
+I'm hoping to clean up the proposal spec in advance of discussing several small normative PRs in the upcoming plenary.
+
+[11:48:06.0406] <bakkot>
+> <@devsnek:matrix.org> bakkot have u considered that this will destroy code golfing
+
+good
+

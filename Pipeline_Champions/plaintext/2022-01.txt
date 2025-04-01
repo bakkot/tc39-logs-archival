@@ -1,0 +1,2715 @@
+2022-01-04
+[09:57:40.0857] <TabAtkins>
+jschoi: Oh man, this diagram is great.
+
+[10:00:53.0632] <TabAtkins>
+Hmm, I wonder if Extensions has a way to handle the syntax ambiguity of its trinary form - is `x?y::z:f()` equal to `x ? (y::z:f())` or `x ? (y::z) : f()`? Does it depend on whether there's a trailing `: elseVal` afterwards?
+
+[10:04:02.0427] <jschoi>
+> <@tabatkins:matrix.org> Hmm, I wonder if Extensions has a way to handle the syntax ambiguity of its trinary form - is `x?y::z:f()` equal to `x ? (y::z:f())` or `x ? (y::z) : f()`? Does it depend on whether there's a trailing `: elseVal` afterwards?
+
+According to Hax’s slides, the trinary form is type-polymorphic depending on whether the middle operand evaluates into a constructor or not. 
+
+[10:04:12.0521] <jschoi>
+* > <@tabatkins:matrix.org> Hmm, I wonder if Extensions has a way to handle the syntax ambiguity of its trinary form - is `x?y::z:f()` equal to `x ? (y::z:f())` or `x ? (y::z) : f()`? Does it depend on whether there's a trailing `: elseVal` afterwards?
+
+The trinary form is type-polymorphic depending on whether the middle operand evaluates into a constructor or not. 
+
+[10:04:28.0087] <jschoi>
+* > <@tabatkins:matrix.org> Hmm, I wonder if Extensions has a way to handle the syntax ambiguity of its trinary form - is `x?y::z:f()` equal to `x ? (y::z:f())` or `x ? (y::z) : f()`? Does it depend on whether there's a trailing `: elseVal` afterwards?
+
+According to Hax’s slides, the trinary form is type-polymorphic depending on whether the middle operand evaluates into a constructor or not. 
+
+[10:04:37.0857] <TabAtkins>
+I'm talking at a higher level of parsing, before evaluation occurs.
+
+[10:04:43.0781] <jschoi>
+Oh wait I see. 
+
+[10:04:50.0854] <jschoi>
+Yeah, I see. 
+
+[10:05:07.0756] <TabAtkins>
+The ?: trinary really poisons single-colon usage.
+
+[10:10:38.0200] <Nicolò>
+TS and Flow are a nightmare to parse because of their usage of : for return type annotations (especially of arrow functions)
+
+[10:19:16.0455] <TabAtkins>
+Hrmmm, Extension's `obj::foo = 1` syntax for setters doesn't generalize. `obj::foo::bar = 1` will call `foo` as a getter, then `bar` as a setter, meaning you still can't use it for functional data structures, which need to unfold the earlier parts of the assignment chain into get/set pairs.
+
+[10:23:09.0446] <jschoi>
+Regarding `x?y::z:f()`, I figure that it would be a SyntaxError to include an unparenthesized trinary extensions expression inside a trinary conditional expression.
+
+Regarding `obj::foo::bar = 1`, yeah, that is a problem, and I don’t know how it could actually work.
+
+CC: HE Shi-Jun 
+
+
+
+[10:24:09.0896] <jschoi>
+(By the way, Nicolò: if babel/babel#13973 looks good to you, I’m going to start work on `@[]`/`@{}` syntax for tuples/records soon based on that pull request.)
+
+[10:54:32.0182] <TabAtkins>
+Okay yeah, looking over it freshly and in depth now, I think Extension's only real wins are (a) reusing methods that happen to be generic enough to be useful on arbitrary objects (relatively rare outside of Array), and (b) adding getters/setters to objects without having to screw with the prototype.
+
+[10:55:26.0343] <TabAtkins>
+The NS polymorphism letting you define a `function foo(arg0, arg1)` and then call it as `arg0::NS:meth(arg1)` isn't any better than pipe's `arg0 |> NS.meth(##, arg1)`, and pipe has less magic going on in that case.
+
+[10:56:26.0184] <TabAtkins>
+The "add a *method* to an existing class without screwing with the prototype" use-case is handled just as well by pipe, as above.
+
+[11:02:55.0858] <TabAtkins>
+And yeah, just confirmed for myself that existing getters/setters don't handle functional data structures well either; `x.foo.bar.baz` just calls the "foo" and "bar" getters then the "baz" setter and nothing else
+
+[12:04:06.0570] <jschoi>
+I imagine that whatever “property descriptor” objects that extensions use would actually have to be a new kind of recursive “reference record” object, but Hax might have something else to say about this.
+
+[12:04:27.0052] <jschoi>
+I wonder if it would be worth carving out January plenary time to present this diagram and discuss all of these proposals at once…
+
+[12:26:11.0731] <TabAtkins>
+I think it would be, yeah
+
+[12:26:20.0427] <TabAtkins>
+Wrote up my thoughts after digesting this: https://gist.github.com/tabatkins/60d831d3e304e3e7316d473f5c1f269b
+
+[12:28:06.0088] <TabAtkins>
+IIRC, ljharb's main desired use-case for bind-this was method extraction - I forget, was it for reliable use on objects of the type it was extracted from (just protecting against prototype mutation) or for calling on different types of objects?
+
+[12:33:22.0742] <ljharb>
+it's for whatever it takes for me to robustly invoke a function while providing the receiver
+
+method extraction + normal invocation achieves this. so too would syntax to call with a receiver.
+
+[12:33:38.0075] <jschoi>
+My argument for bind-this is that .bind and .call (especially .call) are immensely common in general; .call occurrences in the top-1000-downloaded NPM packages are more frequent than .slice, .set, and .push occurrences combined. I think there are at least four or five different use cases in which .call occurs in, although I suppose they could be lumped together into your second and third use cases. (The second use case actually occurs quite frequently in the dataset, from what I recall, but I’d need to recheck.)
+
+[12:33:57.0267] <ljharb>
+ * it's for whatever it takes for me to robustly invoke a function while providing the receiver
+
+method extraction + normal invocation achieves this. so too would syntax to call with a receiver.
+
+[12:34:22.0879] <jschoi>
+* My argument for bind-this is that .bind and .call (especially .call) are immensely common in general; .call occurrences in the top-1000-downloaded NPM packages are more frequent than .slice, .set, and .push occurrences combined. I think there are at least four or five different use cases in which .call occurs in, although I suppose they could be lumped together into your second and third use cases. (The second use case actually occurs quite frequently in the dataset, from what I recall, but I’d need to recheck.)
+
+[12:35:30.0048] <jschoi>
+The sheer frequency of already-extant .call occurrences alone suggests that .call may be worth optimizing for better word order and conciseness. The pipe operator solves .call’s word order but not .call’s conciseness.
+
+[12:35:49.0828] <jschoi>
+* My argument for bind-this is that .bind and .call (especially .call) are immensely common in general; .call occurrences in the top-1000-downloaded NPM packages are more frequent than .slice, .set, and .push occurrences combined; they exceed even console.log occurrences. I think there are at least four or five different use cases in which .call occurs in, although I suppose they could be lumped together into your second and third use cases. (The second use case actually occurs quite frequently in the dataset, from what I recall, but I’d need to recheck.)
+
+[12:35:58.0788] <jschoi>
+* My argument for bind-this is that .bind and .call (especially .call) are immensely common in general; .call occurrences in the top-1000-downloaded NPM packages are more frequent than .slice, .set, and .push occurrences combined; .call occurrences exceed even console.log occurrences. I think there are at least four or five different use cases in which .call occurs in, although I suppose they could be lumped together into your second and third use cases. (The second use case actually occurs quite frequently in the dataset, from what I recall, but I’d need to recheck.)
+
+[12:37:22.0369] <jschoi>
+* The sheer frequency of already-extant .call occurrences suggests that .call may be worth optimizing for better word order and conciseness. The pipe operator solves .call’s word order but not .call’s conciseness.
+
+[12:37:37.0523] <jschoi>
+* The sheer frequency of already-extant .call occurrences alone suggests that .call may be worth optimizing for better word order and conciseness. The pipe operator solves .call’s word order but not .call’s conciseness.
+
+[12:38:53.0343] <jschoi>
+Some more details about found extant use cases for .call can be found starting at https://github.com/tc39/proposal-bind-this/issues/12#issuecomment-939400362.
+
+[12:39:47.0390] <jschoi>
+…which resulted in the results listed in https://github.com/tc39/proposal-bind-this/blob/main/README.md#bind-and-call-are-very-common.
+
+[12:40:55.0098] <jschoi>
+To sum up, I think that the second and third use cases that you list for bind-this in the Gist are (perhaps surprisingly) not rare; they are in fact very frequent in existing code, and therefore they may be worth optimizing for. So I disagree with that part of the Gist, although this reasoning is obviously motivated by the fact that I am bind-this’s champion, haha.
+
+[12:41:01.0434] <jschoi>
+I think the rest of the Gist makes sense; great job in general.
+
+[12:41:18.0286] <jschoi>
+* To sum up, I think that the second and third use cases that you list for bind-this in the Gist are (perhaps surprisingly) not rare; they are very frequent in existing code. So I disagree with that part of the Gist, although this reasoning is obviously motivated by the fact that I am bind-this’s champion, haha.
+
+[12:41:24.0788] <jschoi>
+* I think the rest of the Gist makes sense; great job in general.
+
+[12:41:40.0766] <jschoi>
+* To sum up, I think that the second and third use cases that you list for bind-this in the Gist are (perhaps surprisingly) not rare; they are in fact very frequent in existing code, and therefore they may be worth optimizing for. So I disagree with that part of the Gist, although this reasoning is obviously motivated by the fact that I am bind-this’s champion, haha.
+
+[12:42:07.0006] <jschoi>
+* My argument for bind-this is that .bind and .call (especially .call) are immensely common in general; .call occurrences in the top-1000-downloaded NPM packages are more frequent than .slice, .set, and .push occurrences combined; .call occurrences exceed even console.log occurrences. I think there are at least four or five different use cases in which .call occurs in, although I suppose they could be lumped together into your second and third use cases. (You say that your second use case is rare, but it actually occurs quite frequently in the NPM dataset, from what I recall, but I’d need to recheck.)
+
+[12:47:31.0699] <TabAtkins>
+I need to reread your .call() data; it's still the case that I have approximately never seen those methods used in real code, so the extremely heavy usage still blows me away.
+
+[12:48:52.0147] <jschoi>
+That would be great. The procedure to print all dataset matches in a terminal is hidden in a <details> element, at the bottom of that section in README.md.
+
+[12:49:12.0893] <jschoi>
+* That would be great. The procedure to print all dataset matches in a terminal is hidden in a <details> element, at the bottom of that section in README.md.
+
+[12:51:54.0014] <TabAtkins>
+Okay, yeah, the "reuse an array method" cases being very common are unsurprising, but generally iterator helpers and/or just using `[...x]` are just as good. The Object.prototype stuff, similarly - those should all go thru the same transform as `Object.hasOwn()`, honestly.
+
+[12:53:34.0109] <TabAtkins>
+Any anything around transpiled code isn't, imo, an important use-case. Transpilers don't need nice syntax for what they're doing, they're outputting write-only code in the first place.
+
+[12:54:25.0605] <jschoi>
+Yes, agreed on transpilation: we did exclude any transpilation artifacts that we found (they’re excluded in the CLI command and are also listed in a table with explanations in the README.md <details> element.)
+
+[12:54:35.0166] <jschoi>
+* Yes, agreed on transpilation: we did exclude any transpilation artifacts that we found (they’re excluded in the CLI command and are also listed in a table with explanations in the README.md <details> element.)
+
+[12:55:32.0526] <jschoi>
+* Yes, definitely agreed on not caring about optimizing for transpilation: we did exclude any transpilation artifacts that we found (they’re excluded in the CLI command and are also listed in a table with explanations in the README.md <details> element.)
+
+[12:55:42.0290] <jschoi>
+* Yes, definitely agreed on not caring about optimizing for transpilation: we did exclude any transpilation artifacts that we found (they’re excluded by the CLI command and are also listed in a table with explanations in the README.md <details> element.)
+
+
+2022-01-06
+[10:27:02.0385] <TabAtkins>
+Okay, just reminding myself: an "uncurry-this" operator (or unforgeable function) would satisfy ljharb's usecase, right? You'd be able to reliably yank methods off of classes and then later call them with specific objects, just as a normal function taking the object as its first arg. If we can limit it to that one usage, the overlap with pipe disappears, and it instead works nicely _with_ pipe.
+
+[10:27:19.0122] <TabAtkins>
+ * Okay, just reminding myself: an "uncurry-this" operator (or unforgeable function) would satisfy ljharb's usecase, right? You'd be able to reliably yank methods off of classes and then later call them with specific objects, just as a normal function taking the object as its first arg. If we can limit it to that one usage, the overlap with pipe disappears, and it instead works nicely _with_ pipe.
+
+[10:28:36.0423] <ljharb>
+something that lets me, eg, `const { slice } = Array.prototype; slice::(receiver, ...args)` or `const slice = ::Array.prototype.slice; slice(receiver, ...args)` would work
+
+[10:28:48.0601] <TabAtkins>
+Yes, exactly.
+
+[10:28:54.0806] <ljharb>
+and yes i 100% agree that it works very well in concert with pipe
+
+[10:28:59.0937] <ljharb>
+the call form in particular
+
+[10:29:16.0006] <ljharb>
+and both would also work well in concert with `getIntrinsic`
+
+[10:51:52.0694] <TabAtkins>
+All right, I've added a nota bene to my summary essay covering this: https://gist.github.com/tabatkins/60d831d3e304e3e7316d473f5c1f269b#nota-bene-reliable-method-calling
+
+[10:52:10.0045] <TabAtkins>
+I agree that the call-operator version works better, for several reasons I outline here.
+
+[11:06:13.0674] <jschoi>
+If I may try summarizing: between `arrayLike |> slice::(##, 1)` and `arrayLike |> ##::slice(1)`, you prefer the former, Tab, right?
+
+[11:08:42.0988] <jschoi>
+(The former uses the newly proposed “call-on” operator while the latter uses the “bind-this” operator.)
+
+[11:15:21.0281] <TabAtkins>
+yes, strongly prefer the former
+
+[11:16:01.0111] <TabAtkins>
+It solves the problem just as elegantly, but without the possibility of people writing libraries intentionally aimed at that calling style
+
+[11:16:12.0214] <Ashley Claymore>
+I imagine `arrayLike |> ##::slice(1)` appearing on it's own (not as part of a longer pipe) would be uncommon as one could write `arrayLike::slice(1)`
+
+[11:16:23.0791] <TabAtkins>
+right, exactly
+
+[11:16:25.0262] <Ashley Claymore>
+> <@jschoi:matrix.org> If I may try summarizing: between `arrayLike |> slice::(##, 1)` and `arrayLike |> ##::slice(1)`, you prefer the former, Tab, right?
+
+ * I imagine `arrayLike |> ##::slice(1)` appearing on it's own (not as part of a longer pipe) would be uncommon as one could write `arrayLike::slice(1)`
+
+[11:17:18.0683] <jschoi>
+Yes, I did `arrayLike |> ##::slice(1)` only to show parallelism, but it would actually be `arrayLike::slice(1)`.
+
+[11:17:19.0068] <TabAtkins>
+also, I think it's better ad-hoc - `arrayLike::Array.prototype.slice(1)` requires us to be pretty careful with precedence to get right, but `Array.prototyype.slice::(arrayLike, 1)` is easy
+
+[11:18:12.0588] <TabAtkins>
+i think it's pretty easy to explain, too, since it's literally just "`.call()`, but an operator"
+
+[11:18:29.0633] <jschoi>
+I think this is understandable. I can try proposing a rival-rival call-on operator at the next meeting along with Function.pipe.
+
+[11:18:51.0730] <TabAtkins>
+Let's get in on that together, and we can rope in Jordan too. ^_^
+
+[11:19:18.0382] <TabAtkins>
+i'm thinking over how I might present your diagram for an overview/discussion
+
+[11:22:42.0010] <TabAtkins>
+invites sent, lmk if anyone else wants in
+
+[11:22:55.0942] <Ashley Claymore>
+> <@tabatkins:matrix.org> i think it's pretty easy to explain, too, since it's literally just "`.call()`, but an operator"
+
+that seems like a potential weakness? Seems that makes the benefit mostly about protection against `Function.prototype.call` being patched? Which can be done with `Array.prototype.slice |> ReflectApply(##, arrayLike, 1)`
+
+[11:23:31.0886] <TabAtkins>
+Well it's ".call(), but more convenient". 
+
+[11:23:38.0601] <jschoi>
+I would argue the primary benefit is that `.call` is very common and we are shortening a very common function.
+
+[11:24:25.0895] <jschoi>
+(I’d also be particularly interested to know how much Richard Gibson feels call-on would overlap with other dataflow proposals.)
+
+[11:25:33.0444] <Ashley Claymore>
+`call` is already quite short and doesn't involve holding shift to type?
+
+[11:26:24.0468] <jschoi>
+I guess I do need to work out how things would change with having to use pipe with call-on to get the word-order benefit…
+
+[11:26:37.0719] <TabAtkins>
+not if you're worried about patching, which is a big part of this in the first place
+
+[11:27:02.0193] <TabAtkins>
+`meth |> ReflectApply(##, obj, args)` is a lot longer ^_^
+
+[11:27:22.0061] <jschoi>
+And also obscures the meaning of the code (important, since this use case actually very commonly occurs).
+
+[11:27:47.0184] <jschoi>
+* And also obscures the meaning of the code (which very commonly occurs).
+
+[11:28:08.0170] <jschoi>
+* And also obscures the meaning of the code (important, since this use case actually very commonly occurs).
+
+[11:28:58.0934] <jschoi>
+It would probably be `obj |> ReflectApply(meth, ##, args)`, though.
+
+[11:29:24.0399] <jschoi>
+Versus `obj |> meth::(##, args)`.
+
+[11:29:34.0876] <TabAtkins>
+ah yeah, sure
+
+[11:31:27.0074] <TabAtkins>
+I will admit tho, that a major motivation for this particular shape is to solve this use-case *without* overlapping over dataflow proposals. Between Pipe and PFA, the other bind-this operations can be done reasonably well already; this covers the last significant unhandled use-case (afaict) without stomping on either of those.
+
+[11:34:50.0317] <jschoi>
+My argument for bind-this had been that .call’s frequency (as well as, to a lesser extent, .bind’s) is sufficiently high to justify optimizing its word order and brevity with syntax, even in spite of its overlap with the pipe operator, similarly to how Function.pipe is useful in spite of the pipe operator. But if we can solve word order and brevity by combining with pipe instead of overlapping with it, so much the better. The syntax of call-on is simpler, too.
+
+[11:35:28.0327] <jschoi>
+* My argument for bind-this had been that .call’s frequency (as well as, to a lesser extent, .bind’s) is sufficiently high to justify optimizing its word order and brevity with syntax, even in spite of its overlap with the pipe operator, similarly to how Function.pipe is useful in spite of the pipe operator. But if we can solve word order and brevity by combining with pipe instead of overlapping with it, so much the better. The syntax of call-on is simpler, too. And, although call-on does not improve using .bind, .bind’s frequency is not nearly as high as .call’s.
+
+[11:35:34.0797] <jschoi>
+* My argument for bind-this had been that .call’s frequency (as well as, to a lesser extent, .bind’s) is sufficiently high to justify optimizing its word order and brevity with syntax, even in spite of its overlap with the pipe operator, similarly to how Function.pipe is useful in spite of the pipe operator. But if we can solve word order and brevity by combining with pipe instead of overlapping with it, so much the better. The syntax of call-on is simpler, too. And, although call-on does not improve using .bind, .bind’s frequency is not nearly as high as .call’s, so it is less important.
+
+[11:36:21.0060] <TabAtkins>
+And when .bind is just used to hard-bind a method to the object it's already sitting on, PFA covers that well on its own. The remaining "hard-bind a method to an unrelated object" is, afaict, a lot less common.
+
+[11:36:22.0930] <jschoi>
+* My argument for bind-this had been that .call’s frequency (as well as, to a lesser extent, .bind’s) is sufficiently high to justify optimizing its word order and brevity with syntax, even in spite of its overlap with the pipe operator, similarly to how Function.pipe is useful in spite of the pipe operator. But if we can optimize .call’s word order and brevity by combining with the pipe instead of overlapping with it, so much the better. The syntax of call-on is simpler, too. And, although call-on does not improve using .bind, .bind’s frequency is not nearly as high as .call’s, so it is less important.
+
+[11:36:34.0234] <Ashley Claymore>
+Another potential solution to avoiding `Function.prototype.call` tampering. Is a build step.
+A tool that looks for `someMethod.$call(obj, ...args)` and transforms it to `reflectApply(someMethod, obj, args)`.
+It could install `Function.prototype.$call` during development to avoid needing to transform during fast dev builds. And only transform for production.
+
+[11:36:44.0288] <ljharb>
+TabAtkins:  i definitely would prefer something that's ordered like receiver, function, arguments tho
+
+[11:37:00.0550] <ljharb>
+build steps don't solve the problem for packages, and it's very dangerous to transpile code you didn't author, so i wouldn't want us to recommend that.
+
+[11:37:07.0681] <ljharb>
+ * TabAtkins:  i definitely would prefer something that's ordered like receiver, function, arguments tho
+
+[11:37:17.0161] <ljharb>
+ * build steps don't solve the problem for packages, and it's very dangerous to transpile code you didn't author
+
+[11:37:22.0056] <ljharb>
+ * build steps don't solve the problem for packages, and it's very dangerous to transpile code you didn't author, so i wouldn't want us to recommend that.
+
+[11:37:26.0437] <jschoi>
+The receiver–function–arguments word order is solved (albeit slightly more verbosely) with pipe operator + call-on.
+
+[11:37:54.0142] <TabAtkins>
+I understand why that order is appealing, but note that using that order makes it easy to publish modules that are *intended* to be called with this syntax, promoting ecosystem forking that we don't want.
+
+[11:38:01.0747] <ljharb>
+how? `fn |> ^::(receiver, ...args)` has the same ordering issue as `fn::(receiver, ...args)`
+
+[11:38:06.0937] <jschoi>
+`receiver |> fn::(#, ...args)` has the desired word order. @ljharb 
+
+[11:38:10.0334] <TabAtkins>
+Thus the overlap with pipe that makes some committee members uncomfortable, yeah
+
+[11:38:20.0073] <ljharb>
+any function that looks at `this` is intended to be called with this syntax - which includes most builtin methods. no explicit intention beyond that is or should be required.
+
+[11:38:24.0624] <ljharb>
+ * any function that looks at `this` is intended to be called with this syntax - which includes most builtin methods
+
+[11:38:34.0875] <ljharb>
+ * any function that looks at `this` is intended to be called with this syntax - which includes most builtin methods. no explicit intention is or should be equired.
+
+[11:38:36.0210] <ljharb>
+ * any function that looks at `this` is intended to be called with this syntax - which includes most builtin methods. no explicit intention is or should be required.
+
+[11:38:38.0380] <jschoi>
+* `receiver |> fn::(#, ...args)`.
+
+[11:38:39.0334] <ljharb>
+ * any function that looks at `this` is intended to be called with this syntax - which includes most builtin methods. no explicit intention beyond that is or should be required.
+
+[11:38:43.0843] <TabAtkins>
+Right, publishing a module where *free-floating functions* are authored to use `this` is, imo, bad.
+
+[11:39:18.0030] <ljharb>
+i'm not sure what you mean, that's already a thing people can (and sometimes do) do
+
+[11:39:18.0500] <jschoi>
+* `receiver |> fn::(#, ...args)` has the desired word order.
+
+[11:39:37.0933] <TabAtkins>
+Who does that today? You'd have to use `.call()` to invoke the functions.
+
+[11:39:40.0676] <ljharb>
+it's not our place to discourage `export default function (...args) { this }`, that's a normal part of the language
+
+[11:39:43.0894] <ljharb>
+yes, that's right, you would
+
+[11:39:50.0087] <jschoi>
+* `receiver |> fn::(#, ...args)` has the desired word order. @ljharb 
+
+[11:39:59.0438] <ljharb>
+and "use `.call()`" is the thing that needs to be made easier/more robust
+
+[11:40:02.0326] <ljharb>
+ * and "use `.call()`" is the thing that needs to be made easier/more robust
+
+[11:40:02.0403] <TabAtkins>
+Okay, well that's werid and people can be weird if they want. But that's not something normal libraries do.
+
+[11:40:50.0877] <TabAtkins>
+Publishing functions with that signature (a) overlaps with the pipe use-case, and (b) forces an up-front calling-convention decision that is distinct from how every other function in the language is called.
+
+[11:41:02.0356] <TabAtkins>
+ * Publishing functions with that signature (a) overlaps with the pipe use-case, and (b) forces an up-front calling-convention decision that is distinct from how every other function in the language is called.
+
+[11:41:09.0519] <jschoi>
+`topic.fn(arg)`, `topic |> fn(#, arg)`, `topic |> fn::(#, arg)`.
+
+[11:41:24.0091] <jschoi>
+All the same word order.
+
+[11:41:53.0364] <ljharb>
+it only forces it if the receiver is required. it's perfectly fine if there's fallback behavior for when `this` is nullish
+
+[11:42:15.0566] <ljharb>
+jschoi: no, in the last two, the function comes first before the topic (because only the word order in that one pipe segment is what i think matters)
+
+[11:42:26.0980] <ljharb>
+ * jschoi: no, in the last two, the function comes first before the topic
+
+[11:42:38.0986] <TabAtkins>
+Not as authored, no - that's the point.
+
+[11:42:41.0572] <ljharb>
+ * jschoi: no, in the last two, the function comes first before the topic (because only the word order in that one pipe segment is what i think matters)
+
+[11:42:45.0033] <jschoi>
+I’m talking about for each entire expression.
+
+[11:42:49.0191] <TabAtkins>
+The code is literally in the same order in all three.
+
+[11:42:59.0753] <ljharb>
+the function call only occurs in the one segment
+
+[11:43:11.0757] <ljharb>
+a pipeline is not one atomic thing, it's an aggregation of segments
+
+[11:43:21.0175] <TabAtkins>
+Yes?
+
+[11:43:25.0207] <jschoi>
+Well, it can be viewed either way, right?
+
+[11:43:29.0242] <ljharb>
+sure
+
+[11:43:37.0061] <jschoi>
+Pipes can be viewed as a rearrangement of word order.
+
+[11:43:40.0583] <ljharb>
+but since it can be viewed segment-by-segment, the word order is wrong when viewed that way
+
+[11:43:55.0608] <ljharb>
+i'm specifically talking about the ordering of a single function call
+
+[11:44:06.0568] <ljharb>
+`obj.method(...args)` is the order everyone expects
+
+[11:44:18.0603] <ljharb>
+`fn.call(obj, ...args)` is awkward primarily because the order is weird (the robustness angle is separate)
+
+[11:44:25.0976] <ljharb>
+ * `fn.call(obj, ...args)` is awkward primarily because the order is weird (the robustness angle is separate)
+
+[11:44:50.0062] <ljharb>
+which is why `obj::fn(...args)` is nice
+
+[11:45:05.0182] <ljharb>
+because it restores intuitive OOP ordering for a non-OOP usage
+
+[11:46:16.0313] <jschoi>
+Well, with functional programming, people do do `fn(primaryThingOfInterest)` too, but `primaryThingOfInterest |> fn(#)` is an improvement in word order, too.
+
+[11:47:08.0125] <jschoi>
+We could do something like `primaryThingOfInterest@@fn()` to mean `fn(primaryThingOfInterest)`, which in fact is something that Hax’s extensions can do. The word order is improved in that case also. But `|>` also takes care of it…if you view a pipe as a single atomic thing. If you don’t, then, well, you need that `@@` operator or whatever to improve the word order for non-this-using calls too.
+
+[11:47:26.0821] <jschoi>
+* We could do something like `primaryThingOfInterest@@fn()` to mean `fn(primaryThingOfInterest)`, which in fact is something that Hax’s extensions can do. But `|>` also takes care of it…if you view a pipe as a single atomic thing.
+
+[11:47:55.0791] <jschoi>
+* We could do something like `primaryThingOfInterest@@fn()` to mean `fn(primaryThingOfInterest)`, which in fact is something that Hax’s extensions can do. The word order is improved in that case also. But `|>` also takes care of it…if you view a pipe as a single atomic thing. If you don’t, then, well, you need that `@@` operator or whatever for non-this-using calls too.
+
+[11:48:09.0744] <jschoi>
+* We could do something like `primaryThingOfInterest@@fn()` to mean `fn(primaryThingOfInterest)`, which in fact is something that Hax’s extensions can do. The word order is improved in that case also. But `|>` also takes care of it…if you view a pipe as a single atomic thing. If you don’t, then, well, you need that `@@` operator or whatever to improve the word order for non-this-using calls too.
+
+[11:48:11.0539] <ljharb>
+to be clear, either way, a syntactic `.call` does what i want. i just think it's a lost opportunity if we force the ordering to match `.call`
+
+[11:48:20.0864] <ljharb>
+ * to be clear, either way, a syntactic `.call` does what i want. i just think it's a lost opportunity if we force the ordering to match `.call`
+
+[11:49:20.0697] <jschoi>
+I’m personally fine either way, whether bind-this or call-on. I do think that pipe would allow improving the word order with a call-on operator, but I understand that it might be tough to view a pipe like `receiver|>fn::(#)` as an atomic thing.
+
+[11:49:46.0912] <jschoi>
+* I’m personally fine either way, whether bind-this or call-on. I do think that pipe would allow improving the word order with a call-on operator, but I understand that it might be tough to view a pipe like `receiver|>fn::(#)` as an atomic thing.
+
+[11:50:49.0263] <ljharb>
+it's fine if using pipe offers an improvement, but a proposal for .call needs to be an improvement on its own merits
+
+[11:51:17.0082] <ljharb>
+and a proposal that just allows `f<?>(o, ...a)` vs `f.call(o, ...a)` isn't likely to be considered worth it by the wider committee
+
+[11:51:29.0370] <ljharb>
+ * and a proposal that just allows `f<?>(o, ...a)` vs `f.call(o, ...a)` isn't likely to be considered worth it by the wider committee
+
+[11:51:50.0734] <jschoi>
+That brings up an interesting question, actually.
+
+[11:51:59.0670] <jschoi>
+We want proposals to stand on their own, on their own merits.
+
+[11:52:26.0525] <jschoi>
+But in this particular case we have had several representatives, like Richard Gibson and Yulia, express concerns about redundancy and overlap between these dataflow proposals. That’s why I created that diagram.
+
+[11:52:35.0266] <jschoi>
+These two desires are somewhat in conflict…
+
+[11:52:36.0968] <ljharb>
+proposals can stand alone while also interoperating
+
+[11:52:53.0433] <ljharb>
+it's a *good* thing if proposals that hold their own weight, are better when used in concert
+
+[11:53:27.0879] <ljharb>
+and any syntactic call will benefit from being used in concert with pipeline. i just doubt a syntactic call will hold its own weight if it persist's `.call`'s broken ordering
+
+[11:54:40.0316] <jschoi>
+Yeah. `.call` is *really common*, but improving really-common-frequency × brevity+robustness alone might not be compelling enough, compared to really-common-frequency × brevity+robustness+word-order.
+
+[11:55:01.0654] <TabAtkins>
+Yeah, the issue here is that it's not just interoperating (that's what we want) but *duplication* of significant functionality
+
+[11:55:04.0916] <jschoi>
+* Yeah. `.call` is *really common*, but improving really-common-frequency × brevity+robustness alone (call-on without pipe) might not be compelling enough, compared to really-common-frequency × brevity+robustness+word-order (bind-this).
+
+[11:56:15.0923] <jschoi>
+I think this is a larger question that the plenary might need to discuss on its own: considering proposals on their own merits versus avoiding duplication of functionality between proposals. Which is the bigger goal?
+
+[11:56:46.0968] <jschoi>
+That fundamental question may deserve its own plenary time when we present the diagram of dataflow proposals.
+
+[11:56:55.0755] <jschoi>
+* That fundamental question may deserve its own plenary time when we present the diagram of dataflow proposals.
+
+[11:57:14.0483] <jschoi>
+After all, this situation is going to happen again in the future someday.
+
+[11:57:25.0132] <jschoi>
+* After all, this situation is going to happen again in the future someday.
+
+[11:58:21.0329] <jschoi>
+* Yeah. `.call` is *really common*, but improving really-common-frequency × brevity+robustness alone (call-on without pipe) might not be compelling enough, compared to improving really-common-frequency × brevity+robustness+word-order (bind-this).
+
+[12:00:28.0765] <jschoi>
+* I think this is a larger question that the plenary might need to discuss on its own: Considering proposals on their own merits—versus avoiding duplication of functionality between proposals—which is the bigger goal?
+
+[12:02:56.0678] <ljharb>
+i don't see those goals as in conflict here tbh
+
+[12:03:26.0337] <ljharb>
+if two proposals stand on their own, then any use cases in one not covered by the other are why the duplication is necessary
+
+[12:03:27.0681] <ljharb>
+ * if two proposals stand on their own, then any use cases in one not covered by the other are why the duplication is necessary
+
+[12:12:42.0466] <jschoi>
+If I’m understanding correctly, in your opinion, some duplication between two proposals is acceptable, if it occurs due to the proposals having to stand on their own merits.
+I do agree: increasing There’s More Than One Way to Do It for JavaScript is not very desirable but also would not be very terrible. But I also think that other representatives might not agree. I suppose we will see at plenary.
+
+[12:13:00.0956] <jschoi>
+* If I’m understanding correctly, in your opinion, some duplication between two proposals is acceptable, if it occurs due to the proposals having to stand on their own merits.
+I do agree: increasing There’s More Than One Way to Do It for JavaScript would not be very terrible. But I also think that other representatives might not agree, so we will see.
+
+[12:13:44.0164] <jschoi>
+* If I’m understanding correctly, in your opinion, some duplication between two proposals is acceptable, if it occurs due to the proposals having to stand on their own merits.
+I do agree: increasing There’s More Than One Way to Do It for JavaScript would not be very terrible. But I also think that other representatives might not agree. I suppose we will see at plenary.
+
+[12:14:14.0666] <jschoi>
+* If I’m understanding correctly, in your opinion, some duplication between two proposals is acceptable, if it occurs due to the proposals having to stand on their own merits.
+I do agree: increasing There’s More Than One Way to Do It for JavaScript is not very desirable but also would not be very terrible. But I also think that other representatives might not agree. I suppose we will see at plenary.
+
+[12:15:29.0706] <jschoi>
+* If I’m understanding correctly, in your opinion, some duplication between two proposals is acceptable, if it occurs due to the proposals having to stand on their own merits.
+I do agree: increasing TMTOWTDI for JavaScript is not very desirable but also would not be very terrible. But I also think that other representatives might not agree. I suppose we will see at plenary.
+
+[12:20:22.0782] <ljharb>
+yes, exactly
+
+[12:20:42.0618] <ljharb>
+it's great to minimize ways to do things, and i personally prefer one
+
+[12:21:06.0746] <ljharb>
+but i don't recall us ever blocking anything because it added a different way to do things - brendan has shut down many debates by citing TIMTOWTDI as "the way JS works"
+
+[12:21:15.0124] <ljharb>
+ * but i don't recall us ever blocking anything because it added a different way to do things - brendan has shut down many debates by citing TIMTOWTDI as "the way JS works"
+
+[12:25:12.0099] <ljharb>
+ * but i don't recall us ever blocking anything because it added a different way to do things - brendan has shut down many potential objections by citing TIMTOWTDI as "the way JS works"
+
+[12:25:19.0310] <ljharb>
+ * but i don't recall us ever blocking anything because it added a different way to do things - brendan has shut down many potential objections over the years by citing TIMTOWTDI as "the way JS works"
+
+[12:32:15.0597] <Richard Gibson>
+I personally find call-on as discussed above (undeniable and concise syntax for invoking a function with specified receiver and arguments as an alternative to the deniable and more verbose `fn.call(that, …)` and `Reflect.apply(fn, that, […])`) to be satisfyingly orthogonal to pipeline in particular—they seem to work well both independently and together, with pipeline primarily covering the flow of data between human-relevant (sub)expressions/invocations and call-on putting invocation receiver and arguments on even footing (with an inherently opinionated order, regardless of whether that is receiver…function…args or function…receiver…args).
+
+[12:33:15.0370] <Richard Gibson>
+ * I personally find call-on as discussed above (undeniable and concise syntax for invoking a function with specified receiver and arguments as an alternative to the deniable and more verbose `fn.call(that, …)` and `Reflect.apply(fn, that, […])`) to be satisfyingly orthogonal to pipeline in particular—they seem to work well both independently and together, with pipeline primarily covering the flow of data between human-relevant (sub)expressions/invocations and call-on putting invocation receiver and arguments on even footing (with an inherently opinionated order, regardless of whether that is receiver…function…args or function…receiver…args).
+
+[12:41:24.0501] <jschoi>
+* If I’m understanding correctly, in your opinion, some duplication between two proposals is acceptable, if it occurs due to the proposals having to stand on their own merits.
+I do agree: increasing TMTOWTDI for JavaScript is not very desirable but also would not be very terrible. 
+But I also think that other representatives might not agree. I suppose we will see at plenary.
+
+[12:50:49.0222] <Richard Gibson>
+I agree in large part with the latest gist, and really can't thank TabAtkins or jschoi enough for condensing all of this. The questions that remain most interesting to me after digesting those summaries are around PFA, which includes placeholder(s) (potentially interacting with pipeline) and a new invocation-like syntax (potentially interacting with call-on/bind-this/extensions) but provides capabilities that are cumbersome to access and supports patterns that are difficult to accomplish even with the other proposals.
+
+[13:34:17.0088] <TabAtkins>
+TMTOWTDI is a concern that was explicitly raised about pipe and other dataflow proposals, tho. So yes it's an important thing to discuss so we can get an Official Opinion, rather than distinct groups going "oh this isn't big enough to be worth it, we should scope it up" and "oh this is big enough to overlap with the other one, we should scope it down".
+
+[13:36:24.0443] <TabAtkins>
+ * TIMTOWTDI is a concern that was explicitly raised about pipe and other dataflow proposals, tho. So yes it's an important thing to discuss so we can get an Official Opinion, rather than distinct groups going "oh this isn't big enough to be worth it, we should scope it up" and "oh this is big enough to overlap with the other one, we should scope it down".
+
+[14:29:57.0137] <jschoi>
+http://www.xanthir.com/b5Gd0
+
+[14:33:42.0625] <TabAtkins>
+(This is just me moving the essay from Gist to my blog)
+
+[14:49:23.0824] <TabAtkins>
+All right, started the Call Operator repo https://github.com/tabatkins/proposal-call-operator
+
+[14:50:07.0020] <TabAtkins>
+And I realized while writing it that call+PFA reproduces the bind operator, too: `meth::~(receiver, arg)` == `meth.bind(receiver, arg)`
+
+[15:02:27.0346] <jschoi>
+Feel free to duplicate and modify the text from https://github.com/tc39/proposal-bind-this/blob/main/README.md#bind-and-call-are-very-common into that explainer.
+
+[15:02:43.0208] <jschoi>
+* Feel free to duplicate and modify the text from https://github.com/tc39/proposal-bind-this/blob/main/README.md#bind-and-call-are-very-common into that explainer.
+
+[15:03:56.0097] <jschoi>
+I also kind of think we should name it proposal-call-this…or at least something other than proposal-call-operator: https://github.com/tabatkins/proposal-call-operator/issues/1
+
+[15:30:31.0104] <ljharb>
+> <@tabatkins:matrix.org> And I realized while writing it that call+PFA reproduces the bind operator, too: `meth::~(receiver, arg)` == `meth.bind(receiver, arg)`
+
+if we consider the bind use case important, i do not think it would be prudent to wait for PFA to solve it
+
+[15:31:24.0739] <TabAtkins>
+I consider it less important than call, but more importantly I'm just laying out a roadmap of features+intersections that don't have duplications. If it takes a little bit to get there, that's fine to me.
+
+[15:49:12.0807] <Justin Ridgewell>
+Tab, I think you're missing the bind-op's ergonomic win in fluent APIs
+
+[15:49:48.0431] <Justin Ridgewell>
+Eg, to extend the stdlib (which doesn't exist because of in-fighting)
+
+[15:50:52.0296] <Justin Ridgewell>
+Writing `array.filter(…)::uniq().find(…)` with a pipeline or call-op would suck
+
+[15:52:41.0074] <TabAtkins>
+A big part of pipe's argument is that `array.filter(...) |> uniq(#).find(...)` *doesn't* suck too badly.
+
+[15:53:07.0280] <TabAtkins>
+And it means you don't have an ecosystem split of functions "designed for the operator", which are inconvenient to use in any other way.
+
+[15:53:39.0070] <TabAtkins>
+bind-this and F#-pipes both had this exact same issue
+
+[15:54:06.0973] <Justin Ridgewell>
+We already have an ecosystem split
+
+[15:54:18.0838] <Justin Ridgewell>
+Things that are exist in the stdlib and everything else
+
+[15:54:58.0670] <TabAtkins>
+yes, methods vs functions are indeed a split, but one that exists in approximately *every* language; we might have avoided it with sufficient foresight, but we didn't. That doesn't means introducing a *third* category is something we should consider acceptable.
+
+[15:55:30.0212] <Justin Ridgewell>
+```
+// Bind-op
+array
+  .filter(...)
+  ::uniq()
+  .find(...);
+  .something();
+
+// Pipeline
+array
+  .filter(...)
+  |> uniq(##)
+  |> ##.find(...)
+     .something();
+
+// Call-op
+array
+  .filter(...)
+  |> uniq::(##)
+  |> ##.find(...)
+     .something();
+```
+
+[15:55:57.0905] <Justin Ridgewell>
+I don't see why we would ever pursue a call-op if pipeline exists.
+
+[15:56:16.0526] <Justin Ridgewell>
+Bind-op actually improves on pipeline for a usecase
+
+[15:56:20.0351] <Justin Ridgewell>
+Call-op doesn't.
+
+[15:56:21.0062] <TabAtkins>
+Call-this doesn't promote a third ecosystem, which is somewhat the point. ^_^
+
+[15:57:12.0571] <TabAtkins>
+It solves one specific case - pulling a method off of a prototype, and using it on a different object.
+
+[15:57:36.0095] <Justin Ridgewell>
+That's pipeline and uncurry
+
+[15:57:36.0292] <TabAtkins>
+If you tried to publish a library "designed for the call-this operator" it would just be a library of normal functions that take more characters to call.
+
+[15:57:50.0896] <TabAtkins>
+Yes, call-this is uncurry, indeed.
+
+[15:58:17.0664] <Justin Ridgewell>
+Let me rephrase, it's _better_ as pipeline and uncurry
+
+[15:58:32.0704] <Justin Ridgewell>
+It offers no improvement over that.
+
+[15:58:53.0488] <Justin Ridgewell>
+Bind-op actually allows for an improvement in fluent APIs.
+
+[15:58:57.0654] <Justin Ridgewell>
+ * Bind-op actually allows for an improvement in fluent APIs.
+
+[15:59:08.0533] <TabAtkins>
+Yes, we're shifting the same functionality between different sets of things. Call-this + pipe have the advantage of *no overlap*, while bind-this + pipe overlap.
+
+[15:59:35.0677] <TabAtkins>
+And overlap was an *explicit* concern of committee members for *this entire space* at our last meeting.
+
+
+2022-01-07
+[16:00:38.0671] <Justin Ridgewell>
+> Call-this + pipe have the advantage of no overlap,
+
+I think I just refuted that.
+
+[16:00:51.0802] <Justin Ridgewell>
+It exactly overlaps with pipeline+uncurry
+
+[16:00:54.0218] <TabAtkins>
+No? You said call-this overlaps with uncurry.
+
+[16:01:07.0738] <TabAtkins>
+Right, because call-this and uncurry are the same thing in different syntaxes.
+
+[16:03:06.0991] <Justin Ridgewell>
+My goal here is to allow fluent APIs with acceptable synatx
+
+[16:03:21.0016] <TabAtkins>
+/me is heading home for the day, will have to continue later
+
+[16:03:42.0637] <Justin Ridgewell>
+I don't think pipeline and normal methods looks appealing
+
+[16:03:50.0492] <Justin Ridgewell>
+Pipeline as a chain of free functions is fine
+
+[16:04:05.0942] <Justin Ridgewell>
+But mixing in a chained method on an object in the pipe and it starts to have warts
+
+[16:04:20.0806] <Justin Ridgewell>
+Mixing methods and bind-ops works perfectly
+
+[20:53:41.0666] <ljharb>
+pipeline can’t handle call-this/uncurry without a special operator 
+
+[20:54:00.0935] <ljharb>
+the operator could be call-this, or bind-this, or something else, but it can’t be done with pipeline alone 
+
+[20:55:05.0477] <ljharb>
+i agree that bind-this is the one that fits into an OOP method chain without pipeline, which is useful.
+
+[12:07:29.0792] <TabAtkins>
+So the issue that's gonna continue to bite is that, from the feedback we've gotten, having bind-this able to do essentially the same thing as pipe is a Problem. It might turn out to be sufficiently okay to look past, but as it is this is the precise sort of overlap that has been called out as making committee members uncomfortable.
+
+[12:10:17.0268] <TabAtkins>
+And the arguments against "fluent API via bind-this" are *precisely* the same arguments against "fluent API via F# pipe", which is that it will encourage authors to write libraries intended specifically to be called this way, which means they're harder or awkward to call in the traditional way, and won't work with any other feature that expects functions, like something that takes callbacks - they'll have to be wrapped in an arrow func instead. (For example, it won't work with PFA, if you want the receiver to be the thing placehold'd.)
+
+[12:11:27.0079] <TabAtkins>
+Part of the reason we fought so hard for Hack pipes is precisely because it works reasonably well for *all* of these cases. Yes, it's not the local minimum for fluent APIs, but it's hovering just outside of it, and without the additional downsides that come from seeking that minimum.
+
+[12:14:02.0385] <TabAtkins>
+And I'll note that in the previous code sample, the pipe code was written badly. When done correctly, it's roughly identical to the bind-this code:
+
+```js
+array
+  .filter(...)
+  |> uniq(##)
+  .find(...)
+  .something();
+```
+
+[12:15:14.0283] <TabAtkins>
+The only difference (an unavoidable one) is, as always, having to put the topic value in the arglist, rather than it being passed implicitly in some way. But that's it, vs the extra code and additional indentation that the previous code sample unnecessarily burdened it with.
+
+[12:56:31.0538] <ljharb>
+that pipe example is fine with me, to be sure. however, if `uniq` expects a `this` value then you'd have to (with your proposal) do this:
+```
+array
+  .filter(...)
+  |> uniq::(##)
+  .find(...)
+  .something();
+```
+
+instead of, as with the bind-this proposal:
+```
+array
+  .filter(...)
+  |> ##::uniq()
+  .find(...)
+  .something();
+```
+
+[13:54:36.0779] <TabAtkins>
+Yes, so you, of course, would not write a library with `export function uniq() { return [...new Set(this)]; }`, you'd write it as `export function uniq(arr) {...}`
+
+[13:55:19.0879] <TabAtkins>
+Rather than there now being *three* potential ways to write a function (as a method, as a this-using free fucntion, or as a this-less free function), we stick with the two that we currently  have.
+
+[14:08:28.0802] <TabAtkins>
+But if you'd extracted `uniq()` from a class because of robustness, then yes, you'd write it in the first style with the call-this operator.
+
+[14:09:28.0714] <TabAtkins>
+The alternative is an uncurry operator that just produces a fresh function a la `fn.call.bind(fn)`
+
+[14:09:38.0567] <TabAtkins>
+Then it's just `|> uniq(##)`
+
+[14:16:12.0629] <jschoi>
+I am neutral between bind-this `receiver |> #::fn()` and call-this `receiver |> fn@(#)`, but I rather have either than a demethodize operator. 
+
+[14:39:16.0162] <ljharb>
+Those three already exist
+
+[14:40:28.0563] <TabAtkins>
+You can't just say things like that when you mean "you can do these by calling Function methods" ^_^
+
+[15:36:52.0385] <jschoi>
+* (I am neutral between a bind-this operator `receiver |> #::fn()` and a call-this operator `receiver |> fn::(#)`, but I would rather have either than a demethodize operator `receiver |> (::fn)(#)`.)
+
+[15:37:49.0361] <Justin Ridgewell>
+> <@tabatkins:matrix.org> And I'll note that in the previous code sample, the pipe code was written badly. When done correctly, it's roughly identical to the bind-this code:
+> 
+> ```js
+> array
+>   .filter(...)
+>   |> uniq(##)
+>   .find(...)
+>   .something();
+> ```
+
+Ok, that looks a little better.
+
+[15:40:28.0959] <Justin Ridgewell>
+> <@tabatkins:matrix.org> And the arguments against "fluent API via bind-this" are *precisely* the same arguments against "fluent API via F# pipe", which is that it will encourage authors to write libraries intended specifically to be called this way, which means they're harder or awkward to call in the traditional way, and won't work with any other feature that expects functions, like something that takes callbacks - they'll have to be wrapped in an arrow func instead. (For example, it won't work with PFA, if you want the receiver to be the thing placehold'd.)
+
+I don't think this is true. F# coded a very specific (very restrictive) only-one-arg style that Hack style avoids. Bind-op doesn't suffer from this, since args can be passed. It just happens that Bind-op also doesn't require a topic token to run.
+
+[15:41:47.0324] <TabAtkins>
+No, F#-style just requires your function to *accept* one of its arguments as a second, unary call. There's no fundamental difference between `fn(a, b)(c)` and `c::fn(a, b)`, they're both just accepting one of their arguments in a special way that's not part of the arglist.
+
+[15:42:34.0289] <Justin Ridgewell>
+There's a huge difference with creating a closure and passing arguments to a single function.
+
+[15:43:03.0479] <TabAtkins>
+`function fn(a, b) { this=>{...}}` can even have the exact same body as a this-using function. ^_^
+
+[15:44:01.0891] <TabAtkins>
+There's not really? Like, sure, yeah, they're different, and there's internal stuff. But semantically they're the same. JS distinguishes them; Haskell doesn't; it's just a syntax choice.
+
+[15:46:48.0578] <Justin Ridgewell>
+We shot down F# because of the temporary closures it requires to do anything non-trivial. Even if the runtime output would be the same, I don't think it's fair to compare bind-op to F#.
+
+[15:52:19.0105] <TabAtkins>
+That was *one* of the reasons, yes. (Luckily one that excited the impls so we could lean hard on it.) It was definitely not the only.
+
+[15:53:32.0473] <TabAtkins>
+The ecosystem-forking effect (libraries being written explicitly for pipeline, authoring all their functions as unary-returning) was another reason; we did not want that to happen. And that precise argument applies equally to bind-this.
+
+[15:57:04.0405] <jschoi>
+For what it’s worth, a few months ago, I raised the ecosystem-forking concern regarding bind-this before in this channel, since it had already been raised in plenary by Waldemar Horwat against Hax’s extensions proposal. 
+
+At the time I raised that concern about bind-this here, Jordan (and I think maybe even Tab?) said that the ecosystem-forking risks between bind-this and extensions were “different”, but I still can understand why it may be a concern. I wonder what Waldemar would think, being the one who had raised it for extensions. 
+
+[15:57:29.0938] <jschoi>
+* For what it’s worth, a few months ago, I raised the ecosystem-forking concern regarding bind-this before in this channel, since it had already been raised in plenary by Waldemar Horwat against Hax’s extensions proposal. 
+
+At the time I raised that concern about bind-this here, Jordan (and I think maybe even Tab?) said that the ecosystem-forming risks between bind-this and extensions were “different”, but I still can understand why it may be a concern. I wonder what Waldemar would think, being the one who had raised it for extensions. 
+
+[15:58:04.0510] <jschoi>
+* For what it’s worth, a few months ago, I raised the ecosystem-forking concern regarding bind-this before in this channel, since it had already been raised in plenary by Waldemar Horwat against Hax’s extensions proposal. 
+
+At the time I raised that concern about bind-this here, Jordan (and I think maybe even Tab?) said that the ecosystem-forking risks between bind-this and extensions were “different”, but I still can understand why it may be a concern. I wonder what Waldemar would think, being the one who had raised it for extensions. 
+
+[15:58:58.0437] <Justin Ridgewell>
+> The ecosystem-forking effect… And that precise argument applies equally to bind-this.
+
+I don't agree with this. My understanding of the consensus was encouraging a fully functional, make closures-everywhere was a bad idea. Not that ecosystem fork is a huge issue, and certainly not enough that we'd block entirely.
+
+[15:59:19.0734] <Justin Ridgewell>
+ * > The ecosystem-forking effect… And that precise argument applies equally to bind-this.
+
+I don't agree with this. My understanding of the consensus was encouraging a fully functional, make closures-everywhere was a bad idea. Not that ecosystem fork is a huge issue, and certainly not enough that we'd block entirely.
+
+
+2022-01-08
+[16:01:24.0309] <TabAtkins>
+I don't think I'd have said they were different? I could be wrong, but if so, past me was incorrect. ^_^ The concerns are identical.
+
+[16:01:38.0843] <jschoi>
+(See also WH’s comments in https://github.com/tc39/notes/blob/master/meetings/2020-11/nov-19.md#extensions-for-stage-1)
+
+[16:01:46.0642] <jschoi>
+* (See also WH’s comments in https://github.com/tc39/notes/blob/master/meetings/2020-11/nov-19.md#extensions-for-stage-1)
+
+[16:02:41.0363] <TabAtkins>
+> WH: Looking at the longer term consequences if we adopted this: This is mutually exclusive with a pipeline operator. I definitely do not want both in the language. I also see this as not really solving any significant problem. It does not define extension methods because, as you found out, you cannot use the same syntax for regular methods and what you're calling extension methods. So these aren’t really extension methods, but this does create a rift in the ecosystem where some folks will adopt the convention of defining methods in the :: namespace and some folks will adopt the convention of using functions, and there will be lots of unnecessary friction around the boundaries. I see that kind of thing as being harmful to the ecosystem.
+
+[16:03:33.0648] <TabAtkins>
+> WH: I'm really reluctant about this. It creates a rift in the ecosystem with two different ways of doing the same thing, which means that half of the people will adopt one way and half will adopt the other way. There will be friction at the boundaries. So far, I see this as just a different function calling syntax, but with a separate namespace.
+
+[16:04:02.0719] <jschoi>
+Part of it is about the separate namespace (which Hax is willing to drop and which bind-this does not have) but part of it is also about encouraging libraries disembodied `this`-based functions, which bind-this does share.
+
+[16:05:26.0879] <jschoi>
+I have argued that bind-this would not encourage that library style that much: its purpose is to make more convenient a very common and clunky method (.call and to a lesser extent .bind), but perhaps there is still risk. 
+
+[16:05:52.0353] <TabAtkins>
+The namespace per se isn't necessary to Waldemar's complaint, it's the calling convention that bothers him.
+
+[16:05:54.0430] <jschoi>
+* Yes, those comments. Part of them is about the separate namespace (which Hax is willing to drop and which bind-this does not have) but part of it is also about encouraging libraries disembodied `this`-based functions, which bind-this does share.
+
+[16:06:32.0703] <TabAtkins>
+> <@jschoi:matrix.org> I have argued that bind-this would not encourage that library style that much: its purpose is to make more convenient a very common and clunky method (.call and to a lesser extent .bind), but perhaps there is still risk.
+
+I mean, Justin's comments in this very room imply that there will be demand for authoring in that library style ^_^
+
+[16:07:46.0774] <TabAtkins>
+And the fact that `foo::bar(baz)` *is* slightly shorter than `foo|>bar(##, baz)` inclines me to believe him that it'll be at least somewhat common.
+
+[16:11:51.0603] <jschoi>
+I could have sworn, Tab, that, when I had raised this a few months ago in this room, you were less concerned about this ecosystem risk—but I could be remembering wrongly, haha. 
+I would try searching the logs, but Bakkot’s fancy log search is giving me an error. 🥲
+
+[16:14:30.0680] <jschoi>
+…Anyways, regardless of whether people should publish libraries based on disembodied `this`-based functions or not, people are already using them with `.call` internally a lot for various reasons (such as conditionally switching between two methods or using `this` as a context object). My argument has been that we should discourage people publishing public libraries based on this style, but it’s already happening in internal APIs, and it is very common. It’s not just Array.prototype or Object.prototype methods in the dataset.
+
+[16:16:08.0578] <jschoi>
+That is: although this style should not be in public APIs, it is already happening and it is very frequent in private codebases (see the Gzemnid dataset), and it is yet another reason why .call’s brevity/clunkiness should be optimized with syntax.
+
+[16:19:35.0904] <jschoi>
+Call-on would solve it too, and I am fine with that as a compromise, but I don’t think bind-this would bring significant ecosystem schism either.
+
+
+[16:19:36.0274] <jschoi>
+
+
+And I also think bind-this’s redundancy with the pipe operator is small (just like how Function.pipe’s redundancy with the pipe operator is small). I’m not too concerned when the same problem is addressed by two proposals…I am more concerned where the same problem is addressed by *three* proposals (such as where pipe operator, bind-this, and PFA syntax all overlap in my diagram).
+
+[16:21:52.0068] <TabAtkins>
+Private codebases can do whatever bizarre stuff they want; I've written my share of heavily-functional private JS, after all. It's still virtually unheard of to actually publish a library expecting its functions to be called with `.call()`.
+
+[16:23:12.0147] <jschoi>
+Yes, that is true. `.call` is very common, even excluding Array.prototype and Object.prototype methods (e.g., for conditionally switching between methods), but there is no known public API that is based on disembodied `this`-based functions that would depend on `.call`. And it should probably stay that way.
+
+[16:23:30.0885] <jschoi>
+ * Yes, that is true. `.call` is very common, even excluding Array.prototype and Object.prototype methods (e.g., for conditionally switching between methods), but there is no known public API that is based on disembodied `this`-based functions that would depend on `.call`. And it should probably stay that way.
+
+[16:26:14.0793] <jschoi>
+Actually, I take it back: I think there *are* some public APIs that involve the user supplying a custom `this` value in the dataset. Whether this should be encouraged is another question…but, anyways, there are many extant use cases of `.call` in the dataset, which sum up to a big number.
+
+[16:26:36.0018] <TabAtkins>
+Thus me being happy to address it. ^_^
+
+[16:27:09.0011] <jschoi>
+Haha, yes. 
+Anyways, I think the TIMTOWDI issue is the bigger fundamental question.
+
+[16:28:44.0015] <jschoi>
+Total TOOWTDI is unavoidable, no matter how much you want to reach Python zen, but how much of it is acceptable…? We will need to ask plenary, because it bumps against the fundamental approach to TC39 proposals and judgement on proposals’ own merits.
+
+[16:28:51.0696] <TabAtkins>
+yup
+
+[16:29:10.0363] <TabAtkins>
+also i'm shifting call-this to `@()` because after some thought I think it looks really good
+
+[16:30:05.0635] <jschoi>
+`slice@(arrLike, 1)`. “Slice at this `arrLike`.”
+
+[16:30:51.0788] <jschoi>
+`arrLike |> slice@(#, 1)`. “The `arrLike`, slice at it.”
+
+[16:32:01.0008] <jschoi>
+ * Some TIMTOWDI is unavoidable, and total TOOWTDI is impossible, no matter how much you want to reach Python zen, but how much TIMTOWDI is acceptable…? We will need to ask plenary, because it bumps against the fundamental approach to TC39 proposals and judgement on proposals’ own merits.
+
+[16:34:15.0500] <jschoi>
+`arrLike::slice(1)`. “`arrLike`’s slice.”
+To me, these are all fine and better than the `.call`-based status quo…
+
+[16:34:27.0284] <jschoi>
+ * `arrLike::slice(1)`. “`arrLike`’s slice.”
+To me, these are all fine and better than the `.call`-based status quo…
+
+[16:35:45.0487] <jschoi>
+ * Some TIMTOWDI is unavoidable, and total TOOWTDI is impossible, no matter how much you want to reach Python zen, but how much TIMTOWDI is acceptable…? We will need to ask plenary, because the question bumps against TC39’s fundamental approach to its proposals and how it judges them on their own merits.
+
+[16:37:31.0271] <jschoi>
+(I think the ecosystem-schism concern applies to `slice@(arrLike, 1)` as much as it does to `arrLike::slice(1)`. And I don’t think the ecosystem-schism risk is very large for either proposal. The big issue is TIMTOWDI vs. avoiding proposal redundancy.)
+
+[16:39:02.0981] <jschoi>
+ * (I think the ecosystem-schism concern applies to `slice@(arrLike, 1)` as much as it does to `arrLike::slice(1)`. And I don’t think the ecosystem-schism risk is very large for either proposal. The big issue is TIMTOWDI vs. avoiding proposal redundancy.)
+
+[16:41:42.0236] <TabAtkins>
+I strongly disagree that that `slice@(r, 1)` promotes ecosystem schisming. Writing a library in this fashion means your user's code is *identical* to if you'd just written a normal function, except slightly longer. There's literally no benefit.
+
+[16:42:42.0387] <jschoi>
+What I mean is that it might encourage publishing a library that exports a `slice` function that relies on `this`, and which therefore relies on `.call` or `@()`.
+
+[16:42:54.0532] <jschoi>
+I myself do not think this risk is very large, but it may be similar to that encouraged by bind-this.
+
+[16:43:02.0474] <jschoi>
+ * I myself do not think this risk is very large.
+
+[16:43:15.0465] <TabAtkins>
+Right, I'm saying it *doesnt'* encourage that, because there is *literally no benefit to doing so*, only a (very small) downside.
+
+[16:43:20.0808] <jschoi>
+ * I myself do not think this risk is very large, but it may be similar to that encouraged by bind-this.
+
+[16:43:28.0997] <jschoi>
+Oh, you mean because it has no improvement in word order / fluency…without the pipe operator. 
+
+[16:43:33.0055] <TabAtkins>
+Versus bind-this, which actually does have an upside to doing so - `foo::bar()` is shorter than `foo |> bar(#)`
+
+[16:43:34.0100] <jschoi>
+ * Oh, you mean because it has no added word-order improvement / fluency. 
+
+[16:43:39.0650] <jschoi>
+ * Oh, you mean because it has no added word-order improvement / fluency…without pipeline. 
+
+[16:43:55.0422] <jschoi>
+ * Oh, you mean because it has no improvement in word order / fluency…without the pipe operator. 
+
+[16:44:22.0597] <jschoi>
+Ah, the slight improvement in conciseness too, yes.
+
+[16:49:19.0632] <jschoi>
+So, “`.call` is very frequent, and therefore its conciseness deserves to be improved, but we want to avoid ecosystem schism, so we don’t want to improve it too much”?
+
+[16:49:32.0749] <jschoi>
+ * Ah, the slight improvement in conciseness too, yes. I understand now.
+
+[16:52:27.0767] <TabAtkins>
+That's my thesis, yeah
+
+[19:35:43.0545] <ljharb>
+i don’t see how it’d cause ecosystem schism
+
+[19:36:21.0750] <ljharb>
+It’d be used for all the places .call is already used. Why would anyone go out of their way to design a standalone function to accept a receiver? The feature is only for borrowing prototype methods.
+
+
+2022-01-10
+[09:46:23.0684] <TabAtkins>
+Sigh, everyone keeps talking past each other, assuming only their own use-cases exist. Justin Ridgewell has said several times, flat-out, that they'd like to use the bind-this operator to produce "fluent API" libraries that are slightly more ergonomic than what pipe can do.
+
+[09:46:48.0836] <TabAtkins>
+If you're talking instead just about the call-this operator, then yes, it *won't* cause schism, for the reasons I already gave.
+
+[10:59:53.0427] <ljharb>
+ah, i guess I’d missed that
+
+[10:59:57.0625] <ljharb>
+* ah, i guess I’d missed that
+
+[15:09:56.0431] <sarahghp>
+I wonder if space was made to discuss the more general question bringing up the use cases people imagine explicitly might make it easier to think about the proposals more broadly.
+
+[15:10:39.0310] <sarahghp>
+Overall though, this diagram and write-up are so interesting. I do have to say I'm a big pipe op fan and somewhat dubious about the others. Writing free-this functions seems like a big risk in terms of ecosystem bifurcation.
+
+[15:10:58.0494] <sarahghp>
+Elaborating ways to use `this` seems to me possibly undesirable, dev experience–wise. Anecdotally, I know some slice of devs avoid it & it's often brought up as one of the difficult parts of teaching/using JS (even came across that recently in digging back into React and their motivations for moving to hooks).
+
+I also personally, but maybe only me, worry about PFA quite a lot. It's such a fundamental shift to decouple argument order with the order in which they are provided and I'm not certain there are use cases that aren't achievable by other means / are so common that they are worth the syntax cost / inscrutability trade-off. Even the example of memoizing and expensive operations could be addressed with `(expensiveOp) => (a, b) => { .. }`
+
+
+[15:11:16.0697] <sarahghp>
+Also, I think the example in Tab's gist is slightly incorrect, right? `fn~(arg0, ?, arg2, ?)` becomes `(a)=>fn(arg0, a, arg2, a)` and `fn~(arg0, ?1, arg2, ?2)` would be `(a,b)=>fn(arg0, a, arg2, b)`. 
+
+
+[15:11:30.0055] <sarahghp>
+Anyways, this is suddenly a lot of thoughts. I should probably write a gist too, 😆
+
+
+2022-01-11
+[16:06:24.0849] <TabAtkins>
+No, if you use the plain `?` each is taken as a separate argument; you have to use the indexed variant to reuse placeholder args.
+
+[16:06:45.0243] <TabAtkins>
+Since multiple placeholders is a more common case than reusing a single placeholder.
+
+[12:47:24.0858] <sarahghp>
+> <@tabatkins:matrix.org> Since multiple placeholders is a more common case than reusing a single placeholder.
+
+So then you're undoing and redoing the meaningfulness of order in the same process ... interesting
+
+[12:48:00.0448] <TabAtkins>
+I'm not sure what you mean - the placeholders are still subbed in order
+
+[12:48:35.0908] <sarahghp>
+But the whole point of PFA is order is meaningless. Otherwise, you can just use `.bind`
+
+[12:52:11.0530] <Ashley Claymore>
+One issue with `.bind` is there isn't a way to leave gaps
+
+[12:54:00.0698] <sarahghp>
+Which is reordering, right? Leaving gaps means changing the argument order. 
+
+[12:54:22.0540] <Ashley Claymore>
+* having sudden flash backs to my  c++ days `std::bind(f, _1, 42, _2)`
+
+[12:56:33.0699] <Ashley Claymore>
+I guess when only binding certain arguments it does change order in one way, in that it brings some arguments forwards. But not changing their relative order.
+
+[12:57:14.0000] <Ashley Claymore>
+If I've understood you 🙂
+
+[12:57:23.0059] <Ashley Claymore>
+ * If I've understood you 🙂
+
+[13:00:59.0870] <sarahghp>
+Yes, I think you have. It seems like the cost of adding more syntax (in inscrutability) just to get reordering, which can also happen with arrow functions, is a worrisome trade-off. 
+
+[13:01:23.0526] <sarahghp>
+Especially since it feels like breaking some fairly fundamental agreement, although maybe just to me. 😆
+
+[13:27:56.0267] <TabAtkins>
+sarahghp: I'm still not sure what you're talking about, unfortunately. `.bind()` lets you provide arguments *in sequence* only; PFA relaxes that and lets you skip args, but still defaults to supplying them *in order*.
+
+[13:29:35.0733] <TabAtkins>
+Omitting arguments from the end doesn't seem (imo, at least) to be significantly different from omitting arguments from the start or center.
+
+[13:31:30.0016] <TabAtkins>
+Like, if `fn~(a, ?)` is "undoing the meaningfulness of order", I don't see how `fn.bind(null, a)` isn't equally so.
+
+[13:37:47.0853] <sarahghp>
+> <@tabatkins:matrix.org> sarahghp: I'm still not sure what you're talking about, unfortunately. `.bind()` lets you provide arguments *in sequence* only; PFA relaxes that and lets you skip args, but still defaults to supplying them *in order*.
+
+Oh no maybe I am being this goat! https://twitter.com/Maschlea5/status/1481014660736462850
+
+But yes, I am saying to me, the salient difference between PFA and `.bind` is that PFA lets you supply arguments in a different order. In the example of one argument, it doesn't matter. But in the case of `x = fn~(arg0, ?, arg2, ?)`, the code is saying that it is desirable to create functions where arguments can be passed in a different order — so desirable that we've made a shorthand for it —, except then order matters again when the hole-y function x is called.  And in that way it's relying on contradictory assumptions at the same time.
+
+It's possible this bothers me aesthetically and doesn't actually matter ... I am still thinking about that but it definitely concerns me now. 
+
+[13:38:54.0755] <sarahghp>
+It also definitely feels like a lint trap where the rule to always use ordinals comes right after the facility exists. Maybe that's ok too. 
+
+[13:40:03.0237] <TabAtkins>
+I still don't understand why you're saying "a different order". `fn~(arg0, ?, arg2, ?)` still takes args in the listed order - `(x, y) => fn(arg0, x, arg2, y)`
+
+[13:40:55.0528] <TabAtkins>
+Are you meaning, like, mentally we're rewriting the arg order to be 0, 2, 1, 3, and then binding the first two ahead of time?
+
+[13:43:15.0900] <sarahghp>
+Yes, precisely that.
+
+[13:44:30.0798] <TabAtkins>
+Ah. I'm certainly not doing any such transformation. ^_^
+
+[13:44:39.0502] <TabAtkins>
+No more than I am when writing the same thing as an arrow func.
+
+[13:47:29.0267] <sarahghp>
+But you are _are_ doing that transformation, right? That's literally what's happening. Are you saying you don't think of it that way?
+
+You are right tho, it's not more than an arrow func, except that by making a shorthand syntax for it, we are communicating its desirabltility. And that is where I fall off the train. If you have to reorder something, you can, but it has a tiny bit of friction, which is good, because it's weird.
+
+[13:50:05.0573] <sarahghp>
+And by "weird" I mean it deviates from a fairly core understanding in JS, which is that argument order is meaningful. And when it's not, you can communicate that by having an object argument.
+
+[13:50:14.0752] <TabAtkins>
+I absolutely don't think of it that way, right. There is zero argument rearranging going on in my head when I write `(x,y)=>fn(0, x, 2, y)`
+
+[13:50:46.0693] <TabAtkins>
+I can't speak for others, since I haven't done more than a smattering of programming teaching, and I know people's mental models can diverge *significantly* and in surprising ways.
+
+[13:53:48.0046] <TabAtkins>
+To put another way, `fn~(0, ?, 2, y)` and `fn~(0, 1, ?, ?)` are equivalent in my mental model, but appear to be meaningfully distinct in yours?
+
+[13:54:06.0762] <TabAtkins>
+Or more simply, `fn~(?, 1)` vs `fn~(0, ?)`
+
+[13:59:24.0612] <sarahghp>
+Yes, that's correct.
+
+[13:59:33.0845] <sarahghp>
+ * Yes, that's correct.
+
+[14:05:47.0440] <jschoi>
+For what it’s worth, the “this is already solved by arrow functions” argument was maybe the biggest reason why PFA syntax didn’t successfully advance to Stage 1 last October: https://github.com/tc39/notes/blob/master/meetings/2021-10/oct-25.md#partial-function-application-for-stage-2
+
+[14:12:11.0674] <TabAtkins>
+Yeah, arrow functions do already achieve 80% of what PFA is trying to do, and in a reasonably terse and readable way (slightly longer than PFA, but not terribly so). I've come around to idea that the remaining 20% (pre-computing receivers and arguments, and making "pass a method as a callback" as terse as possible) are worth syntax, but that's very much an arguable point.
+
+[14:16:35.0792] <jschoi>
+The other 20%, is it eager function and argument evaluation?
+
+[14:17:42.0670] <jschoi>
+I.e., the lazy `(x, y) => f()(x, y, a(), b())` versus the eager `f()~(x, y, a(), b())`.
+
+[14:19:10.0045] <jschoi>
+* I.e., the lazy `(x, y) => f()(x, y, a(), b())` versus the eager `f()~(x, y, a(), b())`.
+
+[14:23:16.0459] <TabAtkins>
+Yeah that and the `arr.map(obj.meth)` use-case
+
+[14:23:27.0593] <TabAtkins>
+ * Yeah that and the `arr.map(obj.meth)` use-case
+
+[14:23:45.0527] <TabAtkins>
+which today is usually broken for *two* reasons
+
+[14:26:01.0267] <jschoi>
+* I.e., the lazy `(x, y) => f()(x, y, a(), b())` versus the eager `f()~(?, ?, a(), b())`.
+
+[14:35:19.0721] <sarahghp>
+So right now for `arr.map(obj.meth)` you need `arr.map((el) => obj.meth(el))` to limit to one argument. Why else is it broken?
+
+[14:35:56.0305] <sarahghp>
+Or verbose, say, since it's possible.
+
+[14:41:36.0582] <jschoi>
+* For what it’s worth, the “this is already solved by arrow functions” argument was maybe the biggest reason why PFA syntax didn’t successfully advance to Stage 2 last October: https://github.com/tc39/notes/blob/master/meetings/2021-10/oct-25.md#partial-function-application-for-stage-2
+
+[15:01:24.0109] <TabAtkins>
+Yeah, that's just it. You need to do that to (a) limit it to one argument, as likely intended, and (b) keep the `obj` receiver around. Both are broken by `arr.map(obj.meth)`, but fixed by `arr.map(obj.meth~())`
+
+[15:20:35.0591] <jschoi>
+I think Sarah’s point is that those two problems with `arr.map(obj.meth)` are also solved by the arrow function `arr.map(el => obj.meth(el))`, albeit with lazy evaluation and longer length.
+
+[15:20:48.0893] <jschoi>
+* I think Sarah’s point is that those two problems are also solved by an arrow function `el => obj.meth(el)`, albeit with lazy evaluation and longer length.
+
+[15:24:01.0120] <jschoi>
+* I think Sarah’s point is that those two problems are also solved by an arrow function `v => obj.meth(v)`, albeit with lazy evaluation and longer length.
+
+[15:24:13.0483] <jschoi>
+* I think Sarah’s point is that those two problems are also solved by an arrow function `arr.map(v => obj.meth(v))`, albeit with lazy evaluation and longer length.
+
+[15:24:58.0434] <jschoi>
+* I think Sarah’s point is that those two problems with `arr.map(obj.meth)` are also solved by the arrow function `arr.map(el => obj.meth(el))`, albeit with lazy evaluation and longer length.
+
+[15:25:26.0191] <jschoi>
+* I think Sarah’s point is that those two problems with `arr.map(obj.meth)` are also solved by the arrow function `arr.map(el => obj.meth(el))`, albeit with lazy evaluation and longer length compared to `arr.map(obj.meth~(?))`.
+
+
+2022-01-12
+[17:21:59.0423] <sarahghp>
+What does "keep the `obj` receiver around" mean in this case? 
+
+[17:27:30.0601] <sarahghp>
+Well looking at the diagram examples, it seems like receiver is the method owner or the context passed as `this` in `.bind(this)` or `.call(this)` if it is different from the owner. Why then does `arr.map(obj.meth~(?))` not keep it around?
+
+[17:58:51.0642] <jschoi>
+Tab is saying that `arr.map(obj.method~(?))` does keep `obj` around. He’s saying that `arr.map(obj.method)` does not. 
+(Of course, `arr.map(el => obj.meth(el))` keeps `obj` around too.)
+
+[18:57:20.0232] <ljharb>
+it's also solved by bind-this `arr.map(obj::method)`
+
+[07:58:21.0094] <jschoi>
+* Tab is saying that `arr.map(obj.method~(?))` does keep `obj` around—but also is saying that `arr.map(obj.method)` does not. 
+(Of course, `arr.map(el => obj.meth(el))` keeps `obj` around too.)
+
+
+2022-01-13
+[10:14:58.0192] <TabAtkins>
+No it's not; you need to write `arr.map(obj::obj.method)`
+
+[10:15:37.0426] <TabAtkins>
+If you've *already* extracted the method into a variable, you can write the simpler way, but that's not the case I usually run into.
+
+[10:57:59.0849] <ljharb>
+oh, right, that only works if `method` is extracted. maybe i was thinking of the original bind operator proposal where it'd be `::obj.method`
+
+[11:00:52.0414] <TabAtkins>
+Yeah, that's a persistent confusion for me as well. ^_^
+
+[11:01:32.0848] <TabAtkins>
+(The fact that you have to write `obj::obj.method` for what would, I suspect, be a pretty major use-case is, to me, a pretty bad strike against the current bind-this proposal.)
+
+[11:04:53.0120] <ljharb>
+hm, i'm not sure it would be that major tho
+
+[11:05:31.0587] <ljharb>
+the use cases are mostly about changing the receiver, and `obj.method.bind(obj)` is separate from that
+
+[11:08:13.0904] <TabAtkins>
+The stated use-cases are mostly about that, yes, because hard-binding the existing receiver is inconvenient in the current syntax so of course it's not emphasizing that use-case. ^_^
+
+[11:41:59.0959] <ljharb>
+i really don't think it's all that important tho. typically it comes up on a class method, and the class can do `foo = this.foo.bind(this)` as a class field (or a `@bind` decorator) - how often does a consumer of the class need to do that?
+
+[12:25:45.0185] <TabAtkins>
+I've wanted to map a method across an array multiple times in my past code. It's no stranger than mapping a free function.
+
+[13:05:26.0262] <jschoi>
+Deadline for plenary is soon. I plan to present the dataflow-proposal diagram for a thirty-minute discussion, if that seems good to others here. 
+
+[13:23:18.0241] <TabAtkins>
++1
+
+[13:23:40.0059] <TabAtkins>
+would you like to augment it with call-this?
+
+[14:50:40.0473] <sarahghp>
+> <@jschoi:matrix.org> Deadline for plenary is soon. I plan to present the dataflow-proposal diagram for a thirty-minute discussion, if that seems good to others here.
+
+Do you think people will want to discuss longer?
+
+[15:02:46.0367] <jschoi>
+> <@tabatkins:matrix.org> would you like to augment it with call-this?
+
+I’ll definitely mention it, though I’m uncertain whether we should formally request Stage 1 during that presentation. 
+
+[15:02:57.0779] <jschoi>
+> <@sarahghp:matrix.org> Do you think people will want to discuss longer?
+
+Maybe. The agenda doesn’t look too full right now, I guess…
+
+[15:02:59.0220] <TabAtkins>
+yeah i don't think we should
+
+
+2022-01-14
+[18:56:48.0172] <ljharb>
+The problem space already has stage 1 imo
+
+[18:57:18.0818] <ljharb>
+I’d argue that if we have a solution that’s tenable, it could jump straight to stage 2, marking the other ones as inactive as a result.
+
+[19:38:51.0689] <jschoi>
+https://github.com/tc39/agendas/pull/1106
+
+[19:39:34.0346] <jschoi>
+> <@tabatkins:matrix.org> would you like to augment it with call-this?
+
+I just realized that you may have been referring to adding call-this to the diagram. I’ll see what I can do with that.
+
+[19:41:07.0861] <jschoi>
+I’m not sure whether I would nest call-this’s block within the intersection of bind-this’s block, extensions’ block, and the pipe operator’s block. If not there, then where would it go…? Maybe outside to the left of bind-this, below PFA syntax…? 
+
+[19:41:21.0138] <jschoi>
+ * FYI: https://github.com/tc39/agendas/pull/1106
+
+[19:41:25.0524] <jschoi>
+ * FYI: I asked for one hour. https://github.com/tc39/agendas/pull/1106
+
+[19:42:42.0633] <jschoi>
+(Also, Tab, if you want to co-present during that discussion block, since you wrote an article about the proposals, too—feel free to submit a commit suggestion to #1106, or your own pull request if #1106 gets merged before then.)
+
+[19:43:12.0175] <jschoi>
+ * (Also, Tab, if you want to co-present during that discussion block, since you wrote an article about the proposals, too—feel free to submit a commit suggestion to #1106, or your own pull request if #1106 gets merged before then.)
+
+[19:43:23.0521] <jschoi>
+ * FYI: I asked for one hour of discussion. https://github.com/tc39/agendas/pull/1106
+
+[19:43:31.0025] <jschoi>
+> <@tabatkins:matrix.org> would you like to augment it with call-this?
+
+ * I just realized that you may have been referring to adding call-this to the big diagram. I’ll see what I can do with that.
+
+
+2022-01-19
+[01:04:31.0970] <yulia>
+thanks jschoi for all this work. I will review it ahead of the meeting and send you any comments I have
+
+
+2022-01-26
+[12:01:15.0406] <TabAtkins>
+jschoi: You've been doing quite well here; thank you for the talk so far.
+
+[13:16:29.0431] <yulia>
+yo
+
+[13:16:49.0998] <yulia>
+so, 1 https://matrix.to/#/!RKGOsXKqdKdyWOiTEA:matrix.org/$Xqf1VcaFHqzkIFLl6JerBlMhHS5e1SuAxxqBSvv-HkQ?via=matrix.org&via=mozilla.org&via=igalia.com
+
+[13:17:08.0921] <yulia>
+regarding this, I was thinking of this as how this overlaps with the pipeline operaor
+
+[13:17:28.0839] <yulia>
+but, i figured, that there had been discussion about this and there was a reason to exclude it
+
+[13:17:53.0082] <yulia>
+_if this is intended_ then the overlap betweeen pipeline and bind should have been much larger
+
+[13:18:22.0389] <yulia>
+however, i would say that if we have both, it is reasonable to say that bind this cannot be chained
+
+[13:19:13.0973] <yulia>
+or some other restriction
+
+[13:19:15.0214] <ljharb>
+re bind-this: it is very important that there's a way to do `array <operator> slice` without needing `slice` to exist on `array`.
+
+[13:19:18.0735] <ljharb>
+ * re bind-this: it is very important that there's a way to do `array <operator> slice` without needing `slice` to exist on `array`.
+
+[13:19:22.0183] <TabAtkins>
+Yes, this overlap has been discussed, and is one of the reasons I *don't* want bind-this (and wrote call-this in the way I did)
+
+[13:19:24.0986] <ljharb>
+the word order being critical there.
+
+[13:19:47.0194] <yulia>
+> <@tabatkins:matrix.org> Yes, this overlap has been discussed, and is one of the reasons I *don't* want bind-this (and wrote call-this in the way I did)
+
+yeah, i would accept that
+
+[13:19:55.0066] <yulia>
+> <@ljharb:matrix.org> re bind-this: it is very important that there's a way to do `array <operator> slice` without needing `slice` to exist on `array`.
+
+agreed
+
+[13:20:15.0063] <TabAtkins>
+If word order is important, then it's unavoidable that we will have libraries explicitly written to allow "method-chaining"-ish (aka "fluent API") calling, using the operator.
+
+[13:20:20.0198] <ljharb>
+that's fine
+
+[13:20:25.0424] <ljharb>
+people do terrible things with Proxy, predominantly
+
+[13:20:26.0687] <yulia>
+i don't think we have a disagreement on this
+
+[13:20:32.0636] <ljharb>
+but the intended use case still needs them
+
+[13:20:44.0497] <ljharb>
+our job is explicitly not to be paternalistic
+
+[13:20:49.0797] <ljharb>
+if people want to do gross things, we have to let them (in some ways)
+
+[13:20:55.0044] <TabAtkins>
+If word order is less important, then call-this allows that functionality in a terse and reliable fashion, without encouraging such a library design pattern.
+
+[13:20:57.0740] <ljharb>
+ * if people want to do gross things, we have to let them (in some ways)
+
+[13:21:04.0448] <ljharb>
+word order is very important
+
+[13:21:17.0116] <TabAtkins>
+Our job is *absolutley* to predict how things will affect the ecosystem and avoid things that we believe will likely be bad.
+
+[13:21:20.0363] <ljharb>
+syntax sugar that just replaces `.call` doesn't hold its own weight imo
+
+[13:21:31.0178] <ljharb>
+it's to predict that, but that doesn't mean we can stop everyone from doing bad things
+
+[13:21:32.0939] <yulia>
+i think word order depends on it's context. it is an improvement in some cases
+
+[13:21:37.0588] <ljharb>
+we can't stop ASI either
+
+[13:22:06.0550] <ljharb>
+i'm certainly all for minimizing misuse, especially when it reduces burden on eslint
+
+[13:22:08.0845] <jschoi>
+I think you think word order is important but that word order can be solved by combining the pipe operator with call-this. That’s correct, right?
+
+[13:22:11.0342] <TabAtkins>
+"we can't stop bad things" doesn't mean we give up on the concept of things being bad as a reason to avoid something; no need to slippery-slope this.
+
+[13:22:12.0116] <ljharb>
+ * i'm certainly all for minimizing misuse, especially when it reduces burden on eslint
+
+[13:22:13.0211] <jschoi>
+> <@tabatkins:matrix.org> If word order is less important, then call-this allows that functionality in a terse and reliable fashion, without encouraging such a library design pattern.
+
+ * I think you think word order is important but that word order can be solved by combining the pipe operator with call-this. That’s correct, ri got?
+
+[13:22:17.0321] <jschoi>
+ * I think you think word order is important but that word order can be solved by combining the pipe operator with call-this. That’s correct, right?
+
+[13:22:17.0913] <ljharb>
+sure
+
+[13:22:30.0661] <ljharb>
+but it also doesn't mean "people will do bad things" is sufficient reason to block something
+
+[13:22:36.0952] <ljharb>
+it's somewhere in the middle
+
+[13:22:37.0116] <TabAtkins>
+jschoi: Yes, `obj |> slice@(#, 0, 2)` kinda works
+
+[13:22:46.0742] <jschoi>
+This is a good point. `f(x)` and `x |> f(#)` are both good at various times.
+
+[13:23:00.0550] <jschoi>
+Sometimes you want verb first; sometimes you want noun first.
+
+[13:23:04.0977] <yulia>
+yes
+
+[13:23:23.0553] <jschoi>
+> <@yulia:mozilla.org> i think word order depends on it's context. it is an improvement in some cases
+
+ * This is a good point. `f(x)` and `x |> f(#)` are both good at various ti mes.
+
+[13:23:26.0851] <jschoi>
+ * This is a good point. `f(x)` and `x |> f(#)` are both good at various times.
+
+[13:23:28.0868] <Justin Ridgewell>
+I don't understand why call-this is taken as a viable alternative to bind-op.
+
+[13:23:57.0558] <Justin Ridgewell>
+It's the less fluent choice, because we don't want to promote a code style.
+
+[13:23:58.0303] <ljharb>
+let me state my opinion more strongly: muggles (devs who aren't deep into language minutiae) *will never* prefer writing functions that use `this` solely because they can use it with `::`
+
+[13:24:05.0410] <ljharb>
+it just won't happen
+
+[13:24:28.0884] <ljharb>
+certainly some rebels will try to do something terrible and clever with that approach! but that doesn't mean it'll go anywhere
+
+[13:25:13.0006] <yulia>
+i've seen a whole lot of bind and call
+
+[13:25:28.0556] <yulia>
+and a lot of people being like "why is this not the this that it was called on"
+
+[13:25:35.0344] <jschoi>
+> <@tabatkins:matrix.org> jschoi: Yes, `obj |> slice@(#, 0, 2)` kinda works
+
+`obj |> slice@(#, 0, 2)` arguably works as well as `obj |> slice(#, 0, 2)` works.
+
+[13:26:00.0341] <TabAtkins>
+Yes it does, it's just admittedly clearly worse than `obj::slice(0, 2)`
+
+[13:26:04.0914] <ljharb>
+right
+
+[13:26:08.0799] <yulia>
+yep
+
+[13:26:17.0607] <ljharb>
+i hope we can all agree that all three forms are better than status quo
+
+[13:26:27.0940] <ljharb>
+and that the third is better than the other two, looking at it in isolation
+
+[13:26:34.0996] <ljharb>
+(better, for this use case)
+
+[13:26:44.0356] <yulia>
+i believe we do have the problem pipeline solves: functional chaining. We do have a problem with binding
+
+[13:26:56.0600] <yulia>
+oh, i think i misread
+
+[13:27:19.0448] <yulia>
+i would rather have obj::slice.
+
+[13:27:28.0147] <Justin Ridgewell>
+By function chaining, do you mean nested functions or method chaining?
+
+[13:28:16.0291] <Justin Ridgewell>
+I think we will continue to have method chaining (including patching onto the global prototypes) as long as we do not have a bind-op.
+
+[13:28:32.0154] <sarahghp>
+I would rather not have `::` at all
+
+[13:28:34.0651] <Justin Ridgewell>
+Pipeline will solve some of it, but the explicit topic token will always be less fluent than a regular method chain.
+
+[13:28:44.0881] <Justin Ridgewell>
+So we will continue to see method chaining regarless.
+
+[13:28:46.0159] <ljharb>
+i mean given
+```
+arr
+  .slice(…)
+  .flat(…)
+  ::somethingNew(…)
+  .filter(…)
+```
+vs
+```
+arr
+  .slice(…)
+  .flat(…)
+  |> somethingNew@(#, …)
+  .filter(…)
+```
+
+the former is clearly better to me.
+
+[13:28:57.0060] <pokute>
+Is `arrayLike |> Array.slice@(#, 0, 2)` valid?
+
+[13:29:09.0700] <sarahghp>
+I think both of those are undesirable, honestly
+
+[13:29:11.0775] <TabAtkins>
+Justin Ridgewell: So, right, call-this is intentionally not as "fluent" as bind-this in the .call() case, specifically to avoid overlapping with pipeline. It achieves the functionality (terse, reliable .call()) without anything else. Self-binding (aka method extraction) is imo best done by PFA; `obj.method~()` is clearly better than `obj::obj.method`, imo.  Other-binding is the final leftover case, but I think this is (a) the least common of these cases, afaict from the collected data and (b) sufficiently okay to just use arrow functions with - `that=>slice@(that, 0, 2)` seems fine for this.
+
+[13:29:13.0956] <ljharb>
+pokute: `Array.slice` doesn't exist, but otherwise yes
+
+[13:29:14.0695] <TabAtkins>
+pokute: yes
+
+[13:29:29.0100] <ljharb>
+sarahghp: i do that exact pattern in a ton of libraries, i just break it up because i don't have a chaining affordance
+
+[13:29:30.0507] <TabAtkins>
+Well, sorry, `Array.slice` is undefined
+
+[13:29:42.0694] <ljharb>
+use `Array.prototype.slice`, and it works
+
+[13:29:49.0713] <TabAtkins>
+yeah
+
+[13:29:55.0109] <TabAtkins>
+Or `[].slice`
+
+[13:30:03.0150] <Justin Ridgewell>
+Next let's not have optional chaining, because we already have `&&` and regular dot accses...
+
+[13:30:22.0810] <sarahghp>
+> <@ljharb:matrix.org> sarahghp: i do that exact pattern in a ton of libraries, i just break it up because i don't have a chaining affordance
+
+If I were empress of a codebase (big if), I would definitely expect a single paradigm in a chain. If you want to pipeline, write it all as pipeline
+
+[13:30:23.0048] <ljharb>
+indeed, a lot of the arguments for optional chaining hold here
+
+[13:30:43.0957] <ljharb>
+sarahghp: right, but i wouldn't want to use pipeline. i'd want to use `::` :-)
+
+[13:31:12.0225] <sarahghp>
+that's worse! 
+
+[13:31:15.0671] <ljharb>
+but also, 
+```
+arr
+  |> #.slice(…)
+  |> #.flat(…)
+  |> somethingNew@(#, …)
+  |> #.filter(…)
+```
+looks far worse to me than either of those
+
+[13:31:23.0585] <ljharb>
+which would be the "all pipeline" form
+
+[13:31:28.0219] <sarahghp>
+I don't want to ever explain to a beginner why sometimes `::` and sometimes `.`
+
+[13:31:38.0518] <ljharb>
+you'd have to do that whether it's a chain or not (in a chunk of code that uses both)
+
+[13:31:43.0944] <ljharb>
+ * you'd have to do that whether it's a chain or not (in a chunk of code that uses both)
+
+[13:31:50.0201] <ljharb>
+just like you have to explain `.` vs `?.`, now
+
+[13:32:00.0028] <ljharb>
+or `.x` vs `['x']`
+
+[13:33:36.0511] <sarahghp>
+yes but I don't personally find the advantage to be worth adding another
+
+[13:33:43.0769] <sarahghp>
+you are absolutely not wrong, tho
+
+[13:33:47.0363] <sarahghp>
+ * you are absolutely not wrong, tho
+
+[13:34:41.0840] <ljharb>
+to be fair, i think that in most of my use cases, i'd probably use *only* `::` and not `.` in a single chain, because i want all those method calls to be robust
+
+[13:35:12.0916] <ljharb>
+which means i'm comparing a normal OOP chain with `.`, converting to a more robust `::` in place of every `.` - vs, converting to a more robust `|>` + `fn@(#, ` in place of every `.`.
+
+[13:35:14.0222] <ljharb>
+ * which means i'm comparing a normal OOP chain with `.`, converting to a more robust `::` in place of every `.` - vs, converting to a more robust `|>` + `fn@(#, ` in place of every `.`.
+
+[13:35:28.0477] <ljharb>
+and i'm quite certain the pipeline one would look horrendous
+
+[13:47:02.0711] <pokute>
+In my opinion, if someone goes through the trouble of setting a local variable like `slice` that they can use as a function, it's approximately as much effort to import it as an unbound function as it is to destructure it from Array.prototype (or []). For something like slice, I'd expect that some coders would use a bound version while others would use unbound since it's up to the user to choose which way to do it. Especially if this-calls are introduced after pipelines. For something like RxJs, it's different of course.
+
+[13:59:30.0134] <pokute>
+I haven't used `call` or `bind` other than a few times for React class components. When I've written pipelined code, I've used both `[...] |> #.filter` and `[...].filter` and did think of but ended up not adding `[...] |> filter(#, ...)` as an ergonomic alternative. For my style, `[...]|> Array.filter(#, ...)` (that I would add myself) feels more natural than just unspecific `filter` -function.
+
+[15:15:31.0639] <yulia>
+do you want me there?
+
+[15:15:40.0236] <yulia>
+(i could use a day off)
+
+[15:16:12.0270] <jschoi>
+> <@yulia:mozilla.org> do you want me there?
+
+Completely optional, thanks and have a good day off!
+
+[15:16:14.0761] <jschoi>
+https://github.com/tc39/Reflector/issues/416
+
+[15:16:43.0809] <yulia>
+ah, i am @codehag if you wanna ping me
+
+[15:16:48.0660] <yulia>
+on most everything
+
+[15:16:53.0530] <yulia>
+except this
+
+[15:16:56.0880] <yulia>
+and my email
+
+[15:17:01.0312] <yulia>
+and a few other places ...
+
+[15:17:14.0004] <jschoi>
+Oh, yeah, I had forgotten, whoops.
+
+[15:18:18.0248] <yulia>
+np :D
+
+
+2022-01-27
+[04:40:48.0110] <yulia>
+you know what, i will write up my view on pipeline and also the intersection. i very much like jschoi  and TabAtkins blog posts, i think they went a long way in furthering this discussion in an archivable way. thanks for the inspiration you two.
+
+[08:05:32.0095] <shu>
+i'd prefer to skip the overtime discussion today and read the results later
+
+[08:05:51.0948] <shu>
+but am willing to come if folks anticipate implementation questions?
+
+[09:00:36.0792] <jschoi>
+> <@shuyuguo:matrix.org> but am willing to come if folks anticipate implementation questions?
+
+I don’t anticipate any implementation questions; it’s mostly high-level.
+
+[09:09:03.0064] <jschoi>
+Well, other than the question of PFA syntax and throwaway-callback construction…
+
+[09:09:38.0763] <jschoi>
+…but I think you’ve already expressed your concerns about that clearly enough before, Shu; we’ll continue to keep them in mind in the disucssion.
+
+[10:01:32.0336] <TabAtkins>
+Reminder: dataflow meeting starting now
+
+[10:02:10.0256] <sarahghp>
+Reminder: Let me in!
+
+[10:02:13.0609] <sarahghp>
+😉
+
+[10:02:25.0351] <sarahghp>
+it's at the meet not the jitsi yes?
+
+[10:07:15.0155] <ljharb>
+the Meet, yes
+
+[10:08:00.0410] <jschoi>
+Wait, we’re in the Jitsi!
+
+[10:13:40.0979] <ljharb>
+HE Shi-Jun: fwiw i don't see any mention in the extensions proposal repo of other languages
+
+[11:01:18.0604] <rbuckton>
+TabAtkins: What would you think about an alternative to call-this that didn't use `::` to indicate a different argument order? I'm thinking about something like `fn(this: x, y)`.
+
+[11:01:37.0031] <TabAtkins>
+oh *huh*
+
+[11:01:47.0237] <TabAtkins>
+I guess i'm not too against
+
+[11:02:43.0925] <sarahghp>
+do we have data on "everyone is doing OO"?
+
+[11:02:49.0569] <rbuckton>
+Would be more cohesive with _real_ named argument support, as opposed to object binding patterns.
+
+[11:28:41.0509] <rbuckton>
+It also would leave `::` for something else rather than locking it up for a very small capability.
+
+[11:30:13.0618] <TabAtkins>
+okay yeah i'm getting more in favor of the `this-tagging` syntax
+
+[11:30:42.0144] <TabAtkins>
+i forget, i know there was some syntax issues with using `:` in arg lists for named args, right?
+
+[11:32:12.0527] <rbuckton>
+Is there? `:` is only used in JS for:
+- labeled statements
+- case/default clauses
+- property assignments in object literals/object patterns
+- conditionals
+
+I'm not aware of any other conflicts offhand.
+
+[11:32:17.0494] <rbuckton>
+ * Is there? `:` is only used in JS for:
+- labeled statements
+- case/default clauses
+- property assignments in object literals
+- conditionals
+
+I'm not aware of any other conflicts offhand?
+
+[11:32:40.0894] <rbuckton>
+ * Is there? `:` is only used in JS for:
+- labeled statements
+- case/default clauses
+- property assignments in object literals/object patterns
+- conditionals
+
+I'm not aware of any other conflicts offhand?
+
+[11:32:48.0183] <rbuckton>
+ * Is there? `:` is only used in JS for:
+- labeled statements
+- case/default clauses
+- property assignments in object literals/object patterns
+- conditionals
+
+I'm not aware of any other conflicts offhand.
+
+[11:32:51.0579] <TabAtkins>
+I just know that `foo(argname: val)` has been discussed for JS in the past and been rejected; maybe just because options-args swallow enough of the use-case to not make it worthwhile
+
+[11:33:43.0492] <rbuckton>
+`keyword:` might be fine though?
+
+[11:34:50.0017] <TabAtkins>
+might be, like i said, i'm just vaguely remembering something and might be off on the details
+
+[11:40:27.0905] <jschoi>
+That’s a good idea, Ron.
+
+[11:40:54.0970] <jschoi>
+I will make the bikeshedding thread focused on the three choices:
+
+[11:41:12.0089] <jschoi>
+thisArg::ƒ(arg0)
+
+[11:41:24.0594] <jschoi>
+ƒ@.(thisArg, arg0)
+
+[11:41:31.0097] <jschoi>
+ƒ(thisArg: arg0)
+
+[12:02:13.0816] <rbuckton>
+jschoi: Not `thisArg`, as that would be a regular identifier. Specifically the keyword `this:`. So:
+ƒ(this: thisArg, arg0)
+
+[12:11:31.0777] <rbuckton>
+It would work for PFA too and avoids the bind-this overlap, i.e.: ƒ~(this: thisArg, ?)
+
+```js
+// NOTE: transposition is an approximation (does not capture eager evaluation of PFA)
+f~(?)               // _ => f(_)
+
+o.f~(?)             // note: binds `o` as `this`
+                    // _ => o.f(_)
+
+f~(this: ?)         // _ => f(this: _)
+                    // _ => f.call(_)
+
+f~(this: x, ?)      // note: binds `x` as `this`
+                    // _ => f(this: x, _)
+                    // _ => f.call(x, _)
+
+o.f~(this: ?)       // _ => o.f(this: _)
+                    // _ => o.f.call(_)
+
+o.f~(this: x, ?)    // note: binds `x` as `this`
+                    // _ => o.f(this: x, _)
+                    // _ => o.f.call(x, _)
+
+o.f~(this: ?, ...)  // note: uncurry `this`
+                    // (_, ...args) => o.f.call(_, ...args)
+```
+
+[12:20:00.0736] <jschoi>
+> <@rbuckton:matrix.org> jschoi: Not `thisArg`, as that would be a regular identifier. Specifically the keyword `this:`. So:
+> ƒ(this: thisArg, arg0)
+
+Why can’t the colon distinguish?
+
+[12:20:04.0591] <jschoi>
+ * Why can’t the colon alone distinguish?
+
+[12:20:19.0971] <jschoi>
+Is it because it would preclude general named-argument syntax?
+
+[12:20:24.0388] <jschoi>
+ * Is it because it would preclude general named-argument syntax?
+
+[12:20:43.0871] <jschoi>
+ * Why can’t the colon alone distinguish? `f(receiver:)`.
+
+[12:25:05.0272] <rkirsling>
+yeah I don't mind this new idea either. I'm sorry that my thoughts in the call were disorganized
+
+[12:25:27.0850] <rkirsling>
+I think I prefer options that keep the receiver inside the parens.
+
+[12:30:08.0815] <jschoi>
+Feel free to leave a new comment on https://github.com/tc39/proposal-bind-this/issues/10. Jordan just did.
+
+[13:51:28.0523] <Justin Ridgewell>
+> <@ljharb:matrix.org> HE Shi-Jun: fwiw i don't see any mention in the extensions proposal repo of other languages
+
+I’d also like to look at examples.
+
+[14:33:41.0102] <Justin Ridgewell>
+> <@tabatkins:matrix.org> I just know that `foo(argname: val)` has been discussed for JS in the past and been rejected; maybe just because options-args swallow enough of the use-case to not make it worthwhile
+
+It's not apparent that the arg name is public, and renaming it now causes breaking changes.
+
+[14:48:02.0116] <Justin Ridgewell>
+When do we want to publish the adhoc notes?
+
+[14:48:18.0227] <Justin Ridgewell>
+After 2 weeks with the rest of the plenary notes?
+
+[15:07:28.0893] <jschoi>
+At the meeting, I said I’d do it about two days from now, but with the plenary notes makes sense too I guess.
+
+[15:07:35.0498] <jschoi>
+> <@jridgewell:matrix.org> When do we want to publish the adhoc notes?
+
+ * At the meeting, I said I’d do it about two days from now, but with the plenary notes makes sense too I guess.
+
+[15:14:54.0196] <Justin Ridgewell>
+I think everyone that spoke edited their responses, actually.
+
+[15:15:04.0622] <Justin Ridgewell>
+At least, I say several editing afterwards.
+
+[15:38:15.0733] <jschoi>
+Yeah, everyone edited during and for a few minutes after the meeting. (Thanks everyone for your help.) So I’ll probably just stick with publishing in a couple of days.
+
+
+2022-01-28
+[16:20:44.0432] <TabAtkins>
+Justin Ridgewell: Args being implicitly public works reasonably well in Python, imxp. (And you can now dictate that some args are positional-only and not available by name.) Or is the concern just that exposing arg name of *existing* functions, predating such a syntax, would be a problem?
+
+[16:28:12.0900] <Justin Ridgewell>
+My worry would be libraries who are unaware, but users who are.
+
+[16:29:10.0955] <Justin Ridgewell>
+JS devs don’t currently need to think about it, and so it’s normal for it to change without updating the major.
+
+[16:30:25.0385] <Justin Ridgewell>
+Additionally, what if the lib went through a minifier? What are the public names now?
+
+[16:31:04.0490] <Justin Ridgewell>
+And what will they be the next time it’s run though?
+
+[16:32:12.0220] <Justin Ridgewell>
+Terser uses char frequency to select mangled names. A completely unrelated code change in a string can cause the mangled name in a function to change.
+
+[17:54:46.0287] <rbuckton>
+I think if JS did add actual named parameters, you would have to opt-in somehow.
+
+[18:42:12.0361] <rkirsling>
+lol why do I even bother
+
+[19:13:19.0084] <Justin Ridgewell>
+> <@rkirsling:matrix.org> lol why do I even bother
+
+Is this about the responses to your comment? I interpreted yours as subjective, and it's hard not to have a subjective response to it. I'm sorry if you feel like I'm dismissing your opinion.
+
+[19:13:31.0753] <rkirsling>
+I spent hours thinking over why something was hard for me to understand and expressed it as clearly and concisely as I am capable.
+
+[19:14:34.0287] <rkirsling>
+in that sense it is subjective, but I feel like if I claimed "the sky is blue" at this point someone would "nuh uh" me
+
+[19:18:45.0615] <Justin Ridgewell>
+Which part do you think is being dismissed?
+
+[19:19:17.0312] <Justin Ridgewell>
+In a sense, I read your comment as a difficulty in translating the code into an English phrase.
+
+[19:19:38.0909] <Justin Ridgewell>
+And my thought to answer is "well this is how I would say it"
+
+[19:20:03.0176] <rkirsling>
+I didn't feel dismissed at all by your comment
+
+[19:20:35.0547] <rkirsling>
+I did want to clarify the notion of subject at that point but now it's just a chain of disagreeing with every presupposition I had
+
+[19:21:17.0160] <rkirsling>
+I didn't expect to convince anyone per se but I certainly hoped to clearly express where I was coming from
+
+[19:21:45.0204] <rkirsling>
+at this point I don't feel like I can speak again until somebody acknowledges what I was actually trying to say
+
+[19:23:12.0706] <rkirsling>
+and it's frustrating because I would expect that from the broader community, that's why I shy away from these threads so often, but
+
+[19:31:04.0750] <rkirsling>
+anyway I don't think it's a good place for round-and-round conversations
+
+[19:34:33.0542] <Justin Ridgewell>
+Rereading:
+> It's worth noting here that mathematical function notation sometimes uses a subscript for a similar purpose: e.g. logb(x). We bind b first, and indeed, could pass logb as a function instead of feeding it an x right away.
+
+[19:34:34.0030] <rkirsling>
+otherwise one person spends hours trying to dot every i and cross every t while others spend two minutes regurgitating some entrenched view
+
+[19:35:39.0469] <Justin Ridgewell>
+If I understand right, you're treating `log` as something that would need to a bound to a context `b`?
+
+[19:35:48.0020] <Justin Ridgewell>
+Which would always be on the RHS of the `log` expression
+
+[19:36:18.0000] <Justin Ridgewell>
+But this is directly at odds with what Jordan and I have expressed
+
+[19:36:40.0573] <Justin Ridgewell>
+Having to repeat the context on the right hand side is effectively the same ergonomics as hack pipe.
+
+[19:37:17.0581] <Justin Ridgewell>
+But it seems you'd be open to `receiver :> fn()`, and I think it's because the spaces make it appear `fn` is not a property lookup?
+
+[19:37:32.0338] <rkirsling>
+yeah so I explicitly said that I wasn't expecting people to like my suggestion that the operands be reversed, but I realized that that was the crux of why I find it so hard to read
+
+[19:38:11.0317] <rkirsling>
+yeah `:>` would seem okay at least for the `.call` case, though I wonder if it's separately problematic for the `.bind` case
+
+[19:38:55.0232] <Justin Ridgewell>
+But is it the spaces that make it more comfortable for you?
+
+[19:39:14.0869] <rkirsling>
+yeah because it's passing an argument
+
+[19:40:12.0528] <rkirsling>
+since JS is an imperative language, the "subject" of a function call is the engine, IMO 😅
+
+[19:40:25.0597] <rkirsling>
+(or my computer. or me.)
+
+[19:40:42.0270] <Justin Ridgewell>
+Ok.
+
+[19:40:59.0715] <Justin Ridgewell>
+I could definitely see how `a::b` could be confused with namespace (effectively property) lookup.
+
+[19:41:25.0328] <Justin Ridgewell>
+And I don't think even spaces `a :: b` would help with that.
+
+[19:42:11.0409] <Justin Ridgewell>
+I'm fine with `:>`, it is a pipe behavior that I want https://github.com/tc39/proposal-bind-this/issues/10#issuecomment-936725043
+
+[19:42:35.0383] <Justin Ridgewell>
+And it might be alright to have `bound = receiver :> slice;`
+
+[19:42:51.0345] <Justin Ridgewell>
+(which I don't want as much)
+
+[19:42:56.0486] <rkirsling>
+> <@jridgewell:matrix.org> I'm fine with `:>`, it is a pipe behavior that I want https://github.com/tc39/proposal-bind-this/issues/10#issuecomment-936725043
+
+yeah I remembered that it was an option when I reread that comment :D
+
+[19:48:45.0927] <pokute>
+So `receiver.method()` is then a bit weird when the combo of `.` and `()` makes `()` work differently when they're both present since the preceding `.` changes the "function" call.   guess this is why `.` is bad to use with trailing whitespaces since it changes the following function call. I think `:>` might have the same problem - for a piece of code `receiver :> func()` the whitespace separates the receiver from the function call while I think it's a very important to link them strongly together. (I guess tacit function call application with `arg |>> Math.round` suffers a bit from the same problem.)
+
+[19:49:58.0399] <pokute>
+> <@rkirsling:matrix.org> yeah because it's passing an argument
+
+ * So `receiver.method()` is then a bit weird when the combo of `.` and `()` makes `()` work differently when they're both present since the preceding `.` changes the "function" call.   guess this is why `.` is bad to use with trailing whitespaces since it changes the following function call. I think `:>` might have the same problem - for a piece of code `receiver :> func()` the whitespace separates the receiver from the function call while I think it's a very important to link them strongly together. (I guess tacit function call application with `arg |>> Math.round` suffers a bit from the same problem.)
+
+[19:50:26.0900] <pokute>
+ * So `receiver.method()` is then a bit weird when the combo of `.` and `()` makes `()` work differently when they're both present since the preceding `.` changes the "function" call.   guess this is why `.` is bad to use with trailing whitespaces since it changes the following function call. I think "`:>`" might have the same problem - for a piece of code `receiver :> func()` the whitespace separates the receiver from the function call while I think it's a very important to link them strongly together. (I guess tacit function call application with `arg |>> Math.round` suffers a bit from the same problem.)
+
+[19:50:42.0503] <pokute>
+ * So `receiver.method()` is then a bit weird when the combo of `.` and `()` makes `()` work differently when they're both present since the preceding `.` changes the "function" call.   guess this is why `.` is bad to use with trailing whitespaces since it changes the following function call. I think "`:>`" with trailing whitespace might have the same problem - for a piece of code `receiver :> func()` the whitespace separates the receiver from the function call while I think it's a very important to link them strongly together. (I guess tacit function call application with `arg |>> Math.round` suffers a bit from the same problem.)
+
+[19:50:51.0252] <Justin Ridgewell>
+By changing it, do you mean that the a receiver is passed as `this` instead of nothing?
+
+[19:50:53.0337] <Justin Ridgewell>
+ * By changing it, do you mean that the a receiver is passed as `this` instead of nothing?
+
+[19:51:18.0216] <Justin Ridgewell>
+Doesn't having `.` and `(` on the same line alleviate that?
+
+[19:51:50.0956] <Justin Ridgewell>
+Eg, we break up long chains:
+```
+foo
+  .bar()
+  .then(() => {
+  });
+```
+
+[19:52:17.0882] <pokute>
+> <@jridgewell:matrix.org> By changing it, do you mean that the a receiver is passed as `this` instead of nothing?
+
+Well yeah. function call vs. method call.
+
+[19:55:03.0342] <pokute>
+Of course, multi-line version would be usually formatted pretty straightforwardly, but a single-line `.... && receiver :> freeFunctionLookalike() || ...` might be misleading.
+
+[19:57:31.0328] <Justin Ridgewell>
+I mean, mixing binary operators is always confusing. 😛
+
+[19:58:05.0833] <Justin Ridgewell>
+But yah, I have no idea where the expression nodes end in that example.
+
+[19:59:07.0172] <pokute>
+well, I didn't mean even that :-).  I would rather see `receiver :>freeFunctionLookalike()` instead of `receiver :> freeFunctionLookalike()`for the same reason I would rather see `receiver .freeFunctionLookalike()` instead of `receiver . freeFunctionLookalike()`.
+
+[19:59:32.0894] <pokute>
+ * well, I didn't mean even that :-).  I would rather see `receiver :>freeFunctionLookalike()` instead of `receiver :> freeFunctionLookalike()`for the same reason I would rather see `receiver .freeFunctionLookalike()` instead of `receiver . freeFunctionLookalike()`.
+
+[20:01:49.0807] <rkirsling>
+hmmm
+
+[20:03:07.0157] <rkirsling>
+I guess I'm really viewing it as the same as `|>` but
+
+[20:04:22.0195] <pokute>
+Hack pipeline has a bit of benefit where the "RHS" expression has an topic indicator that gives a hint that it's a part of a bigger expression.
+
+[20:04:40.0554] <rkirsling>
+that is true
+
+[20:05:07.0062] <pokute>
+Tacit function application or F# pipelines don't have such a hint always.
+
+[20:09:32.0810] <pokute>
+For these kind of issues, It's about even better to write some half-page example code where the point of interest snippet is embedded in - not too obfuscated but not too separated either. When we're having it as a topic of discussion, we automatically focus our attention for it and can't really evaluate how it looks around other code.
+
+[20:09:49.0877] <rkirsling>
+I guess in the case of `:>` we don't need a hint since it only fills one param though
+
+[20:10:34.0722] <Justin Ridgewell>
+Hopefully.
+
+[20:22:52.0505] <pokute>
+`({}).hasOwnProperty('foo')` looks like someone typoed until the preceding :> is noticed: `noPrototypeObject :> ({}).hasOwnProperty('foo')`. Though it needs some inside-real-code visibility testing.
+
+[20:25:49.0385] <pokute>
+And realistic use cases too. While pipelines can be used myriad of situations, I doubt this-call or bind-this will be used as variedly. We also need to dismiss code that's deliberately obfuscated in a way that people don't write such code.
+
+[20:26:00.0353] <pokute>
+ * And realistic use cases too. While pipelines can be used myriad of situations, I doubt this-call or bind-this will be used as variedly. We also need to dismiss code that's deliberately obfuscated in a way that people write such code.
+
+[20:26:08.0926] <pokute>
+ * And realistic use cases too. While pipelines can be used myriad of situations, I doubt this-call or bind-this will be used as variedly. We also need to dismiss code that's deliberately obfuscated in a way that people don't write such code.
+
+[20:30:35.0277] <pokute>
+ * And realistic use cases too. While pipelines can be used in myriad of situations, I doubt this-call or bind-this will be used as variedly. We also need to dismiss code that's deliberately obfuscated in a way that people don't write such code.
+
+[20:33:41.0611] <Justin Ridgewell>
+I don't understand the example.
+
+[20:34:02.0281] <Justin Ridgewell>
+Did you mean `noPrototypeObject :> ({}.hasOwnProperty)('foo')`
+
+[20:34:20.0665] <Justin Ridgewell>
+(I for one really dislike the complexity that the non-identifier form of RHS introduces)
+
+[20:34:23.0215] <Justin Ridgewell>
+ * (I for one really dislike the complexity that the non-identifier form of RHS introduces)
+
+[20:36:07.0245] <pokute>
+> <@jridgewell:matrix.org> Did you mean `noPrototypeObject :> ({}.hasOwnProperty)('foo')`
+
+I don't know there precedence, so this might be the correct way.
+
+[20:54:39.0379] <rbuckton>
+I can't say I'm too keen on an "elixir-style except pipe to the this binding" pipeline. It's much harder to reason over. 
+
+[20:56:20.0419] <rbuckton>
+Looking at those two examples, I have no idea what's going on.
+
+[20:56:51.0516] <rbuckton>
+Compare that with `this: x` or `this x` and a normal pipeline:
+
+```js
+```
+
+[21:00:51.0802] <rbuckton>
+ * the `this`-prefixed argument is a bit easier to grok to me:
+
+```js
+{}.hasProperty(this: noPrototypeObject)
+ 
+// or, if you want to pipe it
+
+noPrototypeObject
+  |> {}.hasProperty(this: #)
+```
+
+That way you only need the `|>` pipeline, can call with a custom `this` without needing to pipe at all, and keep all arguments in the argument list.
+
+[21:02:38.0265] <rkirsling>
+that is pretty neat, actually
+
+[21:03:11.0406] <rkirsling>
+feels very well-integrated
+
+[21:21:17.0757] <Justin Ridgewell>
+That's part of why I dislike the non-identifier form.
+
+[21:21:56.0409] <Justin Ridgewell>
+But I' not convinced the this-arg is necessary.
+
+[21:22:49.0076] <Justin Ridgewell>
+Eg,
+```js
+const hasProperty = uncurryThis({}.hasOwnProperty);
+
+noPrototypeObject
+  |> hasProperty(#)
+```
+
+[21:22:59.0977] <Justin Ridgewell>
+Wouldn't require a syntax change
+
+[21:23:08.0737] <Justin Ridgewell>
+ * Eg,
+```js
+const hasProperty = uncurryThis({}.hasProperty);
+
+noPrototypeObject
+  |> hasProperty(#)
+```
+
+[21:23:26.0939] <Justin Ridgewell>
+ * Eg,
+```js
+const hasProperty = uncurryThis({}.hasOwnProperty);
+
+noPrototypeObject
+  |> hasProperty(#)
+```
+
+[21:56:53.0556] <rbuckton>
+While I previously suggested `uncurryThis` for jschoi's function helpers proposal, it's downside is that it has to create a new function object (just like bind or PFA), where `f(this: x)` would just be a Call
+
+[21:57:30.0591] <jschoi>
+See also: https://github.com/js-choi/proposal-function-un-this
+
+[21:57:52.0156] <jschoi>
+(I would find only having a this-uncurrying function to be quite clunky, and I would like a special call syntax, whether it’s bind-this, call-this, or whatever. `.call` is very, very common and deserves to be optimized better than having to define an uncurried function every time…)
+
+[21:58:12.0128] <jschoi>
+* (I would find only having a this-uncurrying function to be quite clunky. `.call` is very, very common…)
+
+[21:58:17.0635] <rbuckton>
+I think that's just the `uncurryThis` I mentioned above but with a different name
+
+[21:58:25.0805] <jschoi>
+* (I would find only having a this-uncurrying function to be quite clunky, and I would like a special call syntax, whether it’s bind-this, call-this, or whatever. `.call` is very, very common…)
+
+[21:58:35.0107] <jschoi>
+Yeah. I split it into a separate proposal.
+
+[21:58:45.0409] <jschoi>
+* Yeah. I split it into a separate proposal after the function-helpers omnibus’s rejection.
+
+[21:58:52.0639] <jschoi>
+* Yeah. I split it into a separate proposal after the function-helpers omnibus proposal’s rejection.
+
+[21:59:34.0537] <jschoi>
+* (I would find only having a this-uncurrying function to be quite clunky, and I would like a special call syntax, whether it’s bind-this, call-this, or whatever. `.call` is very, very common and deserves to be optimized better than having to define an uncurried function every time…)
+
+[22:00:59.0705] <rbuckton>
+IIRC, the argument was that "curry" was too overloaded with FP, but I think that's actually a positive rather than a negative since "to curry" in FP or lambda calculus has a very well defined meaning.
+
+[22:01:46.0687] <jschoi>
+https://github.com/js-choi/proposal-function-un-this/issues/1
+
+[22:02:07.0254] <jschoi>
+Several people do seem to like “demethodize”.
+
+[22:02:33.0013] <rbuckton>
+ugh, thats a mouthful
+
+[22:02:49.0632] <jschoi>
+So is uncurryThis, heh. But yeah…
+
+[22:02:54.0751] <jschoi>
+…bikeshedding.
+
+[22:03:52.0977] <jschoi>
+I still like your `f(this: blah)` idea, although it seems to be getting resistance from some others because of dissimilarity with TypeScript function definitions’ parameter syntax. (Did you ever mention why you think `f(blah:)` is not viable?)
+
+[22:04:23.0695] <jschoi>
+* I still like your `f(this: blah)` idea, although it seems to be getting resistance from some others because of dissimilarity with TypeScript function definitions’ parameter syntax. (Did you ever mention why you think `f(this:)` is not viable?)
+
+[22:04:30.0737] <jschoi>
+* I still like your `f(this: blah)` idea, although it seems to be getting resistance from some others because of dissimilarity with TypeScript function definitions’ parameter syntax. (Did you ever mention why you think `f(blah:)` is not viable?)
+
+[22:04:51.0056] <rbuckton>
+Haskell Curry would be sad if we called it "demethodize" /s
+
+[22:06:07.0783] <rbuckton>
+That's funny, because I suggested it because of its *similarity* with TypeScript's function definition's parameter syntax.
+
+[22:06:10.0672] <jschoi>
+* I still like your `f(this: blah)` idea, although it seems to be getting resistance from some others because of dissimilarity with TypeScript function definitions’ parameter syntax. 
+
+(Did you ever mention why you think `f(blah:)` is not viable?)
+
+[22:07:00.0085] <rbuckton>
+I think `f(arg0: x)` would be great, but we already have `f({ arg0: x })`.
+
+[22:07:02.0546] <jschoi>
+> That’s funny, because I suggested it because of its similarity
+
+Yeah, heh. I am referring specifically to bakkot’s most recent comment in the delegates room.
+
+[22:07:16.0480] <rbuckton>
+I would prefer real named parameters, honestly, because they work better with PFA than object binding patterns.
+
+[22:07:18.0771] <jschoi>
+* > That’s funny, because I suggested it because of its similarity
+Yeah, heh. I am referring specifically to bakkot’s most recent comment in the delegates room.
+
+[22:07:30.0122] <jschoi>
+* > That’s funny, because I suggested it because of its similarity
+
+Yeah, heh. I am referring specifically to bakkot’s most recent comment in the delegates room.
+
+[22:10:41.0988] <Justin Ridgewell>
+Options bags are nice, but the object overhead in hot functions.
+
+[22:11:07.0126] <Justin Ridgewell>
+It's a little similar to the destructure overhead of returning multiple values.
+
+[22:11:46.0509] <rbuckton>
+I keep hoping engines will optimize those away. I'm not sure if any do yet.
+
+[22:12:50.0259] <Justin Ridgewell>
+I don't think they'll ever
+
+[22:13:01.0058] <Justin Ridgewell>
+I really want register based mutli-return.
+
+[22:13:06.0705] <Justin Ridgewell>
+Something akin to Go
+
+[22:13:25.0529] <rbuckton>
+I want `ref` parameters and `ref` declarations, especially now that we have private fields.
+
+[22:15:03.0035] <rbuckton>
+```js
+function f(ref x, ref y) {
+  x = 1;
+  y = 2;
+}
+
+let x;
+let y;
+f(ref x, ref y); 
+
+x; // 1
+y; // 2
+```
+
+[22:15:21.0584] <rbuckton>
+```js
+function f(ref x) {
+  x = 1;
+}
+
+class C {
+  #x;
+  constructor() {
+    // hand private field to `f`
+    f(ref this.#x);
+  }
+}
+```
+
+[22:15:58.0714] <rbuckton>
+ * ```js
+function f(ref x) {
+  x = 1;
+}
+
+class C {
+  #x;
+  constructor() {
+    // hand private field to `f`
+    f(ref this.#x);
+  }
+}
+```
+
+[22:17:09.0688] <rbuckton>
+It plays into the `struct` proposal somewhat as well.
+
+[22:17:33.0836] <rbuckton>
+https://github.com/rbuckton/proposal-refs
+
+[22:17:35.0159] <rbuckton>
+ * https://github.com/rbuckton/proposal-refs
+
+[22:18:30.0708] <Justin Ridgewell>
+Ok, I'd take that, too.
+
+[22:23:25.0490] <rbuckton>
+I've been waiting to propose it when there are more motivating use cases. Other than the capabilities the feature itself unlocks, it is also valuable for decorators (to deal with circular references), and possibly for shared structs (i.e. `Atomics.compareExchange(ref this.#x, 0, 1)`). But neither of those proposals are Stage 3 yet, and I have enough on my plate for the moment.
+
+[02:31:22.0889] <rbuckton>
+Between `f(this: x)` and `f(this x)`, the colon-suffix is necessary to avoid ambiguity with call:
+
+```js
+f(this: (x)) 
+f(this (x)) // Aready valid JS
+```
+
+It might be necessary for `ref`-expressions as well since they can be followed by parens (but not `ref` declarations):
+
+```js
+f(ref x) // ok
+f(ref (x)) // ambiguous
+```
+
+Which could require `ref` to also use a `:` suffix for args, or a different token:
+
+```js
+f(ref x) 
+f(ref (x)) // ambiguous with call
+f(& x) 
+f(& (x)) // ok, unambiguous
+f(&ref x)
+f(&ref (x)) // ok, unambiguous
+f(ref: x)
+f(ref: (x)) // ok, unambiguous 
+
+const y = ref x
+const y = ref (x) // ambiguous with call
+const y = & x;
+const y = & (x)) 
+const y = &ref x
+const y = &ref (x)
+const y = ref: x // meh
+const y = ref: (x) // meh
+```
+
+I'm not a fan of `ref:` in other expressions, so I might have to go with either a token like `&` or introducing a prefixed keyword syntax to allow us to introduce new keywords that shouldn't be treated as an identifier:
+
+```
+&keyword // &ref, &this
+%keyword
+^keyword
+*keyword
+
+f(&this x)
+f(&ref x)
+
+&match (x) {} //no need for NLT
+```
+
+[02:32:55.0090] <rbuckton>
+(element for Android doesn't seem to like formatting code)
+
+[11:32:52.0940] <pokute>
+From what I've read here and in public github issue threads, it seems like the dataflow meeting didn't find any issues for pipeline operator itself. It seems like all the other suggested dataflow proposals would work very fine with the currently suggested hack pipelines. I'm glad!
+
+[11:48:15.0136] <jschoi>
+There are two representatives who have mild concerns about Hack pipes and expressed them at this week’s meetings, but not enough to block.
+
+[11:48:19.0511] <jschoi>
+
+(This is assuming that a bind-this/call-this/something-like-them operator also will advance; otherwise a third representative would switch their support to blocking.)
+
+[11:48:40.0847] <jschoi>
+One of the two representatives concerned about Hack pipes has written an essay that we discussed a bit (https://hackmd.io/yDDJCsS-Sv2AJwo8arAn3w?view), and the other is planning to write her own article. But neither plans to block. 
+
+[11:49:27.0122] <jschoi>
+The other proposals (except for Function.pipe) are more controversial, such as bikeshedding bind-this vs. call-this and, even more controversially, Extensions and PFA syntax. 
+
+[11:49:49.0896] <jschoi>
+So, yeah, basically yes: what you said. 
+
+[11:50:41.0370] <jschoi>
+* One of the two representatives concerned about Hack pipes has written an essay (https://hackmd.io/yDDJCsS-Sv2AJwo8arAn3w?view) that we discussed a bit during a Thursday overflow meeting, and the other is planning to write her own article later. But neither plans to block. 
+
+[11:51:21.0088] <jschoi>
+* One of the two representatives concerned about Hack pipes has written an essay (https://hackmd.io/yDDJCsS-Sv2AJwo8arAn3w?view) that we discussed a bit during a Thursday overflow meeting, and the other is planning to write her own article about them later. But neither representative plans to block Hack pipes, as far as I know. 
+
+[11:52:12.0358] <pokute>
+Isn't this conflicting with, what seems to be my impression, issues raised on F# pipelines and PFA being considered separate proposals, with them having to go through the committee through their own merits too?
+
+[11:53:47.0933] <pokute>
+It seems that the issue was with many use cases of F# needing PFA, while now pipelines seem to require other proposals.
+
+[11:54:22.0029] <pokute>
+ * It seems that the issue was with many use cases of F# needing PFA, while now pipelines seem to require other proposals.
+
+[11:55:54.0310] <jschoi>
+I’m not sure what you mean; my apologies. F# pipes and PFA syntax are indeed separate proposals. But Hack pipes don’t require any other proposal, although they somewhat overlap with several proposals. 
+
+F# pipes were considered but rejected for advancement several years ago, and PFA syntax was considered and rejected several months ago. But we can try to present either of them again in the future, if/when Hack pipes advance further first. And in the meantime I also plan to present Function.pipe, which are basically lightweight F# pipes. 
+
+[11:56:25.0410] <jschoi>
+* I’m not sure what you mean. F# pipes and PFA syntax are also indeed separate proposals. But Hack pipes don’t require any proposal. F# pipes were considered but rejected for advancement several years ago, and PFA syntax was considered and rejected several months ago. But we can try to do either of them in the future if Hack pipes advance further. And in the meantime I also plan to present Function.pipe, which are basically lightweight F# pipes. 
+
+[11:56:58.0021] <jschoi>
+* I’m not sure what you mean. F# pipes and PFA syntax are also indeed separate proposals. But Hack pipes don’t require any proposal. F# pipes were considered but rejected for advancement several years ago, and PFA syntax was considered and rejected several months ago. But we can try to present either of them again in the future, if/when Hack pipes advance further first. And in the meantime I also plan to present Function.pipe, which are basically lightweight F# pipes. 
+
+[11:57:05.0554] <jschoi>
+* I’m not sure what you mean. F# pipes and PFA syntax are indeed separate proposals. But Hack pipes don’t require any proposal. F# pipes were considered but rejected for advancement several years ago, and PFA syntax was considered and rejected several months ago. But we can try to present either of them again in the future, if/when Hack pipes advance further first. And in the meantime I also plan to present Function.pipe, which are basically lightweight F# pipes. 
+
+[11:57:39.0902] <jschoi>
+* I’m not sure what you mean. F# pipes and PFA syntax are indeed separate proposals. But Hack pipes don’t require any other proposal, although they somewhat overlap with several proposals. 
+
+F# pipes were considered but rejected for advancement several years ago, and PFA syntax was considered and rejected several months ago. But we can try to present either of them again in the future, if/when Hack pipes advance further first. And in the meantime I also plan to present Function.pipe, which are basically lightweight F# pipes. 
+
+[11:58:06.0015] <jschoi>
+* I’m not sure what you mean; my apologies. F# pipes and PFA syntax are indeed separate proposals. But Hack pipes don’t require any other proposal, although they somewhat overlap with several proposals. 
+
+F# pipes were considered but rejected for advancement several years ago, and PFA syntax was considered and rejected several months ago. But we can try to present either of them again in the future, if/when Hack pipes advance further first. And in the meantime I also plan to present Function.pipe, which are basically lightweight F# pipes. 
+
+[11:58:48.0121] <jschoi>
+…Unless you’re responding to that essay I linked above from Hax?
+
+[12:03:38.0206] <pokute>
+On one hand, an issue raised for F# was: we must consider F# pipelines as a singular proposal, since PFA is a separate proposal. The F# and PFA proposals should stand on it's own merits since the other proposal might not advance. Now it seems like the success of hack pipelines proposal is linked to another proposal (bind-this/call-this/alternative). 
+
+This was troublesome as both F# pipelines and PFA could be separated into separate proposals and have a reasonable use-case as such. Thus the combo of both, which had more power together, was usually not considered. I remember this being apparent in https://gist.github.com/tabatkins/1261b108b9e6cdab5ad5df4b8021bcb5 for example, where I raised my concern of it.
+
+[12:04:50.0054] <pokute>
+Thus the weird situation where a combination of two proposals was not considered as a pro, but also the lack of combination of two proposals now being considered a con.
+
+[12:05:46.0073] <pokute>
+ * On one hand, an issue raised for F# was: we must consider F# pipelines as a singular proposal, since PFA is a separate proposal. The F# and PFA proposals should stand on it's own merits since the other proposal might not advance. Now it seems like the success of hack pipelines proposal is linked to another proposal (bind-this/call-this/alternative). 
+
+This was troublesome as both F# pipelines and PFA could be separated into separate proposals and have a reasonable use-case as such. Thus the combo of both, which had more power together, was usually not considered. I remember this being apparent in https://gist.github.com/tabatkins/1261b108b9e6cdab5ad5df4b8021bcb5 for example, ~where I raised my concern of it~ (it seems I raised the concern on other gist).
+
+[12:06:01.0907] <pokute>
+ * On one hand, an issue raised for F# was: we must consider F# pipelines as a singular proposal, since PFA is a separate proposal. The F# and PFA proposals should stand on it's own merits since the other proposal might not advance. Now it seems like the success of hack pipelines proposal is linked to another proposal (bind-this/call-this/alternative). 
+
+This was troublesome as both F# pipelines and PFA could be separated into separate proposals and have a reasonable use-case as such. Thus the combo of both, which had more power together, was usually not considered. I remember this being apparent in https://gist.github.com/tabatkins/1261b108b9e6cdab5ad5df4b8021bcb5 for example, ~~where I raised my concern of it~~ (it seems I raised the concern on other gist).
+
+[12:06:11.0538] <jschoi>
+Yes, we talked about the philosophy of considering each proposal on its own merits versus holistically considering all proposals. 
+
+[12:06:18.0111] <pokute>
+ * On one hand, an issue raised for F# was: we must consider F# pipelines as a singular proposal, since PFA is a separate proposal. The F# and PFA proposals should stand on it's own merits since the other proposal might not advance. Now it seems like the success of hack pipelines proposal is linked to another proposal (bind-this/call-this/alternative). 
+
+This was troublesome as both F# pipelines and PFA could be separated into separate proposals and have a reasonable use-case as such. Thus the combo of both, which had more power together, was usually not considered. I remember this being apparent in https://gist.github.com/tabatkins/1261b108b9e6cdab5ad5df4b8021bcb5 for example, (it seems I raised the concern on other gist).
+
+[12:06:23.0506] <jschoi>
+It’s a tension that I explicitly asked the Committee about. 
+
+[12:06:52.0618] <TabAtkins>
+The problem pfa + f# pipes was that *if* you were judging them with the supposition that they'd both land, and one didn't, you'd be in a bad spot. And it wasn't clear both would land.
+
+[12:07:42.0760] <jschoi>
+Yes, for better or for worse, PFA syntax has always been very controversial and remains at high risk of never being accepted by the Committee.  
+
+[12:07:46.0990] <TabAtkins>
+That doesn't imply that all proposals must be judged purely on their individual merits, it was a specific thing 
+
+[12:09:26.0927] <jschoi>
+* Yes, for better or for worse, PFA syntax has always been very controversial and remains at high risk of never being accepted by the Committee.  
+
+[12:09:56.0694] <TabAtkins>
+Aka, "don't worry, we'll have pfa to solve that" was a specific rejoinder to some usability complaints about f# pipes, and that was problem
+
+[12:13:40.0818] <jschoi>
+I think Jordan (ljharb) might have espoused the philosophy that all proposals should be judged primarily on their own merits. But Jordan would also agree, I know, that cross-cutting concerns between proposals should also always be considered. That’s why some representatives asked for this holistic analysis of a bunch of proposals. 
+
+But, like Tab says, the big thing is judging whether the proposal brings enough benefit even if another proposal doesn’t also advance (especially if the other proposal is at high risk of never advancing).
+
+[12:15:22.0945] <jschoi>
+* I think Jordan (ljharb) might have espoused the philosophy that all proposals should be judged primarily on their own merits. But Jordan would also agree, I know, that cross-cutting concerns between proposals should also always be considered. That’s why some representatives asked for this holistic analysis of a bunch of proposals. 
+
+But, like Tab says, the big thing for each proposal is judging whether the proposal brings enough benefit…even if another proposal doesn’t also advance (especially if the other proposal is at high risk of never advancing).
+
+[12:15:56.0685] <pokute>
+> <@tabatkins:matrix.org> Aka, "don't worry, we'll have pfa to solve that" was a specific rejoinder to some usability complaints about f# pipes, and that was problem
+
+That could be solved by merging the F# and PFA proposals. Unfortunately I expect that someone would block such a merged proposal from advancing due to them being splittable. Which results in a perverse situation where a less-generic version of a proposal that can't be meaningfully split has higher chance of advancing than a more generic proposal that can be split. It would encourage someone not revealing a more generic approach since it would have lower chance of passing.
+
+[12:17:23.0691] <jschoi>
+If they go together that much, then coupling them would be fine from my perspective. But the problem is that PFA syntax by itself has been controversial. Coupling F# pipes to PFA syntax means that F# pipes would not be able to advance unless PFA syntax garnered more support. 
+
+[12:17:40.0306] <ljharb>
+imo if a proposal doesn't stand on its own merits, it must not advance - it should be combined with another one.
+
+[12:17:58.0161] <ljharb>
+the only gray area is if it stands on its own merits AND overlaps with another one that stands on its own merits, how OK is that
+
+[12:20:34.0003] <pokute>
+The latest PFA version `funCall~(?, 1)`, IIRC, was blocked due to lack of good use-cases, not by syntax. Merging it with F# would provide ample use cases.
+
+[12:21:07.0962] <pokute>
+> <@jschoi:matrix.org> If they go together that much, then coupling them would be fine from my perspective. But the problem is that PFA syntax by itself has been controversial. Coupling F# pipes to PFA syntax means that F# pipes would not be able to advance unless PFA syntax garnered more support.
+
+ * The latest PFA version `funCall~(?, 1)`, IIRC, was blocked due to lack of good use-cases, not by syntax. Merging it with F# would provide ample use cases.
+
+[12:24:50.0672] <pokute>
+Of course, that would mean two competing pipeline proposals at the same time, which has it's own problems.
+
+[12:26:10.0513] <pokute>
+ * The latest PFA version `funCall~(?, 1)`, IIRC, was blocked, in part, due to lack of good use-cases, not by syntax. Merging it with F# would provide ample use cases.
+
+[12:27:37.0504] <jschoi>
+* If F# pipes and PFA syntax must go together that much, then coupling them into one proposal would be fine from my perspective. But the problem is that even PFA syntax alone has been controversial. Coupling F# pipes to PFA syntax means that F# pipes would never be able to advance unless PFA syntax ever garnered more support. 
+
+[12:58:29.0302] <pokute>
+Reading this all did make me a bit more concerned again. I believe that solutions to some of these issues do not belong into pipeline operator's scope. IMO Pipeline's scope is to not close the door to the solutions to issues outside it's immediate implementation. A statement of "We have addressed the raised issues A,B,C adjacent to pipeline operator and have discovered multiple different possible solutions to each one that are not blocked by the pipeline operator itself." should be sufficient.
+
+The risk with shouldering the solutions to those issues themselves is bloating the proposal and thus having it stuck.
+
+The proposal after all, is pipeline operator, not dataflow solution omnibus. :-) A bit more faith should be put on follow-up proposals.
+
+But maybe this has already been recognized and I'm just shouting at the choir.
+
+[13:03:39.0689] <pokute>
+And I do acknowledge that the dataflow discussion was specifically brought up due to concerns in TC39.
+
+[13:16:52.0252] <pokute>
+It is a delicate balance ... having the dataflow discussion within the context of pipeline operator proposal has it's benefits and it's detriments. A Benefit is that the discussion can go forward with pipeline operator as a priority. Detriments are that any problems with dataflow also become pipeline operator issues by association. /me delicately raises the possibility of a separate task force / working group for dataflow.
+
+
+2022-01-29
+[16:17:04.0143] <jschoi>
+It sounds like you’re concerned that we’re focusing overmuch on the pipe operator and thinking of the other proposals in terms of the pipe operator. 
+TC39 has not only talking about the pipe operator. We focused on many other proposals in the dataflow meetings on Wednesday and Thursday meetings. 
+
+[16:17:20.0907] <ljharb>
+pipeline's already been saddled with that tho, since when it was first presented for stage 1 many years ago, people wanted that to kill the bind operator
+
+[16:17:41.0758] <jschoi>
+ * It sounds like you’re concerned that we’re focusing overmuch on the pipe operator and thinking of the other proposals in terms of the pipe operator. TC39 has not only talking about the pipe operator. We focused on many other proposals in the dataflow meetings on Wednesday and Thursday meetings. 
+
+[16:17:50.0692] <jschoi>
+ * It sounds like you’re concerned that we’re focusing overmuch on the pipe operator and thinking of the other proposals in terms of the pipe operator. 
+TC39 has not only talking about the pipe operator. We focused on many other proposals in the dataflow meetings on Wednesday and Thursday meetings. 
+
+[16:20:06.0468] <jschoi>
+Well, I guess it’s true that the pipe operator might affect all the other proposals, insofar that people don’t like excessive overlap. And some people want to prioritize the pipe operator. But we’re still talking about the other proposals on their own merits.
+
+In the specific case of the overlap between pipe operator and bind-this/call-this, we all resolved on Thursday that the overlap between the two is not excessively bad, and nobody would block either based on the overlap. (Though I know at least one representative who wasn’t present at the time who might be skeptical of this conclusion…) The same goes for the pipe operator versus Function.pipe.
+
+In the case of the other proposals, like Extensions and PFA syntax, we’re taking it on a case-by-case basis.
+
+[16:20:33.0514] <jschoi>
+ * Well, I guess it’s true that the pipe operator might affect all the other proposals, insofar that people don’t like excessive overlap. And some people want to prioritize the pipe operator. But we’re still talking about the other proposals on their own merits.
+
+In the specific case of the overlap between pipe operator and bind-this/call-this, we all resolved on Thursday that the overlap between the two is not bad, and nobody would block either based on the overlap. (Though I know at least one representative who wasn’t present at the time who might be skeptical of this conclusion…)
+
+In the case of the other proposals, like Extensions and PFA syntax, we’re taking it on a case-by-case basis.
+
+[16:20:55.0193] <jschoi>
+ * If I’m understanding correctly…it sounds like you’re concerned that we’re focusing overmuch on the pipe operator and thinking of the other proposals in terms of the pipe operator. 
+TC39 has not only talking about the pipe operator. We focused on many other proposals in the dataflow meetings on Wednesday and Thursday meetings. 
+
+[16:22:38.0597] <pokute>
+> <@jschoi:matrix.org> Well, I guess it’s true that the pipe operator might affect all the other proposals, insofar that people don’t like excessive overlap. And some people want to prioritize the pipe operator. But we’re still talking about the other proposals on their own merits.
+> 
+> In the specific case of the overlap between pipe operator and bind-this/call-this, we all resolved on Thursday that the overlap between the two is not bad, and nobody would block either based on the overlap. (Though I know at least one representative who wasn’t present at the time who might be skeptical of this conclusion…)
+> 
+> In the case of the other proposals, like Extensions and PFA syntax, we’re taking it on a case-by-case basis.
+
+Thanks, It eases my worrying.
+
+[16:22:57.0544] <jschoi>
+ * Well, I guess it’s true that the pipe operator might affect all the other proposals, insofar that people don’t like excessive overlap. And some people want to prioritize the pipe operator. But we’re still talking about the other proposals on their own merits.
+
+In the specific case of the overlap between pipe operator and bind-this/call-this, we all resolved on Thursday that the overlap between the two is not excessively bad, and nobody would block either based on the overlap. (Though I know at least one representative who wasn’t present at the time who might be skeptical of this conclusion…) The same goes for the pipe operator versus Function.pipe.
+
+In the case of the other proposals, like Extensions and PFA syntax, we’re taking it on a case-by-case basis.
+
+[16:25:29.0393] <jschoi>
+ * Well, I guess it’s true that the pipe operator might affect all the other proposals, insofar that people don’t like excessive overlap. And some people want to prioritize the pipe operator. But we’re still talking about the other proposals on their own merits.
+
+In the specific case of the overlap between pipe operator and bind-this/call-this, we all resolved on Thursday that the overlap between the two is not excessively bad, and nobody would block either—at least solely based on that overlap. (Though I know at least one representative who wasn’t present at the time who might be skeptical of this conclusion…) The same goes for the pipe operator versus Function.pipe.
+
+In the case of the other proposals, like Extensions and PFA syntax, we’re taking it on a case-by-case basis.
+
+[16:27:40.0211] <pokute>
+ * Thanks, It resolves almost all my worrying.
+

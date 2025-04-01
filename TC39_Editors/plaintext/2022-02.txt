@@ -1,0 +1,951 @@
+2022-02-03
+[16:41:30.0101] <shu>
+in the RegExp section, is "character" the same as a code point?
+
+[16:49:26.0425] <jmdyck>
+No, it's sort of a union of code point and code unit.
+
+[16:49:57.0933] <shu>
+not sure i understand
+
+[16:50:29.0903] <shu>
+oh i see, depending on `u` mode?
+
+[16:50:37.0828] <jmdyck>
+yeah.
+
+[16:50:45.0457] <jmdyck>
+defn is in https://tc39.es/ecma262/#sec-pattern-semantics, 2nd para
+
+[16:52:53.0050] <shu>
+thanks
+
+[16:53:15.0125] <jmdyck>
+no problem
+
+[15:37:21.0330] <shu>
+ljharb: what are your thoughts on moving long-time inactive proposals to a separate category in https://github.com/tc39/proposals?
+
+[15:47:27.0254] <ljharb>
+what sort of category?
+
+[15:47:43.0121] <ljharb>
+it seems weird to categorize things outside of the process doc
+
+[15:50:15.0299] <ljharb>
+what i'd really like to see is inactive proposals moving to "inactive", but that requires the champions to do that, or plenary to decree it
+
+[15:51:08.0615] <shu>
+i was thinking "inactive" as the category, yes
+
+[15:51:15.0442] <shu>
+i wasn't aware that required consensus
+
+[15:51:22.0560] <ljharb>
+there's already an entire inactive.md file for inactive proposals
+
+[15:51:29.0870] <ljharb>
+it's that it's up to the champions, or consensus
+
+[15:51:37.0332] <ljharb>
+what'd you have in mind to be inactive?
+
+[15:52:03.0813] <shu>
+function.sent, for one
+
+[15:53:20.0185] <shu>
+maybe we should have a triage agenda item annually or something
+
+[15:53:28.0779] <bakkot>
+ljharb: if you have better alternative wording than "a Completion Record normally containing an X", let us know? Michael and I do not have something we like better than that
+
+[15:53:37.0381] <shu>
+where we dedicate 30 minutes asking champions if they still plan to pursue a particular proposal
+
+[15:53:49.0714] <ljharb>
+shu: i already tried to ask plenary to make function.sent inactive, and hax said he'd champion it
+
+[15:53:58.0728] <ljharb>
+anything else?
+
+[15:54:06.0986] <shu>
+fair enough
+
+[15:54:13.0684] <shu>
+someone should take over hashbang and ask stage 4
+
+[15:54:16.0597] <shu>
+those were the two
+
+[15:54:18.0779] <ljharb>
+bakkot: i mean, i was thinking `Foo (a, b): NormalCompletion(X)` in the header
+
+[15:54:36.0278] <ljharb>
+shu: i'm not sure why bradley doesn't do that tbh. it's probably worth asking him directly
+
+[15:54:44.0822] <shu>
+bradley is no longer in TC39, is probably why
+
+[15:54:55.0651] <shu>
+switched jobs and the new job isn't in Ecma afaik
+
+[15:54:58.0712] <ljharb>
+oh, he could easily be via the node project in OpenJS
+
+[15:55:11.0297] <ljharb>
+but you're right, he probably won't make the time
+
+[15:56:17.0750] <bakkot>
+`NormalCompletion(X)` means it returns a normal completion
+
+[15:56:20.0121] <bakkot>
+which is not true
+
+[15:56:29.0713] <bakkot>
+it might return an abrupt completion, but if it returns normally, then the type in the completion is X
+
+[15:56:33.0865] <bakkot>
+ * it might return an abrupt completion, but if it returns normally, then the type in the completion is X
+
+[15:58:36.0053] <ljharb>
+ah, hm
+
+[15:59:55.0010] <bakkot>
+> <@shuyuguo:matrix.org> function.sent, for one
+
+I think Hax actually wanted to pick that one up, IIRC?
+
+[15:59:59.0085] <ljharb>
+he did
+
+
+2022-02-04
+[16:00:18.0152] <ljharb>
+bakkot: `Foo (a, b): ThrowCompletion | NormalCompletion(x)`?
+
+[16:01:27.0123] <bakkot>
+it might be return or break also, sometimes
+
+[16:01:45.0485] <bakkot>
+Also we don't use the `|` notation currently, we just say "or"
+
+[16:01:53.0766] <ljharb>
+sure, "or" then
+
+[16:01:55.0758] <bakkot>
+so some form of prose would be ideal
+
+[16:01:58.0949] <ljharb>
+hm
+
+[16:02:09.0508] <ljharb>
+but like, "normally containing X" doesn't cover all the alternatives either
+
+[16:02:31.0666] <ljharb>
+but it sounds like what you want is "a completion of type normal, containing X, or a completion of another type"? (that isn't a real suggestion, too wordy)
+
+[16:02:40.0057] <bakkot>
+that is what it means, yeah
+
+[16:02:40.0581] <ljharb>
+ * but it sounds like what you want is "a completion of type normal, containing X, or a completion of another type"? (that isn't a real suggestion, too wordy)
+
+[16:02:48.0136] <bakkot>
+that's how I read "normally containing X"
+
+[16:03:01.0783] <ljharb>
+to me "normally" implies "but sometimes it doesn't"
+
+[16:03:05.0101] <bakkot>
+like, in the normal case, it contains an X; in the non-normal case, all we are saying is that it is a completion record
+
+[16:03:12.0315] <bakkot>
+right, sometimes it doesn't
+
+[16:03:15.0038] <ljharb>
+lol
+
+[16:03:16.0582] <bakkot>
+sometimes it's abrupt rather than normal
+
+[16:03:19.0797] <ljharb>
+but i mean it doesn't speak to the [[Type]]
+
+[16:03:32.0991] <ljharb>
+the enum value "normal" in there is not connected to the english word "normally" for me
+
+[16:03:43.0390] <bakkot>
+they're... the same word?
+
+[16:03:51.0941] <ljharb>
+lol i know, but conceptually it reads weird to me
+
+[16:03:56.0211] <bakkot>
+fair
+
+[16:04:01.0955] <bakkot>
+I have no better alternative though
+
+[16:04:16.0651] <ljharb>
+let me think about it, obv if i can't come up with a workable alternative then there's no reason to block on that
+
+[16:04:27.0470] <bakkot>
+√
+
+[16:08:21.0961] <Michael Ficarra>
+"an abrupt completion or a normal completion containing X" works
+
+[16:08:32.0358] <Michael Ficarra>
+allows us to refine it in other ways as well
+
+[16:08:50.0135] <Michael Ficarra>
+we type some AOs as "a throw completion" or "an abrupt completion" already anyway
+
+[16:09:01.0978] <bakkot>
+that's pretty wordy still...
+
+[16:09:09.0888] <Michael Ficarra>
+it's a little bit of work to change to that, but nothing unmanageable
+
+[16:09:21.0481] <Michael Ficarra>
+it's a little wordy, but it's a union
+
+[16:09:28.0205] <Michael Ficarra>
+what do you expect
+
+[16:11:57.0284] <bakkot>
+i expect an alias for the union which is shorter :P
+
+[16:12:02.0407] <bakkot>
+like "a completion record normally containing"
+
+[16:12:58.0116] <Michael Ficarra>
+I'm gonna stick with that for now
+
+[16:14:11.0112] <ljharb>
+i still like `Foo (a, b): ThrowCompletion | NormalCompletion(x)`, and we can make those AOs for break/continue/return if we need them
+
+[16:15:09.0470] <bakkot>
+ljharb: to be clear this is for the prose
+
+[16:15:12.0204] <bakkot>
+like in
+
+> The abstract operation AtomicReadModifyWrite takes arguments typedArray, index, value, and op (a read-modify-write modification function). op takes two List of byte values arguments and returns a List of byte values.
+
+[16:15:12.0860] <bakkot>
+the "and returns a List of byte values" part is the part we are discussing
+
+[16:15:31.0053] <ljharb>
+right, i'm still hoping we omit the prose and go with something in the h1 instead
+
+[16:15:37.0833] <ljharb>
+but i'll keep trying to think of something for the prose
+
+[16:15:59.0072] <bakkot>
+ah, we are not doing that as part of this PR, for sure
+
+[16:16:16.0023] <bakkot>
+we'll have a separate marker for "can return abruptly" in the H1, but we will not have the whole type
+
+[16:55:57.0763] <shu>
+bakkot: ah, okay
+
+[17:50:20.0573] <jmdyck>
+I think it's too easy to read "normally containing X" as meaning roughly "usually containing X" or "typically containing X".
+
+[07:03:15.0085] <Michael Ficarra>
+jmdyck: https://github.com/tc39/ecma262/pull/2547 is ready for review now
+
+[07:03:31.0082] <Michael Ficarra>
+happy to answer any questions about the editorial philosophy behind any of the changes
+
+[07:03:44.0700] <Michael Ficarra>
+I recommend reading the task list in the PR description before review
+
+[07:07:18.0243] <Michael Ficarra>
+FYI most of those things in the task list were checked with the assistance of ecmarkup
+
+[07:08:37.0269] <Michael Ficarra>
+bakkot will work on cleaning up the code and committing anything that can be reliably automatically checked to ecmarkup before we merge
+
+[07:11:15.0516] <Michael Ficarra>
+> <@jmdyck:matrix.org> I think it's too easy to read "normally containing X" as meaning roughly "usually containing X" or "typically containing X".
+
+that's fair, but every usage will link to the definition, which says
+
+> a Completion Record normally containing some type of value refers to a Completion Record that, when it is a normal completion, has a value of that type in its [[Value]] field.
+
+
+[09:28:20.0625] <jmdyck>
+link to definition will help.
+
+[09:28:30.0424] <jmdyck>
+Thanks for the heads-up.
+
+[09:28:39.0876] <jmdyck>
+When do you hope to land it?
+
+[09:58:16.0321] <Michael Ficarra>
+as soon as we can, I guess
+
+[09:58:30.0855] <Michael Ficarra>
+I feel quite comfortable with the state of it, personally
+
+[09:58:57.0650] <Michael Ficarra>
+and since bakkot helped with the tooling-assisted confirmations, I'm sure he feels pretty comfortable with it too
+
+[10:00:18.0880] <Michael Ficarra>
+and I expect that landing the ecmarkup improvements will convince others that it's near enough to correct
+
+[10:01:17.0321] <Michael Ficarra>
+there is still room for errors to have crept in, of course
+
+[10:01:35.0470] <Michael Ficarra>
+a lot of the checks didn't apply to internal/concrete methods, for example
+
+[10:01:54.0029] <Michael Ficarra>
+and we don't actually track types through aliases or anything, so some types might not align
+
+[10:02:34.0394] <Michael Ficarra>
+but as far as how completion records are used, I feel good
+
+[10:03:07.0221] <Michael Ficarra>
+the remaining thing to review would be the various phrasing decisions or changes we've made, since that can be subjective
+
+[10:56:26.0982] <jmdyck>
+Okay, well I should be able to start looking at it (i.e, modifying ecmaspeak to handle+analyze it) this aft.
+
+[11:05:09.0311] <Michael Ficarra>
+awesome
+
+[11:24:55.0672] <bakkot>
+it's definitely not landing until next week at the earliest
+
+[11:36:42.0529] <jmdyck>
+okay, so I've got the weekend at least. :)
+
+
+2022-02-07
+[19:12:23.0518] <jmdyck>
+wah, when I try to "Load diff" for #2547, I get "Oops, something went wrong."
+
+[19:13:21.0608] <jmdyck>
+It worked for my first review. Maybe it's just bigger enough now.
+
+[19:17:04.0998] <jmdyck>
+I guess I'll submit a PR against GH-1796.
+
+[19:31:07.0181] <bakkot>
+I think github has a time-to-render limit where it bails if it takes too long, and sometimes it happens to be faster (maybe when it is less busy?)
+
+[19:34:18.0563] <jmdyck>
+ah, plausible.
+
+[19:35:33.0540] <jmdyck>
+So I've submitted what I've found up to the point of running static type analysis.
+
+[19:36:07.0311] <jmdyck>
+It might take a while to adapt that.
+
+[08:53:55.0215] <ljharb>
+thoughts on https://github.com/tc39/ecma262/pull/2547#discussion_r800079335 ?
+
+[09:00:53.0516] <Michael Ficarra>
+ljharb: I don't like it any better than normally containing
+
+[09:01:09.0552] <Michael Ficarra>
+jmdyck: I incorporated/addressed your comments
+
+[09:01:15.0360] <ljharb>
+it doesn't strongly imply that the abnormally containing situation is possible, tho
+
+[09:01:21.0031] <ljharb>
+"normally" implies that, in english
+
+[09:02:11.0877] <Michael Ficarra>
+I think that, as long as we are okay with the fundamentals of that PR, we can merge it once we get the ecmarkup bump in and do any corrections as follow-ups
+
+[09:02:53.0229] <Michael Ficarra>
+the spec previously didn't have practically any AO return types, so it's an improvement regardless IMO
+
+[09:03:26.0776] <Michael Ficarra>
+ljharb: we should talk about it more in the editor call Wednesday
+
+[09:03:41.0673] <Michael Ficarra>
+I will add the label
+
+[09:04:05.0016] <jmdyck>
+I prefer iljharb's sugg (or something similar) to "normally containing", because it can be more specific about the abrupt possibilities of the return value.
+
+[09:09:18.0587] <Michael Ficarra>
+jmdyck: you're welcome to attend the editor calls if you like, they are open attendance
+
+[09:10:13.0100] <jmdyck>
+thanks for the invitation. Where's the attendance info?
+
+[09:12:14.0485] <Michael Ficarra>
+it's on the TC39 calendar, which is.... somewhere
+
+[09:13:10.0236] <jmdyck>
+maybe somewhere accessible only to delegates?
+
+[09:14:07.0492] <Michael Ficarra>
+lol https://github.com/tc39/how-we-work/issues/94
+
+[09:14:19.0983] <Michael Ficarra>
+no I am pretty sure the TC39 events calendar is meant to be public
+
+[09:14:48.0631] <Michael Ficarra>
+all the events on it other than plenary are all open attendance to my knowledge
+
+[09:15:10.0799] <bakkot>
+it links notes documents from plenary while they are in progress, which are definitely not meant to be public
+
+[09:15:48.0938] <jmdyck>
+incubator calls are 'publicized' (https://github.com/tc39/incubator-agendas), but I don't see similar for editor calls.
+
+[09:16:08.0067] <Michael Ficarra>
+bakkot: it what? on the calendar?
+
+[09:16:16.0301] <bakkot>
+Michael Ficarra: y
+
+[09:16:25.0763] <bakkot>
+if you go to the events for plenary meetings
+
+[09:16:50.0284] <bakkot>
+jmdyck: I'll DM you the link for the call; it's stable and is at 2:30-3:30 PST every Wednesday except weeks when there is plenary
+
+[09:17:14.0464] <Michael Ficarra>
+we should talk to the chairs about making sure the events calendar can be shared publicly
+
+[09:18:22.0039] <bakkot>
+I guess I should say PT rather than PST. Or America/Los_Angeles to be more precise
+
+[09:21:14.0140] <ljharb>
+hm, yeah i'm not sure if it's meant to be broadly public or not, but either way jmdyck should be able to see it
+
+[09:24:26.0111] <jmdyck>
+okay, i'll try to join this week.
+
+[09:24:55.0369] <jmdyck>
+do you normally get non-editor attendees?
+
+[09:27:09.0534] <Michael Ficarra>
+sometimes champions drop by for editorial feedback on stuff they're working on
+
+[09:27:20.0480] <Michael Ficarra>
+we also had the KAIST researchers first present to the editor group
+
+[09:34:35.0084] <bakkot>
+a majority of meetings it's me, michael, shu, jordan, and no others
+
+[09:35:31.0369] <Michael Ficarra>
+I figured it was just a lack of interest typically, but now I'm thinking the lack of discoverability might've had something to do with it
+
+[09:35:46.0208] <Michael Ficarra>
+like I always assumed jmdyck just didn't want to attend the call
+
+
+2022-02-08
+[16:54:24.0648] <jmdyck>
+I got static type analysis to complete on 2547! Next step will be to look at the results.
+
+[16:56:31.0777] <shu>
+my take is i'm not enthusiastic about going out and eliciting broad-spectrum feedback from committee for editorial decisions, unlike in incubator calls, where that's the whole point
+
+[16:56:48.0114] <shu>
+but the editor calls aren't closed rooms, and people can certainly come if they have something editorial to discuss
+
+[16:56:58.0012] <shu>
+(replying to the publicity of calls)
+
+[17:00:52.0173] <jmdyck>
+Based on what I can see, it seems like you wouldn't get much feedback even if you did elicit it. 
+
+[17:01:38.0770] <shu>
+heh, probably true
+
+[17:02:40.0723] <shu>
+the Old Fear was Allen popping up and pushing for something
+
+[17:02:50.0393] <shu>
+but that never really happened anyway, i suppose
+
+[09:13:25.0764] <ljharb>
+nah he was good about that
+
+[09:13:52.0163] <ljharb>
+in the early days of "more than one editor" we pushed pretty hard to get people to show up, and precisely zero people showed up for years after the first meeting or two
+
+[14:25:03.0620] <jmdyck>
+My static type analysis of 2547 is turning up some stuff.
+
+[15:45:55.0322] <bakkot>
+jmdyck: not terribly surprising, given that your analysis is much more complete than ours
+
+
+2022-02-15
+[11:04:53.0702] <Michael Ficarra>
+jmdyck shu ljharb: https://github.com/tc39/ecma262/pull/2547 should be ready for (hopefully final) review now
+
+[11:05:25.0193] <Michael Ficarra>
+we incorporated the changes discussed in the last editor call
+
+[11:05:49.0933] <jmdyck>
+looking at it now, got one small thing.
+
+[11:06:41.0082] <bakkot>
+in particular we are now using `either` to disambiguate `or` and we are using `a normal completion containing X or an abrupt completion` rather than `a Completion Record normally containing`
+
+[11:16:23.0983] <jmdyck>
+oh, i don't have that last commit yet.
+
+[11:19:00.0409] <jmdyck>
+ * oh, i don't have that last commit yet.
+
+[11:30:56.0692] <ljharb>
+it seems like it still has the phrase "normally"; but let me load the full diff to be sure
+
+[11:31:14.0194] <ljharb>
+ * it seems like it still has the phrase "normally"; but let me load the full diff to be sure
+
+[11:32:00.0579] <Michael Ficarra>
+ah yes, I need to remove the definition we added for "normally containing"
+
+[11:32:12.0523] <Michael Ficarra>
+there's also a use in one of the host ops, I'll address it
+
+[11:33:16.0933] <ljharb>
+BigInt::exponentiate and friends still have it
+
+[11:33:43.0285] <ljharb>
+ * BigInt::exponentiate and friends still have it
+
+[11:34:07.0881] <Michael Ficarra>
+thanks, addressing those too
+
+[11:34:54.0553] <ljharb>
+also, the comment thread on package.json says there should be a major ecmarkup bump included in the PR as well, is that still the case?
+
+[11:35:30.0501] <ljharb>
+(scrolling through this megadiff is lagging my 500-open-tab browser, i blame the diff)
+
+[11:36:11.0756] <Michael Ficarra>
+there will be, but we can do reviews before that ecmarkup release is made
+
+[11:36:32.0194] <bakkot>
+yeah we've been iterating on it on https://github.com/tc39/ecmarkup/tree/typecheck
+
+[11:36:42.0938] <bakkot>
+which I haven't even opened a PR for because it needs a fair bit of cleanup
+
+[11:36:47.0276] <Michael Ficarra>
+it is going to take Kevin a little bit to add tests for all the features we added to ecmarkup
+
+[11:36:50.0078] <bakkot>
+mostly around making the errors actually useful and adding tests
+
+[11:37:10.0342] <ljharb>
+kk
+
+[11:50:15.0504] <Michael Ficarra>
+ljharb: done
+
+[11:59:47.0859] <ljharb>
+I’ll have a review submitted in an hour or so
+
+[12:00:32.0121] <bakkot>
+Michael Ficarra: don't forget we started adding the little `abrupt` indicator and you were going to make it look better maybe
+
+[12:01:12.0137] <Michael Ficarra>
+bakkot: I thought we were holding that until a follow-up
+
+[12:09:07.0545] <bakkot>
+oh maybe
+
+[12:09:16.0777] <bakkot>
+we definitely did start doing it
+
+[12:09:24.0268] <bakkot>
+so I'll need to ensure it's not enabled in the ecmarkup branch we actually cut
+
+[13:58:09.0051] <ljharb>
+the extra explicit "return unused"s are a lot of noise :-/
+
+[15:12:06.0061] <bakkot>
+yeah personally I think we should get rid of them, but we'd need to give a definition, as in https://github.com/tc39/ecma262/pull/2397
+
+[15:12:10.0753] <bakkot>
+seems like that's a fine followup
+
+[15:37:18.0496] <ljharb>
+totes
+
+
+2022-02-16
+[17:52:38.0003] <Michael Ficarra>
+yeah I think it will be a pretty straightforward follow up
+
+[11:42:15.0497] <bakkot>
+shu: found a missing UC: `an implementation-defined sequence of calls to SortCompare` (probably on the `calls to SortCompare` part)
+
+[11:42:42.0004] <bakkot>
+probably not worth addressing until after https://github.com/tc39/ecma262/pull/2305 though
+
+[11:47:48.0888] <shu>
+ah good call
+
+[11:47:51.0334] <shu>
+stupid sort
+
+[14:00:46.0696] <shu>
+how do i actually review #2547? i cannot get the diff to load
+
+[14:01:10.0768] <shu>
+like how do i leave comments
+
+[14:03:49.0144] <shu>
+ljharb: how did you get it to load to leave the comments?
+
+[14:29:54.0332] <ljharb>
+i used safari, and waited
+
+[14:30:12.0457] <ljharb>
+chrome's the only one that chokes on large documents, i think :-p
+
+[14:30:43.0689] <bakkot>
+github just fails to load it sometimes ime
+
+[14:30:48.0180] <bakkot>
+nondeterministically
+
+[14:30:48.0601] <jmdyck>
+firefox didn't show the diff for me
+
+[14:32:24.0396] <bakkot>
+shu: editor call?
+
+
+2022-02-17
+[16:08:18.0418] <shu>
+i see some dot-dispatched style calls got `!`, like `! _env_.InitializeBinding(...)`, is that enforced by ecmarkup?
+
+[16:58:23.0475] <bakkot>
+nope
+
+[16:58:31.0316] <bakkot>
+we did those by hand :(
+
+[16:58:41.0164] <shu>
+aw :(
+
+[16:59:22.0889] <bakkot>
+at some point I will improve support for internal and concrete methods 
+
+[16:59:53.0363] <bakkot>
+this is going to require enforcing that all such method names are globally unique, but, they should be anyway so whatever
+
+[17:00:55.0565] <shu>
+for the purposes of type checking it's probably easier, since they should have the same signatures regardless of overrides
+
+[17:01:13.0524] <shu>
+ * for the purposes of type checking it's probably easier, since they should have the same signatures regardless of overrides
+
+[17:05:21.0587] <jmdyck>
+Depends what you mean by "globally unique": function ER, module ER, and global ER each separately declare/define "GetThisBinding" without 'inheriting' from a common 'abstract method'. But their signatures are all the same, so you could just pretend they do.
+
+[17:14:25.0945] <shu>
+man Intl APIs are kinda wild
+
+[17:14:49.0469] <shu>
+i'm reviewing a bunch of patches to v8. they got option bags that are String or Boolean, the hell
+
+[18:00:32.0722] <bakkot>
+> But their signatures are all the same, so you could just pretend they do.
+
+yeah, or I could define it on the base type and then have "this is not called" assertions for the implementations in the other concrete ER types, which I think we do with some other methods
+
+[18:00:57.0241] <bakkot>
+shu: yeahhhhhh I've been realizing I probably need to pay more attention there
+
+[18:01:16.0657] <bakkot>
+I have absolutely no expertise in the intl parts of intl, but they are also, separately, designing APIs, which is a thing I do have experience with
+
+[18:01:20.0144] <bakkot>
+ * I have absolutely no expertise in the intl parts of intl, but they are also, separately, designing APIs, which is a thing I do have experience with
+
+[18:02:12.0578] <bakkot>
+someday, if we ever finish doing all the major cleanups in 262 and I am not yet burnt out on it, I will try to get ecma402 in line with 262's editorial conventions
+
+[10:07:11.0974] <Michael Ficarra>
+ljharb: in case you didn't see it buried in the comments, https://github.com/tc39/ecma262/pull/2547#discussion_r808600292
+
+[10:08:24.0818] <ljharb>
+oh thanks, i did miss it
+
+[10:13:00.0677] <Michael Ficarra>
+there's probably 1 or 2 others that I could find if I could load the damn diff....
+
+[10:13:10.0591] <ljharb>
+https://github.com/tc39/ecma262/pull/2667
+
+[10:13:27.0421] <Michael Ficarra>
+and I'm not going to scroll through `git diff` output
+
+[10:14:17.0509] <ljharb>
+after the list and NotifyWaiter PRs land, and yours is rebased, i'll look through it all again and see if i spot anything :-)
+
+[10:51:01.0554] <ljharb>
+want to slap a merge label on 2667?
+
+[11:02:41.0074] <Michael Ficarra>
+ljharb: labeled
+
+[15:36:22.0027] <bakkot>
+shu: did you want to review https://github.com/tc39/ecma262/pull/2305 or are you good relying on michael's/my stamps
+
+
+2022-02-18
+[16:03:41.0667] <Michael Ficarra>
+bakkot: my stamp is stale now, I should re-review
+
+[16:30:29.0131] <shu>
+bakkot: i would like to but i will have no time this week or next, most likely
+
+[09:24:19.0355] <shu>
+i fixed the ecma262-takes-forever-in-chrome problem by replacing my mba with an m1 mbp
+
+[09:24:34.0220] <shu>
+just fyi if you're looking for workarounds
+
+[09:48:41.0551] <Michael Ficarra>
+if I wanted an m1 mbp, I'd have to buy it for myself
+
+[09:49:01.0460] <Michael Ficarra>
+we're still recirculating pre-pandemic 2019 models to our devs
+
+[10:38:35.0484] <shu>
+buy it and submit an expense report
+
+
+2022-02-23
+[14:30:34.0699] <shu>
+i'll be a few minutes late to call
+
+[15:58:17.0834] <ljharb>
+You can ignore and close #2672 if you want; the slow-loading diff meant i got ahead of myself :-) it’d be fine to land it first tho too, if you want
+
+[15:59:43.0877] <shu>
+multi-billion dollar company can't deal with multi-thousand line diff
+
+
+2022-02-24
+[16:00:01.0715] <shu>
+gotta bring that up at the next msft earnings call
+
+[16:28:14.0969] <Michael Ficarra>
+it's not even that big!
+
+[16:28:26.0533] <Michael Ficarra>
+like the whole spec document is pretty big I guess?
+
+[16:28:37.0219] <Michael Ficarra>
+but not big for computers big
+
+[16:46:00.0777] <bakkot>
+they must just have something quadratic in there
+
+[16:46:01.0592] <bakkot>
+somehow
+
+[09:17:18.0760] <Michael Ficarra>
+quadratic is probably optimistic, it could have far worse complexity than that
+
+[09:30:28.0585] <bakkot>
+quadratic is enough, in a 3000-line document
+
+[09:30:56.0012] <bakkot>
+*47000
+
+[10:29:40.0788] <shu>
+nice, look at all those closed issues
+
+[11:21:38.0143] <shu>
+bakkot: Michael Ficarra i'll PR HTML and WebIDL
+
+[11:22:44.0012] <Michael Ficarra>
+wow
+
+[11:22:52.0201] <Michael Ficarra>
+🥲 I am so happy
+
+[11:24:06.0290] <bakkot>
+shu: might be easier to build tooling, frankly
+
+[11:24:37.0626] <bakkot>
+I don't know if bikeshed or whatever it is that builds the html spec has any similar linting checks
+
+[11:25:35.0467] <shu>
+it's not bikeshed unfortunately
+
+[11:25:50.0388] <shu>
+it's wattsi, which is written in... like, turbo pascal or something? because hixie loved pascal
+
+[11:25:57.0183] <bakkot>
+oh god ok
+
+[11:25:58.0176] <shu>
+and i am not touching that?
+
+[11:26:17.0882] <shu>
+for webidl we might have tooling
+
+[11:26:37.0661] <shu>
+in HTML's case they also defined some AOs themselves, and some of those don't return completions
+
+[11:27:45.0922] <bakkot>
+they could say that `!` in html means the thing it used to, I guess?
+
+[11:27:52.0250] <bakkot>
+but it definitely seems worse that way
+
+[11:28:03.0261] <shu>
+pascal is wild man
+
+[11:28:21.0420] <shu>
+```
+      {$POINTERMATH ON}
+      Move((@Buffer+Subindex*ElementSize)^, Temp^, ElementSize);
+      Move((@Buffer+Index*ElementSize)^, (@Buffer+Subindex*ElementSize)^, ElementSize);
+      Move(Temp^, (@Buffer+Index*ElementSize)^, ElementSize);
+      {$POINTERMATH OFF}
+```
+
+[11:28:35.0608] <shu>
+though i'd probably be positive on "use pointermath"
+
+[11:29:14.0560] <shu>
+bakkot: yeah for sure. i don't want web specs to diverge on as opaque a syntax as `! AO()` and `? AO()`
+
+[11:31:58.0145] <bakkot>
+oh boy it's been like 15 years since I looked at pascal
+
+[11:32:08.0035] <bakkot>
+you could always do it as a post-process step
+
+[11:32:23.0792] <shu>
+yeah
+
+[11:32:31.0170] <shu>
+but that's making the toolchain even weirder
+
+[11:32:34.0568] <shu>
+it's already _super weird_
+
+[11:32:48.0882] <shu>
+like, you compile it with a Docker image that has the right version of the turbo pascal compiler
+
+[11:32:59.0372] <shu>
+because obviously, nobody has a turbo pascal compiler
+
+[11:33:07.0329] <shu>
+well i guess it's already a docker, you can just tack more steps onto it
+
+[11:33:18.0162] <bakkot>
+grep for capital words which link to ecma262 and are followed by a `(` and check if they're preceded by `!`/`?`/`Completion` or not, and whether they should be
+
+[11:33:35.0949] <bakkot>
+advantage of this approach is that it would be oblivious to the underlying build tool
+
+[11:33:53.0337] <bakkot>
+disadvantage is, like, ugh
+
+[11:34:04.0838] <bakkot>
+ * grep for capital words which link to ecma262 and are followed by a `(` and check if they're preceded by `!`/`?`/`Completion` or not, and whether they should be
+
+[11:34:50.0761] <shu>
+yes
+
+[11:35:16.0369] <shu>
+HTML is more inconsistent than just ? btw
+
+[11:35:36.0903] <shu>
+it also has the phrasing "Rethrow any exceptions.", which i presume predates `?`
+
+[11:35:51.0254] <bakkot>
+oh fun
+
+[11:36:26.0852] <bakkot>
+ok but like half of the uses are in one specific algorithm, that's weird
+
+[12:14:04.0833] <bakkot>
+shu: the GetFunctionRealm issue I mention in https://github.com/tc39/ecma262/issues/253#issuecomment-1050185177 is gonna be fun
+
+[12:14:16.0618] <bakkot>
+I _think_ it's possible to trigger it with
+
+```
+function wrap() {
+  return Reflect.construct(HTMLButtonElement, [], new.target);
+}
+let protoCount = -100;
+let x = Proxy.revocable(
+  wrap,
+  {
+    get(...args) {
+      console.log('get', args);
+      if (args[1] === 'prototype') {
+        ++protoCount;
+        if (protoCount === 2) {
+          x.revoke();
+          console.log('revoked');
+        }
+      }
+      return Reflect.get(...args);
+    },
+  }
+);
+
+customElements.define('x-rev', x.proxy, { extends: 'button' });
+wrap.prototype = null;
+protoCount = 0;
+new x.proxy();
+```
+
+[12:14:19.0013] <bakkot>
+but not 100% sure
+
+[12:14:38.0797] <bakkot>
+that does have an entertaining error message in chrome, though, so it probably does trigger it
+
+[12:14:50.0614] <bakkot>
+> Uncaught TypeError: Cannot perform 'undefined' on a proxy that has been revoked
+
+[13:25:33.0457] <shu>
+yes it is possible to trigger with revoked proxies
+
+
+2022-02-25
+[14:15:21.0175] <bakkot>
+I made a tc39 org on github to own ecmarkup and etc: https://www.npmjs.com/org/tc39
+
+[14:15:26.0076] <bakkot>
+lmk if you want to be added
+
+[14:15:45.0109] <bakkot>
+and your npm username
+
+[14:16:12.0608] <bakkot>
+ljharb I figure I will make you an owner, in scope of your "administartor" duties?
+
+[14:17:04.0225] <ljharb>
+thanks, that sounds good
+
+[14:38:31.0059] <bakkot>
+https://github.com/tc39/ecma262/pull/2675
+
+[14:49:05.0563] <ljharb>
+i'm in the org
+

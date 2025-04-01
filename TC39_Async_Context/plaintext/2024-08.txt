@@ -1,0 +1,934 @@
+2024-08-02
+[12:52:03.0078] <Justin Ridgewell>
+Congrats @stephenbelanger:matrix.org: https://github.com/nodejs/node/pull/48528#issuecomment-2266038177
+
+[12:52:45.0704] <Stephen Belanger>
+Heh, that was quick. 😅
+
+[12:52:46.0277] <Justin Ridgewell>
+Last perf improvments were https://github.com/nodejs/node/pull/48528#issuecomment-2253643765
+
+[13:02:17.0080] <Justin Ridgewell>
+- `.get()` is ~50% faster regardless of the number of async resources
+- `.get()` is ~15% faster regardless of the number of nested `.run()` calls
+- Creating new async resources/promises is 50% to 1400% faster depending on number of resources
+    - It’s 2%-14% slower when no `Variable` are in use?
+
+[13:02:39.0611] <Justin Ridgewell>
+* 1.  `.get()` is ~50% faster regardless of the number of async resources
+2.  `.get()` is ~15% faster regardless of the number of nested `.run()` calls
+3.  Creating new async resources/promises is 50% to 1400% faster depending on number of resources
+      - It’s 2%-14% slower when no `Variable` are in use?
+
+[13:03:01.0492] <Justin Ridgewell>
+Is there a test for speed of the `.run()` itself?
+
+[13:22:55.0516] <Stephen Belanger>
+The degradation when not in use is because of the infectious nature of AsyncResource. I plan on poking at that a bit to see what I can do to improve the performance there, but given that apps without _any_ variables don't actually _exist_ in-practice it's not a _huge_ concern.
+
+[13:24:37.0446] <Stephen Belanger>
+And no, I don't think there's a run-only benchmark. I want to build out the benchmarks a bit more around it. Because it was layered over async_hooks forever, and _that_ was always a pile of hacks, it never really got much serious consideration when it came to performance, stability, correctness, etc. I'm hoping to change that with the move off of an async_hooks core.
+
+
+2024-08-03
+[07:58:46.0325] <littledan>
+Great work Stephen!
+
+[13:49:38.0881] <snek>
+got the same fun happening in deno as well. it was nice to see after landing the optimizations in V8 that we can measure the overhead in cpu cycles now 😄 https://github.com/denoland/deno/commit/3a1a1cc030fb7fc90d51ee27162466d6ac924926
+
+[13:50:24.0145] <snek>
+hopefully this proposal can kill that last bit of O(n) complexity 
+
+
+2024-08-04
+[10:22:10.0203] <littledan>
+> <@devsnek:matrix.org> hopefully this proposal can kill that last bit of O(n) complexity 
+
+Which one?
+
+
+2024-08-05
+[05:47:32.0243] <snek>
+littledan: in the node impl its `super(AsyncContextFrame.current())` and in the deno impl its `{...previousContextMapping}`. There's no efficient copy-on-write structure available in js like there is in native code
+
+[07:00:34.0576] <littledan>
+> <@devsnek:matrix.org> littledan: in the node impl its `super(AsyncContextFrame.current())` and in the deno impl its `{...previousContextMapping}`. There's no efficient copy-on-write structure available in js like there is in native code
+
+it should be possible to implement a HAMT in JS, shouldn't it? (hash based on an incrementing number that each Variable has)
+
+[07:00:57.0671] <littledan>
+or, equally, the simple linked list model (good enough sometimes--all web frameworks do this)
+
+[08:35:08.0026] <Stephen Belanger>
+A linked list of contexts is what I was going for originally, but it makes things uncollectable even if they’ve been replaced in the store because they are held further up in the linked list. Needed to do the map clone approach for reasonable memory characteristics.
+
+[08:35:33.0212] <littledan>
+you can use a HAMT for this (the engine doesn't have special powers that JS doesn't have)
+
+[08:35:44.0339] <littledan>
+https://en.wikipedia.org/wiki/Hash_array_mapped_trie
+
+[08:36:09.0083] <littledan>
+in particular a "persistent" one
+
+[08:36:21.0567] <littledan>
+I think engines would *not* implement this with a linked list plus magical GC
+
+
+2024-08-07
+[11:55:41.0660] <Andreu Botella>
+Steve Hicks: You previously mentioned that with a single property name on events, developers would have to look up which would be the source of that snapshot for each event. If most events with async sources don't propagate the context but some do, wouldn't developers also have to look up when the context is propagated?
+
+[11:55:48.0883] <Andreu Botella>
+and I suspect that would be a lot harder to google
+
+[12:55:36.0445] <Steve Hicks>
+> <@abotella:igalia.com> Steve Hicks: You previously mentioned that with a single property name on events, developers would have to look up which would be the source of that snapshot for each event. If most events with async sources don't propagate the context but some do, wouldn't developers also have to look up when the context is propagated?
+
+That's a fair point.  I really do prefer the consistency, but ultimately I think getting the right default as much as possible is a more important trade-off.  I think in order to reason much further about this, we need two things: (1) a more concrete list of events and what context they will run in, and (2) a better understanding of whether the "no context exists" case falls back on the top-level (empty) context or else the registration-time context.  What's the best way to collaborate on #1?
+
+[12:59:08.0269] <Andreu Botella>
+last time I checked there were 250+ event names in the web platform (which is not the same as distinct events, since e.g. the `error` event on window is very different from the `error` event on say `WebSocket`)
+
+[13:00:00.0675] <Andreu Botella>
+only those that have async sources matter here, but I don't think there's a good way to get the full list short of analyzing every single one
+
+[13:00:17.0630] <Andreu Botella>
+ * only those that have async sources matter here, but I don't think there's a good way to get the full list of those, short of analyzing every single one
+
+[13:01:21.0902] <Andreu Botella>
+although maybe there's a way to analyze e.g. chromium code to get a partial list of events that are guaranteed to have async sources
+
+[13:01:55.0646] <Steve Hicks>
+I can ask my internal chrome contacts to see if they've got any pointers
+
+[13:03:18.0820] <Andreu Botella>
+one thing nicolo-ribaudo pointed out is that we could try to reach out to JS educators, maybe giving some example APIs for libraries that would be using AsyncContext, and let developers tell us which events they'd use those libraries with
+
+[13:03:46.0662] <Andreu Botella>
+since we have a selection bias in that first-party developers won't be engaging because they will not be using AsyncContext directly most of the time
+
+[13:04:56.0175] <Steve Hicks>
+that's an interesting approach - I'm a little unsure of what it would mean to use an event with a library, though.
+
+[13:05:31.0008] <Steve Hicks>
+I imagine a tracing or DI library is generally pretty orthogonal from the event system, so it more comes down to just what events your application uses at all
+
+[13:07:04.0390] <Andreu Botella>
+I'm not familiar with DI systems at all, so I'll have to trust you on that
+
+[13:07:24.0247] <littledan>
+by DI here, it's referring to the same kind of thing as React Context
+
+[13:07:44.0639] <littledan>
+it'll be good for us all to become familiar with these things, as they're a potentially important use of AsyncContext
+
+[13:08:08.0659] <littledan>
+an example of a framework that uses this DI terminology is Vue https://vuejs.org/guide/components/provide-inject
+
+[13:11:36.0005] <Steve Hicks>
+Well, I think there's a lot more to DI than what react context does (or else I  may have a too-limited view of what react context is about, since my primary experience is just to avoid prop drilling).  For instance, it's typically used to inject top-level/singleton services, like schedulers, RPC clients, or data stores.  My experience with DI is mostly on the server via Guice (in Java) but in that context, it's a pretty different flavor from drilling props.  A lot of the motivation tends to be looser coupling to support testing and late-loading.
+
+[13:13:32.0837] <Steve Hicks>
+Andreu Botella: you mentioned 250+ event names, but presumably this also doesn't include (e.g.) custom element lifecycle callbacks, mutation/intersection observers, etc.
+
+[13:14:47.0036] <Andreu Botella>
+for custom element callbacks, as far as I'm aware they're always either triggered synchronously from JS code, or caused by a user or browser event, so I don't think there are any possible async sources
+
+[13:16:09.0011] <Andreu Botella>
+for observers, most of them bunch multiple observations, so calling the callback with only one of them would be a merge
+
+[13:17:54.0559] <Andreu Botella>
+in the document I describe exposing the snapshot for each of them in the observation object, if it would be useful
+
+[13:18:08.0872] <Andreu Botella>
+Chengzhong Wu pointed out that for `PerformanceObserver` they would be
+
+[13:19:55.0015] <Chengzhong Wu>
+Yeah, resource timing in fetch is only available from `PerformanceObserver` so it is useful to get each resource timing event's relevant context snapshot
+
+[13:33:03.0545] <Andreu Botella>
+another important question: if we use the top-level context for user/browser-sourced events, would users of AsyncContext need a way to tell whether it is the top-level context? or would every possible use only care about its own variables, and it could check whether they have the default values?
+
+[13:35:42.0496] <Andreu Botella>
+I'm thinking of userland schedulers, which would have no variables, they would just store a snapshot – is there any use case where it would make sense to do that inside an event listener, and where the scheduler would want to replace the snapshot if it's empty?
+
+[13:41:55.0631] <Steve Hicks>
+> <@abotella:igalia.com> for custom element callbacks, as far as I'm aware they're always either triggered synchronously from JS code, or caused by a user or browser event, so I don't think there are any possible async sources
+
+One async source I'm aware of is when a contenteditable element is deleted by user interaction.
+
+[13:42:58.0192] <Andreu Botella>
+there's never good terminology for this stuff 😮‍💨
+
+[13:43:22.0323] <Andreu Botella>
+when I say async source, I'm discouting events caused by user or browser interactions
+
+[13:44:09.0314] <Steve Hicks>
+Ah, I thought "user" meant "developer".  So you're not counting a UI click initiating a click event as an async source?
+
+[13:47:31.0679] <Andreu Botella>
+if we go with not using registration-time always, then we'd have one consistent behavior for events fired synchronously from the action of some JS code, and another consistent behavior (whether top-level context or registration context) for events that were not fired due to the action of some JS code
+
+[13:48:06.0293] <Andreu Botella>
+what I'm concerned with is cases where you have JS code starting an async operation in the browser that eventually fires an event
+
+[13:48:26.0835] <Andreu Botella>
+since those cases would have to be handled manually, and it's unfeasible to handle every single one of them in the initial rollout
+
+[13:48:41.0811] <Andreu Botella>
+ * since the spec and browser changes for those cases would have to be handled manually, and it's unfeasible to handle every single one of them in the initial rollout
+
+[13:48:48.0125] <Andreu Botella>
+ * since the spec and browser changes for those events would have to be handled manually, and it's unfeasible to handle every single one of them in the initial rollout
+
+[13:49:54.0790] <Steve Hicks>
+Do you have an example of "JS code starting an async operation in the browser that eventually fires an event"?  Are you thinking of e.g. XHR?
+
+[13:50:20.0778] <Andreu Botella>
+XHR is a good and common example, which is why I keep using it, but there are many others
+
+[13:51:00.0527] <Andreu Botella>
+a lot of those are obscure though
+
+[13:52:52.0408] <Andreu Botella>
+ * if we go with not using registration-time always, then we'd have one consistent behavior for events fired synchronously from the action of some JS code, and another consistent behavior (whether top-level context or registration context) for events that were not fired due to the action of some JS code in the same agent
+
+[13:53:05.0115] <Steve Hicks>
+I'm not optimistic, but is there any way to hedge here?  When we're rolling out userland APIs internally, we try to lock things down as much as possible at the outset so that not-yet-defined behavior is an early error.  I'm not coming up with any good way to fail fast if anyone were to try to rely on a specific choice of context in the interim before we figure out what the correct default is.
+
+[13:53:54.0044] <littledan>
+> <@stephenhicks:matrix.org> Well, I think there's a lot more to DI than what react context does (or else I  may have a too-limited view of what react context is about, since my primary experience is just to avoid prop drilling).  For instance, it's typically used to inject top-level/singleton services, like schedulers, RPC clients, or data stores.  My experience with DI is mostly on the server via Guice (in Java) but in that context, it's a pretty different flavor from drilling props.  A lot of the motivation tends to be looser coupling to support testing and late-loading.
+
+I think React Context is used for a lot of things (certainly data stores, not 100% sure about the others)
+
+[13:55:35.0049] <Andreu Botella>
+> <@stephenhicks:matrix.org> I'm not optimistic, but is there any way to hedge here?  When we're rolling out userland APIs internally, we try to lock things down as much as possible at the outset so that not-yet-defined behavior is an early error.  I'm not coming up with any good way to fail fast if anyone were to try to rely on a specific choice of context in the interim before we figure out what the correct default is.
+
+Yeah, I can't come up with a way either
+
+[13:57:42.0057] <Steve Hicks>
+The sledgehammer approach would just be to make `variable.get()` throw until a new snapshot is restored, but I don't see that flying.
+
+[13:58:17.0248] <Steve Hicks>
+(and even then, people end up depending on errors, etc... web compat is a pain)
+
+[13:59:04.0545] <Justin Ridgewell>
+The only future proof default is no context
+
+[13:59:20.0954] <Justin Ridgewell>
+Provide both originating and registration via properties
+
+[14:02:51.0478] <Steve Hicks>
+I don't think that satisfies the goal that AC-unaware user code does the right thing by defualt.  And it doesn't really leave the door open to providing a different context later (e.g. we have a `beginTrace` API that starts a new trace if there's not one currently active, or opens a child span if there is.  But changing an event from no-context to registration context (for example) ends up changing this behavior, which isn't good.
+
+[14:46:23.0137] <Steve Hicks>
+Backing up a bit, I wonder how many events are actually ambiguous.  I suspect that the majority will be pretty clear.  It's a lot of upfront work, but if we can narrow down the list of events that we really don't know what to do with, that might make it easier to talk about.  Is something like https://www.w3.org/wiki/List_of_events a good place to start?
+
+[14:51:35.0813] <Andreu Botella>
+that looks very outdated, but it might be a place to start
+
+[14:52:12.0049] <Andreu Botella>
+the definitive list of events is probably https://github.com/w3c/webref/tree/main/ed/events, scraped directly from web specs
+
+[14:52:48.0921] <Andreu Botella>
+although not all of those are specs that are far enough in the process to be implementable in browsers, let alone implemented
+
+[14:53:09.0811] <Andreu Botella>
+ * although not all of those are specs that are far along in the process to be implementable in browsers, let alone implemented
+
+[14:58:57.0796] <Andreu Botella>
+I have a buggy script running around that can take webref data and filter it based on MDN's compat data, I can work on that tomorrow if you think it would be useful
+
+[14:59:22.0360] <Andreu Botella>
+ * I have a buggy script running around that can take webref data and filter it based on MDN's compat data, I can pull it out and try to make it work on events tomorrow if you think it would be useful
+
+[15:00:19.0321] <Andreu Botella>
+ * I have a buggy script somewhere that can take webref data and filter it based on MDN's compat data, I can pull it out and try to make it work on events tomorrow if you think it would be useful
+
+
+2024-08-08
+[17:39:47.0699] <Steve Hicks>
+that sounds useful, I was about to try to put something like that together myself
+
+[11:19:07.0742] <Andreu Botella>
+I'm looking at chromium event dispatch code, and it seems like there are a number of events (especially dealing with navigation, cross-window communication and similar things) that are synchronous if the window is active, but not if it's in the back/forward cache
+
+[11:21:32.0793] <Steve Hicks>
+That seems consistent with click, where it can be triggered either programmatically or by the user interface.  Active vs fallback context should be fine?
+
+[11:22:44.0302] <Andreu Botella>
+could be
+
+[11:23:29.0475] <Andreu Botella>
+for the `message` event, though, chromium is already propagating the context for task attribution
+
+[11:31:24.0497] <Andreu Botella>
+huh, it seems like for at least some of these events with an async source, the way chromium dispatches them would make it easy to propagate the context in the implementation
+
+[11:32:18.0886] <Andreu Botella>
+but I don't know how that translates to other browsers, and that definitely does not translate to the spescs
+
+[11:32:23.0420] <Andreu Botella>
+ * but I don't know how that translates to other browsers, and that definitely does not translate to the specs
+
+
+2024-08-12
+[10:54:04.0407] <Andreu Botella>
+So as I mentioned earlier, Chromium has a way to track what scheduled some async tasks (seems to be used for devtools and for ad tracking), so I made a patch that prints out the type of event, and for async sources some string related to the scheduler, for each event dispatch
+
+[10:54:14.0603] <Andreu Botella>
+https://chromium-review.googlesource.com/c/chromium/src/+/5774262
+
+[10:55:43.0715] <Andreu Botella>
+maybe there's a way to turn that into telemetry that we could get, but the timeline on getting that will be months
+
+[10:56:15.0663] <Andreu Botella>
+I also don't expect that the async task tracking covers every event with an async source
+
+[10:56:32.0252] <Andreu Botella>
+ * I also don't expect that this async task tracking covers every event with an async source, so we might not get a full list of such events
+
+[10:56:54.0653] <Andreu Botella>
+but I might run a number of Blink web tests overnight and see what results we get
+
+
+2024-08-14
+[17:58:23.0401] <Steve Hicks>
+I put together a spreadsheet from the @webref/events github:
+https://docs.google.com/spreadsheets/d/1r-IjEyTEuCzQtJgSyY-a5htrQFME9RPylkv3hT_puqg/edit?gid=1971388798#gid=1971388798
+
+[19:09:51.0412] <Steve Hicks>
+So far a handful of cases seem to maybe want to snapshot the context that was active when a task is queued - e.g. `securitypolicyviolation` is fired _asynchronously_ after JS code programatically does something that violates CSP - this seems basically impossible to polyfill, for what that's worth.
+
+[10:17:36.0915] <littledan>
+what do you mean by "preserve" here?
+
+[10:18:08.0579] <littledan>
+maybe we should maintain a "rationale" column in this doc
+
+[10:20:40.0608] <Steve Hicks>
+sounds good, and i can also add anyone else as an editor if you ping me what account to add
+
+
+2024-08-19
+[13:56:05.0312] <Steve Hicks>
+I was talking with our tracing folks today (both from the tracing side and the web frameworks side) and had broad agreement that they generally just want event handlers to do as little as possible in terms of snapshot/restore.  I told them about my concerns with polyfilling these "async causes" (i.e. programmatic JS that triggers an event to be queued for dispatch in a future microtask) and the consensus was that, for any events we tend to care about, it's basically always more accurate to run listeners in the root/empty context rather than the registration context, and not to worry about a more-accurate programmatic causal context that we can't get access to.
+
+[13:58:04.0553] <Steve Hicks>
+But with our current polyfill (which dispatches events in the registration context), they're running into real problems where event listeners are registered in the "application bootstrap context" and they really want stronger guarantees that that context will completely disappear when bootstrapping is complete.
+
+[14:05:10.0504] <littledan>
+people have this intuition of "do as little as possible" or "disappear" but I don't think they mean the null context, I think they mean some sort of causal context, which we've discussed the difficulty of defining. Did you raise this difficulty with the requesting teams?
+
+[14:05:45.0309] <littledan>
+or maybe you're saying, they are happy with the null context?
+
+[14:07:41.0368] <littledan>
+> <@stephenhicks:matrix.org> But with our current polyfill (which dispatches events in the registration context), they're running into real problems where event listeners are registered in the "application bootstrap context" and they really want stronger guarantees that that context will completely disappear when bootstrapping is complete.
+
+This is excellent to know that you're really trying this in a polyfill and it's really not working out. But can you explain a little more about how this comes up mechanically, within a system that already does event delegation?
+
+[14:08:11.0341] <littledan>
+ * [EDIT: Sorry I misread what you wrote above, you already did address this] people have this intuition of "do as little as possible" or "disappear" but I don't think they mean the null context, I think they mean some sort of causal context, which we've discussed the difficulty of defining. Did you raise this difficulty with the requesting teams?
+
+[14:18:07.0661] <Andreu Botella>
+If we do that, and at some later point we realize there's some existing event with an async source that needs the async dispatch context to be propagated, that won't be able to be changed
+
+[14:18:23.0293] <Andreu Botella>
+we wouldn't even be able to have use counters
+
+[14:19:37.0730] <Steve Hicks>
+what do you mean by "use counters"?
+
+[14:19:43.0371] <littledan>
+> <@stephenhicks:matrix.org> But with our current polyfill (which dispatches events in the registration context), they're running into real problems where event listeners are registered in the "application bootstrap context" and they really want stronger guarantees that that context will completely disappear when bootstrapping is complete.
+
+one thing to note is that, if you have a particular variable (like the trace/span id) that you always want to be a particular value (like null), you can set that value explicitly your bootstrapping code. I'm really curious why this kind of thing didn't work for you
+
+[14:19:53.0949] <littledan>
+> <@stephenhicks:matrix.org> what do you mean by "use counters"?
+
+this is about assessing the web compatibility of later changes in semantics
+
+[14:20:02.0269] <Steve Hicks>
+I'm not sure I'm saying that async events never dispatch with a causal context.
+
+[14:22:07.0347] <Andreu Botella>
+Chromium and firefox (probably also webkit, but I don't know that for sure) have telemetry where, if a page uses some combination of features, that usage gets recorded, to asses e.g. how likely is a change in semantics to affect websites
+
+[14:24:02.0670] <Andreu Botella>
+you could have use counters for uses of `AsyncContext.prototype.get()` with the null context, or similar, but you can't track cases like
+```js
+foo.addEventListener("bar", () => {
+  asyncVar.run("baz", () => {
+     someUnrelatedAsyncVar.get();
+  });
+});
+```
+
+[14:24:31.0828] <Andreu Botella>
+hm...
+
+[14:24:50.0145] <Andreu Botella>
+I guess it's not impossible to track, but it might add implementation complexity
+
+[14:26:09.0042] <Andreu Botella>
+okay, you could track all uses of contexts derived from an async event without a lot of complexity, but not from a specific async event
+
+[14:26:27.0395] <littledan>
+Andreu, I think you're jumping ahead a few steps too many when you're talking about this future compatibility risk; let's focus on figuring out their needs first
+
+[14:27:41.0037] <littledan>
+Steve Hicks: Are we talking about the span id/trace id? Is this just one variable? Could you say more about how/when it's initialized, and how "application bootstrap time" becomes misleading compared to being identifiably "null"?
+
+[14:28:29.0183] <Steve Hicks>
+Yes, the place where this is coming up is with the root trace, where the bootstrap runs in a bootstrap trace, and then event handlers look for a missing trace to know to start a new one (rather than continue an existing one).  It might be possible to explicitly zero out the trace when registering listeners - I've asked whether that's viable.
+
+[14:30:03.0186] <Justin Ridgewell>
+> <@stephenhicks:matrix.org> But with our current polyfill (which dispatches events in the registration context), they're running into real problems where event listeners are registered in the "application bootstrap context" and they really want stronger guarantees that that context will completely disappear when bootstrapping is complete.
+
+This sounds like the tail wagging the dog. They want to ensure that their bootstrap context is GC’d, and think not events capturing context will ensure that, but that’s just not the case. What happens when they have a pending promise or `setInterval`?
+
+I think null-context is the least useful choice for users. It’s simple enough for them to clear the boostrap context before adding event listeners, but we shouldn’t force everyone else to wrap their event handlers because of this case.
+
+[14:31:08.0004] <Justin Ridgewell>
+> <@stephenhicks:matrix.org> I'm not sure I'm saying that async events never dispatch with a causal context.
+
+The GC use case prevents us from every making a causal context event.
+
+[14:31:23.0704] <Justin Ridgewell>
+* The GC use case prevents us from ever using a causal context in events.
+
+[14:31:37.0094] <Steve Hicks>
+Registration context is simply wrong for many, many events.  There may be a more useful causal context that's available, and we should use it when possible, even if we can't polyfill it.
+
+[14:31:39.0577] <littledan>
+> <@stephenhicks:matrix.org> Yes, the place where this is coming up is with the root trace, where the bootstrap runs in a bootstrap trace, and then event handlers look for a missing trace to know to start a new one (rather than continue an existing one).  It might be possible to explicitly zero out the trace when registering listeners - I've asked whether that's viable.
+
+ah, OK, they want a bootstrap trace, and then they want event handlers to run in a null trace.... could we address this by loading a null trace snapshot right around addEventListener, narrowly?
+
+[14:32:08.0905] <littledan>
+or is it that they really do want a causal trace?
+
+[14:32:43.0751] <Steve Hicks>
+My understanding is that the code running `addEventListener` is largely out of our control - third party libraries and whatnot
+
+[14:33:18.0971] <littledan>
+maybe patch addEventListener then?
+
+[14:33:59.0177] <Justin Ridgewell>
+> <@stephenhicks:matrix.org> Registration context is simply wrong for many, many events.  There may be a more useful causal context that's available, and we should use it when possible, even if we can't polyfill it.
+
+Sure, I see good arguments for causal context. But I don’t think there are any good ones for null context.
+
+[14:34:01.0597] <Steve Hicks>
+> <@littledan:matrix.org> maybe patch addEventListener then?
+
+That way lies madness, let me tell you...
+
+[14:34:13.0351] <littledan>
+> <@stephenhicks:matrix.org> Registration context is simply wrong for many, many events.  There may be a more useful causal context that's available, and we should use it when possible, even if we can't polyfill it.
+
+concrete examples of cases where it is wrong is extremely helpful! Now we have one with tracing and bootstrap contexts. If we can assemble more, it'll be very useful.
+
+[14:34:44.0076] <Steve Hicks>
+I think my point was that when causal context is unavailable, empty context is the best alternative - both for lossy polyfills and for standards
+
+[14:34:44.0456] <littledan>
+> <@stephenhicks:matrix.org> Registration context is simply wrong for many, many events.  There may be a more useful causal context that's available, and we should use it when possible, even if we can't polyfill it.
+
+ * concrete examples of cases where it is wrong is extremely helpful! Now we have one with bootstrap traces. If we can assemble more, it'll be very useful.
+
+[14:35:28.0119] <littledan>
+sure, I guess I'm just trying to understand the details of their requirements, and then we can think of the various possible ways to meet them
+
+[14:35:35.0830] <littledan>
+rather than reaching a "point" yet
+
+[14:36:31.0201] <littledan>
+A new piece of information for me today was that there's a desire to trace how long bootstrap takes, and so this is what makes the registration context wrong. I did not understand that phenomenon before this conversation.
+
+[14:36:47.0854] <littledan>
+so this is very helpful
+
+[14:36:48.0625] <Steve Hicks>
+> <@stephenhicks:matrix.org> That way lies madness, let me tell you...
+
+In particular, I've been patching addEventListener for my polyfill, and it's super subtle.
+
+[14:37:20.0655] <Steve Hicks>
+> <@stephenhicks:matrix.org> That way lies madness, let me tell you...
+
+ * In particular, I've been patching addEventListener for my polyfill, and it's super subtle.  Also, short-term patches are nonviable because removeEventListener
+
+[14:37:40.0491] <littledan>
+> <@stephenhicks:matrix.org> In particular, I've been patching addEventListener for my polyfill, and it's super subtle.  Also, short-term patches are nonviable because removeEventListener
+
+yeah, I can imagine... I'm just trying to understand the constraints, and curious what kinds of third party libraries you're trying to trace through
+
+[14:37:44.0466] <Steve Hicks>
+ * In particular, I've been patching addEventListener for my polyfill, and it's super subtle.  Also, short-term patches are nonviable because removeEventListener.  So I think we need to put that out of our heads as a remotely viable suggestion.
+
+[14:37:53.0905] <littledan>
+and what kind of flexibility you have about how you use them
+
+[14:38:24.0142] <Steve Hicks>
+d3 and tanstack router were two that were named
+
+[14:39:09.0998] <Steve Hicks>
+and it's not so much that we want to "trace through" them, so much as that they're involved in the app and all it takes is one library not doing it right to mess everything up - this is why the right defaults are critical
+
+[14:43:01.0453] <Stephen Belanger>
+Node.js _never_ patches events, and this is very intentional. Event emitters themselves are not async, they inherit asynchrony from what publishes to them. Therefore it’s actually that _triggering_ thing you need to propagate context to and leave event emitters alone to just continue in the context the dispatch happens in.
+
+[14:43:46.0851] <Stephen Belanger>
+In web platform that triggering thing can be internals, so that needs to be taken into consideration.
+
+[14:44:14.0942] <Stephen Belanger>
+But it should be treated as a propagation of the web platform thing, not a propagation of event emitters.
+
+[14:45:04.0115] <Stephen Belanger>
+Which means event emitters should not be expected to have “consistent” behaviour, because the conditions in which they are triggered is not consistent.
+
+[14:45:10.0964] <Andreu Botella>
+propagating the context through everything async in the web platform is simply not feasible at this point in time, which is why I'm talking about async sources for events (which in your terms is async internals that eventually triggers the event)
+
+[14:45:46.0881] <Andreu Botella>
+that way we can focus only on the async internals that are observable
+
+[14:46:20.0888] <Stephen Belanger>
+It doesn’t need to propagate fully _through_ it necessarily. Only to the extent that is observable from JavaScript. (At least at this point, anyway…)
+
+[14:47:06.0928] <Stephen Belanger>
+I _do_ want to have it actually accessible _everywhere_ though as I would _really_ like for profiler samples to capture current context state.
+
+[14:47:31.0540] <Stephen Belanger>
+But, as you say, that’s a large effort.
+
+[14:47:34.0768] <littledan>
+so, how would it be if EventTargets had a snapshot associated with them (say, the default for the whole document) and ran all of their events there?
+
+[14:47:47.0612] <littledan>
+ * so, how would it be if EventTargets had a snapshot associated with them (say, the default for the whole document, so the global one) and ran all of their events there?
+
+[14:48:21.0778] <littledan>
+and if there's another relevant snapshot for an event, we pass that in a property
+
+[14:49:01.0202] <littledan>
+we have to define the web semantics completely, we can't say "whatever falls out"
+
+[14:49:34.0844] <Stephen Belanger>
+Binding to the initialization of an EventTarget? I can see how that could be useful for resource attribution, but would not work for the application tracing case without needing to rebind everything to the execution flow path (aka through flow)
+
+[14:50:33.0188] <littledan>
+there are two problems we're discussing: the one Steven H raised (avoid misattribution to the bootstrap phase) and this one you're raising (do all the tracing causally)
+
+[14:51:48.0632] <Stephen Belanger>
+I think they’re related problems.
+
+[14:52:13.0288] <Stephen Belanger>
+The attribution depends on the flow you’re expecting.
+
+[14:52:14.0858] <littledan>
+sure, the perfect solution to everything also solves the easier version that Steven described where it's OK for us to cheat and use the null context
+
+[14:53:08.0025] <Andreu Botella>
+> <@stephenbelanger:matrix.org> But, as you say, that’s a large effort.
+
+Even having all events with an internal async source propagate the causal context won't be easy, and we have already gotten pushback (from Domenic Denicola) saying that that will be too burdensome for folks working on web specs
+
+[14:53:36.0539] <littledan>
+> <@abotella:igalia.com> Even having all events with an internal async source propagate the causal context won't be easy, and we have already gotten pushback (from Domenic Denicola) saying that that will be too burdensome for folks working on web specs
+
+yes, we've gotten this pushback from Anne van Kesteren as well. Together, they represent Chrome and Safari.
+
+[14:53:40.0858] <Stephen Belanger>
+Attributing something to boot or EventTarget creation implies you are interested in viewing things from the perspective of resource ownership. Through or causal flow is a more direct line to what triggered the thing.
+
+[14:54:09.0080] <littledan>
+> <@stephenbelanger:matrix.org> Attributing something to boot or EventTarget creation implies you are interested in viewing things from the perspective of resource ownership. Through or causal flow is a more direct line to what triggered the thing.
+
+sorry, I meant, just giving up 100% and saying, it's the global default snapshot
+
+[14:54:54.0900] <littledan>
+Stephen Belanger: What do you want us to do when you bring up, browsers should do causal flow, when Andreu is reporting that we have pushback from browsers on this, and you also say you don't actually care much about the browser case?
+
+[14:55:26.0744] <Andreu Botella>
+I think the right behavior is causal flow, but it seems unfeasible
+
+[14:55:35.0316] <Stephen Belanger>
+I think “giving up” is a valid decision given the complexity, though needs to be very clearly encoded and explained as “This is not the _correct_ decision, this is just what we have _now_ because solving this case is hard”
+
+[14:56:10.0523] <Stephen Belanger>
+Meaning, not painting ourselves into a corner with expecting that flow forever.
+
+[14:56:27.0271] <Andreu Botella>
+> <@stephenbelanger:matrix.org> I think “giving up” is a valid decision given the complexity, though needs to be very clearly encoded and explained as “This is not the _correct_ decision, this is just what we have _now_ because solving this case is hard”
+
+Yes, but the problem with that is that the web is not versioned, so if programs start to rely on the behavior *now*, that behavior will be locked forever
+
+[14:56:46.0758] <Andreu Botella>
+and it's even going to be hard to *detect* whether programs rely on that behavior
+
+[14:56:55.0296] <Andreu Botella>
+I don't think there are any good solutions
+
+[14:57:11.0090] <littledan>
+right, I don't see a way to avoid "painting ourselves into a corner"
+
+[14:57:20.0379] <littledan>
+we have to choose what the semantics are
+
+[14:57:39.0795] <Stephen Belanger>
+> <@littledan:matrix.org> Stephen Belanger: What do you want us to do when you bring up, browsers should do causal flow, when Andreu is reporting that we have pushback from browsers on this, and you also say you don't actually care much about the browser case?
+
+I mean _I_ care about the browser case. APM vendors maybe _less_ so, but it’s a space we’re gradually starting to need to care about.
+
+[14:57:54.0897] <littledan>
+> <@stephenbelanger:matrix.org> I mean _I_ care about the browser case. APM vendors maybe _less_ so, but it’s a space we’re gradually starting to need to care about.
+
+OK sorry ignore the last clause and just focus on the first two
+
+[14:58:31.0821] <Stephen Belanger>
+It’s more just that servers have very different execution patterns from browsers, and if you define something _only_ considering browser runtime semantics then you make it unusable for servers.
+
+[14:58:56.0677] <littledan>
+maybe you could be more concrete about a server case that you're worried about us defining the wrong semantics for?
+
+[15:00:19.0861] <Stephen Belanger>
+> <@abotella:igalia.com> Yes, but the problem with that is that the web is not versioned, so if programs start to rely on the behavior *now*, that behavior will be locked forever
+
+Yes, that’s my concern with the “giving up” approach. If we can be sure that one would never _expect_ an empty context, but it could be present in some scenarios, then it could be seen as just an absence of support for that scenario. But if people begin to _expect_ an empty context in that case then it becomes contract.
+
+[15:02:26.0909] <Stephen Belanger>
+> <@littledan:matrix.org> maybe you could be more concrete about a server case that you're worried about us defining the wrong semantics for?
+
+I’ve stated it before, as has Matteo. Users expect things to persist into _temporally_ continuing code, not just call-recursive code. AsyncContext as it is now gets the call-recursive flow fine, but doesn’t flow _out_ to get the temporally continuous context.
+
+[15:03:31.0839] <littledan>
+> <@stephenbelanger:matrix.org> I’ve stated it before, as has Matteo. Users expect things to persist into _temporally_ continuing code, not just call-recursive code. AsyncContext as it is now gets the call-recursive flow fine, but doesn’t flow _out_ to get the temporally continuous context.
+
+I know you and Matteo have stated this broad goal, but I think what we need to do is collect more concrete cases of variables and callsites where it's important that this handling be done
+
+[15:03:40.0409] <Stephen Belanger>
+Like we need to be able to create a span in a mysql query call, have that span flow out to the function that called it, and become the parent of the next span created in logically continuing code.
+
+[15:03:57.0624] <Andreu Botella>
+> <@stephenbelanger:matrix.org> Yes, that’s my concern with the “giving up” approach. If we can be sure that one would never _expect_ an empty context, but it could be present in some scenarios, then it could be seen as just an absence of support for that scenario. But if people begin to _expect_ an empty context in that case then it becomes contract.
+
+There are at least two cases (XHR and same-window `postMessage`) where things internal to Chrome need the context to be propagated asynchronously. So it wouldn't be using the empty context for all events with an async source. But that's probably not enough for developers to not begin to expect an empty context in all other cases
+
+[15:04:24.0145] <littledan>
+> <@stephenbelanger:matrix.org> Like we need to be able to create a span in a mysql query call, have that span flow out to the function that called it, and become the parent of the next span created in logically continuing code.
+
+Can this be done by mutating a span object that's held in an asynccontext variable? I thought that's what OTel already does
+
+[15:05:08.0716] <Stephen Belanger>
+No, because you lose the causality if you don’t actually have causal flow.
+
+[15:05:09.0322] <Steve Hicks>
+> <@littledan:matrix.org> Can this be done by mutating a span object that's held in an asynccontext variable? I thought that's what OTel already does
+
+This is also what we're doing with our internal tracing framework
+
+[15:05:29.0648] <littledan>
+> <@stephenbelanger:matrix.org> No, because you lose the causality if you don’t actually have causal flow.
+
+can you elaborate on what you mean here?
+
+[15:05:44.0401] <Stephen Belanger>
+I’ve provided examples before that if you, for example, do a Promise.all(…), have no way to know which branch you’re trying to merge back to.
+
+[15:06:11.0289] <Stephen Belanger>
+You’d have two branches trying to write to the same span and it would breaks
+
+[15:06:18.0095] <Stephen Belanger>
+* You’d have two branches trying to write to the same span and it would break.
+
+[15:06:32.0918] <littledan>
+but... wasn't your solution to choose arbitrary among them anyway?
+
+[15:06:39.0109] <Steve Hicks>
+> <@stephenhicks:matrix.org> This is also what we're doing with our internal tracing framework
+
+And we prefer it over the flow-through model because of the lexical guarantees against context being nuked by a bad actor in the middle.
+
+[15:06:41.0740] <littledan>
+ * but... wasn't your solution to choose arbitrarily among them anyway?
+
+[15:07:51.0202] <Stephen Belanger>
+You can only nuke flow-through if you mess with the context through a global graph, which it’s designed to generally not doz
+
+[15:07:55.0274] <Stephen Belanger>
+* You can only nuke flow-through if you mess with the context through a global graph, which it’s designed to generally not do.
+
+[15:08:12.0071] <Stephen Belanger>
+And you can cause the same problems with around flow right now.
+
+[15:08:38.0348] <Stephen Belanger>
+We’re doing exactly that right now with AsyncResource in Node.js messing with a global graph and causing problems for people.
+
+[15:09:08.0346] <Stephen Belanger>
+Around flow is not inherently safer.
+
+[15:09:41.0395] <Stephen Belanger>
+It’s actually _less_ safe because you frequently need to bind out of the paths it gives you because most are only conditionally useful z
+
+[15:09:45.0447] <Stephen Belanger>
+* It’s actually less safe because you frequently need to bind out of the paths it gives you because most are only conditionally useful.
+
+[15:09:57.0370] <Stephen Belanger>
+* It’s actually _less_ safe because you frequently need to bind out of the paths it gives you because most are only conditionally useful.
+
+[15:10:54.0304] <Steve Hicks>
+I think the ideal state to my mind is that we have a version of my spreadsheet where all 400 rows are filled out consistently, with each either being "registration time", "empty context", or some other combination involving more specific contexts, etc.  And then polyfills would likely fall back on empty context when they can't access the correct one.
+
+[15:12:39.0394] <Stephen Belanger>
+Around flow also requires _substantially_ more binding logic than through flow as through flow is in most cases just a continuation of the scope you are already in, while other semantics are continuously trying to return to a prior state out of the state it is in presently.
+
+[15:13:29.0055] <Steve Hicks>
+> <@stephenbelanger:matrix.org> It’s actually _less_ safe because you frequently need to bind out of the paths it gives you because most are only conditionally useful.
+
+This is a good point, which demonstrates that the least safe thing of all is bad defaults.  Any time anyone needs to break from the defaults, it leads to risk of (1) not doing it because they didn't realize they needed to, (2) doing it too much/inappropriately because it's subtle.
+
+[15:13:56.0057] <littledan>
+> <@stephenhicks:matrix.org> I think the ideal state to my mind is that we have a version of my spreadsheet where all 400 rows are filled out consistently, with each either being "registration time", "empty context", or some other combination involving more specific contexts, etc.  And then polyfills would likely fall back on empty context when they can't access the correct one.
+
+sounds good, but it'd be easier to fill this out if we had some agreed-on examples of cases where we don't want to use the registration context and want to use something else in particular. Do you have a few off the top of your head?
+
+[15:15:32.0508] <Steve Hicks>
+Honestly, I almost never want registration context.  setTimeout is about it.
+
+[15:15:52.0881] <Steve Hicks>
+XHR
+
+[15:16:11.0886] <littledan>
+so, idk, if you could go crazy and fill out the table with your opinions (maybe we could make different columns for us each to "vote") that'd be helpful
+
+[15:16:23.0241] <littledan>
+I don't know whether you want things to be null or something else, for the other cases
+
+[15:16:51.0446] <littledan>
+I was suggesting above, let's go crazy and make all events always be in the null context; I didn't really get a read for whether you liked that idea
+
+[15:17:29.0830] <Steve Hicks>
+sorry, yes, I think that's closer to what I'd prefer
+
+[15:18:04.0847] <Steve Hicks>
+though I'm not sure if that answer is quite nuanced enough to fly
+
+[15:18:36.0396] <littledan>
+what sort of nuance do you think would be good to correct?
+
+[15:23:26.0992] <Steve Hicks>
+A lot of events seem to be triggerable either by code or by user interaction.  I would like to see the active context when the dispatch task was queued for the former case, and the empty context for the latter.  This requires an understanding that the listener needs to be able to handle both empty and non-empty contexts, depending on how the event was triggered.
+
+[15:23:52.0920] <Steve Hicks>
+for polyfills, everything looks user-triggered
+
+[15:24:06.0065] <littledan>
+OK, if this is the only thing to follow (dispatch context vs empty context) it seems simple enough for me to drop my "this is also Zalgo" thing
+
+[15:24:46.0130] <littledan>
+also seems simple enough for browsers' concerns about "can we do this without having some huge understanding of tracing whenever handling any callback"
+
+[15:25:13.0516] <littledan>
+in Andreu's analysis, he identified many cases where the registration context just seemed like the right answer, beyond setTimeout. Did you have any thoughts on those?
+
+[15:25:32.0265] <Steve Hicks>
+I don't know which those were
+
+[15:25:46.0879] <Andreu Botella>
+anything before events in the web integration document
+
+[15:25:57.0934] <Steve Hicks>
+I think XHR might be one case where it's something other than dispatch-or-empty
+
+[15:25:59.0309] <Andreu Botella>
+ * anything before the event section in the web integration document
+
+[15:26:10.0693] <littledan>
+can you look at Andreu's doc and identify which parts you agree and disagree with?
+
+[15:26:57.0492] <Steve Hicks>
+> <@littledan:matrix.org> can you look at Andreu's doc and identify which parts you agree and disagree with?
+
+This is https://github.com/tc39/proposal-async-context/pull/100 ?
+
+[15:27:00.0851] <Andreu Botella>
+yeah
+
+[15:27:13.0371] <littledan>
+thanks
+
+[15:37:13.0921] <Steve Hicks>
+* Observers can batch, so you can't get the causal context - I don't feel strongly between null vs registration, but probably we need to expose the cause via mutation record property
+* I don't have enough context for action registrations to speak intelligently, but I think they are similar to events.  Certainly web component lifecycle callbacks need to get a causally relevant (or fallback on null) snapshot, but I suspect something like mediaSession might also have a more relevant context, e.g. if you call `play()` programmatically or something
+
+[15:39:39.0583] <Steve Hicks>
+Async completion callbacks all seem good as they are - I generally see registratio-time as a preferred default for callbacks that will run at most once, at a semi-predicatable time.  When it will call more than once, indefinitely into the future, I think registration is the wrong _default_, though you may still need opt back into it in some cases.
+
+[15:41:58.0579] <littledan>
+can you elaborate on which cases we should opt back into registration context?
+
+[15:42:21.0929] <littledan>
+for observers: do you think the causal context is necessary for the MVP, or is it OK if it's a "for-later" thing?
+
+[15:42:41.0204] <littledan>
+observers are a fun test of what we mean by "synchronous"!
+
+[15:49:08.0800] <Andreu Botella>
+for observers, since the cause would be a new property, that can be left for later without risk of breakage
+
+[16:30:14.0488] <Chengzhong Wu>
+> <@stephenhicks:matrix.org> Yes, the place where this is coming up is with the root trace, where the bootstrap runs in a bootstrap trace, and then event handlers look for a missing trace to know to start a new one (rather than continue an existing one).  It might be possible to explicitly zero out the trace when registering listeners - I've asked whether that's viable.
+
+Is the trace on event handler agnostic to event types? In implementations where instrument known event types, it can determine either creating a new root span, or creating a child span by event type semantics.
+
+[16:31:49.0008] <Chengzhong Wu>
+Like in OpenTelemetry, it is needed to be aware of event type semantics to produce useful traces.
+
+
+2024-08-20
+[17:28:17.0321] <Steve Hicks>
+> <@littledan:matrix.org> can you elaborate on which cases we should opt back into registration context?
+
+By "opt back into" I meant `AsyncContext.Snapshot.wrap` to handle the rare exception to the default.
+
+[17:28:26.0639] <Steve Hicks>
+> <@littledan:matrix.org> can you elaborate on which cases we should opt back into registration context?
+
+ * By "opt back into" I meant `AsyncContext.Snapshot.wrap` to handle the rare exception to the default - so not "us" opting in
+
+[17:31:40.0722] <Steve Hicks>
+> <@legendecas:matrix.org> Is the trace on event handler agnostic to event types? In implementations where instrument known event types, it can determine either creating a new root span, or creating a child span by event type semantics.
+
+My understanding here is that we _do_ fire some events synchronously via `element.click()` or `.focus()` and that those cascading cases are treated as child spans, whereas a user-initiated click (or focus) would be treated as a root span (but with the same tree of children).  In this case, having event handlers "do nothing" produces exactly the right behavior - user-initiated actions come in with an empty context, while synchronous events inherit the caller's context.
+
+[23:43:29.0630] <littledan>
+I think the question was about something else: do you have event-specific logic in your tracing system? Do we expect this to exist generally? The answer to this has significant impact on what kinds of API shapes would or wouldn’t work (even if you have identified one which would work).
+
+[01:04:55.0080] <Steve Hicks>
+Ah, I think it is probably event-specific, but I don't know exactly. I'll ask, though can you explain why it's such a significant impact?
+
+[01:08:15.0691] <Steve Hicks>
+Though, on second thought, the specificity could easily only be in the product code, rather than in the infrastructure.
+
+[06:22:51.0045] <littledan>
+Whether it is event-specific determines whether we could indicate important context in event-specific properties, as you had proposed, and have a bit of logic to fix things up with that information 
+
+[06:24:38.0143] <littledan>
+This is really core because we know that different variables need different kinds of information flow. So, we are trying to figure out what the requirements are for this tracing variable (which is the motivation for all of the null context and flow-through discussion as far as I can tell)
+
+[06:28:19.0085] <littledan>
+Also, maybe you have some other system that you have been comparing AsyncContext to, and converting an existing tracing system to be based on AsyncContext? Can you tell us about this baseline and what its semantics are?
+
+[07:18:35.0524] <Andreu Botella>
+I was under the impression that choosing between initial context and registration context for user-sourced events would be trivial, but after thinking some more about it, I don't think it would be
+
+[07:19:06.0916] <Andreu Botella>
+after all, you could fire an event synchronously in an inline `<script>`, and that would have the initial context
+
+[07:19:45.0654] <Andreu Botella>
+so there would need to be extra browser code and spec text to track when an event is user/browser-sourced
+
+[07:20:12.0379] <Andreu Botella>
+ * so there would need to be extra browser code and spec text to somehow track when an event is user/browser-sourced
+
+[08:15:18.0573] <Andreu Botella>
+whoops, I was writing a long post in https://github.com/tc39/proposal-async-context/pull/100 and accidentally hit "close pull request" before finishing it
+
+[08:28:11.0214] <Andreu Botella>
+edited with the remainder
+
+[08:28:18.0101] <Andreu Botella>
+ * edited with the remainder of that message
+
+[08:43:50.0392] <Steve Hicks>
+> <@littledan:matrix.org> Whether it is event-specific determines whether we could indicate important context in event-specific properties, as you had proposed, and have a bit of logic to fix things up with that information 
+
+I think the difficulty here is two-fold: both third-party libraries and distant first-party developers are doing async things (e.g. listening on events, etc) on their own terms and in their own ways, and it's not reasonable to expect them to know whether and when they need to do special handling to propagate a non-default context, and there's no good way for the framework that cares about that propagation to stick itself in the way to make it happen the right way. This is independent of any event type, and (as far as I can tell at first glance) seems to require that we pick the "right default" from the start, since any incorrect default will break the flow.
+
+This is a lot of upfront work, but may not be infeasible. There's a large but finite number of events to consider, and a divide-and-conquer approach may make it possible within a few months...? I agree that changing this in the future is likely to be problematic, unless we could reasonably poison the context of not-yet-decided events, but I'm having trouble imagining how that could work reasonably.
+
+[08:46:21.0791] <Andreu Botella>
+I think at this point we should be involving more web platform folks in these conversations
+
+[09:02:55.0461] <littledan>
+we definitely need to be talking more with web platform folks, but (a) I'm not sure if we can get them to read our voluminous discussions, we probably need to come up with a condensed summary of thoughts (b) sometimes we can learn more from them in a small discussion than a big one--it's easier to be interactive that way.
+
+[09:04:47.0474] <littledan>
+> <@stephenhicks:matrix.org> I think the difficulty here is two-fold: both third-party libraries and distant first-party developers are doing async things (e.g. listening on events, etc) on their own terms and in their own ways, and it's not reasonable to expect them to know whether and when they need to do special handling to propagate a non-default context, and there's no good way for the framework that cares about that propagation to stick itself in the way to make it happen the right way. This is independent of any event type, and (as far as I can tell at first glance) seems to require that we pick the "right default" from the start, since any incorrect default will break the flow.
+> 
+> This is a lot of upfront work, but may not be infeasible. There's a large but finite number of events to consider, and a divide-and-conquer approach may make it possible within a few months...? I agree that changing this in the future is likely to be problematic, unless we could reasonably poison the context of not-yet-decided events, but I'm having trouble imagining how that could work reasonably.
+
+I'm curious how your tracing framework deals with these third-party integration cases today, and how well that works out.
+
+
+2024-08-23
+[07:33:17.0968] <Andreu Botella>
+Steve Hicks: Here's the data I extracted from Chrome for the sources for various events: https://gist.github.com/andreubotella/e1127d588f85ef74cd58b2bd25a652ff
+
+[07:34:17.0012] <Andreu Botella>
+since the same event name can have different meanings, the mapping is event name → WebIDL interface name (well, rather C++ class name in Chromium) → source data
+
+[07:39:51.0800] <Andreu Botella>
+there are fewer events with an async source than I'd have expected, but I think this is because Chromium isn't tracking all sources
+
+
+2024-08-26
+[09:29:01.0055] <nicolo-ribaudo>
+I started adding a column to https://docs.google.com/spreadsheets/d/1r-IjEyTEuCzQtJgSyY-a5htrQFME9RPylkv3hT_puqg/edit?gid=1971388798#gid=1971388798 called "Context avaiable at async dispatch", which marks for events dispatched asynchronously which async context would be trivially available.
+
+This shows for how many events it would be easy to add a `.dispatchContext` property / how easy it would be to use the dispatch context rather than the registration context. All events that can be triggered by JS and have no "available context", or have the wrong one, will need manual wiring.
+
+[10:24:12.0903] <nicolo-ribaudo>
+ * I started adding a column to https://docs.google.com/spreadsheets/d/1r-IjEyTEuCzQtJgSyY-a5htrQFME9RPylkv3hT\_puqg/edit?gid=1971388798#gid=1971388798 called "Context available at async dispatch", which marks for events dispatched asynchronously which async context would be trivially available.
+
+This shows for how many events it would be easy to add a `.dispatchContext` property / how easy it would be to use the dispatch context rather than the registration context. All events that can be triggered by JS and have no "available context", or have the wrong one, will need manual wiring.
+
+
+2024-08-29
+[21:15:50.0353] <snek>
+interesting that someone noticed... https://github.com/denoland/deno/issues/25275. i think it's only incidental that it works in nodejs because node happened to implement module loading in js where promise hooks preserved the context.
+
+[22:42:14.0871] <Justin Ridgewell>
+We’ve discussed this before, and I think we decided that module evaluation always happens in a clean context?
+
+[22:42:34.0454] <Justin Ridgewell>
+Ie, Deno’s behavior now is correct, and this is an intentional difference from ALS.
+
+[22:49:46.0090] <snek>
+the PR currently leaves it to be host defined. but either way noticing how people react to things is always useful i think.
+
+[04:36:34.0535] <Andreu Botella>
+> <@devsnek:matrix.org> the PR currently leaves it to be host defined. but either way noticing how people react to things is always useful i think.
+
+we've been discussing this as part of the web integration
+
+[04:37:25.0399] <Andreu Botella>
+nicolo-ribaudo argues that since module evaluation is idempotent, it should depend on ambient state as little as possible
+
+[04:37:43.0822] <Andreu Botella>
+ * nicolo-ribaudo argues that since module evaluation is idempotent, it should not depend on ambient state (whenever possible)
+
+[05:17:09.0669] <Luca Casonato>
+yeah, we discussed this at module harmony a couple weeks ago
+
+[06:43:55.0726] <Chengzhong Wu>
+[#98](https://github.com/tc39/proposal-async-context/pull/98) leaves it to be host defined because the "clean context" may contain host defined initial entries, like task attribution. However, this does allows host to propogate the context of very first call to `import()` or `import.defer().exported`. Maybe an editor's note can clarify that "it is recommended to not propagate the context"?
+
+[06:44:12.0782] <Chengzhong Wu>
+ * [#98](https://github.com/tc39/proposal-async-context/pull/98) leaves it to be host defined because the "clean context" can contain host defined initial entries. However, this does allows host to propogate the context of very first call to `import()` or `import.defer().exported`. Maybe an editor's note can clarify that "it is recommended to not propagate the context"?
+
+[06:44:23.0688] <Chengzhong Wu>
+ * [#98](https://github.com/tc39/proposal-async-context/pull/98) leaves it to be host defined because the "clean context" can contain host defined initial entries. However, this does allow host to propogate the context of very first call to `import()` or `import.defer().exported`. Maybe an editor's note can clarify that "it is recommended to not propagate the context"?
+
+[06:45:46.0391] <nicolo-ribaudo>
+We should normatively enforce the behavior we want
+
+[06:46:23.0748] <nicolo-ribaudo>
+Module and script records could snapshot the context where they run, and run module.Evaluate() in dynamic import using that context 
+

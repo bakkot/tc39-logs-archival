@@ -1,0 +1,363 @@
+2023-02-05
+[13:43:26.0737] <linusg>
+I know https://test262.report/ wasn't properly maintained for a while, but it seems to be fully dead now - does anyone know who to ping to look into that?
+
+
+2023-02-06
+[19:43:04.0968] <snek>
+i wish they'd just port all the code and infra for it to some public repo, then we could just take some tc39 budget to pay for ci or whatever and call it a day
+
+[20:06:47.0615] <rkirsling>
+it really is an uncomfortable situation, yeah
+
+[07:47:13.0270] <ryzokuken>
+> <@linusgroh:matrix.org> I know https://test262.report/ wasn't properly maintained for a while, but it seems to be fully dead now - does anyone know who to ping to look into that?
+
+it belongs to Bocoup
+
+[07:47:56.0760] <ryzokuken>
+I can talk to them about it if folks want, but I guess the status is the same as before (they no longer work on any TC39 stuff anymore and don't have the resources to maintain it any further).
+
+[07:48:30.0155] <ryzokuken>
+> <@devsnek:matrix.org> i wish they'd just port all the code and infra for it to some public repo, then we could just take some tc39 budget to pay for ci or whatever and call it a day
+
+Not sure if they're open to this idea but I'll float it to them.
+
+[07:49:41.0457] <snek>
+last time i asked they were not
+
+[07:49:48.0894] <snek>
+maybe the website being fully down is the kick they need though
+
+[07:50:02.0540] <ryzokuken>
+> <@devsnek:matrix.org> last time i asked they were not
+
+same
+
+[07:51:55.0788] <ryzokuken>
+> <@devsnek:matrix.org> maybe the website being fully down is the kick they need though
+
+dunno, hard to predict but maybe it'd be a better idea to build something new from the ground up without some of the pitfalls
+
+[07:52:09.0695] <ryzokuken>
+we could consult leobalter about this, they seemed open to the idea
+
+[07:53:04.0619] <snek>
+i mean if someone wants to write all that css, more power to em i guess lol
+
+[08:38:40.0420] <ptomato>
+sorry, it's been an action item in the test262 maintainers meeting to try to get ECMA resources for test262.report, but we haven't worked on it recently
+
+[08:40:34.0745] <littledan>
+> <@pchimento:igalia.com> sorry, it's been an action item in the test262 maintainers meeting to try to get ECMA resources for test262.report, but we haven't worked on it recently
+
+Is this Ecma resources for hosting it, or to compensate Bocoup for them making it open source? Do we have an idea of the expected cost?
+
+[08:43:30.0087] <ptomato>
+no info beyond "we need to talk to people and find these things out"
+
+[08:44:09.0114] <ryzokuken>
+in light of this discussion, it might be good to talk to them on behalf of TC39 instead of Igalia?
+
+[08:45:00.0921] <ptomato>
+yes, that's the plan
+
+[08:55:08.0240] <littledan>
+> <@pchimento:igalia.com> sorry, it's been an action item in the test262 maintainers meeting to try to get ECMA resources for test262.report, but we haven't worked on it recently
+
+ * Is this Ecma resources for hosting it? Do we have an idea of the expected cost?
+
+
+2023-02-07
+[18:22:46.0135] <littledan>
+So in the latest round of JS-is-missing-features discourse, one request that stands out is for Jack Works ‘s Number.range/BigInt.range. I am wondering, how can we move that forward? Is it blocked on anything?
+
+[18:24:14.0590] <littledan>
+I remember we had some kind of debate around how exactly arguments should work but everyone was positive about it IIRC
+
+[19:00:42.0202] <bakkot>
+I think the main blocker was whether the resulting thing should be one-shot or reusable
+
+[19:00:48.0716] <bakkot>
+and we just need to actually decide
+
+[19:00:56.0236] <bakkot>
+ * I think the main blocker was whether the resulting thing should be one-shot or reusable
+
+[19:01:38.0775] <bakkot>
+https://github.com/tc39/proposal-Number.range/issues/17, which is well on its way to being a centithread...
+
+[19:02:49.0727] <ljharb>
+indeed i think that's the open question. some iterators are reusable, so one might expect these to be; but most aren't, so one might expect these not to be
+
+[19:03:47.0700] <bakkot>
+iterators are never reusable, but many iterables are
+
+[19:04:10.0396] <bakkot>
+(iterators being inherently stateful)
+
+[19:04:26.0863] <ljharb>
+ah right, that's it
+
+[19:21:24.0981] <bakkot>
+from https://twitter.com/tesseralis/status/1622787957261488128, I am actually inspired to do `Math.randomInt()`,  I think
+
+[19:21:41.0729] <bakkot>
+where, I guess, it is overloaded based on whether you pass numbers or bigints (and forbids both)
+
+[19:22:17.0888] <bakkot>
+or it could be called `randomInRange` or something
+
+[19:22:57.0883] <bakkot>
+though, if `Number.range()` gave you a re-usable thing, it could be a class instance with a `.selectRandom()` member...
+
+[19:23:11.0446] <bakkot>
+(that is mostly a joke, not a design I would seriously pursue)
+
+[19:23:58.0667] <bakkot>
+`let getRandomItem = array => array[Number.range(array.length).selectRandom()]`
+
+[19:53:12.0131] <bakkot>
+ok hear me out: `for await.concurrent[2] (item of asyncIter) { ... }` to run the body of the for-await concurrently. equivalent to `await asyncIter.map(item => {...}).bufferAhead(2).forEach(() => {})` except that the body of the for-await can still do stuff like `break` and `return` (which prevent further iterations of the loop from starting, though any which have already started still run to the end of the loop body)
+
+[19:58:08.0623] <littledan>
+> <@bakkot:matrix.org> https://github.com/tc39/proposal-Number.range/issues/17, which is well on its way to being a centithread...
+
+I think I was on the “reusable” side previously but I am now am leaning one shot given what we decided about iterator helpers since then
+
+[19:58:42.0130] <littledan>
+You should be able to use an iterator helper directly on a range 
+
+
+2023-02-08
+[23:56:49.0991] <Jack Works>
+> <@littledan:matrix.org> So in the latest round of JS-is-missing-features discourse, one request that stands out is for Jack Works ‘s Number.range/BigInt.range. I am wondering, how can we move that forward? Is it blocked on anything?
+
+The iterator helper has been stage 3 so I want to advance it in Jan 2023 tc39 meeting, but I forgot to add it to the agenda. I'll add it to the next meeting 
+
+[23:58:43.0881] <Jack Works>
+> <@bakkot:matrix.org> ok hear me out: `for await.concurrent[2] (item of asyncIter) { ... }` to run the body of the for-await concurrently. equivalent to `await asyncIter.map(item => {...}).bufferAhead(2).forEach(() => {})` except that the body of the for-await can still do stuff like `break` and `return` (which prevent further iterations of the loop from starting, though any which have already started still run to the end of the loop body)
+
+Yeah I want this and I tried to add it in await.ops proposal but failed 
+
+[06:27:21.0683] <littledan>
+> <@jackworks:matrix.org> The iterator helper has been stage 3 so I want to advance it in Jan 2023 tc39 meeting, but I forgot to add it to the agenda. I'll add it to the next meeting
+
+What's the implementation status?
+
+[10:09:55.0016] <bakkot>
+littledan I assume that comment was "since iterator helpers advanced it is time to bring back Number.range, as an iterator"
+
+[10:10:01.0717] <bakkot>
+Number.range is not yet ready for implementations
+
+
+2023-02-15
+[10:45:11.0438] <annevk>
+https://github.com/whatwg/html/issues/8708 might be of interest. Float16Array should be a thing, but people are instead doing things with Float32Array and hoping nobody objects, presumably due to the work involved? I should probably check on the motivation.
+
+
+2023-02-17
+[21:55:25.0513] <snek>
+that seems pretty uncontentious, they should just bring it
+
+[23:36:10.0764] <annevk>
+Can someone explain to me how https://github.com/tc39/proposal-temporal/issues/1654 was determined to be a Stage 4 concern? It's a pretty significant security issue.
+
+[23:36:53.0264] <annevk>
+I really wish host integration was sorted out by Stage 3...
+
+[04:28:22.0478] <littledan>
+Host hooks vs implementation-defined is sort of an editorial thing, IMO
+
+[04:28:33.0526] <littledan>
+At least in cases like this
+
+[04:39:21.0002] <annevk>
+The normative text doesn't call it out and there might be an implementation that overlooked this as a result
+
+[04:40:40.0086] <annevk>
+I think especially when security is important we should have a clear understanding of the control flow
+
+[04:48:08.0795] <littledan>
+Ah I see, sorry I hadn’t read the issue before responding
+
+[04:49:47.0994] <littledan>
+There had been earlier discussions about host hooks in Temporal which I thought were editorial and I got confused.
+
+
+2023-02-21
+[07:06:44.0808] <Jack Works>
+https://socket.dev/blog/let-s-make-js-regexps-streamy
+
+[07:06:47.0976] <Jack Works>
+https://github.com/SocketDev/tc39-propoal-progress-allowing-regexp
+
+[07:06:50.0572] <Jack Works>
+interesting
+
+
+2023-02-22
+[07:41:05.0029] <davethegr8>
+What's needed to get an event on the TC39 calendar?
+
+[07:41:26.0121] <ryzokuken>
+an account with write access to said calendar
+
+[07:41:33.0749] <ryzokuken>
+I think a few people around here do
+
+[07:41:50.0206] <ryzokuken>
+but maybe it's a good time to extend that group a bit to keep up?
+
+[07:42:16.0231] <davethegr8>
+I'd like to get the inclusion calls on to the calendar at the very least
+
+[07:42:48.0151] <ryzokuken>
+definitely a great idea, I think Mark already has write access though, so it might be simpler to just ask them to add it there
+
+[07:42:58.0548] <ryzokuken>
+ * definitely a great idea, I think Mark already has write access though, so it might be simpler to just ask them to add it there
+
+[07:42:58.0807] <davethegr8>
+Probably would have been a better thread for the delegates channel, but oh well haha
+
+[09:09:42.0924] <ljharb>
+i primarily manage that calendar, for future reference
+
+
+2023-02-23
+[01:18:58.0654] <Andreu Botella>
+Hey, I noticed that the spec says `[[IsLockFree1]]` and `[[IsLockFree2]]` must be set for an agent cluster and can't change, but it doesn't say anything about `[[IsLockFree8]]`
+
+[01:19:30.0044] <Andreu Botella>
+I thought this must have been intentional, but then I realized that `BigInt64Array` was of course added after the rest of TypedArrays
+
+[01:19:42.0403] <Andreu Botella>
+ * I thought this must have been intentional, but then I realized that `BigInt64Array` was of course added after the rest of TypedArrays
+
+[01:19:52.0091] <Andreu Botella>
+so was this an oversight? or is it intended for some reason?
+
+[01:20:33.0357] <Andreu Botella>
+also, there are two notes on the meaning of those slots that seem to contradict each other
+
+[01:21:20.0978] <Andreu Botella>
+9.7 says they're set "if atomic operations on 1/2/8-byte values are lock-free", "if an atomic operation is implemented with any type of lock the operation is not lock-free"
+
+[01:21:44.0958] <Andreu Botella>
+but the note in the definition of `Atomics.isLockFree()` says
+
+[01:22:09.0622] <Andreu Botella>
+> if the atomic step of an atomic primitive \[...\] on a datum of size n bytes will be performed without the surrounding agent acquiring a lock _**outside the n bytes comprising the datum**_, then `Atomics.isLockFree(n)` will return true
+
+[01:22:27.0048] <Andreu Botella>
+ * > if the atomic step of an atomic primitive \[...\] on a datum of size n bytes will be performed without the surrounding agent acquiring a lock _**outside the n bytes comprising the datum**_, then `Atomics.isLockFree(n)` will return true
+
+[01:22:44.0521] <Andreu Botella>
+those don't seem to be equivalent
+
+[01:24:09.0841] <Andreu Botella>
+I don't know too much about memory models, so I might very well be missing stuff, but if so, that could use more clarification
+
+[01:28:50.0151] <annevk>
+Andreu Botella: there are some (or maybe just one) open issues around the memory model, though I don't recall seeing this particular one being raised
+
+[01:29:24.0754] <annevk>
+In general the formality around agents also leaves a lot to be desired (also filed)
+
+[05:59:47.0173] <annevk>
+Has Map.prototype.extend() or equivalent ever been discussed?
+
+[08:03:38.0113] <shu>
+Andreu Botella: sounds like an oversight to me
+
+[08:36:55.0800] <shu>
+those are both in non-normative notes, but they also seem roughly equivalent to me for building intuition
+
+[08:37:00.0521] <shu>
+can you expand on what the confusion is?
+
+[08:37:49.0762] <Andreu Botella>
+one is "atomic operations of size n will be performed without acquiring a lock, at all", the other is "without acquiring a lock outside of those specific n bytes"
+
+[08:38:35.0125] <shu>
+agreed the second one is more confusing, don't recall why we called out "specific N bytes", that doesn't seem useful to call out
+
+[08:39:13.0039] <shu>
+our original intention of the meaning of "lock-free" is the formal one
+
+[08:40:32.0670] <shu>
+i.e. isLockFree(n) means n-byte atomics guarantees progress for at least 1 thread after bounded time when T threads are concurrently accessing the same memory via n-byte atomics
+
+[08:40:56.0284] <shu>
+and for notes we just want to say "don't actually worry about that formalism, just think of it as not using mutexes to implement"
+
+[09:02:26.0958] <yulia>
+> <@davethegr8:matrix.org> What's needed to get an event on the TC39 calendar?
+
+happy to give you access. i just need your email.
+
+[11:21:30.0036] <ljharb>
+> <@annevk:matrix.org> Has Map.prototype.extend() or equivalent ever been discussed?
+
+what would that do?
+
+
+2023-02-24
+[23:14:55.0854] <annevk>
+ljharb: essentially copy key-values from a map-like into this
+
+[00:23:06.0816] <Ashley Claymore>
+Kotlin has a similar method on their Map https://kotlinlang.org/api/latest/jvm/stdlib/kotlin.collections/-mutable-map/put-all.html
+
+[00:26:05.0719] <annevk>
+Yeah, we've had some requests for this for `URLSearchParams` (which is a multi-map, but looks quite similar in shape) and I rather not add something without standard library precedent
+
+[00:26:38.0875] <annevk>
+For arrays it seems you just do `push(...otherArray)` but that doesn't really scale to other collections
+
+[00:42:51.0634] <Ashley Claymore>
+And that also doesn't scale with very large arrays as it blows engine's varargs limits
+
+[00:43:07.0458] <Ashley Claymore>
+* And that also doesn't scale with very large arrays as it blows engine's varargs limits
+
+[00:47:05.0250] <Ashley Claymore>
+That said Im more likely to concat and create a new array.
+
+[00:48:19.0177] <Ashley Claymore>
+For the URLSearchParams case is it explicitly for mutating the map, as opposed to creating a copy?
+
+[00:50:17.0914] <Ashley Claymore>
+The new Set.prototype.union for example is like a non-mutating extends (if one squints)
+
+[00:50:53.0542] <Ashley Claymore>
+* The new Set.prototype.union for example is like a non-mutating extends (if one squints)
+
+[00:56:04.0317] <annevk>
+Ashley Claymore: yeah I noticed `union` and was wondering why it was like that
+
+[00:56:15.0898] <annevk>
+Ashley Claymore: `URLSearchParams` users would definitely want to mutate this
+
+[00:57:30.0277] <annevk>
+(in part because `URLSearchParams` can be associated with a `URL` and you'd want to end up mutating the `URL`)
+
+[13:31:34.0069] <ljharb>
+> <@annevk:matrix.org> ljharb: essentially copy key-values from a map-like into this
+
+that seems very useful; same for Set, WeakMap, WeakSet
+
+[15:32:46.0228] <Ashley Claymore>
+Could maybe follow how Kotlin name `put` for single `putAll` for multiple.
+We could have `map.setAll` and `set.addAll`
+
+
+2023-02-25
+[18:03:01.0785] <Kris Kowal>
+In a previous life, addEach seemed the obvious choice http://www.collectionsjs.com/method/add-each
+
+[18:05:36.0071] <Kris Kowal>
+In the same life `deleteAll` meant to delete all equivalent values. http://www.collectionsjs.com/method/delete-all Which was meaningful since hash, equality, and comparison were overridable
+

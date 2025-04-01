@@ -1,0 +1,43 @@
+<!DOCTYPE html><html><head>
+  <title>TC39 General on 2024-05-31</title>
+  <link rel="stylesheet" href="../style.css">
+  <script>window.room = "TC39 General";</script><script src="../render-roomlist.js"></script>
+  <script src="../logs.js"></script>
+</head>
+<body><div class="wrapper">
+<div class="sidebar">
+<div class="title">TC39 General<br>2024-05-31<br><a href="plaintext/">plaintext logs</a></div>
+<div class="nav">
+<a href="2024-05-30" class="nav-link"><span>prev</span></a>
+<a href="2024-06-01" class="nav-link"><span style="float:right">next</span></a>
+</div>
+    <div class="all-rooms"><noscript>JavaScript is required to load the channel index, but you can go to <a href="../..">the static index</a> directly.</noscript></div>
+<div class="footer"><a href="https://github.com/bakkot/matrix-archive-bot">source on github</a></div>
+</div>
+<div class="rhs">
+<div class="rhs-header">
+<span id="error" style="color: red; display:none">error</span>
+
+<input type="text" id="query" size="25" placeholder="Search TC39 General">
+<a id="search-submit" class="button icon-link" title="Search">
+  <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M505 442.7L405.3 343c-4.5-4.5-10.6-7-17-7H372c27.6-35.3 44-79.7 44-128C416 93.1 322.9 0 208 0S0 93.1 0 208s93.1 208 208 208c48.3 0 92.7-16.4 128-44v16.3c0 6.4 2.5 12.5 7 17l99.7 99.7c9.4 9.4 24.6 9.4 33.9 0l28.3-28.3c9.4-9.4 9.4-24.6.1-34zM208 336c-70.7 0-128-57.2-128-128 0-70.7 57.2-128 128-128 70.7 0 128 57.2 128 128 0 70.7-57.2 128-128 128z"></path></svg>
+</a>
+</div>
+
+<div class="log"><table id="log-table"><tbody id="log-tbody">
+
+  <tr class="msg" id="L0"><td class="ts-cell"><a class="ts" href="#L0" alt="Thu May 30 2024 21:53:42 GMT-0700 (Pacific Daylight Time)">04:53</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@sirisian:matrix.org">sirisian</span>&gt;</div></td><td class="msg-cell">When writing a lexer for ECMAScript how do you decide when to change between the goal symbols? <a href="https://tc39.es/ecma262/#sec-ecmascript-language-lexical-grammar">https://tc39.es/ecma262/#sec-ecmascript-language-lexical-grammar</a> I naively converted them to regex to toy with an idea. <a href="https://gist.github.com/sirisian/5c3402ca51a2440f0bc4e5d297269195">https://gist.github.com/sirisian/5c3402ca51a2440f0bc4e5d297269195</a> (Ignore any mistakes, I plan to redo it). Like I get that you'd start with InputElementHashbangOrRegExp <a href="https://regex101.com/r/YYgu1i/1">https://regex101.com/r/YYgu1i/1</a> So the lexer would take tokens until it ran into a TemplateMiddle or TemplateTail. So in that example it takes the "a" then can't consume the "}". Where does one get the context, whether a RegularExpressionLiteral or TemplateMiddle/Tail is permitted? Is this based on the previous tokens? Do you have to like parse as you run the lexer so you'd potentially parse TemplateSpans -&gt; TemplateMiddleList -&gt; TemplateMiddle and this that would mean that's permitted. (And then you'd do the same to see if RegularExpressionLiteral is permitted)?</td></tr>
+  <tr class="msg" id="L1"><td class="ts-cell"><a class="ts" href="#L1" alt="Thu May 30 2024 22:49:20 GMT-0700 (Pacific Daylight Time)">05:49</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">yes, you have to parse as you run the lexer</td></tr>
+  <tr class="msg" id="L2"><td class="ts-cell"><a class="ts" href="#L2" alt="Thu May 30 2024 22:49:31 GMT-0700 (Pacific Daylight Time)">05:49</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">or at least, this is how everyone does it afaik</td></tr>
+  <tr class="msg" id="L3"><td class="ts-cell"><a class="ts" href="#L3" alt="Thu May 30 2024 22:49:54 GMT-0700 (Pacific Daylight Time)">05:49</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell"><p>that is what this sentence is getting at:</p>
+<blockquote>
+<p>There are several situations where the identification of lexical input elements is sensitive to the syntactic grammar context that is consuming the input elements.</p>
+</blockquote>
+</td></tr>
+  <tr class="msg" id="L4"><td class="ts-cell"><a class="ts" href="#L4" alt="Thu May 30 2024 22:50:30 GMT-0700 (Pacific Daylight Time)">05:50</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">i.e., you can't know how to tokenize (the lexical grammar) without knowing the context from the higher-level parse (the syntactic grammar)</td></tr>
+  <tr class="msg" id="L5"><td class="ts-cell"><a class="ts" href="#L5" alt="Thu May 30 2024 23:30:56 GMT-0700 (Pacific Daylight Time)">06:30</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-11" title="@gibson042:matrix.org">Richard Gibson</span>&gt;</div></td><td class="msg-cell">my understanding is basically that you start with lexical goal symbol <strong>|InputElementHashbangOrRegExp|</strong> and syntactic goal symbol being either |Script| or |Module|. Production of an input element from application of that |InputElementHashbangOrRegExp| goal will then limit possibilities in the syntactic grammar to the point where the new lexical goal symbol is determined. For example: if the first input element is a |TemplateHead| <code>`prefix${</code> then the syntactic grammar has committed to an |ExpressionStatement| and its contained |Expression| starts with a |SubstitutionTemplate| whose aforementioned |TemplateHead| must be followed by an |Expression|. |Expression| can expand to |RegularExpressionLiteral| but not to |TemplateMiddle|, so the new lexical goal symbol is <strong>|InputElementRegExp|</strong>. If that produces input element |StringLiteral| <code>"foo"</code>, then the syntactic grammar has committed the inner |Expression| to a |MemberExpression| starting with that literal as the |PrimaryExpression|, which can be followed by something that extends the |MemberExpression| (i.e., <code>[</code> or <code>.</code> for member access or <code>`</code> for a tagged template or a noncommittal |WhiteSpace| or |LineTerminator| or |Comment|), or otherwise by something that extends a containing production (e.g., <code>(</code> for a call or <code>?.</code> for an optional chain or <code>/</code> for a division or <code>}</code> to continue the outer template). So that means the next input element can be a |TemplateMiddle| or |TemplateTail| but not a |RegularExpressionLiteral|, and the new lexical goal symbol is <strong>|InputElementTemplateTail|</strong>. Continue ad nauseam.</td></tr>
+  <tr class="msg" id="L6"><td class="ts-cell"><a class="ts" href="#L6" alt="Thu May 30 2024 23:48:59 GMT-0700 (Pacific Daylight Time)">06:48</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-11" title="@gibson042:matrix.org">Richard Gibson</span>&gt;</div></td><td class="msg-cell"><span class="nick-16">Timo Tijhof</span>: you can get consistent sorting like <code>newPages.sort( ( a, b ) =&gt; (isNaN(a.index) ? Infinity : a.index) - (isNaN(b.index) ? Infinity : b.index) )</code>, but I don't think there's any way to avoid some kind of surrogate value</td></tr>
+  <tr class="msg" id="L7"><td class="ts-cell"><a class="ts" href="#L7" alt="Fri May 31 2024 16:55:59 GMT-0700 (Pacific Daylight Time)">23:55</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-13" title="@jmdyck:matrix.org">jmdyck</span>&gt;</div></td><td class="msg-cell"><span class="nick-11">Richard Gibson</span> re your lexing+parsing description: yup, that sounds about right.</td></tr>
+
+</tbody></table></div></div></div>
+</body></html>

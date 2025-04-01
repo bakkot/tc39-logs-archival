@@ -1,0 +1,397 @@
+2023-05-08
+[13:26:21.0587] <Kris Kowal>
+nicolo-ribaudo guybedford I just dropped a comment, but if discussion is warranted, I’m reminded that we at Agoric insist that all new intrinsics be reachable from globalThis by transitive property walk, until another proposal advances far enough that we’re confident we can reach all intrinsics another way.
+
+[13:27:44.0339] <Kris Kowal>
+So, I suggest keeping globalThis.ModuleSource in Import Parse Phases even if it’s otherwise inert. It also serves as the anchor for ljharb’s brand check accessor in environments in which `WebAssembly.Module` does not exist.
+
+[13:28:10.0473] <Kris Kowal>
+So it would not be constructible but would not be useless.
+
+[13:31:49.0034] <littledan>
+What does this mean?
+"Phase syntax by convention,
+not specification"
+
+[13:31:57.0113] <littledan>
+(from Lucas&Guy's slides)
+
+[13:34:41.0354] <Kris Kowal>
+My team also just let me know while I was away that they wouldn’t object to `import.source`, `import.module`, &c syntax even though it would break old versions of our SES lockdown shim, but we also won’t push for a change on the eve of a call for stage 3.
+
+[13:35:09.0806] <Kris Kowal>
+ * My team also just let me know while I was away that they decided that they wouldn’t object to `import.source`, `import.module`, &c syntax even though it would break old versions of our SES lockdown shim, but we also won’t push for a change on the eve of a call for stage 3.
+
+[13:35:16.0025] <littledan>
+I significantly prefer the syntax in the current proposal FWIW
+
+[13:35:39.0056] <littledan>
+but separately, didn't we want to provide some kind of access to AbstractModuleSource from the global?
+
+[13:35:39.0866] <Kris Kowal>
+I figured that it would be preferred. 👍
+
+[13:37:06.0083] <Kris Kowal>
+In the PR, Guy, Luca, and Nicolò have been waffling on whether to have some kind of global access to `AbstractModuleRecord` and it hasn’t settled yet. https://github.com/tc39/proposal-import-reflection/pull/36
+
+[13:38:21.0365] <Kris Kowal>
+I erroneously stated no strong preference. We do want the new intrinsics to be accessible. I think the champions are otherwise on the fence at the moment.
+
+[13:38:54.0707] <littledan>
+tbh for something going to Stage 3, it'd be ideal if all the spec text landed by the agenda deadline
+
+[13:39:17.0301] <Kris Kowal>
+I also expect the problem to heal naturally when some subsequent proposal makes ModuleSource real.
+
+[13:42:47.0233] <littledan>
+For something to go to Stage 3, I'd hope the presentation also explains these sorts of details which are apparently still under debate (like sourceText vs @@toStringTag). Maybe this meeting should be more of a "call for final review"
+
+[13:44:02.0589] <guybedford>
+Kris Kowal: yes, at least if we ship Wasm first, then `WebAssembly.Module` will provide AbstractModuleSource reachability through the WebAssembly global.
+
+[13:44:27.0745] <Kris Kowal>
+Is WASM shipping in 262?
+
+[13:44:57.0931] <Kris Kowal>
+There will be environments in which WebAssembly will not exist but AbstractModuleSource will.
+
+[13:45:15.0791] <guybedford>
+@littledan the PR was ready and reviewed last week. nicolo-ribaudo just has lots of editorial feedback. I'd argue a lot of the remaining questions are editorial, apart from the global `ModuleSource` point of course which Luca only brought up on Friday unfrotunately
+
+[13:45:48.0292] <guybedford>
+Kris Kowal: in such environments, AbstractModuleSource would be unreachable
+
+[13:46:04.0722] <guybedford>
+but yes, I did bring this whole argument up to Luca when he suggested it
+
+[13:46:41.0495] <guybedford>
+his argument was that `global.ModuleSource` being useless seems an untennable thing to ship
+
+[13:47:00.0955] <guybedford>
+and he was concerned about getting agreement on that
+
+[13:47:12.0937] <guybedford>
+in that we should ship features that have, well, features
+
+[13:49:22.0244] <littledan>
+> <@guybedford:matrix.org> @littledan the PR was ready and reviewed last week. nicolo-ribaudo just has lots of editorial feedback. I'd argue a lot of the remaining questions are editorial, apart from the global `ModuleSource` point of course which Luca only brought up on Friday unfrotunately
+
+Yeah I think you've done a good job here, Guy. From my perspective, I'd be happy if you landed the PR any time
+
+[13:50:48.0535] <littledan>
+at the same time, this is the first meeting where the champion group will be presenting the newly concrete scope (Wasm source modules) and the final syntax (with the excellent explanation in terms of loading stages) to the committee. It might be best if we present this to committee this meeting, let it sink in, call for more reviews, and propose advancement next meeting (unless there is some reason for more urgency that I can't see)
+
+[13:52:12.0589] <guybedford>
+The main point of urgency I feel at this point is just that if we know which spec gets to stage3, then the layering questions all start to fall out much more easily from there
+
+[13:52:24.0009] <guybedford>
+because already there's a lot of cross-over in the spec text
+
+[13:54:16.0622] <littledan>
+Yeah editorial churn is definitely costly but I think it shouldn't really affect decisions like this ideally. I don't think this should wait more than 1 meeting though.
+
+[13:56:29.0463] <littledan>
+and we're still going back and forth among this group about key questions, like should this contain an inert ModuleSource. We should strongly settle on decisions to get to Stage 3.
+
+[14:00:11.0037] <Kris Kowal>
+At least, I think this is the last open question and it’s not that hard to settle. I expect we’ll have all important decisions settled by end of meeting tomorrow.
+
+[14:00:30.0957] <Kris Kowal>
+Emphatically eager to see this go forward as soon as possible.
+
+[14:25:13.0318] <littledan>
+Do we expect to ever have hook-ability for asset references?
+
+[14:33:08.0789] <Kris Kowal>
+I expect we will.
+
+[14:33:39.0322] <Kris Kowal>
+And I think that door remains open with the proposals as they stand.
+
+[14:35:13.0759] <Kris Kowal>
+My intuition is that we’d introduce `importAssetHook` to the `Module` constructor option which would bypass `importHook` and return a new `ModuleAsset` type. The `ModuleAsset` would have a hook for producing one or more sources or modules.
+
+[14:35:46.0226] <Kris Kowal>
+Or mechanisms to that effect.
+
+[14:39:12.0545] <littledan>
+yeah that makes sense, and then the normal import pipeline will call both hooks
+
+[14:39:43.0971] <Kris Kowal>
+Assuming import assets would express their entire cache key up front (be orthogonal to import attributes), there probably would either be a single corresponding ModuleSource or no corresponding module source at all, so there might instead just be a hook for getting the bytes and an optional behavior for promoting it to source.
+
+[14:40:18.0700] <Kris Kowal>
+My thought was actually that only one hook or the other would be used.
+
+[14:40:52.0255] <littledan>
+well, if there's a hook for getting the bytes, it should include the attributes
+
+[14:41:10.0157] <Kris Kowal>
+That is, if you provide an importAssetHook, it would take precedence over the importHook.
+
+[14:41:39.0364] <Kris Kowal>
+The importHook doesn’t have the signature necessary to chain the result of the importAssertHook.
+
+[14:42:09.0663] <littledan>
+how so?
+
+[14:42:48.0979] <Kris Kowal>
+Consider a very different straw-design: The `importAssetHook` would just return bytes and `parseAssetHook` which accepts the bytes and returns a `Module`.
+
+[14:43:05.0097] <Kris Kowal>
+Both would receive the same attributes bag.
+
+[14:43:10.0434] <littledan>
+I think assets are URLs on the web and really don't correspond to bytes
+
+[14:44:17.0826] <Kris Kowal>
+Ah, I must be misinterpreting the intent. If Asset is an opaque token that captures the location of the resource, that’s an even earlier phase than I imagined.
+
+[14:44:46.0860] <Kris Kowal>
+Though, in a bundler, it would necessary capture the underlying source and maybe even the bytes.
+
+[14:44:55.0566] <Kris Kowal>
+ * Though, in a bundler, it would necessarily capture the underlying source and maybe even the bytes.
+
+[14:47:11.0692] <Kris Kowal>
+To avoid my confusion, perhaps what we’ve been calling Asset would be better described as either a Content or Location import phase.
+
+[14:49:15.0204] <Kris Kowal>
+In any case, I don’t think anything in the import phase or import attributes proposal is likely to be regretted in the face of language evolution toward import assets.
+
+[14:51:04.0747] <Kris Kowal>
+Also unlikely that anything about module import virtualization would be regretted, but I can imagine a design where the import hook can’t ignore the asset phase.
+
+[14:59:31.0546] <Kris Kowal>
+The `location` phase would be problematic for portability, but a `resolved` phase is okay. That’d be analogous to the `Compartment` `resolveHook`.
+
+
+2023-05-09
+[09:04:52.0148] <nicolo-ribaudo>
+Meeting now!
+
+[09:58:29.0206] <guybedford>
+sorry I'm at the Node.js collab summit, do let me know if there's anything I missed
+
+[09:58:35.0952] <guybedford>
+thanks for working through the merge today
+
+
+2023-05-10
+[09:30:49.0043] <littledan>
+We reviewed the modules presentations internally in Bloomberg. Some feedback which might be useful, especially for Luca and Guy's presentation:
+- Consider explaining that the idea is to come back and add JS module source later (which will probably be a question that has most people left hanging)
+- If this comes before Nicolo's presentation, it should reference the later one, and specifically call out the concept that we have this interdependent space that the modules group has worked out to some extent, and we'd like to land these things piecemeal such that each stands on their own but they work together well, and it wouldn't be so bad if we actually didn't follow through on the later ones.
+- In general, where possible, anticipate people's concerns and acknowledge them, or explain answers to questions about cross-cutting concerns (at least with reference links) rather than trying to gloss over things and just explaining the positive aspects.
+- The modules group isn't working like Intl since we're having trouble engaging implementers, especially browsers. We should probably organize a specific set of meetings with them, to talk through the space in general and their possible implementation concerns.
+
+[10:26:27.0834] <Kris Kowal>
+@room On the SES call today, Daniel Ehrenberg suggested we have a dedicated engagement with implementers to surface VM specific module harmony concerns. I’m looking for contacts to volunteer for such a meeting so we can send out a doodle.
+
+[10:28:46.0018] <dminor>
+Please invite me and I'll pass it along to some SpiderMonkey folks who are working on module stuff.
+
+[10:28:53.0045] <dminor>
+I'll show up too, of course :)
+
+[10:35:25.0233] <shu>
+Kris Kowal: send me an invite but i don't have that many cycles to spare. i'd like relatively infrequent and very targeted with concrete questions in the agenda?
+
+[10:38:34.0695] <Kris Kowal>
+> <@shuyuguo:matrix.org> Kris Kowal: send me an invite but i don't have that many cycles to spare. i'd like relatively infrequent and very targeted with concrete questions in the agenda?
+
+That can be arranged. We can put such a thing together on the module harmony calls leading up.
+
+[10:39:30.0394] <Kris Kowal>
+We can also ask the XS folk to show us where they found challenges in their implementation of Compartments.
+
+[10:39:51.0857] <Kris Kowal>
+Since Compartments capture most of the layers of module harmony.
+
+[10:41:28.0127] <Kris Kowal>
+The piece of feedback we’ve already received is that virtualizing modules led to the discovery of existing bugs in their module internals, since those behaviors could then be excited by fuzzing.
+
+[10:43:03.0342] <Kris Kowal>
+cc phoddie (Peter Hoddie)  re implementer show and tell for module harmony.
+
+[10:44:48.0896] <shu>
+well and you have my longstanding feedback, that i am, in general, against exposing previously un-user code exposed things to user code
+
+[10:47:42.0906] <littledan>
+> <@shuyuguo:matrix.org> well and you have my longstanding feedback, that i am, in general, against exposing previously un-user code exposed things to user code
+
+This is a pretty broad statement! We should probably talk in a more detailed way about what these things apply to.
+
+[10:47:53.0141] <shu>
+yes indeed
+
+[10:49:31.0155] <littledan>
+> <@shuyuguo:matrix.org> Kris Kowal: send me an invite but i don't have that many cycles to spare. i'd like relatively infrequent and very targeted with concrete questions in the agenda?
+
+The idea is that this would be one-time (or maybe repeated but that's a future discussion) and that it'd try to go over the whole set of proposals. The question is generally, "does this seem bad to you? why?" The thing is, the people championing modules proposals already have a lot worked out among them(/us), and the need from here is to identify blockers/what we shouldn't do from that plan.
+
+[10:49:44.0301] <shu>
+ah, one time! perfect
+
+[10:49:52.0707] <Kris Kowal>
+Very cognizant of that general position. My understanding is that the issues that XS encountered consistent of behaviors that _were_ previously excitable, but not discoverable with a fuzzer.
+
+[10:50:07.0472] <shu>
+then it sounds like you should give us some reading material ahead of time to develop positions ahead of time
+
+[10:50:34.0769] <shu>
+otherwise ISTM we'll need at least two meetings, one for us to understand what's concretely being asked with clarifications, then one to give harder-line positions
+
+[10:50:49.0542] <Kris Kowal>
+ * Very cognizant of that general position. My understanding is that the issues that XS encountered consisted of behaviors that _were_ previously excitable, but not discoverable with a fuzzer.
+
+[10:51:27.0957] <littledan>
+I'm not sure if that latter thing would be so bad (maybe the second part sharing positions could be async?) since as much as we write, it probably won't answer all of your questions.
+
+[10:54:43.0381] <shu>
+yeah a bounded number of meetings for small N sgtm
+
+
+2023-05-15
+[10:38:06.0467] <nicolo-ribaudo>
+During the Module Harmony intersection semantics discussion, those of you who are championing/authoring proposals please feel free to jump in the discussion as if you were co-presenters.
+
+[10:39:32.0888] <nicolo-ribaudo>
+( Luca Casonato Kris Kowal guybedford caridy )
+
+[10:39:58.0956] <nicolo-ribaudo>
+ * During the Module Harmony intersection semantics discussion, those of you who are championing/authoring proposals please feel free to jump in the discussion as if you were co-presenters when there are discussion about your proposal :)
+
+[11:38:42.0970] <littledan>
+Kris Kowal: I don't understand your comment; I thought this presentation *is* the epic
+
+[11:38:54.0078] <littledan>
+but yeah the presentation would be reworked and written down in other places maybe if that'd help
+
+[11:39:36.0762] <Kris Kowal>
+I’ll clarify that my comment is about organizing repositories.
+
+[11:42:49.0106] <shu>
+here's the one-sentence question form of my concern: how hard will it be for an implementer who's not going to any of the module harmony calls to design and implement one of these features?
+
+[11:44:18.0516] <littledan>
+> <@shuyuguo:matrix.org> here's the one-sentence question form of my concern: how hard will it be for an implementer who's not going to any of the module harmony calls to design and implement one of these features?
+
+Do you have any concrete source of concern that it'd be harder for modules than other proposals?
+
+[11:44:26.0210] <littledan>
+the idea is to document things
+
+[11:44:30.0741] <nicolo-ribaudo>
+> <@shuyuguo:matrix.org> here's the one-sentence question form of my concern: how hard will it be for an implementer who's not going to any of the module harmony calls to design and implement one of these features?
+
+I can speak for module expresions/declarations.
+Right now, those two proposals "pretend" to be developed in isolation and don't call out anywhere in their docs their relation with the other proposals. This is something I can fix, to prevent the implementation problems you are concerned about.
+
+Other proposals (i.e. the various compartments layers) do a better job with regard to this
+
+[11:44:31.0304] <littledan>
+(as Kris said)
+
+[11:45:06.0294] <shu>
+> <@littledan:matrix.org> Do you have any concrete source of concern that it'd be harder for modules than other proposals?
+
+yes, because half of it is in blink/gecko/WK, not in the JS engine
+
+[11:49:09.0166] <nicolo-ribaudo>
+> <@shuyuguo:matrix.org> yes, because half of it is in blink/gecko/WK, not in the JS engine
+
+Do you know how much this division follows the 262-HTML division? I'm sure things got mixed up with the hooks refactor we landed some months ago, but did the previous layering match the implementation layering?
+
+[11:49:22.0054] <nicolo-ribaudo>
+> <@shuyuguo:matrix.org> yes, because half of it is in blink/gecko/WK, not in the JS engine
+
+ * Do you know how much this division follows the 262-HTML division? I'm sure things got mixed up with the hooks refactor we landed some months ago, but did the previous spec layering match the implementation layering?
+
+[11:52:00.0661] <shu>
+nicolo-ribaudo: sorry, i don't currently, would need to do research
+
+[11:56:38.0853] <Kris Kowal>
+I think the word we’re looking for is foreshadowing. Each individual proposal should have notes on mechanisms that foreshadow later proposals.
+
+[12:46:04.0609] <nicolo-ribaudo>
+`import source from from;` 👀
+
+[12:46:25.0503] <nicolo-ribaudo>
+(in practice no one would use `from` there and the ambiguity is solved by a two-tokens-lookahead)
+
+[12:57:56.0152] <ljharb>
+fwiw, wrt alternatives, i would not be happy with *increasing* the asymmetry between static and dynamic, compared to the current spec
+
+[12:58:07.0682] <ljharb>
+ * fwiw, wrt alternatives, i would not be happy with _increasing_ the asymmetry between static and dynamic, compared to the current spec (reacting to some of the suggested alternatives)
+
+[12:59:05.0310] <Kris Kowal>
+I am in favor of parity in general between static and dynamic import.
+
+[12:59:13.0485] <littledan>
+Are these significantly different in terms of their asymmetry? I haven't heard anyone advocate for `import.source foo from bar` but certainly it'd be easier to parse
+
+[12:59:19.0560] <ljharb>
+(lol also, `import.phase source foo from 'path'` is an alternative that would work for `import.phase()` because dynamic import is syntax not a function reference)
+
+[12:59:25.0595] <Kris Kowal>
+The only distinction should ever be static discoverability.
+
+[12:59:30.0990] <ljharb>
+or `import.source` i supposed
+
+[12:59:32.0368] <ljharb>
+ * or `import.source` i suppose
+
+[12:59:34.0218] <ljharb>
+ * or `import.source` i suppose, sure
+
+
+2023-05-16
+[22:12:48.0977] <Jack Works>
+> <@littledan:matrix.org> but separately, didn't we want to provide some kind of access to AbstractModuleSource from the global?
+
+I thought if we don't provide any functionality on it, only presented for class heritage, it will be good for the implementors?
+
+[22:16:15.0388] <Jack Works>
+> <@kriskowal:matrix.org> Consider a very different straw-design: The `importAssetHook` would just return bytes and `parseAssetHook` which accepts the bytes and returns a `Module`.
+
+not viable... it requires a parser
+
+[22:19:51.0765] <Jack Works>
+> <@kriskowal:matrix.org> Consider a very different straw-design: The `importAssetHook` would just return bytes and `parseAssetHook` which accepts the bytes and returns a `Module`.
+
+ * not viable... it requires a parser (and it basically breaks CSP?)
+
+[03:58:33.0157] <Luca Casonato>
+> <@jackworks:matrix.org> not viable... it requires a parser (and it basically breaks CSP?)
+
+i would rather imagine a split between `loadHook`, and `instantiateHook` (one corresponding to source phase imports, other to source -> instance)
+
+[08:22:29.0006] <Kris Kowal>
+> <@jackworks:matrix.org> not viable... it requires a parser (and it basically breaks CSP?)
+
+The parser would presumably be `ModuleSource` and the analogues for other languages. But it is true that those can’t attach CSP. But also, pure assets are not in general executable, so CSP might not be germane for the cases you’d want this feature.
+
+[08:24:41.0205] <Justin Ridgewell>
+> By making the phase part of the explicit syntax, it is possible to statically distinguish between
+a full dynamic import and one that is only for a source (where dependencies don't need to be
+processed). – https://github.com/tc39/proposal-import-reflection/pull/45/files
+
+This is actually a really good change for bundlers
+
+[08:25:42.0952] <Justin Ridgewell>
+We'd be able to support the normal case with static analysis, but it if they did anything dynamic we would have deopted the entire graph. This makes it foolproof.
+
+[08:28:44.0524] <Kris Kowal>
+Has implications for the properties of a `ModuleSource` instance. We could reveal whether each `import.<phase>` is used.
+
+
+2023-05-30
+[09:04:11.0847] <Kris Kowal>
+littledan: If you’re about, nicolo-ribaudo  plans to be a bit late but may have material to show on import source syntax exploration in babel.
+
+[09:04:27.0750] <littledan>
+Joining!
+

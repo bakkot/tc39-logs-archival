@@ -1,0 +1,220 @@
+2024-11-07
+[08:05:38.0089] <guybedford>
+Anyone joining today?
+
+[08:08:19.0286] <nicolo-ribaudo>
+Sorry I got distracted 
+
+[08:08:25.0387] <nicolo-ribaudo>
+If you are still around I'll join now
+
+[08:08:32.0115] <guybedford>
+yeah we're here
+
+
+2024-11-13
+[10:28:22.0418] <guybedford>
+Hi all, I've added three new items to the agenda tomorrow, and specifically with new proposal updates.
+
+Will be great to discuss further.
+
+
+
+2024-11-14
+[08:00:16.0326] <nicolo-ribaudo>
+I'm a couple minutes late
+
+[09:00:55.0497] <jakobjingleheimer>
+guybedford nicolo-ribaudo i took a quick look, and i might actually be able to facilitate import.meta.load(). I'm doing a quick PoC right now.
+
+[09:03:44.0092] <nicolo-ribaudo>
+I assume that is as much problematic to Guy as .require :P
+
+[09:06:31.0846] <jakobjingleheimer>
+Why? Isn't his objection about commonjs? (import.meta.load() would use esm)
+
+[09:06:52.0296] <jakobjingleheimer>
+Recording and summary of today's meeting: https://app.fireflies.ai/view/TC39-Module-Harmony::qn4hiX7NVrtLJ7ax
+
+[09:08:13.0037] <nicolo-ribaudo>
+> <@jakobjingleheimer:matrix.org> Why? Isn't his objection about commonjs? (import.meta.load() would use esm)
+
+I think the objection is to it being just a function that you can grab and pass around, making it as hard to statically analyze as require calls
+
+[09:14:15.0950] <guybedford>
+I think statically analyzable import capabilities belong in TC39
+
+[09:14:39.0037] <guybedford>
+and `import.meta` is a dangerous place for things in general
+
+[09:14:47.0654] <guybedford>
+that we should have a very high bar for
+
+[09:15:06.0660] <guybedford>
+but Node.js can have module loading helpers under its builtin modules that offer features like preloading etc for sure
+
+[09:15:13.0371] <guybedford>
+just like browsers have custom preloading
+
+[09:15:32.0878] <guybedford>
+I'd just suggest it be a `import { preload } from 'node:module'` or something like that so it's clear it's Node.js specific
+
+[09:23:04.0241] <jakobjingleheimer>
+Isn't import.meta that space? Also, that's where node-like runtimes are supposed to put these sorts of things.
+
+There are cumbersome drawbacks to it being on node:module instead of import.meta. Notably:
+
+This is possible:
+import.meta.load('./foo.js')
+
+This is not:
+preload('./foo.js')
+
+Instead it would have to be
+preload(import.meta.resolve('./foo.js'))
+
+Or
+
+preload('./foo.js', import.meta.url)
+
+[09:24:38.0925] <jakobjingleheimer>
+Btw my initial PoC for import.meta.load is working. I'd need to try it with a loader registered to say it's likely possible.
+
+But if it doesn't facilitate what you want, then i won't bother
+
+[09:26:56.0558] <jakobjingleheimer>
+It facilitates what i want though 😜
+
+[11:12:25.0123] <jakobjingleheimer>
+guybedford 👀
+
+[11:37:50.0916] <guybedford>
+`import.meta` is dangerous in the context of things not being standard, while `import x from 'node:x'` is clearly Node.js specific
+
+[11:38:04.0461] <guybedford>
+there was discussion in the past about `import.meta.node.feat` as being environment-specific
+
+[11:38:13.0092] <guybedford>
+even that still concerns me though...
+
+[11:43:37.0279] <jakobjingleheimer>
+That's what WinterCG is for and possibly TC-something
+
+[11:43:56.0965] <jakobjingleheimer>
+* That's what WinterCG is for and possibly TC-something when WinterCG gets promoted
+
+[11:46:21.0661] <guybedford>
+yeah that would be ideal for `import.meta` stuff, with a high bar for criteria of what is required for its standards
+
+[11:55:15.0961] <jakobjingleheimer>
+Soooo sounds like Guy's onboard
+
+[11:58:07.0814] <kriskowal>
+What does this preload facility do?
+
+[11:58:36.0865] <kriskowal>
+Is it effectively a transitive `import source`?
+
+[12:01:06.0716] <jakobjingleheimer>
+> <@kriskowal:aelf.land> What does this preload facility do?
+
+It's the equivalent of the html preload. Aka get this ready cuz i'ma use it soon.
+
+[12:03:20.0831] <kriskowal>
+Yeah, so in terms of module harmony, that’d drive the importHook for the entry module and its transitive dependencies but not cause any of them to be evaluated if they haven’t been already. I am in support of having the feature, and it’s part of the Compartment proposal as `compartment.load`, which implies `import.load(x)` and `import load "x"' in the fullness of time.
+
+[12:03:30.0408] <kriskowal>
+ * Yeah, so in terms of module harmony, that’d drive the importHook for the entry module and its transitive dependencies but not cause any of them to be evaluated if they haven’t been already. I am in support of having the feature, and it’s part of the Compartment proposal as `compartment.load`, which implies `import.load(x)` and `import load "x"` in the fullness of time.
+
+[12:06:37.0344] <kriskowal>
+I recall Node folks being cautious about `import.meta.resolve` because it increases the allocation burden to one new closure for every module that utters `import.meta`. I think that just pushes you more toward `preload(x, import.meta.url)` for a stopgap. If the feature is enshrined at TC39, it should be `import.load`, which is syntax and doesn’t imply a closure.
+
+[12:11:25.0145] <jakobjingleheimer>
+Yes, that is an issue. We have an idea how to mitigate that. For now, i think we can ignore that issue (it's kinda my problem 😉)
+
+It's most applicable to node-like, there's a tiny use-case for browsers, which is ehy i think import.meta is the place for it
+
+[12:13:42.0890] <guybedford>
+In general though I think we should try to aim for as a goal - does this make sense in TC39 first? If so, first explore that. If not, then WinterCG. If not, then platform-specific standards.
+
+[12:15:36.0463] <kriskowal>
+I am in favor `import load` and `import.load` in 262. Node.js can deprecate `import.meta.load`, browsers would not be able to.
+
+[13:35:31.0074] <jakobjingleheimer>
+Sure, we can go TC39 first 🙂
+
+[13:44:12.0930] <kriskowal>
+Not to beat a dead horse, if TC39 specifies a transitively loaded import phase, I am against spelling that `import.meta.load` because that creates an obligation for a virtual module to add `load` to its `importMeta`, which it could either elect not to do or do with behavior that senselessly deviates from what a `Module` instance would do regardless of the host environment. `import.meta` is the purview of hosts and virtual hosts.
+
+
+2024-11-21
+[08:02:31.0134] <nicolo-ribaudo>
+Wow, Fireflies joined before Jakob
+
+[08:02:34.0570] <nicolo-ribaudo>
+Anyway, meeting time :)
+
+[08:03:11.0849] <nicolo-ribaudo>
+ * Wow, Fireflies joined before Jakob (Q jakobjingleheimer I noticed that your username has K, but your name in Fireflies has C. Which one should I use?)
+
+[08:06:48.0942] <jakobjingleheimer>
+> <@nicolo-ribaudo:matrix.org> Wow, Fireflies joined before Jakob (Q jakobjingleheimer I noticed that your username has K, but your name in Fireflies has C. Which one should I use?)
+
+yeah, i send Fireflies to join from my work laptop (i don't have to be in the room, unless i have to let it in).
+
+my actual name is Jacob :) JakobJingleheimer is just from the nursery rhyme (i use it because it's funny, and also very long, so it's a good "is this UI flexible enough")
+
+[08:17:06.0119] <jakobjingleheimer>
+> <@nicolo-ribaudo:matrix.org> Wow, Fireflies joined before Jakob (Q jakobjingleheimer I noticed that your username has K, but your name in Fireflies has C. Which one should I use?)
+
+ * yeah, i send Fireflies to join from my work laptop (i don't have to be in the room, unless i have to let it in).
+
+my actual name is Jacob :) JakobJingleheimer is just from the nursery rhyme (i use it because it's funny, and also very long, so it's a good "is this UI flexible enough" test)
+
+[10:19:54.0308] <kriskowal>
+I had assumed that your name was John Schmidt and you ran with the implications.
+
+[10:24:14.0985] <kriskowal>
+For the record, you arrived in this room at the exact moment I was discussing the limitations of Unix domain socket path names with a colleague. The BSD and Linux kernels only use the first ~140 characters of a fully qualified path to a UNIX domain socket as the key for their internal ring buffer table, so if you have to take care to ensure that these are held close to the root of the filesystem. If you’re putting them in a home directory, like in an XDG_RUNTIME dir, you’re not guaranteed that they will work for ~johnjakobjingleheimerschmidt.
+
+[10:37:44.0843] <kriskowal>
+ * For the record, you arrived in this room at the exact moment I was discussing the limitations of Unix domain socket path names with a colleague. The BSD and Linux kernels only use the first ~140 characters of a fully qualified path to a UNIX domain socket as the key for their internal ring buffer table, so you have to take care to ensure that these are held close to the root of the filesystem. If you’re putting them in a home directory, like in an XDG\_RUNTIME dir, you’re not guaranteed that they will work for ~johnjakobjingleheimerschmidt.
+
+[11:30:05.0951] <jakobjingleheimer>
+Halfway ;) John Jakob Jingleheimet Schmidt
+
+Jakob Schmidt in English is Jacob Smith
+
+[11:36:12.0694] <kriskowal>
+Maybe IOANNES IACOBUS TINTINDOMARIUS FACTOREM
+
+[11:36:22.0889] <kriskowal>
+Kowal also means Smith, fwiw.
+
+[13:29:43.0996] <jakobjingleheimer>
+Notes and transcript from today's meeting: https://app.fireflies.ai/view/TC39-Module-Harmony::7zgc7y3tfBaOCiLO?ref=recap&track=7zgc7y3tfBaOCiLO&sg=nb&share=1&utm_content=share_recap_cta
+
+[14:27:47.0543] <shu>
+there sure were a lot of smiths back in the day
+
+
+2024-11-22
+[16:50:11.0313] <ljharb>
+there still are, but nobody calls them memesmiths for some reason 
+
+
+2024-11-26
+[12:03:39.0181] <ljharb>
+are yall going to have your meeting on thanksgiving, or should it be cancelled?
+
+[12:05:20.0804] <guybedford>
+I think enough of us are outside the US that we'll go ahead with it
+
+[12:05:42.0095] <guybedford>
+I understand that makes it tricky for US folks though
+
+
+2024-11-28
+[06:25:57.0228] <jakobjingleheimer>
+I've lost my voice, so I'm gonna sit tonight out
+

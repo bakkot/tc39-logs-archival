@@ -1,0 +1,443 @@
+2024-01-06
+[08:08:18.0231] <TabAtkins>
+I'm on vacation next week so I won't be around for the meeting.
+
+
+2024-01-08
+[21:17:36.0830] <ljharb>
+i'll be there but it's pretty important we all get on the same page, so it may not be worth it if tab won't be there. anyone else have thoughts on keeping or skipping the meeting?
+
+[21:27:55.0027] <Jack Works>
+no update since last one
+
+[07:40:17.0394] <rbuckton>
+I'm fine with skipping or postponing
+
+[07:53:03.0421] <Jack Works>
+I think I'll go sleep now, I'd also prefer skipping or postponing
+
+[08:00:41.0102] <ljharb>
+sounds good, i'll cancel it
+
+
+2024-01-12
+[12:33:16.0236] <ljharb>
+i won't be at the meeting on the 22nd; i'm out of town
+
+
+2024-01-16
+[22:34:23.0252] <ljharb>
+do we think there's any possibility we'll all be on the same page, and be ready to present, at the next meeting? if so we may want to try to schedule a meeting at a different time so we can be sure everyone shows up
+
+[12:26:21.0641] <TabAtkins>
+Okay, I'm back from vacation.
+
+[12:26:43.0903] <TabAtkins>
+And yes, I think so, so yeah let's find a time we can do if you're missing next monday.
+
+[12:39:39.0519] <ljharb>
+awesome. i can do this week, or next thursday/friday, or the week of the 29th
+
+[15:21:15.0030] <mpcsh>
+this week is tough for me, but next thurs / fri should be wide open
+
+
+2024-01-17
+[15:41:17.0831] <rbuckton>
+FYI, I've started drafting a `void` "discard" binding proposal here: https://github.com/rbuckton/proposal-void-binding. The goal is to subsume the previous `using void` part of the resource management proposal into a more general purpose form for specifying "discarded" bindings, as an explicit _Elision_ marker, and for future use as a "discard" pattern for pattern matching. The explainer is very light on details at the moment, I plan to flesh it out over the next few days.
+
+
+2024-01-18
+[09:43:01.0330] <rbuckton>
+This has now been fully fleshed-out with motivations, example syntax, intended semantics, etc.
+
+
+2024-01-22
+[06:28:19.0532] <dminor>
+Are we rescheduling today's meeting?
+
+[07:17:58.0101] <ljharb>
+yes
+
+[07:50:42.0808] <TabAtkins>
+I'm be just a few minutes late to the meeting this morning
+
+[07:50:58.0383] <TabAtkins>
+Oh nm then
+
+
+2024-01-23
+[20:03:21.0492] <Jack Works>
+hello, rbuckton will you consider update how customMatchers are written in https://onedrive.live.com/view.aspx?resid=934F1675ED4C1638%21299428&authkey=!AEyZcVuri5fJLbQ (page 17)? It does not match what pattern matching using now in raw.githack.com/tc39/proposal-pattern-matching/new-spec/index.html
+
+[20:06:53.0706] <rbuckton>
+I'm aware its a bit out of date, I'll fix it tomorrow.
+
+[20:08:54.0967] <Jack Works>
+in page 23, I think matching the inner value of a Map/Set is a footgun (when using the current semantic in the pm proposal) because it is ordered match
+
+[20:25:35.0457] <rbuckton>
+I may add a clarification. Slide 22 shows syntax pulled verbatim from the prior collection literals proposal explainer, while slide 23 illustrates the same text, but with the proposed syntax. In that slide I'm not specifically arguing for that example to be supported, but offering it as a contrast to the preceding slide.
+
+
+2024-01-24
+[14:58:10.0639] <rbuckton>
+> <@jackworks:matrix.org> hello, rbuckton will you consider update how customMatchers are written in https://onedrive.live.com/view.aspx?resid=934F1675ED4C1638%21299428&authkey=!AEyZcVuri5fJLbQ (page 17)? It does not match what pattern matching using now in raw.githack.com/tc39/proposal-pattern-matching/new-spec/index.html
+
+What is the purpose of `receiver` in a custom matcher? 
+
+[15:02:44.0750] <rbuckton>
+I'm not sure I'm a fan of how InvokeCustomMatcher makes custom matcher implementations more complicated.
+
+[15:04:50.0158] <rbuckton>
+In the slide you point to, I have to add a number of extra conditions around return values to align with `InvokeCustomMatcher` just doing a ToBoolean on the result when the hint is boolean, and I'm not a huge fan of return type inconsistency.
+
+[15:11:14.0989] <rbuckton>
+In my opinion, a "hint" should primarily inform the method as to whether it does or does not need to perform additional computation/allocation when it isn't necessary. Having to check `hint` to ensure my `return { match: false }` isn't interpreted as `true` doesn't really match with the idea of a hint.
+
+[15:13:26.0109] <rbuckton>
+Is there a reason we consider anything other than `MatchResult | boolean | undefined` to be a valid result? If we restricted the result to just those cases, then we can have simpler custom matcher bodies that only need to elide the `value` portion if it won't be used.
+
+[15:18:01.0352] <rbuckton>
+Ah, I guess it's just boolean or Iterable now?
+
+[15:18:37.0521] <rbuckton>
+To be honest, if we had ADT enums, I'd have suggested we have something like:
+
+```
+enum MatchResult {
+  Fail,
+}
+
+[15:18:50.0059] <rbuckton>
+ * To be honest, if we had ADT enums, I'd have suggested we have something like:
+
+```
+enum MatchResult {
+  Fail,
+  Pass,
+  One(result),
+  Many(...results)
+}
+```
+
+[15:19:40.0321] <rbuckton>
+So that we don't need a full iterator protocol for a unary extractor like `when Point({ x, y })`, just to wrap the `{ x, y }` result that will be further destructured.
+
+[15:20:30.0043] <rbuckton>
+ * To be honest, if we had ADT enums, I'd have suggested we have something like:
+
+```
+enum MatchResult {
+  Fail,
+  Pass,
+  One(result),
+  Many(...results)
+}
+```
+
+And have a custom matcher return `MatchResult | boolean | undefined`
+
+[15:21:01.0808] <rbuckton>
+ * With `MatchResut.One(result)` so that we don't need a full iterator protocol for a unary extractor like `when Point({ x, y })`, just to wrap the `{ x, y }` result that will be further destructured.
+
+[15:21:06.0500] <rbuckton>
+ * With `MatchResut.One(result)` so that we don't need a full iterator protocol for a unary extractor like `when Point({ x, y })` just to wrap the `{ x, y }` result that will be further destructured.
+
+[15:24:42.0420] <rbuckton>
+> <@rbuckton:matrix.org> In my opinion, a "hint" should primarily inform the method as to whether it does or does not need to perform additional computation/allocation when it isn't necessary. Having to check `hint` to ensure my `return { match: false }` isn't interpreted as `true` doesn't really match with the idea of a hint.
+
+After further reflection, _hint_ here isn't so bad since I don't need to differentiate between a `{ matched: false }` and a `{ matched: true }` anymore. I still think it would be nice to be able to optimize for the unary-extractor case in some way.
+
+
+2024-01-25
+[15:50:03.0117] <TabAtkins>
+Jack Works: I don't understand how InvokeCustomMatcher works. You check for kind==BOOLEAN in step 8, and return the bool-ized result immediately, but then you check for kind==BOOLEAN *again* in step 11.
+
+[15:53:40.0702] <TabAtkins>
+I think what you *mean* to be doing is checking for if `result` is `true`, immediately after step 8, and returning an empty iterator in that case. Then step 10 can just return the GetIteratorCached result (right now the return value is just ignored), and you can delete steps 11 and 12.
+
+[15:56:01.0757] <TabAtkins>
+> <@rbuckton:matrix.org> Ah, I guess it's just boolean or Iterable now?
+
+Right, we killed the "match result object" as it's no longer necessary.
+
+
+2024-01-26
+[16:05:44.0370] <TabAtkins>
+Jack Works: I also don't think we actually need the note about `document.all` there in InvokeCustomMatcher; it's a bizarre legacy piece of the web platform that produces weird behavior *everywhere*. We're not particularly special here. ^_^
+
+[16:06:49.0125] <TabAtkins>
+(Tho also, in that example the second `if()` will only match if you write `null is f(let html, ...)`, since there will be more elements in the iterator than just the html element.)
+
+[18:07:17.0039] <Jack Works>
+> <@rbuckton:matrix.org> What is the purpose of `receiver` in a custom matcher? 
+
+this is required to make dotted custom matchers working correctly.
+
+[18:09:42.0572] <Jack Works>
+for code `when A.B(let c):`, we do `let receiver = A.B; let matcher = Get(receiver, Symbol.customMatcher)`, then `Call(matcher, receiver, args)`. If we don't have receiver, all custom matchers will be called without `this`.
+
+[18:10:08.0136] <rbuckton>
+> <@jackworks:matrix.org> this is required to make dotted custom matchers working correctly.
+
+I'm not sure I agree that's correct. If you equate this to `Symbol.iterator`, we don't forward a receiver if you do
+```js
+for (const x of foo.bar) {
+}
+```
+so why would we do that here? Carrying over the receiver isn't something you'll normally need, and if you need to preserve the receiver, you would make `[Symbol.customMatcher]` into a getter that returns a bound function.
+
+[18:10:59.0372] <rbuckton>
+I wouldn't expect `when A.B(let c)` to preserve the receiver unless maybe `A.B` is just a plain function.
+
+[18:11:06.0476] <Jack Works>
+this is not in the initial spec, it was found as a bug to fix
+
+[18:11:16.0327] <Jack Works>
+if you don't like it, we can discuss to remove receiver
+
+[18:11:22.0168] <rbuckton>
+I'm not certain I agree its a bug?
+
+[18:12:17.0103] <rbuckton>
+You normally only pass around a receiver if you're working with proxies/reflect. I don't think I've seen that anywhere else in the spec.
+
+[18:13:07.0706] <rbuckton>
+That's just the nature of JS. I wouldn't want to do something specific here that would be incompatible with some other proposal like bind-this
+
+[18:13:28.0500] <rbuckton>
+A one-off fix here could hurt us more down the line
+
+[18:14:26.0549] <rbuckton>
+it may be annoying, but changing it is inconsistent with the rest of the language.
+
+[18:14:39.0393] <Jack Works>
+Oh, seeing the notes reminds me the use case. If you want to use a boolean tester like `something.equal` (which means `something.equal(matchTopic)`), it will be impossible if receiver is not passed, but we can discuss it on the design meeting anyway.
+
+[18:15:51.0547] <Jack Works>
+> <@rbuckton:matrix.org> it may be annoying, but changing it is inconsistent with the rest of the language.
+
+And I guess this reflects what function calls do. `a.b(c)` brings `a` as receiver, so extractors do the same.
+
+[18:17:23.0955] <rbuckton>
+I can see carrying the receiver as `this` for `something.equal` when it's just a predicate function and not a custom matcher. The inconsistency is that we chose to have this weird case where we allow either one. Then again, if you equate this to DOM event handlers, there's no `this` preservation when you pass it a function and not a `{ handleEvent(evt) {} }` object.
+
+[18:18:20.0210] <rbuckton>
+Extractors aren't 100% like functions. They appear to be the inverse of function application, but they're actually more like the inverse of construction, and `new Foo.Bar()` doesn't preserve `Foo` as the receiver.
+
+[18:19:52.0012] <rbuckton>
+If, for example, we had a bind-this proposal, i.e. `::foo.bar`, then I would say we would use the bound `this` via that syntax, i.e. `when ::obj.equals`. 
+
+[18:23:26.0301] <rbuckton>
+https://github.com/tc39/proposal-call-this hit Stage 1, but hasn't had much movement in awhile. https://github.com/tc39/proposal-bind-operator is sitting at Stage 0.
+
+[18:23:57.0810] <rbuckton>
+ * I can _maybe_ see carrying the receiver as `this` for `something.equal` when it's just a predicate function and not a custom matcher. The inconsistency is that we chose to have this weird case where we allow either one. Then again, if you equate this to DOM event handlers, there's no `this` preservation when you pass it a function and not a `{ handleEvent(evt) {} }` object.
+
+[18:24:41.0224] <Jack Works>
+> <@rbuckton:matrix.org> In the slide you point to, I have to add a number of extra conditions around return values to align with `InvokeCustomMatcher` just doing a ToBoolean on the result when the hint is boolean, and I'm not a huge fan of return type inconsistency.
+
+sorry can you rephrase this part? 
+
+[18:25:07.0906] <rbuckton>
+> <@jackworks:matrix.org> sorry can you rephrase this part?
+
+Ignore that. A few messages later I realized I was in error.
+
+[18:26:16.0270] <rbuckton>
+I was trying to reconcile `hint === "boolean"` with returning a `{matched: false }` that would coerce to `true`, but had missed the part where MatchResult was dropped in favor of just returning an iterable object.
+
+[18:32:08.0911] <rbuckton>
+But the `receiver` thing makes me a little more uncomfortable with the decision to support predicates by default. 
+
+[18:33:00.0000] <rbuckton>
+`instanceof` fits better with how the actual runtime semantics play out.
+
+[18:34:09.0253] <rbuckton>
+`obj instanceof x.y` doesn't preserve `x` as a receiver when calling `[Symbol.hasInstance]`, much like how `obj is x.y` doesn't preserve `x` as the receiver when calling `[Symbol.customMatcher]`.
+
+[18:36:09.0588] <Jack Works>
+> <@tabatkins:matrix.org> Jack Works: I don't understand how InvokeCustomMatcher works. You check for kind==BOOLEAN in step 8, and return the bool-ized result immediately, but then you check for kind==BOOLEAN *again* in step 11.
+
+yes you're right this is a bug. I'm fixing this right now.
+
+[18:36:38.0377] <rbuckton>
+To me that argues for having a *different* syntax for predicates: either a `match`-specific disambiguator or just not passing the receiver and adoption some future bind-this syntax to enable that in the future.
+
+[18:36:55.0696] <rbuckton>
+ * To me that argues for having a _different_ syntax for predicates: either a `match`-specific disambiguator or just not passing the receiver and adopting some future bind-this syntax to enable that in the future.
+
+[18:37:06.0482] <rbuckton>
+ * To me that argues for having a _different_ syntax for predicates: either a `match`-specific disambiguator or just not passing the receiver and adopting some future bind-this syntax to enable that when it becomes available.
+
+[18:37:15.0138] <Jack Works>
+I'll also add a note that `receiver` is not a consensus yet.
+
+[18:40:13.0650] <rbuckton>
+And in the mean time, user's can always just pull out `obj.equal` into a temp variable before the pattern, e.g. 
+```js
+const equal = x => obj.equal(x);
+match (value) {
+  when equal: ...;
+}
+```
+
+
+[18:47:17.0192] <Jack Works>
+> <@rbuckton:matrix.org> After further reflection, _hint_ here isn't so bad since I don't need to differentiate between a `{ matched: false }` and a `{ matched: true }` anymore. I still think it would be nice to be able to optimize for the unary-extractor case in some way.
+
+Yes, it's possible (via MatchResult object), but we need to think if we really gonna do that in the specification. For example, we can make Arrays destructing not calling iterator protocol but with `length` and index access directly, but we do that for mental model simplicity (I guess) (which means everything go by iterator protocol, there is no special cases)
+
+[18:49:40.0111] <rbuckton>
+> <@jackworks:matrix.org> Yes, it's possible (via MatchResult object), but we need to think if we really gonna do that in the specification. For example, we can make Arrays destructing not calling iterator protocol but with `length` and index access directly, but we do that for mental model simplicity (I guess) (which means everything go by iterator protocol, there is no special cases)
+
+I don't think a one-off break from iterator destructuring makes sense. It would just be surprising to some users. The ADT enum result suggestion continues to leverage iterator destructuring, but has well-defined branches for the unary extractor case.
+
+[18:51:23.0383] <Jack Works>
+if we want to support unary or multiple, we need to bring MatchResult object back (otherwise a test around iterator protocol looks like a footgun). do you want to add a note about this?
+
+[18:53:38.0286] <rbuckton>
+Possibly, or at least we should discuss it at the next meeting. To be clear, it's not that I'm advocating for the entire `MatchResult` ADT enum thing, but more that I'm wondering if there is an optimization we can make for the unary-extractor case.
+
+[19:01:15.0908] <Jack Works>
+https://raw.githack.com/tc39/proposal-pattern-matching/new-spec/index.html#sec-invoke-custom-matcher
+
+bug fixed (you may need clear browser cache) cc TabAtkins 
+
+[19:01:51.0664] <rbuckton>
+For example, we could have a rule for return values such that:
+- A successful n-ary match has the shape `{ kind: "values", values: iterator }`
+- A successful unary match has the shape `{ kind: "value", value: value }`
+- A successful nullary match is indicated by the value `true`. Such a result cannot be extracted.
+- A failed match is indicated by `false`.
+- If the result is an Object but does not have a `kind`, it is lifted to `{ kind: "values", values: result }`. As such, any object that does not have a `kind` must be iterable.
+- Otherwise, the result is lifted to `ToBoolean(result)`.
+
+
+
+[19:04:35.0296] <rbuckton>
+essentially, it's an ADT union of:
+```
+type MatchResult = 
+  | { kind: "values", values: Iterable }
+  | { kind: "value", value: any }
+  | { kind: "pass" }
+  | { kind: "fail" }
+  | Iterable // coerced to { kind: "values", values: Iterable }
+  | true // coerced to { kind: "pass" }
+  | false // coerced to { kind: "fail" }
+  | undefined // coerced to { kind: "fail" }
+```
+
+[19:05:47.0267] <rbuckton>
+I'm not hung up on how it looks or is implemented, I'm just more interested in the idea of an optimization that reduces overhead for the `when Point({ x, y })` case.
+
+[19:06:07.0186] <Jack Works>
+it's possible and performance good, but I think the protocol looks too complicated now
+
+[19:06:10.0631] <rbuckton>
+I'd have wanted something similar if we had `when Point{ x, y }`
+
+[19:06:53.0279] <Jack Works>
+current protocol:
+
+```
+type MatchBooleanResult = any // ToBoolean semantics
+type MatchListResult = false | Iterable<any>
+```
+
+[19:08:45.0346] <rbuckton>
+It doesn't seem complex to me. The actual protocol could be simplified:
+
+```ts
+type MatchResult = { kind: "list" | "one" | "pass" | "fail", value?: any };
+```
+
+And the coercion rules just indicate how anything that is not an object with a `kind` is converted to an object with a `kind`.
+
+[19:09:00.0177] <rbuckton>
+ * It doesn't seem complex to me. The actual protocol could be simplified:
+
+```ts
+type MatchResult = { kind: "list" | "one" | "pass" | "fail", value?: any };
+```
+
+And the coercion rules just indicate how anything that is not an object with a `kind` is converted to an object with a `kind` (or errors)
+
+[19:09:36.0243] <rbuckton>
+ * It doesn't seem complex to me. The actual protocol could be simplified:
+
+```ts
+type MatchResult = { kind: "list" | "value" | "pass" | "fail", value?: any };
+```
+
+And the coercion rules just indicate how anything that is not an object with a `kind` is converted to an object with a `kind` (or errors)
+
+[19:12:47.0763] <rbuckton>
+ * essentially, it's an ADT union of:
+
+```
+type MatchResult = 
+  | { kind: "list", value: Iterable }
+  | { kind: "value", value: any }
+  | { kind: "pass" }
+  | { kind: "fail" }
+  | Iterable // coerced to { kind: "list", value: Iterable }
+  | true // coerced to { kind: "pass" }
+  | false // coerced to { kind: "fail" }
+  | undefined // coerced to { kind: "fail" }
+```
+
+[19:16:01.0524] <rbuckton>
+ * For example, we could have a rule for return values such that:
+
+- A successful n-ary match has the shape `{ kind: "list", value: Iterable }`
+- A successful unary match has the shape `{ kind: "value", value: any }`
+- A successful nullary match has the shape `{ kind: "pass" }`. Such a result cannot be extracted.
+- A failed match has the shape `{ kind: "fail" }`.
+- If the result is an Object and has a `kind`, but it is not one of `"list"`, `"value"`, `"pass"`, or `"fail"`, throw a TypeError.
+- If the result is an Object but does not have a `kind`, it is lifted to `{ kind: "list", value: result }`. As such, any Object that does not have a `kind` must be iterable.
+- Otherwise, the result is lifted to `ToBoolean(result)`:
+  - If the new result is `true`, it is lifted to `{ kind: "pass" }`.
+  - If the new result is `false`, it is lifted to `{ kind: "fail" }`.
+
+[19:17:55.0843] <rbuckton>
+But I agree, `Iterable | boolean` is simpler.
+
+[19:20:16.0399] <rbuckton>
+Maybe if we add an `Iterator.once(value)` static method we could add optimizations for it directly in the spec like we do for native `Promise`. 
+
+[19:24:55.0162] <rbuckton>
+On the other hand, runtimes could chose to internally optimize a match result of `[value]` to avoid iterator destructuring and just reach for the value, though I imagine there'd need to be a lot of heavy usage of unary extractors before it would be worth writing up an optimization for that case.
+
+[20:16:14.0231] <Jack Works>
+> <@rbuckton:matrix.org> On the other hand, runtimes could chose to internally optimize a match result of `[value]` to avoid iterator destructuring and just reach for the value, though I imagine there'd need to be a lot of heavy usage of unary extractors before it would be worth writing up an optimization for that case.
+
+do they optimize for `const [state, setState] = useState()`?
+
+[20:16:37.0062] <rbuckton>
+I
+
+[20:17:06.0251] <rbuckton>
+ * I'm not sure, offhand. 
+
+[00:52:59.0408] <Jack Works>
+do we have a list of agenda items so we can write down what we need to discuss in the next meeting?
+
+[08:21:30.0513] <ljharb>
+i don't think we do yet. either way given the deadline is in 24 hours i don't think we'll be able to go for stage 2 this meeting
+
+[08:22:39.0551] <dminor>
+Is there anything we're looking for committee feedback on? Would a Stage 1 update be appropriate?
+
+[08:41:48.0934] <ljharb>
+i don't think it makes sense to do an update before the champion group has consensus
+
+
+2024-01-27
+[05:47:11.0386] <Jack Works>
+> <@ljharb:matrix.org> i don't think we do yet. either way given the deadline is in 24 hours i don't think we'll be able to go for stage 2 this meeting
+
+I mean our in-group meeting, not the tc39 meeting 
+

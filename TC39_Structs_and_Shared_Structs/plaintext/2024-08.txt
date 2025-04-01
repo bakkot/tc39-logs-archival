@@ -1,0 +1,1091 @@
+2024-08-28
+[10:08:41.0996] <Mathieu Hofman>
+shu: could you update the TC39 calendar invite for the meeting? Looks like it never got updated when we switched to biweekly
+
+[10:12:28.0979] <shu>
+Mathieu Hofman: ah i only switched my personal one? my bad, let me fix it now
+
+
+2024-08-29
+[11:55:28.0663] <kriskowal>
+I seem to have bludgeoned the Join button enough times for Matrix to acknowledge my presence.
+
+[11:57:06.0457] <nicolo-ribaudo>
+Welcome
+
+[11:58:29.0501] <rbuckton>
+kriskowal: I tried to DM you the link I mentioned, but there are two matrix identities for you in the delegates chat and I may have sent them to the wrong one. Here's what I sent, in any case:
+
+For reference, this Gist contains a brief analysis of an earlier proposed handshaking mechanism: https://gist.github.com/rbuckton/08d020fc80da308ad3a1991384d4ff62 
+Alternatively, this other gist details possible mechanisms to grant/deny correlation as well as to support bundlers when correlating by source location: https://gist.github.com/rbuckton/b00ca9660fb888486da07b22e38dd1e9
+
+[11:59:53.0523] <kriskowal>
+> <@rbuckton:matrix.org> kriskowal: I tried to DM you the link I mentioned, but there are two matrix identities for you in the delegates chat and I may have sent them to the wrong one. Here's what I sent, in any case:
+> 
+> For reference, this Gist contains a brief analysis of an earlier proposed handshaking mechanism: https://gist.github.com/rbuckton/08d020fc80da308ad3a1991384d4ff62 
+> Alternatively, this other gist details possible mechanisms to grant/deny correlation as well as to support bundlers when correlating by source location: https://gist.github.com/rbuckton/b00ca9660fb888486da07b22e38dd1e9
+
+Yeah, Matrix isn’t good at chat. One cannot simply start up a new Matrix instance with friends and migrate their identity, much less convince Matrix the old one is gone, especially when matrix.org has forgotten its side of the credentials for it.
+
+[12:04:53.0579] <kriskowal>
+By a glance, it looks like this design direction hasn’t been considered or was dismissed out-of-hand:
+```
+struct Foo {}
+addEventListener('message', event => {
+  const foo = new Foo(event.data.foo);
+});
+```
+Wherein, `Foo` is an opaque struct definition closing over the vm-specific vagaries of padding, alignment, embedding, dereferencing, &c, `event.data.foo` is an opaque handle on shared memory without behavior, and `new Foo(event.data.foo)` unites the data and behavior.
+
+[12:05:50.0783] <kriskowal>
+And, of course `Foo.prototype` captures the behavior side.
+
+[12:09:11.0957] <shu>
+what would this union do
+
+[12:09:33.0669] <shu>
+one of the primary goal here is to actually share the objects, not just share the payload
+
+[12:10:10.0432] <shu>
+this is because application state, by volume, is a lot of pointers. recreating your object graph from payloads per thread means you are not scaling with the number of threads
+
+[12:10:22.0050] <shu>
+so any solution that requires creating wrapper objects per-thread is a nonstarter
+
+[12:10:25.0905] <kriskowal>
+i’m assuming you mean sharing the backing memory, since the objects are necessarily in different realms
+
+[12:10:50.0009] <shu>
+yes, payload and backing memory are interchangeable for what i said
+
+[12:11:06.0354] <shu>
+a related question is "why not create object overlays on top of SABs"
+
+[12:11:11.0362] <nicolo-ribaudo>
+> <@kriskowal:aelf.land> i’m assuming you mean sharing the backing memory, since the objects are necessarily in different realms
+
+If objects don't capture any realm-specific state, you can actually share the objects 
+
+[12:11:55.0117] <kriskowal>
+oh, right, we’re talking about a new primitive.
+
+[12:12:32.0722] <nicolo-ribaudo>
+This would be different from SharedArrayBuffer, where there is a per-thread wrapper pointing to the same memory
+
+[12:13:14.0543] <shu>
+> <@kriskowal:aelf.land> oh, right, we’re talking about a new primitive.
+
+well, they're objects
+
+[12:13:29.0562] <shu>
+but yes, internally you can think of them as new primitives
+
+[12:13:34.0464] <shu>
+they're objects with special behavior
+
+[12:13:45.0831] <kriskowal>
+alright, so the crux of this is that the _value_ capturing the union of the shared memory and behavior must also be a primitive.
+
+[12:14:11.0842] <shu>
+sorry, having trouble parsing that sentence
+
+[12:14:21.0525] <kriskowal>
+i now better understand how we arrive at the prototype walk algorithm
+
+[12:15:00.0147] <shu>
+there's another alternative that was dismissed, which is actually thread-safe functions
+
+[12:15:04.0960] <kriskowal>
+there’s no per-worker object that points to the local prototype and shared data
+
+[12:15:08.0604] <shu>
+that is just too much a can of worms, and nobody wants a new callable type
+
+[12:15:16.0204] <shu>
+> <@kriskowal:aelf.land> there’s no per-worker object that points to the local prototype and shared data
+
+yeah
+
+[12:15:38.0368] <kriskowal>
+this seems cursed
+
+[12:15:54.0723] <shu>
+heh, in what way?
+
+[12:16:39.0527] <kriskowal>
+i can see why this design direction forces today’s debate about where to put the global state
+
+[12:16:51.0946] <shu>
+ah, yeah
+
+[12:17:46.0350] <iain>
+For the record, I think it would be good to explore the thread-safe functions option at least a little bit. 
+
+[12:18:02.0220] <shu>
+i agree, as long as in parallel
+
+[12:18:24.0084] <shu>
+but identity discontinuity makes it _really_ difficult
+
+[12:18:24.0604] <kriskowal>
+the Moddable folks would be good to involve in a conversation about thread-safe functions.
+
+[12:19:31.0704] <kriskowal>
+XS is a bit unique in its design constraints, but does have thread-safe functions and can sense when a subgraph can be safely captured in ROM.
+
+[12:19:45.0410] <iain>
+There are many parts of this proposal that make big changes; I'm not convinced that new callables would be worse than some of the other proposed changes
+
+[12:19:53.0941] <iain>
+What do you mean by identity discontinuity?
+
+[12:20:10.0026] <shu>
+> <@iain:mozilla.org> There are many parts of this proposal that make big changes; I'm not convinced that new callables would be worse than some of the other proposed changes
+
+i am
+
+[12:20:33.0315] <shu>
+i'm gonna need something more specific than "this is already large, therefore it has room for other large changes"
+
+[12:20:40.0140] <kriskowal>
+Identity discontinuity is `const source = '{}', eval(source) !== eval(source)`.
+
+[12:21:16.0799] <kriskowal>
+Which is not an interesting example, but `const source = 'class Foo { #p }'` is more interesting.
+
+[12:21:45.0190] <shu>
+> <@iain:mozilla.org> What do you mean by identity discontinuity?
+
+specifically, i'm talking about how each global has its own set of Math, Object, Function, etc, that have distinct identity
+
+[12:22:19.0987] <shu>
+JS functions are closures very deep down, not just the JS user code closed-over stuff
+
+[12:22:32.0249] <shu>
+so we'd have to answer the question of what does that mean for thread-safe functions
+
+[12:22:35.0632] <shu>
+do they become more dynamically scoped?
+
+[12:24:07.0288] <iain>
+Without having thought it through much, I would want to say that they can't capture anything other than global variables, and global variables are always looked up in the local global.
+
+[12:24:57.0200] <shu>
+okay, so dynamically scoped to the caller global
+
+[12:25:29.0676] <iain>
+Yes. If there were a clean way to distinguish between `shared function foo() { return Math; }` and `var x; shared function foo() { return x; }`, I would also like to prohibit the latter.
+
+[12:26:59.0634] <shu>
+is it basically this thing i wrote up a while ago
+
+[12:27:00.0158] <shu>
+https://github.com/tc39/proposal-structs/blob/main/CODE-SHARING-IDEAS.md
+
+[12:27:36.0042] <iain>
+So that modulo monkey-patching, all the "dynamically scoped" stuff you're closing over is basically the same between realms
+
+[12:27:54.0960] <iain>
+That looks like a better thought out version of my vague notion, yes
+
+[12:29:07.0184] <shu>
+my conclusion is that i think it's a lot of work and a lot of complexity for the language for not as much gain as you might think
+
+[12:29:29.0440] <shu>
+like, people are gonna want to close over state in a thread-local way during computation
+
+[12:29:32.0070] <shu>
+and i think that's fine
+
+[12:30:23.0964] <kriskowal>
+It it imagined that every get/set of an individual property on a shared struct is implicitly an atomic on that individual field?
+
+[12:30:28.0247] <shu>
+and i believe more and more that we actually get more mileage out of letting people use the functions we have today on shared data, but make that ergonomic
+
+[12:30:56.0669] <iain>
+My hope is that doing something like this would let us significantly simplify the prototype problem
+
+[12:31:18.0874] <shu>
+> <@kriskowal:aelf.land> It it imagined that every get/set of an individual property on a shared struct is implicitly an atomic on that individual field?
+
+yes, Unordered by default. Atomics.load/store and friends are extended to be able to operate on struct fields should you want sequentially consistent atomic access
+
+[12:31:48.0421] <shu>
+the guarantee is the same as bare reads/writes on SABs via TypedArrays: if you have races, you can observe any of the written values, but they shall never tear
+
+[12:32:02.0773] <shu>
+i.e. you can't observe half of one write composed with half of another write
+
+[12:33:01.0239] <kriskowal>
+I gather from the requirements, that it’s imagined that incrementally replacing a `class` with a `shared struct` is a delicate-but-possible performance improving refactor that doesn’t require changes from the consuming code
+
+[12:34:04.0200] <kriskowal>
+I’m much more familiar with these shenanigans in other languages. I see that CAS is `Atomics.compareExchange`. Alright.
+
+[12:34:05.0793] <shu>
+that's not a hard requirement for me, but is certainly a goal. i believe that's harder requirement for Ron perhaps
+
+[12:34:41.0580] <shu>
+i said in the beginning of the call, before you joined, that i can live in a world where we don't solve the correlation problem because on net there's still enough value here for the power apps
+
+[12:35:04.0391] <shu>
+but if we can solve the correlation problem, we unlock things like incremental adoption that helps a larger amount of apps
+
+[12:35:09.0352] <kriskowal>
+So, you’d personally be satisfied with the data-only subset?
+
+[12:35:22.0683] <shu>
+i wouldn't equate "satisfied" with "can live with"
+
+[12:35:27.0677] <kriskowal>
+Or rather, on behalf of the economic interests your represent.
+
+[12:35:43.0008] <shu>
+by "can live with" as, if it was the only thing holding the rest of the proposal up, i'd drop it
+
+[12:35:59.0140] <shu>
+and iterate on it after the initial proposal
+
+[12:37:28.0929] <shu>
+> <@kriskowal:aelf.land> Or rather, on behalf of the economic interests your represent.
+
+speaking only for myself, yes. i still think we'd be doing a disservice for many of the reasons we've gone into with Mark in the past. the most salient of which, i think, is that without ergonomically correlated methods, we're inviting people to use free functions, and it becomes _harder_ to encapsulate
+
+[12:37:46.0898] <shu>
+which ron and i think will result in higher likelihood of thread unsafe code being written
+
+[12:38:20.0446] <shu>
+> <@kriskowal:aelf.land> Or rather, on behalf of the economic interests your represent.
+
+ * speaking only for myself, yes. i still think we'd be doing a disservice to the language for many of the reasons we've gone into with Mark in the past. the most salient of which, i think, is that without ergonomically correlated methods, we're inviting people to use free functions, and it becomes _harder_ to encapsulate
+
+[12:42:34.0587] <kriskowal>
+So, the cursed fork has tines:
+1. manual union of data and behavior (untenable because it obviates shared memory and reduces to a shared array buffer proxy membrane we can already do)
+2. per-realm registry of prototypes (which requires some mitigation so such prototypes can be safely shared between compartments, maybe pure functions, freezing isn’t enough, but pure could be shared by threads)
+3. dynamic scope and a per-module/evaluator hook to virtualize get-prototype-of (toward addressing compartment isolation—i think it unlikely that it does)
+4. deniable global registry of token->prototype mappings (i can’t speak for Mathieu Hofman’s proposal, which might preserve sub-realm sandboxing, but i’m not convinced)
+
+[12:43:41.0908] <shu>
+what's difference between 3 and 4?
+
+[12:44:21.0504] <kriskowal>
+An outcome to avoid is order-dependence of evaluations of the same source, or a composition hazard where a system explodes if you evaluate a struct definition twice.
+
+[12:46:27.0324] <kriskowal>
+> <@shuyuguo:matrix.org> what's difference between 3 and 4?
+
+3. Hooking get-prototype-of looks like `new Module(source, getStructPrototype(source, identifier) {maybeReturnPrototype()})`
+4. Looks like `new Evaluators({ globalThis: { structRegistry: new StructRegistry() }})` and `struct Foo with structRegistry.something() {}`
+
+[12:46:50.0859] <kriskowal>
+> <@shuyuguo:matrix.org> what's difference between 3 and 4?
+
+ * 3. Hooking get-prototype-of looks like `new Module(source, {getStructPrototype(source, identifier) {maybeReturnPrototype()}})`
+4. Looks like `new Evaluators({ globalThis: { structRegistry: new StructRegistry() }})` and `struct Foo with structRegistry.something() {}`
+
+[12:47:55.0203] <kriskowal>
+In the prototype hook, the “identifier” would necessarily come from the text of the module source.
+
+[12:48:20.0918] <shu>
+given that neither of those things exist i don't really know the proposals well enough to understand
+
+[12:48:31.0230] <shu>
+ * given that neither of those things exist today i don't really know the proposals well enough to understand
+
+[12:49:50.0827] <shu>
+i just wanna do something naive and simple man
+
+[12:49:56.0613] <kriskowal>
+I think we’re unlikely to converge on either 3 or 4.
+
+[12:51:06.0700] <shu>
+can we pass a nonce to Realm (Worker?) construction that determines which registry they'll use?
+
+[12:51:09.0048] <kriskowal>
+> <@shuyuguo:matrix.org> i just wanna do something naive and simple man
+
+shared memory concurrency
+
+[12:51:19.0295] <kriskowal>
+> <@shuyuguo:matrix.org> i just wanna do something naive and simple man
+
+ * shared memory parallelism
+
+[12:51:26.0508] <shu>
+like script nonces, these are supposed to be generated afresh per load
+
+[12:51:35.0936] <shu>
+but you'd express constraints like, these workers are conceptually in the same package and should share the nonce
+
+[12:51:40.0474] <shu>
+and these other workers aren't
+
+[12:52:01.0745] <shu>
+and those with the same nonce have the same implicit, ambiently available registry
+
+[12:52:11.0090] <shu>
+so by default you don't get any correlation at all
+
+[12:52:40.0676] <shu>
+> <@kriskowal:aelf.land> shared memory parallelism
+
+you telling me stores and loads are complicated? :)
+
+[12:52:56.0394] <iain>
+Yes
+
+[12:53:15.0541] <kriskowal>
+i think it goes without saying that shared structs have very narrow field of applicability. not even “all notions of worker” and certainly “not every postMessage”
+
+[12:55:32.0177] <kriskowal>
+clarifying question: is `new Worker()` consistently an OS thread or sometimes an OS process across all browsers? Do we currently have a place to stand to say “this worker must be in another process to mitigate process pipeline sidechannels”?
+
+[12:55:36.0805] <shu>
+are you inviting me to defend the motivation or...?
+
+[12:55:37.0773] <kriskowal>
+ * clarifying question: is `new Worker()` consistently an OS thread or sometimes an OS process across all browsers? Do we currently have a place to stand to say “this worker must be in another process to mitigate pipeline sidechannels”?
+
+[12:56:20.0119] <kriskowal>
+No, just clarification, I’m wondering whether this proposal implies other web changes like distinguished Worker constructor signatures.
+
+[12:57:07.0980] <kriskowal>
+Did all browsers follow V8’s lead with isolates?
+
+[12:58:49.0406] <kriskowal>
+I like that pure functions obviate the correlation and identity discontinuity problems.
+
+[12:58:53.0026] <shu>
+so while the HTML spec doesn't define threads vs processes, it follows 262's lead in "agent" and "agent cluster", with the understanding that an agent is a thread, and an agent cluster constitutes an abstract process boundary
+
+[12:59:03.0728] <kriskowal>
+And that’s a design direction you can follow from the just-data subset.
+
+[12:59:18.0904] <shu>
+i'd rather just not have it for the initial proposal then
+
+[13:00:30.0611] <shu>
+> <@kriskowal:aelf.land> No, just clarification, I’m wondering whether this proposal implies other web changes like distinguished Worker constructor signatures.
+
+it doesn't
+
+[13:00:41.0448] <iain>
+Doing shared memory GC between threads is already scary enough; I don't think anybody would be especially interested in implementing cross-process GC between different-process worker threads.
+
+[13:01:02.0294] <shu>
+there is already the notion of "agent cluster" being the set of agents that can access shared memory, which is currently SABs
+
+[13:01:17.0341] <kriskowal>
+So, I gather it’s the case that Worker is always agent and there isn’t a mechanism for a process boundary.
+
+[13:01:19.0400] <shu>
+ * there is already the notion of "agent cluster" being the set of agents that can access the same shared memory, which is currently SABs
+
+[13:01:30.0459] <shu>
+there is the notion of an agent cluster, but it is not reified
+
+[13:01:33.0495] <kriskowal>
+ * So, I gather it’s the case that Worker is always agent [edit: agent cluster] and there isn’t a mechanism for a process boundary.
+
+[13:01:43.0599] <shu>
+no, a Worker is an agent
+
+[13:01:51.0135] <shu>
+a set of workers + the main page constitutes an agent cluster
+
+[13:01:57.0303] <kriskowal>
+ * So, I gather it’s the case that Worker is always agent and there isn’t a mechanism for a process boundary.
+
+[13:01:58.0556] <shu>
+because they are in the same cluster, they can pass SABs to each other
+
+[13:02:20.0942] <kriskowal>
+alright, so there isn’t a web API for a process boundary.
+
+[13:02:26.0968] <shu>
+correct
+
+[13:02:37.0994] <kriskowal>
+thanks, that helps my grokery
+
+[13:02:49.0840] <shu>
+the decision Chrome took was, roughly, to put each tab into its own individual process
+
+[13:04:05.0801] <shu>
+the more important process boundary is between "content" or "renderer" processes that run JS and display web content, and the "browser" process that is much more higly privileged
+
+[13:04:26.0318] <shu>
+but as far as user content goes on the web, they all run in renderer processes
+
+[13:09:08.0362] <shu>
+> <@kriskowal:aelf.land> alright, so there isn’t a web API for a process boundary.
+
+there is no API access, but you can basically request process boundaries via https://web.dev/articles/why-coop-coep
+
+[13:09:17.0484] <kriskowal>
+there’s a very old cartoon about a company that relocates to the north pole so they can hire penguins for cheap labor. my mental model for plugin systems on the web was until this moment that you get to choose whether to endow your plugins with either timers or confine them in a worker so you get a process boundary.
+
+[13:09:38.0198] <shu>
+i think you're still misunderstanding. Workers are not a process boundary
+
+[13:09:41.0915] <shu>
+Workers are threads
+
+[13:09:50.0738] <kriskowal>
+no, i’m following you.
+
+[13:10:09.0128] <shu>
+was responding to "confine them in a worker so you get a process boundary"
+
+[13:10:19.0361] <kriskowal>
+thank you for correcting my mental landscape :-)
+
+[13:10:39.0612] <shu>
+so, since the web security model is built on same-origin
+
+[13:10:41.0391] <kriskowal>
+yeah, i’m the MBA who thought there are penguins at the north pole in this metaphor.
+
+[13:11:25.0810] <shu>
+there are these headers that let the page say "i want different origins to be isolated (read: process boundary)"
+
+[13:11:38.0310] <kriskowal>
+oh, alright, i see i was not wrong, just `new Worker` isn’t sufficient. You need a separate origin and maybe COOP COEP, which I ought to learn more about before I make a web platform.
+
+[13:11:43.0314] <shu>
+and if you serve your page with these headers, _then_ we enable shared memory
+
+[13:12:08.0908] <kriskowal>
+kk, same page.
+
+[13:12:56.0744] <shu>
+this proposal of course follows that policy, not that we have a choice :)
+
+[13:13:07.0282] <kriskowal>
+this is coherent.
+
+[13:14:02.0553] <kriskowal>
+I assume postMessage that crosses a process boundary would be in a position to throw if you attempted to share a struct.
+
+[13:14:16.0459] <shu>
+exactly right, same as for SABs
+
+[13:14:42.0494] <rbuckton>
+> <@kriskowal:aelf.land> By a glance, it looks like this design direction hasn’t been considered or was dismissed out-of-hand:
+> ```
+> struct Foo {}
+> addEventListener('message', event => {
+>   const foo = new Foo(event.data.foo);
+> });
+> ```
+> Wherein, `Foo` is an opaque struct definition closing over the vm-specific vagaries of padding, alignment, embedding, dereferencing, &c, `event.data.foo` is an opaque handle on shared memory without behavior, and `new Foo(event.data.foo)` unites the data and behavior.
+
+This is similar to what I do for `@esfx/struct-type`, which is more like the old "typed objects" proposal and uses objects backed by `SharedArrayBuffer`. In the end, this doesn't work unless the objects are typed as you must know the type of everything in the object graph. `new Foo(event.data.foo)` just isn't sufficient on its own.
+
+[13:15:29.0101] <kriskowal>
+Right, I assumed `new Foo` would entrain its transitive reachable struct definitions.
+
+[13:15:57.0892] <kriskowal>
+In any case, it’s moot because you have a stated position that you don’t want per-agent wrapper objects.
+
+[13:16:21.0119] <kriskowal>
+And my proposal was specifically to enable >1 wrapper object per agent.
+
+[13:16:34.0359] <kriskowal>
+Such that different compartments might have different prototypes for the same struct.
+
+[13:17:26.0551] <kriskowal>
+With that off the table, I can see the appeal of not having to solve sub-realm isolation.
+
+[13:18:07.0096] <snek>
+this is what I suggested before but it was dismissed because shared structs may be nested, so it's hard to wrap each layer
+
+[13:18:12.0584] <shu>
+let me expand on the stated position: the goal is that the order of the number of wrapper objects should either not grow with the number of threads, or grow very slowly with the number of threads
+
+[13:18:44.0971] <shu>
+per-realm prototypes of course already violates "not grow with the number of threads", but it seems okay because O(number of struct types) should be << O(number of struct instances)
+
+[13:18:57.0008] <shu>
+sub-realm prototypes is probably also fine, so long as that inequality roughly holds
+
+[13:19:26.0202] <kriskowal>
+> <@shuyuguo:matrix.org> sub-realm prototypes is probably also fine, so long as that inequality roughly holds
+
+That’s likely.
+
+[13:19:35.0607] <rbuckton>
+> <@kriskowal:aelf.land> I gather from the requirements, that it’s imagined that incrementally replacing a `class` with a `shared struct` is a delicate-but-possible performance improving refactor that doesn’t require changes from the consuming code
+
+delicate-but-possible sounds like an apt description. For something like TypeScript, our AST nodes are *essentially* immutable (though only enforced via design-time checking, not at runtime), so it is very feasible that we could convert our AST nodes to be shared structs, so long as we can attach behavior. That would allow us to efficiently parallelize parse and emit without the need to duplicate the entire AST in memory for each thread, while still enabling our customers to use our language service API to produce and consume these nodes.
+
+[13:20:26.0470] <shu>
+cause you buy into the pain of shared memory for two reasons, right: one is CPU time, one is to actually share memory and save memory than duplicating per-thread. so our solution can't preclude the second reason
+
+[13:20:43.0818] <rbuckton>
+In the long term, it would be better to have the nodes be *actually* immutable, but that would require either shared private fields or some operation to atomically freeze a shared struct instance.
+
+[13:21:10.0367] <shu>
+yeah, if we think of structs as "declarative sealing", we should also have "declarative freezing"
+
+[13:21:15.0678] <shu>
+though i don't want to bite off that now
+
+[13:22:21.0426] <kriskowal>
+I really like the design direction where you start with data and work your way out to thread-safe shared behavior too.
+
+[13:22:37.0848] <kriskowal>
+It would be limiting, but also enabling.
+
+[13:22:52.0916] <kriskowal>
+You wouldn’t even need to replicate the prototypes.
+
+[13:23:02.0070] <shu>
+in a different life, without this being demand-driven, i would love to agree
+
+[13:23:45.0509] <shu>
+demand-driven meaning we started from actual partners wanting more performance and expressivity out of the web platform
+
+[13:25:32.0589] <shu>
+> <@kriskowal:aelf.land> I really like the design direction where you start with data and work your way out to thread-safe shared behavior too.
+
+i want to reiterate we _started that way_
+
+[13:25:38.0246] <shu>
+we all wanted to go that way, for the same reasons
+
+[13:25:55.0550] <shu>
+but we're here now because of experience
+
+[13:26:17.0371] <rbuckton>
+One direction I'd suggested for shared functions was to entertain the notion of a single frozen shared realm that all shared things live in, but then shared structs cannot close over or use anything in the current realm, only other shared things, but that's a lot to bite off and wasn't well received.
+
+[13:26:18.0752] <kriskowal>
+Yeah, please pardon me for replaying a great deal of history to catch up. It was my hope not to get drawn in :-)
+
+[13:28:22.0062] <shu>
+bbl, will catch up after labor day
+
+[13:28:31.0773] <kriskowal>
+Down the pure behavior road is also the possibility of JIT to shader.
+
+[13:28:51.0476] <rbuckton>
+Data-only shared structs would be fine for green field projects, but for something like TypeScript we'd essentially need to create a wrapper/proxy layer over a shared AST that we would have to rehydrate in every thread, which eats up all of the memory/performance gains you would hope to gain.
+
+[13:29:19.0044] <iain>
+Without making the claim that this is actually taking place: in the abstract, I think it would be unfortunate if we locked in a suboptimal design for shared behaviour out of an urge to have something that we can ship sooner. Specifically: if we think we could eventually work out a design for thread-safe shared behaviour, and it would be more performant than the current thread-local prototype approach, then it would be better not to lock ourselves into a local maximum.
+
+[13:29:21.0308] <kriskowal>
+But I digress, it seems that the remaining options both involve more elaborate mitigations for sub-realm confinement and I’ll have to be here to evaluate those options.
+
+[13:29:59.0542] <kriskowal>
+ * But I digress, it seems that the remaining options both involve more elaborate mitigations for sub-realm confinement and I’ll have to be here to help evaluate those options.
+
+[13:30:49.0999] <shu>
+> <@iain:mozilla.org> Without making the claim that this is actually taking place: in the abstract, I think it would be unfortunate if we locked in a suboptimal design for shared behaviour out of an urge to have something that we can ship sooner. Specifically: if we think we could eventually work out a design for thread-safe shared behaviour, and it would be more performant than the current thread-local prototype approach, then it would be better not to lock ourselves into a local maximum.
+
+"sooner" here means like in the next N years
+
+[13:31:05.0159] <shu>
+i think it's the right choice to have something that can ship in fewer than a decade...?
+
+[13:31:11.0479] <shu>
+ * i think it's the right choice to have something that can ship in fewer years than a decade...?
+
+[13:31:20.0544] <shu>
+like we're talking about rushing out something next week vs next quarter
+
+[13:31:31.0205] <shu>
+ * like we're not talking about rushing out something next week vs next quarter
+
+[13:32:02.0447] <rbuckton>
+I have considered approaches to eventually layer on actual shared functions in the future, at least from the syntax/DX side of things.
+
+[13:34:20.0678] <iain>
+I mean, I think we could ship data-only in N-K years for some positive K
+
+[13:35:23.0028] <kriskowal>
+> <@shuyuguo:matrix.org> i think it's the right choice to have something that can ship in fewer years than a decade...?
+
+ESM enters the chat
+
+[13:36:05.0912] <iain>
+But my point is not that we should ship data-only, it's that in the time it takes to actually implement that part, I hope that we have thoroughly examined the design tradeoffs of thread-safe functions
+
+[13:36:27.0533] <kriskowal>
+(I remain salty about proposing a `Module` constructor 14 years ago)
+
+[13:36:40.0010] <rbuckton>
+The biggest problem I see with that is that the big applications that are requesting this feature are also requesting behavior, so they're going to have to wait K. If we can find a solution that lets us gradually get to actual shared functions later while still having behavior now, that's preferrable.
+
+[13:36:40.0462] <iain>
+The ability to avoid shared prototypes and thread-local hashtables seems like a win
+
+[13:38:29.0790] <iain>
+Shu said above that it's less of a win than you might think
+
+[13:38:35.0204] <rbuckton>
+> <@iain:mozilla.org> The ability to avoid shared prototypes and thread-local hashtables seems like a win
+
+We can't avoid thread-local hashtables if we want to put shared structs in weak maps, which we *would* need to do if we need to create proxies to emulate the ability to attach behavior. That doesn't go away.
+
+[13:39:11.0220] <shu>
+> <@kriskowal:aelf.land> ESM enters the chat
+
+now you also know what i think about ESMs, at least natively
+
+[13:39:51.0647] <kriskowal>
+> <@shuyuguo:matrix.org> now you also know what i think about ESMs, at least natively
+
+it didn’t have to be this way
+
+[13:41:34.0664] <iain>
+> <@rbuckton:matrix.org> We can't avoid thread-local hashtables if we want to put shared structs in weak maps, which we *would* need to do if we need to create proxies to emulate the ability to attach behavior. That doesn't go away.
+
+Shared structs in weakmaps effectively requires full stop-the-world cross-worker GC. If you want to include that in the MVP, you are adding an extra K to the N years.
+
+[13:43:16.0738] <iain>
+The proposal very nearly avoids the need to support shared->local edges. The incremental cost of having to overhaul GC is significantly larger than the incremental benefits for the few use cases.
+
+[13:43:49.0758] <iain>
+Roughly speaking, I think you can either have shared structs without weakmaps in N years and then weakmap support K years later, or you can wait N+K years for the whole thing.
+
+[13:44:50.0639] <iain>
+I would like to find a point in design space that maximizes the value to users while minimizing the implementation time necessary to ship it to them
+
+[13:45:31.0603] <shu>
+have you had time to noodle on "collect main thread cycles only, let the rest leak"?
+
+[13:45:35.0720] <shu>
+v8 is banking on that basically
+
+[13:45:39.0136] <rbuckton>
+> <@iain:mozilla.org> Shared structs in weakmaps effectively requires full stop-the-world cross-worker GC. If you want to include that in the MVP, you are adding an extra K to the N years.
+
+I don't think its avoidable, although it was the line that the V8 dev trial stopped at. If we don't have the ability to put shared struct instances in weak maps, then they will just end up in maps and leaking.
+
+[13:46:17.0704] <shu>
+yeah iain, the counterfactual is literally that _more things will leak_
+
+[13:47:14.0500] <shu>
+i don't really see what the benefit of it is. sure, you and i can say "well, technically, the engine is doing exactly the right thing here" but... why would the users care about who's the blame for the leaks?
+
+[13:47:57.0333] <iain>
+If the code is guaranteed to leak, then they will hopefully not write that code
+
+[13:48:06.0540] <shu>
+no that is literally not true
+
+[13:48:18.0843] <iain>
+And yeah, there will be some cases where that is difficult and there will be pressure on us to do something better
+
+[13:48:24.0258] <shu>
+i have explicitly asked, what are you (tools, apps) going to do if there's no weakmap support
+
+[13:48:27.0802] <shu>
+the answer is always "we will use maps"
+
+[13:48:40.0341] <iain>
+I'm not saying that collecting cross-thread cycles is objectively bad
+
+[13:48:42.0682] <shu>
+this is not going off a hunch here
+
+[13:49:15.0851] <shu>
+no, you're saying it'll take too long and difficult to build
+
+[13:50:18.0992] <shu>
+> <@iain:mozilla.org> And yeah, there will be some cases where that is difficult and there will be pressure on us to do something better
+
+you know what the "better" thing is other than always leaking? it's manual memory management
+
+[13:50:20.0378] <iain>
+I'm saying that I think there is value in shipping the easy part first, and warning people using the power-user feature that they have to be careful about memory leaks
+
+[13:50:52.0041] <shu>
+man i don't know why i'm not getting across
+
+[13:50:56.0446] <shu>
+this isn't about "you have to be more careful"
+
+[13:51:06.0308] <iain>
+I understand what you're saying
+
+[13:51:08.0964] <shu>
+this is about making the choice "leak forever or use free()"
+
+[13:51:14.0230] <shu>
+what is "more careful"?
+
+[13:52:29.0963] <iain>
+What are the cases in which you have to be putting these in a map?
+
+[13:52:52.0813] <iain>
+Like, it is clearly not the case that every possible usage of shared structs relies on local weakmaps
+
+[13:53:12.0710] <shu>
+no, it isn't, but to associate thread local data you need it
+
+[13:53:19.0118] <shu>
+and that's a pretty common thing to do
+
+[13:55:27.0003] <shu>
+spreadsheet model, suppose naively that each cell is a struct. the model is shared. there's some main-thread local stuff that's associated with the cell (event handlers, dom nodes, whatever)
+
+[13:55:39.0450] <rbuckton>
+> <@iain:mozilla.org> What are the cases in which you have to be putting these in a map?
+
+If we go with the "ship the easy part" and only do data only, then to use them in TypeScript I need to wrap every shared struct based AST node with a regular JS object. I don't want two different JS objects in one thread to point to the same backing struct, so I need to disambiguate them. We also create and throw away and reuse nodes frequently during transformation, and heavily rely on reference identity during tree transformations. So we will use `WeakMap` if we can, or `Map` if we can't. there's no way around it if we want to incrementally adopt, and a full rewrite just isn't plausible.
+
+[13:57:36.0967] <iain>
+I'm looking at [this V8 design doc](https://docs.google.com/document/d/1GoIWdfsKuKb0PS3gSF8b1U0RoHs5ALPzXAMx-QPHHNg/edit#heading=h.g227de93gbi) discussing shared-to-unshared references
+
+[13:58:30.0265] <rbuckton>
+Also, while our AST nodes are essentially immutable, we do need to conditionally attach additional information to them, such as symbol and type information, source map information, etc. Generally these mappings only live as long as a given `TypeChecker` does, but we also incrementally parse and reuse entire subtrees of an AST if possible, so some information may need to live longer.
+
+[13:59:14.0551] <iain>
+And the options appear to be "leak some stuff" and "here's a speculative idea with 'non-negligible complexity' that we think should probably work"
+
+[14:01:16.0584] <iain>
+Er, and "make the entire heap global"
+
+[14:03:34.0644] <iain>
+The distributed global heap idea seems like the most promising idea in the long run
+
+[14:04:29.0035] <iain>
+But that's the one with non-negligible complexity
+
+[14:05:00.0958] <shu>
+we're going to prototype this and try it with our partners
+
+[14:05:15.0278] <shu>
+there's no request for you to agree and commit to something right now for either the JS proposal nor the Wasm proposal
+
+[14:05:42.0375] <shu>
+the skepticism is warranted, that's why we're actually going to build something...
+
+[14:06:17.0457] <shu>
+what i disagree with is all the arguing against having V8 try it, and for "have userspace leak everything"
+
+[14:08:57.0821] <iain>
+I think that there are significant webcompat concerns in cases where engines systematically disagree on whether particular operations leak
+
+[14:09:29.0127] <shu>
+i... did not say we're going to build it and ship it
+
+[14:09:41.0475] <shu>
+i said we are going to prototype this and try it out with our partners
+
+[14:10:04.0591] <shu>
+like, OTs, or dev trials
+
+[14:10:22.0234] <shu>
+> <@iain:mozilla.org> I think that there are significant webcompat concerns in cases where engines systematically disagree on whether particular operations leak
+
+but also i mean, you don't think that's true today?
+
+[14:11:00.0629] <iain>
+It would be if such disagreements existed
+
+[14:11:07.0563] <shu>
+they... do?
+
+[14:11:14.0398] <iain>
+On this scale?
+
+[14:11:16.0906] <shu>
+like webkit does not have a cycle collector afaiu
+
+[14:11:26.0173] <shu>
+they have some insane 'object group' thing afaiu
+
+[14:11:29.0955] <iain>
+Wat
+
+[14:11:50.0749] <shu>
+well, i'd love to be corrected. you all have a cycle collector for DOM nodes, blink has Oilpan
+
+[14:11:54.0008] <shu>
+WK has... ad-hoc stuff
+
+[14:12:00.0615] <iain>
+Huh. TIL
+
+[14:12:05.0061] <shu>
+but the common cases are handled
+
+[14:12:12.0077] <shu>
+that seems pretty analogous to me
+
+[14:13:07.0793] <shu>
+the thesis is: main thread cycles are the common ones, and those are handleable. so if that's what the OT shows on both counts, then great. if it isn't, then our thesis was wrong and we need to start over
+
+[14:14:56.0559] <iain>
+Basically: I think SM would be willing to ship a version of shared structs with no shared-to-local edges if they were left out of the proposal, and then add them in later. If shared-to-local edges are part of the MVP, then we are unlikely to ship until we have reached rough memory-leak-parity with V8.
+
+[14:15:27.0683] <iain>
+I think that the former scenario provides value for users sooner.
+
+[14:16:37.0276] <shu>
+the decision here must be made in unison with shared wasmgc
+
+[14:16:54.0198] <shu>
+either js shared structs and wasmgc shared structs are both usable as weakmap keys or neither are, in the MVP
+
+[14:17:15.0819] <shu>
+given where staffing is right now i imagine shared wasmgc to be the proposal that makes the decision first
+
+[14:18:12.0149] <shu>
+who's the gc lead? jonco?
+
+[14:18:50.0214] <iain>
+jonco is the GC lead. Ryan Hunt is the wasm lead. The position I'm taking here is based on talking it over with Ryan. jonco would prefer if we didn't have to do any of this.
+
+[15:54:34.0579] <shu>
+iain: it may be helpful for us to chat, both the JS and the Wasm side together
+
+[15:54:40.0247] <shu>
+parallel convos have been happening
+
+[15:55:47.0180] <iain>
+Awkwardly Ryan just went on parental leave this week, and I will be going on leave myself any day now.
+
+[15:56:12.0709] <shu>
+ah, well, in no world is computers more important than children
+
+[15:57:49.0893] <iain>
+I think we should both be back by early November
+
+[15:58:29.0339] <iain>
+So if you ping us then, we will *probably* still remember some of this
+
+[16:00:35.0046] <shu>
+well, others on the team are still around, i assume
+
+[16:01:26.0188] <shu>
+anyway, process-wise, do you agree that this is a decision to be made during stage 2 (i.e. entry into stage 3)? which certainly won't come before Novemeber
+
+[16:01:30.0300] <shu>
+ * anyway, process-wise, do you agree that this is a decision to be made during stage 2 (i.e. entry into stage 3)? which certainly won't come before November
+
+[16:01:51.0661] <shu>
+i doubt it'll be baked enough for stage 3 november next year but we'll see...
+
+[16:01:58.0488] <shu>
+ * i doubt it'll even be baked enough for stage 3 november next year but we'll see...
+
+[16:19:18.0461] <iain>
+I agree that the decision that we are going to do shared structs at all (eg stage 1 to stage 2) comes before pinning down the details of exactly which parts we think belong in the MVP (stage 2 to stage 3).
+
+
+2024-08-30
+[23:51:33.0961] <Mathieu Hofman>
+> <@iain:mozilla.org> The proposal very nearly avoids the need to support shared->local edges. The incremental cost of having to overhaul GC is significantly larger than the incremental benefits for the few use cases.
+
+Well there is the other problem that currently all JS objects are usable as WeakMap keys, and that some libraries rely on that to hold true, possibly some that never attempt to access the fields of the object. If we're talking about shared structs being a drop-in replacement for class instances in some cases, I'd argue we need to uphold that current property of the language.
+
+[08:55:19.0768] <iain>
+I think everybody agrees that in the long run it would be good to have shared structs that can be used as weakmap keys. My argument is that in terms of the actual implementation effort, supporting shared-to-local edges (which is required to implement weakmaps that don't leak) is a major implementation challenge (like, 1/3 to 1/2 of the overall proposal?). The new capabilities that it unlocks are relatively small. So the question is whether it is better to ship a complete version of shared structs in N years, or a more restricted version in N/2 years followed by a complete version N/2 years later.
+
+[08:55:39.0110] <iain>
+ * I think everybody agrees that in the long run it would be good to have shared structs that can be used as weakmap keys. My argument is that in terms of the actual implementation effort, supporting shared-to-local edges (which is required to implement weakmaps that don't leak) is a major implementation challenge (like, 1/3 to 1/2 of the overall proposal?). The new capabilities that it unlocks are relatively small (compared to the overall proposal). So the question is whether it is better to ship a complete version of shared structs in N years, or a more restricted version in N/2 years followed by a complete version N/2 years later.
+
+[08:59:05.0195] <iain>
+I also expect that getting implementation feedback from more than one engine before locking in the final proposal will lead to a better end result.
+
+[09:22:43.0555] <littledan>
+Didn't V8 also initially consider banning shared to local edges? Do we know more about what led V8 to change their minds?
+
+[09:28:03.0086] <iain>
+Sometimes you want to associate some necessarily local data (eg an event handler, a DOM node) with a shared struct.
+
+[09:29:10.0069] <littledan>
+are you saying, we could support those edges, just not for WeakMaps?
+
+[09:33:55.0588] <iain>
+V8 isn't proposing unrestricted shared to local edges. But putting shared structs in weak maps ends up in a similar situation with respect to cycles through the shared space.
+
+[09:35:26.0950] <iain>
+Eg if you have two shared structs and two workers, and each worker has a weakmap with one shared struct as a key and the other as the corresponding value, then how do you collect that?
+
+[09:38:58.0442] <iain>
+The "no shared to local edges" principle, if robustly enforced, means that you can do local collections without having to coordinate with anybody else. Once you break it, then you can have cycles that (as far as anybody can tell) require you to stop the world occasionally to avoid leaking memory.
+
+[09:40:01.0941] <littledan>
+oh I see. Yeah, if we want to restrict those edges, then restricting weakmap keys is part of it. Seems reasonable
+
+[11:16:30.0404] <ljharb>
+having an object that you can't store in a weakmap seems like a nonstarter tho
+
+[11:20:07.0939] <iain>
+Shared structs are going to be weird in all sorts of ways. Why is this specific restriction a non-starter (compared to, say, not being able to store references to local objects)?
+
+[11:24:02.0085] <iain>
+I reiterate that from an implementation perspective this is genuinely a major additional effort to implement well, on the rough order of magnitude as the rest of the proposal put together.
+
+[11:25:39.0151] <iain>
+(It can be implemented badly with less effort, but there are significant web-compat concerns there.)
+
+[11:28:04.0046] <Mathieu Hofman>
+I there a middle ground where collecting non cyclic shared->local edges created by weakmaps would not cause significantly more implementation work? I think it's totally acceptable for some non common cases to leak at first
+
+[11:29:37.0707] <Mathieu Hofman>
+The concern with not being able to blindly put a `typeof foo === 'object' && foo !== null` in a WeakMap is a huge compat concern when an app gradually adopts shared structs
+
+[11:29:46.0450] <Mathieu Hofman>
+ * The concern with not being able to blindly put a `typeof foo === 'object' && foo !== null` in a WeakMap is a compat concern when an app gradually adopts shared structs
+
+[11:32:54.0612] <iain>
+I think that roughly works out to be "WeakMap as a way to implement main-thread TBS" in the V8 design doc [here](https://docs.google.com/document/d/1GoIWdfsKuKb0PS3gSF8b1U0RoHs5ALPzXAMx-QPHHNg/edit#heading=h.pbq4b3s54rlj). I would have to double-check with our GC experts, but I think that's less effort. My concern there is webcompat: if one browser implements that, and another browser implements full cycle collection, then you're going to have websites that leak in one browser but not the other.
+
+[11:33:44.0757] <iain>
+So in practice there's no difference between that middle ground and the full requirement.
+
+[11:34:54.0513] <iain>
+I acknowledge that this makes incremental adoption harder.
+
+[11:35:41.0796] <iain>
+I am not convinced that it makes incremental adoption so much harder that it outweighs the benefit of being able to ship something sooner.
+
+[11:36:43.0050] <iain>
+To be clear, I'm also not convinced of the converse! I just want to make sure that we're all clear on the decision we're making.
+
+[12:04:10.0964] <ljharb>
+> <@iain:mozilla.org> Shared structs are going to be weird in all sorts of ways. Why is this specific restriction a non-starter (compared to, say, not being able to store references to local objects)?
+
+a new thing accepting a subset of values is fine. an existing thing suddenly changing its current invariants (all objects can be weakly held) is not. this would apply to weakmap, weakset, weakref, and finalizationregistry - that's a lot of things to have changed invariants.
+
+if browsers were OK with a `isWeakable` predicate - proposed for precisely this problem when non-global symbols became allowed - then it'd have been OK to change, but sans that predicate, it's not
+
+[12:08:54.0133] <snek>
+`let isWeakable = (o) => try { new WeakMap([{}, 1]); return true; } catch { return false : }`
+
+[12:08:58.0344] <snek>
+ * `let isWeakable = (o) => try { new WeakMap([{}, 1]); return true; } catch { return false; }`
+
+[12:09:04.0178] <snek>
+ * `let isWeakable = (o) => try { new WeakMap([o, 1]); return true; } catch { return false; }`
+
+[12:12:18.0615] <ljharb>
+indeed, that'd be a polyfill for it :-) but unless it's built in, the ecosystem won't use it, and there'll be tons of checks like `Object(o) === o` or `o && typeof o === 'object'` that naively check for a subset of weakable values, that will break if a non-weakable object suddenly gets passed into something
+
+[12:56:23.0471] <rbuckton>
+I'm still very concerned that shipping shared structs "fast" by dropping agent/realm-local prototypes and not supporting WeakMap is going to significantly hamper adoption for the teams actually requesting this feature. If I don't have the ability to define behavior on the prototype, then I would need to create a membrane over shared data to be able to incrementally adopt. If I can't put the shared structs in a WeakMap to ensure I only ever produce a single proxy for a given shared struct, then I have to put them in a Map. If I put them in a Map, they will leak. If I don't want them to leak, I need to force all of my API consumers to perform manual memory management, which would be a brand new requirement for *all* API consumers, so we probably just end up leaking memory. That is not a great outcome.
+
+[12:58:27.0630] <rbuckton>
+I would be happy with a scenario where A) we get agent-local prototypes, but B) we can't have shared structs as WeakMap keys, since for (A) those prototypes would probably never be collected anyways since they will be retained by the shared struct constructors and the module graph.
+
+[14:19:56.0677] <rbuckton>
+Actually, having prototypes but not WeakMap support is still a problem. Since prototypes would give us behavior, we wouldn't need a membrane for Nodes, but we still need one for `NodeArray`. A TypeScript `NodeArray` is essentially an `Array` with extra `pos`/`end` properties attached. Unfortunately, the `SharedArray` type introduced in the shared structs dev trial doesn't allow for additional (non-indexed) properties. The only way to handle that transparently/incrementally would still be via a `Proxy`, which means we still have a potential memory leak if we don't have WeakMap.
+
+[14:24:17.0160] <rbuckton>
+If we have prototypes and WeakMaps, something like `SourceFile` could have a `statements` getter that could return a `Proxy` for a struct like
+```js
+shared struct NodeArrayStruct {
+  pos; // number
+  end; // number
+  items; // SharedArray<Node>
+}
+```
+where the proxy emulates `NodeArray` and redirects numeric indexed access to `items`. The performance would be abysmal though.
+
+[14:26:03.0619] <rbuckton>
+I experimented with just creating a shared struct with properties like `{ length; "0", "1" }`, but the dev trial had major perf issues with struct fields whose names were integer indexes.
+
+[14:26:14.0961] <rbuckton>
+ * I experimented with just creating a shared struct with properties like `{ length; "0"; "1"; }`, but the dev trial had major perf issues with struct fields whose names were integer indexes.
+
+[14:27:16.0846] <rbuckton>
+ * If we have prototypes and WeakMaps, something like `SourceFile` could have a `statements` getter that could return a `Proxy` for a struct like
+
+```js
+shared struct NodeArrayData {
+  pos; // number
+  end; // number
+  items; // SharedArray<Node>
+}
+```
+
+where the proxy emulates `NodeArray` and redirects numeric indexed access to `items`. The performance would be abysmal though.
+
+[14:40:05.0663] <rbuckton>
+If a `SharedArray` were essentially like a `shared struct`, maybe we could leverage subclassing somehow?
+
+```js
+shared struct NodeArray extends SharedArray {
+  pos = -1;
+  end = -1;
+  constructor(length) {
+    super(length);
+  }
+}
+```
+
+
+[14:41:30.0668] <rbuckton>
+If we can get that to work, then my need for WeakMap support drops significantly so long as we have prototypes.
+
+[14:56:38.0074] <rbuckton>
+Assuming shared structs act like primitives, such that their protoypes are looked up, then those prototypes would need to be retained indefinitely even if the shared struct never leaves the agent since it won't, itself, retain a reference to the prototype.
+
+[15:03:03.0351] <rbuckton>
+Which means whatever correlation scheme we use doesn't necessarily need to maintain a shared to local edge anyways. If shared structs are top-level only, their prototypes would be retained by their constructors, which would be retained by the module, which is in turn retained for the lifetime of the program.
+
+
+2024-08-31
+[17:26:25.0864] <Mathieu Hofman>
+You can't refactor to use the following shape?
+```
+shared struct Node array {
+  pos = -1;
+  end = -1;
+  array;
+}
+```
+
+[17:26:48.0748] <Mathieu Hofman>
+* You can't refactor to use the following shape?
+```
+shared struct NodeArray {
+  pos = -1;
+  end = -1;
+  array;
+}
+```
+
+[17:28:05.0739] <Mathieu Hofman>
+* You can't refactor to use the following shape?
+```
+shared struct NodeArray {
+  pos = -1;
+  end = -1;
+  array;
+  constructor(length) { this.array = new SharedArray(length); }
+}
+```
+
+[18:16:01.0944] <rbuckton>
+Preferrably, no. That would be a *major* breaking API change so it is certainly not "incremental"
+
+[18:16:08.0519] <rbuckton>
+ * Preferably, no. That would be a _major_ breaking API change so it is certainly not "incremental"
+
+[18:18:39.0531] <rbuckton>
+There is just far too much tooling that utilizes the TS language service API change that would be broken and need to be updated. That's a lot of churn we'd like to avoid and would be a major adoption blocker for us.
+
+[18:19:09.0446] <rbuckton>
+ * There is just far too much tooling that utilizes the TS language service API that would be broken by that change and need to be updated. That's a lot of churn we'd like to avoid and would be a major adoption blocker for us.
+
+[18:21:39.0763] <Mathieu Hofman>
+Ah yeah that makes sense. Making `SharedArray` extensible makes sense. At the end of the day, it seems like a "normal" shared struct, just with integer properties defined at construction, and a currently inexplicable non-writable length property
+
+[18:22:05.0190] <rbuckton>
+`Proxy+WeakMap` isn't a great solution, but it would allow us to incrementally adopt. LS API features would go through the proxy and be slower.
+
+[18:28:34.0331] <rbuckton>
+> just with integer properties defined at construction
+
+I've often wished JS had actual numeric indexers rather than exotic array objects.
+

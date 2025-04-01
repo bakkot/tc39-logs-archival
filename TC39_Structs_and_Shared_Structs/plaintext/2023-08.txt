@@ -1,0 +1,122 @@
+2023-08-17
+[10:29:08.0300] <rbuckton>
+As far as topics for today, I've started experimenting with the shared structs trial in the TypeScript compiler and have some early feedback.
+
+[10:30:59.0252] <shu>
+awesome, omw to meeting room
+
+[12:55:02.0479] <rbuckton>
+As promised, here is a rough sketch of the handshaking mechanism I was thinking about: https://gist.github.com/rbuckton/08d020fc80da308ad3a1991384d4ff62
+
+
+2023-08-18
+[13:36:44.0472] <rbuckton>
+If we end up having this concept of thread-local fields, or a thread-local `[[Prototype]]`, do we actually need shared structs? Could we solve the same problem by introducing `shared` and `fixed` fields on a `class` instead? In other words, treat all non-`shared` fields as just thread-local fields, while having all `fixed` fields establish a fixed shape for an object, with the remaining non-`fixed` fields at the end?
+
+[13:39:39.0987] <rbuckton>
+I suppose you'd still need to indicate whether non-`shared` fields are "structured clone"-able.
+
+[13:43:22.0170] <rbuckton>
+And this could all be potentially handled via privileged decorators rather than keywords, i.e.:
+
+```js
+@Shareable()
+class Foo {
+  @Shared()
+  x;
+
+  @Shared()
+  y;
+
+  @Copiable()
+  data;
+
+  @ThreadLocal()
+  toString() { ... }
+}
+```
+
+[13:47:37.0203] <shu>
+rbuckton: the 'shared' modifier is not fully composable so i feel like we still need shared structs. not fully composable meaning, it doesn't make sense to have an object with some shared fields and some non-shared fields
+
+[13:48:55.0331] <rbuckton>
+The reason I brought this up is that we were actively discussing non-shared (i.e., "thread-local") fields in the last meeting.
+
+[13:49:21.0462] <shu>
+though i think my gut reaction is 'dislike' largely because it feels weird to me to have a property as fundamental as 'whether identity of instances of this class is preserved' to be implied by the fields that it has
+
+[13:49:26.0813] <shu>
+ * though i think my gut reaction is 'dislike' largely because it feels weird to me to have a property as fundamental as 'whether identity of instances of this class is preserved across threads' to be implied by the fields that it has
+
+[13:50:20.0516] <shu>
+am i understanding you right that you're thinking of something like, if a class `C` has any shared fields, it produces shared instances, and the non-shared fields are thread-local?
+
+[13:50:39.0441] <shu>
+otherwise it's not a shared thing, and all threads are "thread-local" but that's not really observable since it can't escape the thread
+
+[13:50:46.0321] <shu>
+ * otherwise it's not a shared thing, and all fields are "thread-local" but that's not really observable since it can't escape the thread
+
+[13:52:07.0720] <shu>
+i don't understand what the decorator notation above is doing
+
+[13:55:55.0913] <rbuckton>
+does it matter if identity is preserved across threads, if they have no way to compare the identity?
+
+[13:56:16.0602] <shu>
+it very much matters if identity is preserved across threads because that's how you observe how many allocations you've done...
+
+[13:56:23.0865] <shu>
+these aren't structural
+
+[13:56:38.0567] <shu>
+(how do you not observe identity without making these structural?)
+
+[13:56:44.0015] <rbuckton>
+I suppose it matters for `worker.postMessage(obj); worker.postMessage(obj);`, but within a single call to `postMessage` references are preserved during structured clone.
+
+[13:57:05.0998] <shu>
+like, if things round-trip, i want the same Map lookups to work etc
+
+[13:57:27.0427] <rbuckton>
+In any case, the class in the example above is explicitly marked as `@Shareable()` which would control the identity behavior.
+
+[13:58:46.0209] <shu>
+so far it feels like it comes down to taste, whether it feels nicer to have sharing semantics of fields and objects be determined "bottom up" by per-field annotations, or whether it's nicer to have sharing semantics be determined "top down" by per-class/struct annotations, with per-field annotations for exceptional cases (like thread-local)
+
+[13:58:47.0839] <rbuckton>
+All of the decorators serve the same purpose as a keyword might. There was a strong sentiment in the past by some committee members that once Decorators is at Stage 4 we should avoid adding new keywords for things if a decorator would suffice. While I'm not sure I 100% agree, decorators could be used for this. 
+
+
+2023-08-19
+[17:00:39.0403] <littledan>
+> <@rbuckton:matrix.org> All of the decorators serve the same purpose as a keyword might. There was a strong sentiment in the past by some committee members that once Decorators is at Stage 4 we should avoid adding new keywords for things if a decorator would suffice. While I'm not sure I 100% agree, decorators could be used for this. 
+
+This very much has to be a case by case thing. I think Shu has technical reasons here why decorators don’t work. (Also I don’t know why your decorators have ()—that has never been needed in any draft proposal that I saw for decorators, and isn’t needed in Stage 3 or TS decorators)
+
+[17:02:12.0394] <rbuckton>
+That's fair, though I'
+
+[17:03:49.0770] <rbuckton>
+ * That's fair, though I'll admit that in the TS experiment I'm using decorators so that I can use `class` so that TypeScript understands the types produced. The `@Shared` decorator itself is somewhat complex, but I can very easily write definitions like the following:
+
+```ts
+@Shared()
+export class SharedTypeParameterDeclaration extends SharedNodeWithJSDoc<SyntaxKind.TypeParameter> {
+    @Shared() readonly modifiers!: SharedNodeArray<SharedModifier> | undefined;
+    @Shared() readonly name!: SharedIdentifier;
+    @Shared() readonly constraint!: SharedTypeNode | undefined;
+    @Shared() readonly default!: SharedTypeNode | undefined;
+    @Shared() readonly expression!: SharedExpression | undefined;
+}
+```
+
+[17:04:22.0564] <rbuckton>
+So I'd argue that there aren't technical reasons why decorators won't work, at least not with the origin trial.
+
+[17:19:55.0674] <rbuckton>
+Let me walk that last statement back somewhat. Its technically feasible to implement using decorators, but may not have intended performance characteristics due to potential limitations in static analysis.
+
+[07:53:05.0270] <Mathieu Hofman>
+The biggest complication I see with piggy-backing on the `class` syntax is the same issue we keep running into: how do you connect a local behavior to a definition introduced by another thread. At the end of the day, `class` creates a local definition, which seem incompatible with attaching behavior, at least without introducing new syntax.
+

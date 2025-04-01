@@ -1,0 +1,187 @@
+2023-08-14
+[11:30:02.0884] <ramsey>
+Is anyone aware of any language tags that would return "bottom-to-top" when passed to icu4c's `uloc_getLineOrientation()` function?
+
+[11:31:18.0020] <ramsey>
+For example, I've tried `pgl-Ogam` (Primitive Irish, Ogham script), but that returns "top-to-bottom" (which maybe is wrong?)
+
+[11:32:58.0774] <ramsey>
+Also, I know this is a channel for ECMA-402, but I was looking into the Intl Locale Info Proposal, which has a `getTextInfo()` method that includes (character) `direction`, and I was wondering why "line direction" was left out, but maybe it's because there are no language tags that would produce "bottom-to-top" in ICU
+
+[11:35:20.0197] <littledan>
+Wow, this is a pretty advanced question. I wonder if people over on the Unicode Slack would have that background, about what's in CLDR
+
+[11:36:11.0758] <ramsey>
+I wasn't aware of the Unicode Slack. I had gone looking for some chat channel for them on IRC or Matrix. Do you have a link?
+
+[11:49:15.0541] <littledan>
+ramsey: If you DM me your email address, I'll make sure you get an invite
+
+[14:11:38.0269] <sffc>
+See some previous discussion on this topic here: https://github.com/tc39/proposal-intl-locale-info/issues/59
+
+[14:11:50.0039] <sffc>
+"textInfo.direction is a very simplified model of reality"
+
+[14:31:34.0350] <ramsey>
+sffc: Thanks!
+
+
+2023-08-17
+[02:36:13.0712] <hsivonen>
+Does there exist stated design rationale for why `Intl.Collator` (which, unlike many other APIs, doesn't format anything) falls back to the host locale instead of falling back to `und`? Considering that the root collation is more likely to be valid for a language that isn't explicitly listed in CLDR than a non-root host-language collation, the specified behavior seems unfortunate. Moreover, it's bad that the distinction isn't visible in the typical CI locale of en-US.
+
+[05:36:44.0103] <littledan>
+Everything in Intl falls back to the host locale… I think that’s the extent of the rationale.
+
+[05:37:56.0327] <littledan>
+If we wanted to work on Intl.Collator, we should probably address the thing where the design forces a bunch of recalculation of the collation key to do any sorting…
+
+[07:39:40.0816] <sffc>
+> Moreover, it's bad that the distinction isn't visible in the typical CI locale of en-US.
+Can you check the resolved options to get the locale?
+
+
+2023-08-21
+[02:27:56.0530] <hsivonen>
+> <@sffc:mozilla.org> > Moreover, it's bad that the distinction isn't visible in the typical CI locale of en-US.
+> Can you check the resolved options to get the locale?
+
+Possibly, yeah, if one goes looking for it, instead of just testing sort behavior.
+
+[02:28:03.0991] <hsivonen>
+> <@littledan:matrix.org> Everything in Intl falls back to the host locale… I think that’s the extent of the rationale.
+
+Thanks.
+
+[02:30:17.0007] <hsivonen>
+> <@littledan:matrix.org> If we wanted to work on Intl.Collator, we should probably address the thing where the design forces a bunch of recalculation of the collation key to do any sorting…
+
+Unlikely. According to ICU4C docs, the number of comparisons that you need to do to amortize the collation key generation is high, and collation keys are rarely appropriate. (FWIW, it appears that even SQLite's ICU4C mode sorts without stored collation keys even though the use case for stored collation keys is "databases")
+
+[08:30:53.0220] <sffc>
+Let's please not use locale sensitive sorting in a database. My team just spent a quarter making a special version of ICU to help a database team not corrupt their data when upgrading our library.
+
+[14:50:04.0588] <justingrant>
+> > (FWIW, it appears that even SQLite's ICU4C mode sorts without stored collation keys even though the use case for stored collation keys is "databases")
+
+> My team just spent a quarter making a special version of ICU to help a database team not corrupt their data when upgrading our library.
+
+By "stored collation key" do you mean that when a column is stored with a particular collation, then (as an implementation detail) a collation key is also stored along with that column's data?
+
+sffc was this an existing 3rd-party DBMS like Oracle or MySQL?  Or was it a custom internal Google thing?
+
+If the former, then I'd be curious to learn if any RDBMS does that. AFAIK, I/O is much more expensive than CPU in most modern platforms, so it seems fine to recalculate a collation key whenever sorting or comparing while running a query or when building a persisted index. Yes, it's slower, but if perf is a problem then building an index is typically the right solution rather than optimizing table scans. 
+
+
+2023-08-22
+[02:55:04.0664] <hsivonen>
+> <@justingrant:matrix.org> > > (FWIW, it appears that even SQLite's ICU4C mode sorts without stored collation keys even though the use case for stored collation keys is "databases")
+> 
+> > My team just spent a quarter making a special version of ICU to help a database team not corrupt their data when upgrading our library.
+> 
+> By "stored collation key" do you mean that when a column is stored with a particular collation, then (as an implementation detail) a collation key is also stored along with that column's data?
+> 
+> sffc was this an existing 3rd-party DBMS like Oracle or MySQL?  Or was it a custom internal Google thing?
+> 
+> If the former, then I'd be curious to learn if any RDBMS does that. AFAIK, I/O is much more expensive than CPU in most modern platforms, so it seems fine to recalculate a collation key whenever sorting or comparing while running a query or when building a persisted index. Yes, it's slower, but if perf is a problem then building an index is typically the right solution rather than optimizing table scans.
+
+For an index to be the right solution, the database needs to be willing and performance-wise capable of rebuilding the index upon collation library and/or CLDR update. Otherwise, you get value-added services like AWS maintaining a glibc whose collation behavior is frozen to accommodate Postgres creating a collation-dependent persistent index.
+
+[09:54:47.0182] <sffc>
+Yes what Henri mentioned is the type of problem I was referencing
+
+[16:25:55.0418] <justingrant>
+Got it. So Postgres relies on the OS's glibc for collation instead of statically linking a particular snapshot of a collation library with each release?  Or is the OS's glibc fixed to match Postgres's behavior so that client apps will sort exactly like the DBMS does, even when not running any DB-related code?
+
+Regardless, how can this problem actually be solved?  If I want to have a case-insensitive, accent-insensitive DB index, and the rules for accent-insensitive comparison change between ICU releases, then the index has to be rebuilt, right?
+
+
+2023-08-23
+[18:36:40.0945] <tewuzij>
+Well case insensitivity is terrible anyway
+
+[18:43:58.0603] <sffc>
+Databases aren't my area of expertise but if you want fuzzy searching you should normalize your text with NFD and Case Fold and build a search db out of that, rather than making a key with a version-sensitive sorting function
+
+[18:49:24.0559] <sffc>
+Collator-based matching is really powerful though so maybe there's a valid reason to consider building an index with a Collator-based transform
+
+[20:54:04.0868] <littledan>
+I kinda got the idea that collation keys might be better than NFD + case fold for some of these fuzzy comparison/searching cases from https://www.unicode.org/reports/tr10/#Searching but I hear about a lot more real systems using nfd+fold
+
+[20:54:45.0969] <littledan>
+So maybe I misinterpreted that section
+
+[20:55:47.0496] <littledan>
+(The non-stability point is well noted!)
+
+[23:15:56.0402] <justingrant>
+> if you want fuzzy searching 
+
+AFAIK, many RDBMSs (like MySQL, Postgres, and SQL Server) default to case-insensitive collation for text columns. There may be per-DBMS variation in whether accent-insensitive (equivalent to [Unicode tertiary](https://www.unicode.org/reports/tr10/#Asymmetric_Search_Tertiary), I suspect) is the default or not.  But it's safe to assume that the majority of text data stored in relational databases is case-insensitively collated. 
+
+So to an app developer, a DB query like `SELECT lastname FROM inventors WHERE lastname = 'De Havilland'` returning a result like`"de Haviland"` isn't "fuzzy" or special. It's just the default way that most non-Oracle relational databases have worked for many years.
+
+> normalize your text with NFD and Case Fold and build a search db out of that
+
+Some challenges to this approach:
+* It doubles the storage requirements for any text column, except in the relatively rare case that you don't need to retain the original case of the column. Database performance and cost is generally constrained by data size, so for most large-scale applications it would be a non-starter to store data twice.
+* It requires application code (or code in the DB, like a computed column or trigger) to do the NFD + Case Fold operation when storing new rows. This adds complexity, hurts perf, and introduces failure cases like the two columns getting out of sync. The alternative of relying on the DB itself to take care of collation is easier, faster, and safer. (Assuming collation updates don't corrupt indexes!)
+
+So it seems unlikely that many DB app developers would want to store an extra, normalized copy of text data.  Instead, they'd probably demand that their hosting providers freeze the collation library. This is what AWS [seems to be doing, FWIW](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/PostgreSQL-Collations.html#:~:text=To%20reduce%20the%20possible%20impacts%20of%20the%20glibc%20updates%2C%20RDS%20for%20PostgreSQL%20now%20includes%20an%20independent%20default%20collation%20library.). 
+
+A DBMS system relying on the OS's collation library seems dangerously brittle. I'm amazed that Postgres does this. Until today, I assumed that all DBMSs statically linked their collation library, and only revved it like any other backwards-incompatible change: put in a major version release, require rebuilding indexes to pick up the change, fixup or rebuild indexes when upgrading the DBMS, etc.
+
+[00:00:54.0060] <hsivonen>
+> <@justingrant:matrix.org> Got it. So Postgres relies on the OS's glibc for collation instead of statically linking a particular snapshot of a collation library with each release?  Or is the OS's glibc fixed to match Postgres's behavior so that client apps will sort exactly like the DBMS does, even when not running any DB-related code?
+> 
+> Regardless, how can this problem actually be solved?  If I want to have a case-insensitive, accent-insensitive DB index, and the rules for accent-insensitive comparison change between ICU releases, then the index has to be rebuilt, right?
+
+As I understand it, Postgres calls glibc (unless configured to call ICU4C) for collation and expects the output for given input to stay the same, which is assuming a guarantee that glibc (other than the AWS special version) doesn't provide across glibc updates. I'm not a Postgres admin and don't know how the Postgres developers view this or how Postgres continues to do this despite it appearing extremely ill-advised from a collator implementor perspective. https://postgresql.verite.pro/blog/2018/08/27/glibc-upgrade.html (with enough searching, there should also be a blog post out there about a horror story of a Postgres database backup being unrestorable after a glibc update.)
+
+[00:18:16.0619] <hsivonen>
+sffc: Given https://github.com/unicode-org/icu4x/issues/3906#issuecomment-1688682654 , does there exist documentation for what are considered ECMA-402 design errors that i18n libraries should not copy?
+
+[02:46:15.0238] <tewuzij>
+Would the db work with strings akin to 'Maθiw'?
+
+
+2023-08-24
+[03:02:36.0619] <hsivonen>
+(I don't see spec language connecting the segmenter granularities to actual operations. Seems to rely just on the English meaning of the string constants.)
+
+[03:21:17.0516] <hsivonen>
+Are use cases for `.resolvedOptions().locale` documented somewhere?
+
+[03:25:15.0312] <hsivonen>
+A quick GitHub search suggests that by far the most common use case for `.resolvedOptions().locale` is to read the host locale by executing `Intl.DateTimeFormat().resolvedOptions().locale`
+
+[03:27:37.0098] <hsivonen>
+Seems to trace back to https://stackoverflow.com/questions/673905/how-to-determine-users-locale-within-browser
+
+
+2023-08-29
+[10:35:23.0469] <hsivonen>
+Why does Temporal have CalendarEra and CalendarEraYear? That is, what do they accomplish compared to CalendarDateEra and CalendarDateEraYear?
+
+[10:45:14.0320] <ptomato>
+CalendarEra calls a method on a calendar object, which may be user-defined. CalendarDateEra is the default implementation of that method
+
+[10:56:38.0862] <hsivonen>
+Thanks. Why are the first two listed as locale-sensitive operations if they aren't operations that a built-in implementation of a calendar needs to provide?
+
+[11:02:48.0952] <ptomato>
+they only occur in hosts that provide non-ISO8601 calendars
+
+[11:04:42.0805] <ptomato>
+however, we have an issue open to move these into a different section, because non-ISO8601 calendars may be provided by non-locale-aware implementations. https://github.com/tc39/proposal-temporal/issues/1418
+
+
+2023-08-31
+[09:46:16.0029] <hsivonen>
+What's the use case for using `localeMatcher: "lookup"`? That is, is there a practical reason to opt from implementation-defined "best fit" to spec-defined "lookup"? Firefox delegates "best fit" to "lookup", but what if an implementation delegated "lookup" to Chromium-style "best fit" (delegates aspects to ICU4C) or Boa-style "best fit" (delegates falling back to a more general locale to ICU4X)? Would delegation of "lookup" to "best fit" be detectable by testing? AFAICT, "lookup" in both Firefox and Chrome turns "in" into "id", but I don't see text in the spec that allows that. If alias resolution like that is de facto already part of "lookup", how can one test that "lookup" isn't a delegation to Chrome or Boa-style "best fit"?
+
+[10:08:48.0327] <hsivonen>
+Ah, the parse + canonicalize step already resolves "in" to "id"?
+

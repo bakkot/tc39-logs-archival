@@ -1,0 +1,1254 @@
+2021-12-04
+[17:44:17.0686] <jschoi>
+sarahghp: I’m taking a look at your slides for the Decimal update. I’m a little confused by the “Standard Library” slide, as well as the subsequent “Downsides of Object-Based Operator Overloading” slide’s mentioning of Math.max. Could you clarify whether your current plan still to latch onto BigInt Math’s polymorphic Math extensions, or is it to add new methods to the Decimal global object? And what does Math.max have to do with operator overloading?
+
+[17:44:35.0751] <jschoi>
+https://drive.google.com/file/d/1qdieei11dZgDY_KnJhSBcFyHTMZOmCJr/view
+
+[17:45:22.0509] <jschoi>
+https://github.com/tc39/proposal-bigint-math/issues/14#issuecomment-952024624
+
+[17:45:48.0431] <jschoi>
+(I’m not planning to present an update on BigInt Math in the next plenary, until its chartered incubator meeting occurs.)
+
+
+2021-12-05
+[01:22:59.0290] <pokute>
+I've been dogfooding my TypeScript support for pipeline operator at https://github.com/Pokute/AoC2021/blob/main/4.ts . It's starting to feel crucial for me. Lacking tacit function application (`|>>`) would be an inconvenience, but the other way around, I would have so many IIAFEs.
+
+[12:28:14.0006] <bakkot>
+A proposal: https://gist.github.com/bakkot/3d0f81233fc00b508ae5f247b1458823
+
+tl;dr: adding syntax for defining a function which can be either sync or async, depending on how it's called:
+
+```
+async? function f(possiblyAsyncCallback) {
+  let x = await? possiblyAsyncCallback();
+  return something(x);
+}
+
+console.log(f.sync(syncCallback)) // a regular value
+
+console.log(f.async(asyncCallback)) // a Promise
+```
+
+
+[12:28:39.0205] <bakkot>
+looking for any feedback on whether this seems at all reasonable before I put together something to present to committee
+
+[12:46:40.0787] <Justin Ridgewell>
+> <@bakkot:matrix.org> A proposal: https://gist.github.com/bakkot/3d0f81233fc00b508ae5f247b1458823
+> 
+> tl;dr: adding syntax for defining a function which can be either sync or async, depending on how it's called:
+> 
+> ```
+> async? function f(possiblyAsyncCallback) {
+>   let x = await? possiblyAsyncCallback();
+>   return something(x);
+> }
+> 
+> console.log(f.sync(syncCallback)) // a regular value
+> 
+> console.log(f.async(asyncCallback)) // a Promise
+> ```
+> 
+
+Have you seen [gensync](https://github.com/loganfsmyth/gensync) before?
+
+[12:48:48.0223] <bakkot>
+I had not!
+
+[12:49:23.0938] <bakkot>
+but that is basically exactly the same thing, neat
+
+[12:55:25.0120] <loganfsmyth>
+Let me know if you have suggestions for improvements, I think babel is the only thing really using it right now.
+
+[13:08:22.0683] <bakkot>
+main thing which looks to be missing to me is a way for the function to switch on whether it was called as sync or async
+
+[13:08:36.0799] <bakkot>
+so that it can e.g. call the appropriate sync or async version of some other API
+
+[13:09:11.0512] <bakkot>
+(my gist has a `function.async` meta-property for this; it would be a bit harder to do in a library)
+
+[13:14:43.0048] <loganfsmyth>
+Got it, should be pretty easy for you to make a helper to do that since you can make a function where the async version returns true and the sync version returns false and then do `if (yield* isAsync()) {`
+
+[14:28:43.0592] <nicolo-ribaudo>
+> <@loganfsmyth:mozilla.org> Got it, should be pretty easy for you to make a helper to do that since you can make a function where the async version returns true and the sync version returns false and then do `if (yield* isAsync()) {`
+
+Yup, Babel already has it: https://github.com/babel/babel/blob/2a3b0b96012b86c558aec344dad34a60c51a71c9/packages/babel-core/src/gensync-utils/async.ts#L23
+
+[14:31:24.0391] <loganfsmyth>
+Hah I though it did but I was on mobile and couldn't be bothered to look
+
+[14:32:17.0760] <loganfsmyth>
+Certainly something we could move into gensync too
+
+[14:34:24.0124] <nicolo-ribaudo>
+Btw, something that would greatly benefit from moving this to the language (rather than as a library) are stack traces and step-by-step debugging; gensync makes it really hard (this is not a critique, just a limitation I don't think can be solved in a library).
+
+[14:53:16.0547] <bakkot>
+I think the main annoying thing with the library version is that you can't call regular async functions without wrapping them first (unless I'm missing something)
+
+[14:53:40.0391] <bakkot>
+not a huge hinderance but would be nicer not to need to worry about it
+
+[14:54:10.0610] <bakkot>
+anyway, this is really cool; I will play with it some
+
+[14:55:35.0817] <nicolo-ribaudo>
+Well, it's `await? (function.async ? asyncFn() : syncFn())` vs `yield* gensync({ sync: syncFn, async: asyngFn })()` (you need the check in both versions)
+
+[14:55:49.0361] <nicolo-ribaudo>
+> <@bakkot:matrix.org> I think the main annoying thing with the library version is that you can't call regular async functions without wrapping them first (unless I'm missing something)
+
+ * Well, it's `await? (function.async ? asyncFn() : syncFn())` vs `yield* gensync({ sync: syncFn, async: asyngFn })()` (you need the check in both versions)
+
+[14:55:54.0503] <nicolo-ribaudo>
+But yes, you always need to wrap
+
+[14:56:52.0183] <bakkot>
+with the syntax you need to wrap if you're calling a function you figured out yourself, but not if you're calling a function the user provided
+
+[14:57:27.0592] <bakkot>
+i.e. you can just do `await? callback()` and if the user called you as `f.async` and passed an async callback, or if the user called you as `f.sync` and passed a sync callback, it will work the same
+
+[14:57:37.0815] <bakkot>
+and `callback` doesn't need to be wrapped
+
+[14:58:31.0397] <nicolo-ribaudo>
+Oh ok yes, we had to introduce a `maybeAsync` gensync helper in Babel for that
+
+[14:58:45.0884] <nicolo-ribaudo>
+(which also throws if `callback()` returns a promise when called in a sync context)
+
+[14:58:51.0361] <nicolo-ribaudo>
+ * (which also throws if `callback()` returns a promise when called in a sync context)
+
+[14:59:31.0422] <bakkot>
+yeah there's definitely some possibility of shooting yourself in the foot here, if you mess up what's async and what's sync
+
+[15:00:08.0568] <bakkot>
+this would be fun for typescript to figure out :P
+
+
+2021-12-06
+[08:08:56.0584] <ljharb>
+that seems like precisely a proposal for releasing z̲̗̼͙̥͚͛͑̏a̦̟̳͋̄̅ͬ̌͒͟ļ̟̉͌ͪ͌̃̚g͔͇̯̜ͬ̒́o̢̹ͧͥͪͬ 
+
+[08:09:22.0128] <ljharb>
+it's been a pretty consistent design principle that a thing should always or never return a promise, which is why throwing in the default argument position in an async function produces a rejected Promise
+
+[08:09:27.0280] <ljharb>
+ * it's been a pretty consistent design principle that a thing should always or never return a promise, which is why throwing in the default argument position in an async function produces a rejected Promise
+
+[08:10:23.0630] <nicolo-ribaudo>
+I think with that proposal `fn.async()` would always return a promise, and `fn.sync()` would never return a promise
+
+[08:57:22.0482] <ljharb>
+oh maybe i misunderstood, it produces "not a function", but an object with two functions on it?
+
+[10:33:38.0980] <bakkot>
+yeah
+
+[10:34:08.0472] <bakkot>
+one which always returns a promise, one which never does (unless you go out of your way to return a promise explicitly, I guess)
+
+[11:07:27.0631] <TabAtkins>
+> <@pokute:matrix.org> I've been dogfooding my TypeScript support for pipeline operator at https://github.com/Pokute/AoC2021/blob/main/4.ts . It's starting to feel crucial for me. Lacking tacit function application (`|>>`) would be an inconvenience, but the other way around, I would have so many IIAFEs.
+
+Could you elaborate, perhaps in the Pipeline Champions room?
+
+[11:08:52.0317] <TabAtkins>
+Oh I see, you're saying that the current proposal (Hack, not F#) is slightly inconvienent, but if we'd gone the other way (F#, not Hack) you'd have a ton of IIAFEs which would be even worse.
+
+[13:41:57.0691] <pokute>
+Exactly. I love how easy it's write `|>> func` instead of `|> func(#)`. If I had only hack-style then I would have to write a lot of stuff in completely different ways.
+
+[13:44:32.0887] <pokute>
+TabAtkins: Is the Pipeline Champions room public?
+
+[13:44:47.0106] <TabAtkins>
+yup
+
+[13:46:59.0919] <pokute>
+Can't find it, tried multiple different search terms.
+
+[13:47:33.0591] <pokute>
+ * Exactly. I love how easy it's write `|>> func` instead of `|> func(#)`. If I had only F#-style then I would have to write a lot of stuff in completely different ways.
+
+[14:13:50.0954] <TabAtkins>
+Ah it looks like one has to give their room a name for it be found by searching. @pokute does #tc39-pipeline:matrix.org work now?
+
+[14:24:08.0995] <bakkot>
+TabAtkins: if you intend it to be public you might also want to give it public history
+
+[14:24:23.0470] <bakkot>
+if you do that my logbot will pick it up
+
+[14:26:49.0897] <TabAtkins>
+done
+
+[14:32:18.0375] <bakkot>
+doesn't look done to me
+
+[14:34:42.0547] <TabAtkins>
+all history is public from here onward; i haven't turned on previous history. does your bot require that for some reason?
+
+[14:51:37.0283] <bakkot>
+no, history is public _to members_, also not as "not public"
+
+[14:52:13.0039] <bakkot>
+it's impossible to turn on previous history, afaik; putting it to "anyone" (at least according to the docs) will only make history visible from that point forward
+
+[14:52:32.0058] <bakkot>
+> Changes to who can read history will only apply to future messages in this room. The visibility of existing history will be unchanged.
+
+[14:54:36.0577] <bakkot>
+the bot only generates logs for rooms with history visibility set to "Anyone", since the effect of the bot is that it publishes public logs, which I only want to do if you sign up for making history public
+
+[14:58:26.0500] <pokute>
+> <@tabatkins:matrix.org> Ah it looks like one has to give their room a name for it be found by searching. @pokute does #tc39-pipeline:matrix.org work now?
+
+That direct link works, but I still couldn't find it with search.
+
+[14:58:59.0349] <TabAtkins>
+well i have no idea how the search works, so i guess that'll have to be sufficient
+
+
+2021-12-07
+[10:47:24.0279] <shu>
+Matrix experts: what am i doing wrong such that when i log into Matrix on multiple machines, some of my DM history is all error messages with "unable to decrypt"?
+
+[10:56:50.0174] <graingert>
+> <@shuyuguo:matrix.org> Matrix experts: what am i doing wrong such that when i log into Matrix on multiple machines, some of my DM history is all error messages with "unable to decrypt"?
+
+probably you didn't add your new device?
+
+[10:56:59.0707] <graingert>
+you need to do the barcode thingy
+
+[10:58:17.0238] <shu>
+i don't recall that popping up at all, so that probably explains it
+
+[12:19:27.0631] <TabAtkins>
+bakkot: Ah, the fact that all the "Members Only" messages specify what history they have available made me assume that the "Public" option, with no such specification, would reveal past history. Changed now!
+
+[12:41:13.0646] <bakkot>
+TabAtkins: very understandable confusion. I'd submit a PR to their UI except I can't figure out where it's stored and their issue tracker has literally thousands of open issues
+
+[12:41:20.0863] <bakkot>
+anyway, logs are now available at https://matrixlogs.bakkot.com/Pipeline_Champions/
+
+[13:11:52.0262] <TabAtkins>
+Does the ${} thing in templates have a name for itself?
+
+[13:29:15.0565] <rkirsling>
+if I had to name it off the cuff, I might say "interpolator"
+
+[13:33:53.0864] <TabAtkins>
+yeah i'm going with "pattern-interpolation operator" for now (for talking about its use in pattern-matching)
+
+
+2021-12-08
+[16:58:37.0445] <jschoi>
+Should it be called an operator? It’s not like it evaluates into an expression by itself—it’s kind of more like spread syntax, right?
+“Interpolation syntax”, maybe…
+
+[16:59:36.0630] <jschoi>
+I’m just thinking about that sentence on the MDN chart of operators that says, “The spread operator is not in this list because it is not an operator,” and wondering if inconsistently saying “interpolation operator” might confuse learners.
+
+[17:00:57.0593] <jschoi>
+https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Operator_Precedence#table
+
+[17:01:27.0806] <jschoi>
+Interpolation whatever-we-call-it wouldn’t belong on this operator chart, either.
+
+[17:02:49.0434] <jschoi>
+(I do like and appreciate the word “interpolation” much more than “pin”, for what it’s worth.)
+
+[17:03:17.0996] <joepie91 🏳️‍🌈>
+"the spread operator is not an operator" seems like a dubious statement
+
+[17:03:46.0591] <joepie91 🏳️‍🌈>
+like, it may be true according to some strict technical definition, but I'm not sure it's true by anyone's *pragmatic* definition
+
+[17:04:10.0977] <ljharb>
+spread is definitely not an operator, because it doesn’t work anywhere in expression position 
+
+[17:04:42.0489] <ljharb>
+similarly yes, I’d call the ${} “placeholder syntax” (cc TabAtkins)
+
+[17:05:17.0968] <ljharb>
+or “interpolation placeholder syntax”, i suppose, to disambiguate from pipeline
+
+[17:05:21.0139] <jschoi>
+(I like “interpolation syntax” more than “placeholder syntax”, for what it’s worth. “Placeholder syntax” makes me think of the pipe operator and PFA syntax, haha.)
+
+[17:05:24.0401] <jschoi>
+Yes.
+
+[17:08:10.0962] <ljharb>
+i also prefer the name “interpoliterals” over template literals too, as long as we’re naming things :-p
+
+[17:12:05.0357] <TabAtkins>
+I don't think operators have to be usable in any context to be reasonably called that? My definition is relatively broad.
+
+[17:12:34.0594] <TabAtkins>
+Spread is def an operator, to me. ${} is as much as operator as () is
+
+[17:12:39.0450] <joepie91 🏳️‍🌈>
+yeah, that's pretty much what I was alluding to with "pragmatic definition"
+
+[17:13:07.0857] <joepie91 🏳️‍🌈>
+as far as people's mental models are concerned, how they reason about how the language works, it certainly seems to be an operator
+
+[17:13:09.0528] <TabAtkins>
+Yeah I agree with you
+
+[17:13:26.0387] <joepie91 🏳️‍🌈>
+even if it may not meet certain strict technical definitions of one, and may not be one implementation-wise
+
+[17:16:45.0984] <bakkot>
+that definitely does not match my mental model of how languages work
+
+[17:16:51.0887] <bakkot>
+operators are things which turn values into other values
+
+[17:17:01.0026] <bakkot>
+neither spread nor `${}` is an operator in that sense
+
+[17:19:09.0421] <jschoi>
+> <@tabatkins:matrix.org> I don't think operators have to be usable in any context to be reasonably called that? My definition is relatively broad.
+
+We don’t have to be prescriptive on how people in general use the word, but since this is the official language explainer and “syntax” in this case is more precise than “operator”, then we might as well use the more precise word.
+
+[17:20:56.0386] <jschoi>
+* > <@tabatkins:matrix.org> I don't think operators have to be usable in any context to be reasonably called that? My definition is relatively broad.
+
+We don’t have to be prescriptive on how people in general use the word, but since this is the official language explainer, and “syntax” in this case is more technically correct than “operator”, then we might as well use the more more technically correct term, while letting people in general call an operator if they want to.
+
+[17:22:26.0404] <jschoi>
+* > <@tabatkins:matrix.org> I don't think operators have to be usable in any context to be reasonably called that? My definition is relatively broad.
+
+We don’t have to be prescriptive on how people in general use the word. But since this is the official language explainer, and “syntax” in this case is more technically correct than “operator”, then we might as well use the more more technically correct term, while letting people in general still call it an operator if they want to.
+
+[17:23:26.0224] <jschoi>
+* > <@tabatkins:matrix.org> I don't think operators have to be usable in any context to be reasonably called that? My definition is relatively broad.
+
+We don’t have to be prescriptive on how people in general use the word. But since we’re talking about the official language explainer, and “syntax” in this case is more technically correct than “operator”, then we might as well use the more more technically correct term on the explainer, while letting people in general still call it an operator if they want to.
+
+[17:28:54.0594] <joepie91 🏳️‍🌈>
+strictly following technical correctness rather than leaving room for simplifications frequently results in worse explainers, though, from a didactic point of view
+
+[17:29:11.0700] <joepie91 🏳️‍🌈>
+technical accuracy certainly is an important factor to weigh, but not the *only* one
+
+[17:29:54.0684] <joepie91 🏳️‍🌈>
+(a lot of the complaints about MDN being 'difficult to understand' seem to relate to this)
+
+[18:07:53.0666] <jschoi>
+> <@joepie91:pixie.town> strictly following technical correctness rather than leaving room for simplifications frequently results in worse explainers, though, from a didactic point of view
+
+That’s fair. At least in this case “syntax” is just about as clear as “operator” anyway.
+
+[18:09:08.0240] <jschoi>
+For what it’s worth, I do personally find value in distinguishing “things that combine expressions into expressions” (operators) from other syntaxes, and I suspect that this distinction may have teaching value too, but that’s my own intuition, and I am only one being of many, haha.
+
+[18:09:22.0638] <jschoi>
+* For what it’s worth, I do personally find value in distinguishing “things that combine expressions into expressions” (operators) from other syntaxes, and I suspect that this distinction may have teaching value too, but that’s my own intuition, and I am only one being of many, haha.
+
+[18:09:27.0847] <jschoi>
+* > <@joepie91:pixie.town> strictly following technical correctness rather than leaving room for simplifications frequently results in worse explainers, though, from a didactic point of view
+
+That’s fair. At least in this case “syntax” is just about as clear as “operator” anyway.
+
+[18:10:29.0093] <jschoi>
+* For what it’s worth, I do personally find value in distinguishing “things that combine expressions into expressions” (operators) from “things that don’t result in an expression” (not operators)—and I suspect that this distinction may have teaching value to learners too—but that’s my own intuition, and I am only one being of many, haha.
+
+[18:10:49.0443] <jschoi>
+* > <@joepie91:pixie.town> strictly following technical correctness rather than leaving room for simplifications frequently results in worse explainers, though, from a didactic point of view
+
+That’s fair. At least in this case “syntax” is just about as clear as “operator” anyway. They’re both pretty basic programming words.
+
+[18:11:12.0518] <jschoi>
+* For what it’s worth, I do personally find value in distinguishing “things that combine expressions into expressions” (operators) from “things that don’t result in expressions” (not operators)—and I suspect that this distinction may have teaching value to learners too—but that’s my own intuition, and I am only one being of many, haha.
+
+[02:32:28.0356] <joepie91 🏳️‍🌈>
+I do agree that it's valuable to teach that distinction actually (I also tend to put a lot of focus on expression vs. statement in what I teach, for example), I'm just not sure that an operator reference is the right place :D
+
+[14:07:59.0773] <TabAtkins>
+Question ended up being moot, fwiw; I went with "interpolation pattern" instead.
+
+
+2021-12-09
+[09:44:05.0225] <devsnek>
+is there anyone security-minded from the v8 team i can dm real quick? shu maybe?
+
+[10:04:54.0607] <shu>
+i don't know if i'm security minded
+
+[10:05:00.0066] <shu>
+but sure, feel free to DM
+
+
+2021-12-10
+[14:54:27.0164] <jugglinmike>
+shu: Did you see https://github.com/tc39/proposal-resizablearraybuffer/pull/72#issuecomment-967323881 ?
+
+[15:04:34.0171] <shu>
+yes, i am just terribly behind
+
+[15:05:27.0751] <jugglinmike>
+Then say no more :)
+
+
+2021-12-12
+[09:13:05.0616] <Andreu Botella (he/they)>
+Hey. I was trying to understand the ShadowRealm proposal, and I noticed that the requirements for `HostResolveImportedModules` don't say anything about realms
+
+[09:13:36.0119] <Andreu Botella (he/they)>
+and IIUC the security properties of ShadowRealms need the realm to not share a module map with any other realms
+
+[09:13:57.0865] <Andreu Botella (he/they)>
+ * and IIUC the security properties of ShadowRealms need the realm to not share a module map with any other realms
+
+[09:27:11.0442] <Andreu Botella (he/they)>
+Also, the HTML spec's implementation of `HostResolveImportedModules` doesn't follow the requirements, since it always uses the current realm's module map, and if `referencingScriptOrModule` is `null`, that might result in different calls to that operation returning different module records
+
+[09:27:30.0027] <Andreu Botella (he/they)>
+I'd argue that's a bug with the TC39 spec
+
+[12:20:58.0632] <Mathieu Hofman>
+> <@andreubotella:mozilla.org> and IIUC the security properties of ShadowRealms need the realm to not share a module map with any other realms
+
+That is not my understanding. What made you think this? My recollection is that the shadow realms would share a module map, but would be keyed by realm. Cc leobalter 
+
+[12:24:27.0686] <Mathieu Hofman>
+I believe this is the issue where it was discussed: https://github.com/tc39/proposal-shadowrealm/issues/261
+
+[12:24:38.0722] <Mathieu Hofman>
+I think there is a related whatwg issue
+
+[12:27:14.0932] <Mathieu Hofman>
+I believe this comment on the integration PR: https://github.com/whatwg/html/pull/5339#issuecomment-874588585
+
+[12:28:18.0639] <Andreu Botella (he/they)>
+Thanks for those links, I hadn't been following the conversations and was trying to figure out how things worked purely from the spec proposal and how it interacts with the HTML spec as it is currently
+
+[12:28:57.0271] <Andreu Botella (he/they)>
+But my understanding was that, if a module is first instantiated in the parent realm, and then imported from a ShadowRealm, you could access the parent realm's intrinsic objects that way
+
+[12:29:04.0890] <Andreu Botella (he/they)>
+I don't think there's anything to stop that currently
+
+[12:36:34.0840] <Mathieu Hofman>
+Ah no, you don't get the same module instance. It's keyed on the realm. But the resolution is shared per document
+
+[12:37:25.0173] <Andreu Botella (he/they)>
+oh, so the actual fetch for a module script only happens once per document, but you have different module records per realm?
+
+[12:37:33.0145] <Mathieu Hofman>
+So you can observe with timing if the parent has the module in it's map, but you never directly share any objects
+
+[12:40:34.0704] <Andreu Botella (he/they)>
+But in that case, `HostResolveImportedModules` would still need to say something about realms
+
+[14:06:26.0017] <Andreu Botella (he/they)>
+I filed https://github.com/tc39/proposal-shadowrealm/issues/342
+
+
+2021-12-13
+[09:24:34.0777] <leobalter>
+Andreu Botella (he/they), Mathieu Hofman the understanding for the ES proposal and the HTML integration was to have the ShadowRealms reusing part of the modules resolution in the sense the loading and static parsing is done once for all Realms and runtime evaluation is done individually for each Realm (including ShadowRealms) when they "request" it. 
+
+So calling the Module Map the same or different depends if you - like me - use a web dev practicioner point of view. It's the same map for the io and static parsing (syntax errors might be caught earlier), but runtime evaluation is where the map splits per each ShadowRealm.
+
+[11:42:21.0255] <Andreu Botella (he/they)>
+leobalter: When I posted that, I wasn't very clear on the details of how the HTML integration had to happen, so thanks for the clarification. But the issue I filed doesn't mention module maps, which are an HTML spec concept – it mentions module records, which are tied to a realm.
+
+[11:43:50.0371] <Andreu Botella (he/they)>
+The issue is about how the hook requirements are not only insufficient for the security properties, but conflict with them. Though I haven't checked out the HTML integration PR yet, my understanding is that it gets around that by violating the requirements.
+
+[13:05:50.0551] <leobalter>
+Would you mind forwarding this to the github issue? I’m on pto and the github thread might help with an async discussion. Thanks!
+
+[13:45:09.0232] <Andreu Botella (he/they)>
+> <@leobalter:matrix.org> Would you mind forwarding this to the github issue? I’m on pto and the github thread might help with an async discussion. Thanks!
+
+I think the comments I've made on the github issue since then should be enough
+
+
+2021-12-14
+[11:16:12.0678] <jschoi>
+A chair or administrator should change the log links in all of the channels to the appropriate pages in https://matrixlogs.bakkot.com/.
+
+
+2021-12-15
+[23:43:15.0826] <ryzokuken>
+jschoi: done, though I'm neither a chair nor an admin. Now that we've finalized Matrix, should be scrub all the permissions? Let me check if I can step down myself.
+
+[23:44:12.0923] <ryzokuken>
+bakkot: is this channel not logged on purpose?
+
+[23:51:22.0285] <bakkot>
+ryzokuken: ? https://matrixlogs.bakkot.com/TC39_General/2021-12-15
+
+[23:51:36.0405] <bakkot>
+it only refreshes every five minutes or so
+
+[23:52:22.0398] <ryzokuken>
+oh no wrong channel sorry
+
+[23:52:28.0532] <ryzokuken>
+bakkot: I meant #temporaldeadzone:matrix.org 
+
+[23:54:47.0788] <bakkot>
+yeah, that's intentional
+
+[09:42:23.0028] <ljharb>
+ryzokuken: maybe delete that mention of it here, so it's less discoverable?
+
+[09:42:53.0185] <ryzokuken>
+removed, but it must've been logged
+
+[09:43:22.0487] <ljharb>
+yes, but we can kick the bot from TDZ and avoid mentioning it in public channels in the future :-)
+
+[09:44:21.0514] <ryzokuken>
+sure! I hope one day we spin up a TC39 homeserver and ban the bot from the entire server 😀 
+
+[14:48:54.0756] <sideshowbarker>
+comments or a PR on https://github.com/mdn/content/issues/11237 would be welcome
+
+
+2021-12-16
+[19:17:54.0110] <jschoi>
+Is there a particular reason why Array.from (https://tc39.es/ecma262/#sec-cma262/#sec-call) seems to call CloseIterator if an error occurs when setting `A`’s properties, when there are too many items, and when `mapfn` throws an error—but not when IteratorStep results in an abrupt completion nor when the iterator depletes its items?
+
+[19:18:01.0409] <jschoi>
+ * Is there a particular reason why Array.from (https://tc39.es/ecma262/#sec-cma262/#sec-call) seems to call CloseIterator if an error occurs when setting its result’s properties, if there are too many items, or if `mapfn` throws an error—but not when IteratorStep results in an abrupt completion nor when the iterator depletes its items?
+
+[19:18:56.0521] <jschoi>
+ * Is there a particular reason why Array.from (https://tc39.es/ecma262/#sec-cma262/#sec-call) seems to call CloseIterator if an error occurs when setting `A`’s properties, when there are too many items, and when `mapfn` throws an error—but not when IteratorStep results in an abrupt completion nor when the iterator depletes its items?
+
+[20:12:42.0311] <bakkot>
+we don't close the iterator when an error occurs in the iterator itself, because the iterator is broken
+
+[20:12:52.0044] <bakkot>
+and we don't close iterators when they are depleted in general
+
+[20:13:14.0185] <bakkot>
+(the assumption is that it does its own cleanup before returning `{done: true}`)
+
+[20:13:50.0399] <bakkot>
+we only cause IteratorClose when we need to close an iterator because we can no longer consume it for reasons of our own
+
+[20:17:00.0109] <bakkot>
+ * we only call IteratorClose when we need to close an iterator because we can no longer consume it for reasons of our own
+
+[21:19:50.0394] <jschoi>
+I see https://github.com/tc39/rationale/issues/2; thank you.
+
+[21:22:17.0328] <jschoi>
+ * I see. I also see you’ve posted https://github.com/tc39/rationale/issues/2; thank you.
+
+[21:22:25.0543] <jschoi>
+ * I see. I also see you’ve posted https://github.com/tc39/rationale/issues/2. Thank you for both that and the explanation.
+
+[22:13:37.0117] <jschoi>
+https://github.com/tc39/proposal-array-from-async/issues/16#issuecomment-995453541
+As far as I can tell, there is no way to capture all possible rejections from a sync iterable’s yielded promises, while still maintaining `for await` semantics. This is correct, right?
+
+[22:14:12.0873] <jschoi>
+ * https://github.com/tc39/proposal-array-from-async/issues/16#issuecomment-995453541
+As far as I can tell, there is no way to capture all possible rejections from a sync iterable’s yielded promises, while still maintaining `for await` semantics. This is correct, right?
+
+[09:54:07.0102] <Mathieu Hofman>
+What does `for await (const foo of iterableYieldingPromises)` do in this case?
+
+[09:55:54.0479] <Mathieu Hofman>
+If I was to implement this in a polyfill, I'd setup a dummy `.catch()` on the next promise to avoid the unhandled error, but still yield the original promise later
+
+[09:56:47.0847] <Mathieu Hofman>
+It's a pretty common occurrence when parallelizing async operations
+
+[10:00:22.0721] <Mathieu Hofman>
+> <@mhofman:matrix.org> What does `for await (const foo of iterableYieldingPromises)` do in this case?
+
+My bad I didn't read the OP. It goes unhandled! Wondering if it's something we should fix in the language. I suppose the problem is that if the loop body throws in an error during processing of the second element, then the IteratorClose has no way to report the error. Maybe recreating a promise resolved with the rejection to trigger a future unhandled error would work
+
+[11:39:41.0504] <Mathieu Hofman>
+Ugh I wasn't awake, the OP example is flawed, and  Async-from-Sync Iterator objects behave correctly
+
+[13:30:00.0874] <Mathieu Hofman>
+Actually follow up on  Async-from-Sync Iterator objects / for await of. The following IteratorClose behavior seem surprising to me:
+
+```
+function * gen() {
+  try {
+    yield Promise.resolve(1);
+    yield Promise.reject(2);
+  } finally {
+    console.log('iter cleanup');
+  }
+}
+
+`for of` behaves as expected:
+```
+for (const i of  gen()) {
+  console.log(await i);
+}
+// 1 "iter cleanup" (Uncaught 2)
+```
+
+for await of however doesn't close the iterator
+```
+for await (const i of  gen()) {
+  console.log(i);
+}
+// 1 (Uncaught 2)
+```
+
+[13:30:20.0720] <Mathieu Hofman>
+ * Actually follow up on  Async-from-Sync Iterator objects / for await of. The following IteratorClose behavior seem surprising to me:
+```
+function * gen() {
+  try {
+    yield Promise.resolve(1);
+    yield Promise.reject(2);
+  } finally {
+    console.log('iter cleanup');
+  }
+}
+```
+
+
+`for of` behaves as expected:
+```
+
+for (const i of  gen()) {
+console.log(await i);
+}
+// 1 "iter cleanup" (Uncaught 2)
+```
+
+for await of however doesn't close the iterator
+```
+
+for await (const i of  gen()) {
+console.log(i);
+}
+// 1 (Uncaught 2)
+```
+```
+
+[13:30:33.0031] <Mathieu Hofman>
+ * Actually follow up on  Async-from-Sync Iterator objects / for await of. The following IteratorClose behavior seem surprising to me:
+```
+function * gen() {
+  try {
+    yield Promise.resolve(1);
+    yield Promise.reject(2);
+  } finally {
+    console.log('iter cleanup');
+  }
+}
+```
+
+`for of` behaves as expected:
+```
+
+for (const i of  gen()) {
+console.log(await i);
+}
+// 1 "iter cleanup" (Uncaught 2)
+```
+
+for await of however doesn't close the iterator
+```
+
+for await (const i of  gen()) {
+console.log(i);
+}
+// 1 (Uncaught 2)
+```
+
+[13:52:26.0875] <Ashley Claymore 🤒>
+At least the solution for this particular example is a one keyword change to `async function * gen() {`
+
+[13:52:49.0081] <Ashley Claymore 🤒>
+though I was surprised there was a difference
+
+[13:52:53.0248] <Ashley Claymore 🤒>
+ * though was surprised there was a difference
+
+[13:52:58.0633] <Ashley Claymore 🤒>
+ * though I was surprised there was a difference
+
+[13:53:27.0936] <Mathieu Hofman>
+sure, but then that iterator is async and can no longer be used with sync iteration
+
+[13:54:24.0107] <Ashley Claymore 🤒>
+good point :)
+
+[13:55:57.0819] <Ashley Claymore 🤒>
+Would it be possible to change this, or working-as-intended/too-late-to-change
+
+[13:58:40.0599] <Mathieu Hofman>
+I'm not sure, there is other behavior with IteratorClose I find strange, like the swallowing of errors in `return` if the iterator was closed by a `for-of` loop that threw, which is kinda the opposite of `finally` errors shadowing `try` errors
+
+[14:04:27.0811] <Mathieu Hofman>
+Wondering if something can be done in step 10 of [AsyncFromSyncIteratorContinuation](https://tc39.es/ecma262/#sec-asyncfromsynciteratorcontinuation)
+
+[14:06:34.0376] <Mathieu Hofman>
+like close the sync iterable on rejection since rejecting the `next` call will cause consumers of the async iterable to bail from ever touching the async iterable again
+
+[14:28:29.0431] <Mathieu Hofman>
+ * like close the sync iterable on wrapper value rejection since rejecting the `next` call will cause consumers of the async iterable to bail from ever touching the async iterable again
+
+
+2021-12-17
+[16:14:24.0733] <Justin Ridgewell>
+We have a 262 issue for that
+
+[16:14:50.0538] <Justin Ridgewell>
+https://github.com/tc39/ecma262/issues/1849
+
+[16:17:02.0503] <Mathieu Hofman>
+Looks like you and I arrived at the same conclusion
+
+[16:18:32.0805] <Justin Ridgewell>
+Lol, yah down to the step number
+
+[16:22:51.0983] <Mathieu Hofman>
+Actually rejecting the capability wouldn't close the sync iterator, would it? That's the problem today, the rejection flows into the promise capability, and into the consumer of the async iterator, which then quarantines the async iterator
+
+[16:59:05.0486] <Justin Ridgewell>
+It should, given a `throw` will close via the `IfAbruptRejectPromise`, which just calls `capability.[[Reject]]`
+
+[17:02:22.0843] <Mathieu Hofman>
+I don't see it
+
+[17:07:45.0326] <Mathieu Hofman>
+I don't see anything that will close the `syncIterator` if the `promiseCapability` is rejected. For that matter, the `syncIterator` is not given to `AsyncFromSyncIteratorContinuation`, so it wouldn't have a way to do it.
+
+[17:09:05.0752] <Mathieu Hofman>
+it'd have to be plumbed through as an optional 3rd argument in the case of `next`, as `return` and `throw` already close the `syncIterator` by definition
+
+[17:16:54.0064] <Justin Ridgewell>
+Let me try digging in again
+
+[17:21:21.0255] <Justin Ridgewell>
+https://tc39.es/ecma262/#sec-%asyncfromsynciteratorprototype%.next
+
+[17:21:35.0986] <Justin Ridgewell>
+Step 6.a gets the `sync.next()` value
+
+[17:22:37.0605] <Mathieu Hofman>
+it gets the result, aka `{value: Promise, done: boolean}`
+
+[17:22:42.0386] <Justin Ridgewell>
+Which gets us an `{ value, done }` value
+
+[17:22:43.0090] <Justin Ridgewell>
+Yah
+
+[17:23:02.0679] <Justin Ridgewell>
+Now, `done` doesn't really matter
+
+[17:23:15.0454] <Justin Ridgewell>
+ * Which gets us an `{ value, done }` value
+
+[17:23:22.0244] <Justin Ridgewell>
+But we get the `value`
+
+[17:23:33.0046] <Justin Ridgewell>
+In https://tc39.es/ecma262/#sec-asyncfromsynciteratorcontinuation
+
+[17:24:12.0186] <Justin Ridgewell>
+The promise itself is received as a normal completion, but it's either rejected or will reject
+
+[17:24:33.0641] <Mathieu Hofman>
+and from what I understand `AsyncFromSyncIteratorContinuation` grabs `done` and `value` from the result, awaits the `value` and resolves a promise with `{done, value: awaitedValue}`
+
+[17:25:10.0206] <Justin Ridgewell>
+If we pass `capibility.[[Reject]]` to `PerformPromiseThen`, then it'll eventually call that reject
+
+[17:25:24.0906] <Mathieu Hofman>
+if the await throws, it rejects the promise, but the `syncIterator` is not touched anymore
+
+[17:25:37.0877] <Justin Ridgewell>
+There's a close step
+
+[17:26:05.0541] <Mathieu Hofman>
+right but rejecting the promise does nothing besides giving a rejected promise to the async iterator consumer
+
+[17:27:21.0987] <bakkot>
+one fix to this would be to add a handler to `valueWrapper` which closes the iterator, though that seems kinda silly
+
+[17:27:36.0528] <Mathieu Hofman>
+aye that's what I'm arguing we need to do
+
+[17:27:40.0939] <bakkot>
+another fix is to have for-await-of explicitly coordinate with the wrapper, which seems kinda painful
+
+[17:27:54.0892] <Mathieu Hofman>
+why is it silly ?
+
+[17:28:12.0761] <Mathieu Hofman>
+what we have right now is basically the wrapper not cleaning up after itself
+
+[17:28:28.0770] <bakkot>
+because we'd be unwrapping the promise twice
+
+[17:28:35.0561] <Mathieu Hofman>
+it missed a `try-catch` when `await`ing the value
+
+[17:29:17.0808] <Mathieu Hofman>
+how so, the 3rd argument in step 10 does nothing right now, instead it needs to cleanup and passthrough the error
+
+[17:29:28.0712] <bakkot>
+yeah, that's fair
+
+[17:29:38.0821] <Mathieu Hofman>
+ * it missed a `try-catch` when `await`ing the value
+
+[17:29:45.0795] <bakkot>
+not really unwrapping it twice so much as handling both branches
+
+[17:29:59.0045] <bakkot>
+sgtm, needs-consensus PRs welcome
+
+[17:32:42.0548] <Justin Ridgewell>
+It's up the chain a bit
+
+[17:32:51.0804] <Justin Ridgewell>
+https://tc39.es/ecma262/#sec-runtime-semantics-forin-div-ofbodyevaluation-lhs-stmt-iterator-lhskind-labelset
+
+[17:33:05.0174] <Justin Ridgewell>
+This is the thing that runs `for await (…)`
+
+[17:34:02.0422] <Justin Ridgewell>
+For us, `iteratorRecord` is the wrapped asyncSync iterable, `iterationKind` is `iterate`, and `iteratorKind` is `async`
+
+[17:34:31.0113] <Justin Ridgewell>
+ * For us, `iteratorRecord` is the wrapped asyncSync iterable, and `iteratorKind` is `iterate`
+
+[17:34:52.0393] <Justin Ridgewell>
+ * For us, `iteratorRecord` is the wrapped asyncSync iterable, `iterationKind` is `iterate`, and `iteratorKind` is `async`
+
+[17:35:24.0775] <Justin Ridgewell>
+Step 6.b says "If iteratorKind is async, set nextResult to ? Await(nextResult)."
+
+[17:35:32.0845] <bakkot>
+ForIn/OfBodyEvaluation isn't really in a position to handle the issue, because it can't tell the difference between an async iterator which threw and a sync iterator which returned a rejected promise
+
+[17:35:37.0980] <Mathieu Hofman>
+Step 6.
+> b. If iteratorKind is async, set nextResult to ? Await(nextResult).
+> c. If Type(nextResult) is not Object, throw a TypeError exception.
+
+There is no cleanup of the iterator
+
+[17:35:38.0543] <bakkot>
+it's the wrapper which has to deal with it
+
+[17:35:51.0822] <Mathieu Hofman>
+ * Step 6.
+> b. If iteratorKind is async, set nextResult to ? Await(nextResult).
+> c. If Type(nextResult) is not Object, throw a TypeError exception.
+
+There is no cleanup of the iterator
+
+[17:36:15.0156] <Justin Ridgewell>
+We can't make those different cases
+
+[17:36:36.0219] <bakkot>
+Which?
+
+[17:36:43.0320] <bakkot>
+I agree we can't make `ForIn/OfBodyEvaluation` differentiate
+
+[17:36:45.0194] <Justin Ridgewell>
+https://github.com/tc39/ecma262/issues/1849#issuecomment-584961565
+
+[17:37:09.0357] <Justin Ridgewell>
+They should both be calling the cleanup function
+
+[17:37:20.0088] <bakkot>
+no, neither of them should be
+
+[17:37:39.0957] <bakkot>
+_the wrapper_ should do be calling cleanup when its underlying iterator returns a promise which rejects
+
+[17:37:46.0756] <Mathieu Hofman>
+iterator throw / reject on `next` exits the iteration abruptly
+
+[17:37:48.0363] <bakkot>
+because at that point it's going to stop iterating the underlying iterator
+
+[17:38:15.0836] <bakkot>
+and when you stop iterating over a well-behaved iterator, you close it
+
+[17:38:16.0951] <bakkot>
+cf https://github.com/tc39/rationale/issues/2
+
+[17:38:57.0705] <bakkot>
+from ForIn/OfBodyEvaluation's point of view, the thing being iterated is not well-behaved, because its next method returned a promise which rejects
+
+[17:39:04.0614] <bakkot>
+so ForIn/OfBodyEvaluation should not be doing any cleanup
+
+[17:39:25.0564] <Justin Ridgewell>
+I disagree
+
+[17:39:33.0362] <bakkot>
+Which with part?
+
+[17:39:48.0080] <Justin Ridgewell>
+Non-well behaved iterators should cleanup
+
+[17:39:54.0693] <bakkot>
+Well, they don't, anywhere
+
+[17:39:58.0159] <Justin Ridgewell>
+If my iterator throws, it needs to clean up
+
+[17:40:06.0868] <bakkot>
+if your iterator throws, it can do the cleanup itself
+
+[17:40:52.0255] <bakkot>
+we only ever call IteratorClose when we stop iterating for reasons which the iterator could not have known
+
+[17:40:59.0601] <bakkot>
+e.g. breaking out of a loop, etc
+
+[17:41:39.0876] <Mathieu Hofman>
+yeah even I was surprised at first, I agree the behavior on broken iterators make sense, and it'd be impossible to change it. Here however it's the wrapper that's not well behaved by not cleaning up when the consumer would think the wrapper itself is misbehaved for throwing
+
+[17:41:39.0920] <bakkot>
+if the iterator itself is saying that it is done, then it's the iterator's responsibility to do the cleanup
+
+[17:42:26.0497] <Justin Ridgewell>
+Ok, I think we're talking about two separate things now
+
+[17:42:52.0789] <Justin Ridgewell>
+The async wrapper is stopping iteration
+
+[17:43:04.0183] <Justin Ridgewell>
+The underlying sync iterator didn't do anything wrong
+
+[17:43:05.0910] <Mathieu Hofman>
+ * yeah even I was surprised at first, I agree the behavior on broken iterators make sense, and it'd be impossible to change it. Here however it's the wrapper that's not well behaved by not cleaning up when the consumer would think the wrapper itself is misbehaved for throwing
+
+[17:43:15.0676] <Justin Ridgewell>
+It can either be left open, or we can clean it up.
+
+[17:43:47.0393] <bakkot>
+Right, my position is that the _wrapper_ should clean up the sync iterator at that point
+
+[17:44:16.0547] <Mathieu Hofman>
+the async wrapper is returning a rejection, which is construed by the consumer as misbehaving. It should know it won't be called again, so it should close its sync source
+
+[17:44:22.0236] <Justin Ridgewell>
+Ok
+
+[17:44:28.0327] <bakkot>
+i.e. we should add a handler to the third argument in step 10 of AsyncFromSyncIteratorContinuation which closes the sync iterator
+
+[17:44:48.0513] <Justin Ridgewell>
+Lol, I think that's what I suggested
+
+[17:44:53.0901] <bakkot>
+hah, well
+
+[17:45:03.0399] <bakkot>
+I am glad we are agreement then, even if violent
+
+[17:45:37.0285] <Mathieu Hofman>
+what you suggested is forwarding the rejection, which already happens. The wrapper needs to explicitly close the sync iterator it holds
+
+[17:45:44.0107] <bakkot>
+oh, yeah
+
+[17:46:19.0081] <Mathieu Hofman>
+admittedly the flow inversion in iterators is a bit mindbending
+
+[19:12:19.0601] <Mathieu Hofman>
+Alright, since this is my first spec PR, can someone take a preliminary look and tell me if that makes sense before I mark it as ready? bakkot maybe?
+https://github.com/tc39/ecma262/pull/2600
+
+[19:40:19.0990] <bakkot>
+lgtm
+
+[19:44:53.0233] <bakkot>
+note that you (or someone) will need to present at plenary and get consensus for it to land
+
+
+2021-12-18
+[19:42:20.0130] <pokute>
+There's resistance against adding syntax to ECMAScript and implicit tail-call elimination doesn't seem to be working out from engine implementers. Then how about explicit, magical `Function.prototype.callWithElimination(this, ...params)` that gives an error during AST generation if the call is not in correct place for eliminating the tail call?
+
+[23:13:55.0005] <ljharb>
+what is "AST generation"? that's not a thing in the spec afaict
+
+[23:14:07.0498] <ljharb>
+ * what is "AST generation"? that's not a thing in the spec afaict
+
+[23:20:37.0042] <ryzokuken>
+> <@ljharb:matrix.org> what is "AST generation"? that's not a thing in the spec afaict
+
+They mean "while parsing" 
+
+[23:20:54.0770] <ryzokuken>
+But I don't think a function call should fail while parsing? 
+
+[23:20:54.0914] <ljharb>
+sure, but how could you parse an API call like that?
+
+[23:21:01.0967] <ryzokuken>
+Exactly
+
+[23:21:13.0936] <ljharb>
+`const x = Function.prototype.callWithElimination; return x.call(f);`
+
+[23:21:33.0009] <ljharb>
+pretty sure it requires syntax to detect the position of something, eg tail call position
+
+[23:21:35.0122] <ryzokuken>
+I don't think this will work, it's valid syntax and shouldn't fail. 
+
+[23:23:15.0618] <ryzokuken>
+> <@ljharb:matrix.org> pretty sure it requires syntax to detect the position of something, eg tail call position
+
+You mean syntax around the expression inside the function? 
+
+[23:23:43.0763] <ryzokuken>
+The expression containing the tail call I mean. 
+
+[23:35:01.0564] <Mathieu Hofman>
+Yeah I don't see how something that isn't syntax could cause a parsing time error. Now the premise about syntax is that it should pay for itself. If there is a way to add something without syntax, then there is little justification to add syntax. If the only option is syntax (like in this suggestion) then the question becomes, is it worth the cost? I'm not sure I know enough about tail call use cases to form a complete opinion, but the fact we've gotten away without it for so long is an indicator there are likely ways to avoid a tail call optimization requirements.
+
+[23:41:02.0937] <Mathieu Hofman>
+* Yeah I don't see how something that isn't syntax could cause a parsing time error. Now the premise about syntax is that it should pay for itself. If there is a way to add something without syntax, then there is little justification to add syntax. If the only option is syntax (like in this idea of explicit tail call) then the question becomes, is it worth the cost? I'm not sure I know enough about tail call use cases to form a complete opinion, but the fact we've gotten away without it for so long is an indicator there are likely ways to avoid a tail call optimization requirements.
+
+[05:11:21.0480] <pokute>
+> <@ljharb:matrix.org> `const x = Function.prototype.callWithElimination; return x.call(f);`
+
+I was thinking of that, but it's difficult.  I was thinking of only recognising `return recursiveFunc.callWithElimination(undefined, accumulator, moreParams)` or something like that.
+
+[05:12:29.0671] <ryzokuken>
+> <@pokute:matrix.org> I was thinking of that, but it's difficult.  I was thinking of only recognising `return recursiveFunc.callWithElimination(undefined, accumulator, moreParams)` or something like that.
+
+that do you mean "only recognizing"?
+
+[05:12:45.0034] <ryzokuken>
+that it won't work if you assign it to another variable?
+
+[05:12:58.0555] <ryzokuken>
+that seems to go against pretty much every single rule of the language
+
+[05:14:20.0016] <pokute>
+As the only valid position that doesn't give error during parsing. The error thing was that it should give an error before runtime so that it's impossible to have code that tries to call it in wrong position. And yeah, can't assign. :-) It's magical. **But** it's not unprecended! You can't have `const myImport = import`.
+
+[05:15:16.0694] <ryzokuken>
+`import` is a keyword
+
+[05:15:32.0767] <ryzokuken>
+this is a function on a prototype
+
+[05:17:29.0378] <pokute>
+Well, we could make it less conventional with `return recursiveFunc[Function.withCallEliminationSymbol]( ... )`.
+
+[05:20:43.0168] <pokute>
+I was thinking of early error just that people don't accidentally write it in positions where it can't be tail eliminated away.
+
+[05:21:32.0415] <Ashley Claymore>
+I should re-read the previous meeting notes, but in my memory I didn't think syntax was the main item stopping ptc ? I thought it was more implementation complexity and relation to the stack trace proposal?
+
+[05:23:39.0227] <pokute>
+Explicity would weaken the expectations that stack traces and debugging is identical with normal function calls.
+
+[05:26:24.0542] <Ashley Claymore>
+ * I should re-read the previous meeting notes, but in my memory I didn't think syntax was the main item stopping tco ? I thought it was more implementation complexity and relation to the stack trace proposal?
+
+[05:27:31.0304] <pokute>
+ * Explicity would weaken the expectations that stack traces and debugging is identical to normal function calls.
+
+[05:39:02.0100] <Ashley Claymore>
+last notes I could find: https://github.com/tc39/notes/blob/master/meetings/2016-05/may-24.md#syntactic-tail-calls-bt
+
+[07:17:16.0104] <ryzokuken>
+Yeah, I don't think it would be easy to sell new syntax for TCO to the committee... 
+
+[08:36:37.0486] <Mathieu Hofman>
+> <@pokute:matrix.org> Well, we could make it less conventional with `return recursiveFunc[Function.withCallEliminationSymbol]( ... )`.
+
+This is still a dynamic non parse time evaluation. `import()` is pure syntax. `Function` is not and can be replaced by code, as can any of it's prototype or self methods.
+
+[08:37:40.0854] <Mathieu Hofman>
+If you want explicit tail call that throws at parse time, i don't see any other way but requiring syntax.
+
+[08:38:11.0793] <ljharb>
+I don’t see how non-syntax could throw at any time 
+
+[08:40:33.0485] <Mathieu Hofman>
+Yeah I think you're right, you'd probably need something to link your current stack to the runtime call to ensure it throws if not I'm tail position. That reeks of `function.callee`
+
+[08:42:38.0848] <Mathieu Hofman>
+At which point since you need syntax anyway, I'd rather make it static/parse time syntax. Note that I still don't understand enough the motivation.
+
+
+2021-12-28
+[15:05:36.0087] <bakkot>
+I wrote a thing about gensync, because it seems like a great utility and I want people to use it more: https://writing.bakkot.com/gensync.html
+
+
+2021-12-29
+[16:32:22.0750] <devsnek>
+just rewrite eslint to support async rules
+
+[16:36:52.0554] <bakkot>
+unfortunately they weren't into that idea
+
+
+2021-12-30
+[23:39:39.0133] <ljharb>
+they're working on a new config system, and it supports ESM, and thus it has to be async
+
+[23:39:51.0348] <ljharb>
+so i don't see why they'd be opposed to rules working that way
+
+[23:43:56.0741] <bakkot>
+https://github.com/eslint/eslint/issues/15394#issuecomment-989410995
+
+[23:43:58.0566] <bakkot>
+¯\_(ツ)_/¯
+
+[23:44:29.0915] <ljharb>
+i read your gensync thing and i still really don't understand the point. if you already have both a sync and async version, then sure, and if you only have a sync version, then it's pretty trivial to wrap that in an async function, but if you only have an async version then how can you make it sync?
+
+[23:45:17.0446] <bakkot>
+the idea is that sometimes your thing is async only because it needs to call a user-provided function, which may or may not be async
+
+[23:45:26.0445] <bakkot>
+if the user-provided function is async, you of course need to be async
+
+[23:45:30.0606] <bakkot>
+if it is not, it is nice not to be
+
+[23:46:59.0964] <bakkot>
+(the post has a concrete example of when that might come up)
+
+[23:48:36.0377] <ljharb>
+but like, if the user's providing a "read file" method, why wouldn't you just return whatever it returns?
+
+[23:48:44.0884] <ljharb>
+like if it returns a promise, you return one, if not, not
+
+[23:50:00.0011] <bakkot>
+because you need to do stuff with the thing inside the promise
+
+[23:50:19.0634] <ljharb>
+i guess i'm just really not getting why this is an issue outside of what seems like a very rare use case - where a user is providing a maybe-sync maybe-async method, but you need to do processing on each result, and you can't call the function for the next result until you do that processing
+
+[23:50:54.0402] <ljharb>
+or why you couldn't have two interfaces - a sync one and an async one - that both share an internal processing function
+
+[23:51:27.0245] <bakkot>
+yes, you could split up all your code so that it is in continuation-passing style, and then invoke the callbacks synchronously when the result of the user-provided function is available synchronously, but the point of async-await is that writing CPS by hand sucks
+
+[23:52:57.0396] <bakkot>
+I invite you to go through the exercise of refactoring the `getTransitiveDependencies` function so that it works that way; it is not a trivial refactor
+
+[23:54:41.0580] <bakkot>
+this problem comes up basically any time you're writing a utility which takes a function as an argument and does something with the return value of that function; this is not rare, in my experience, though it may be in yours
+
+[23:55:04.0704] <ljharb>
+certainly that's not rare in my experience, i do that all the time, but i've never had this problem come up before that i can recall
+
+[23:55:35.0182] <ljharb>
+ but to be fair i almost never use async/await (altho i often work with promises)
+
+[23:56:42.0765] <ljharb>
+i also often write eslint code that works sync with dependencies - like the ExportsMap in eslint-plugin-import - but it doesn't accept a user-provided file reading mechanism, it just hardcodes it
+
+[23:58:06.0918] <bakkot>
+yeah, if you hardcode all your IO the issue comes up less; I generally try pretty hard to keep the IO at the boundaries, so that the core logic doesn't do any IO itself
+
+[23:58:17.0677] <bakkot>
+except by invoking user-provided stuff
+
+[00:00:04.0153] <bakkot>
+it does still come up, though; the last time I ran into this problem was when I wanted to offload some expensive computation to a worker, which meant the result of the computation was suddenly async, and I had to go rewrite everything to add `async` in a bunch of places and the library was no longer usable in sync contexts
+
+[00:00:22.0112] <bakkot>
+ * it does still come up, though; the last time I ran into this problem was when I wanted to offload some expensive computation to a worker, which meant the result of the computation was suddenly async, and I had to go rewrite everything to add `async` in a bunch of places and the library was no longer usable in sync contexts
+
+[00:01:27.0448] <ljharb>
+why do you need `async` everywhere versus `return isPromise(p) ? p.then(f) : f(p)` or something?
+
+[00:01:45.0762] <bakkot>
+because the function call is in the middle of a bunch of other logic
+
+[00:03:07.0289] <bakkot>
+```
+for (let item of items) {
+  try {
+    let init = foo(item);
+    // 10 more lines here
+    result = await expensiveCompute(result, init);
+  } catch (e) {
+    // 10 more lines here
+  }
+}
+```
+
+[00:03:43.0405] <bakkot>
+it is definitely _possible_ to refactor this so that it just uses `.then` instead of `await`, but it's extremely annoying
+
+[00:04:18.0198] <bakkot>
+ * ```
+for (let item of items) {
+  try {
+    let init = foo(item);
+    // 10 more lines here
+    result = await expensiveCompute(result, init);
+  } catch (e) {
+    // 10 more lines here
+  }
+}
+```
+
+
+2021-12-31
+[10:04:08.0813] <devsnek>
+tfw tuples don't come with boxes anymore
+
+[10:21:57.0569] <devsnek>
+i'm def gonna be adding Symbol.prototype.unbox to my code
+
+[10:22:04.0196] <devsnek>
+ * i'm def gonna be adding Symbol.prototype.unbox to my code
+
+[10:27:49.0514] <Mathieu Hofman>
+Ashley Claymore  has has a `Box` polyfill that is compatible with both the records and tuple polyfill and future symbol as weakmap key, picking either an frozen object or symbol depending on what's available.
+
+[10:28:35.0196] <Mathieu Hofman>
+* Ashley Claymore:  has has a `Box` polyfill that is compatible with both the records and tuple polyfill and future symbol as weakmap key, picking either an frozen object or symbol depending on what's available.
+
+[10:28:45.0056] <Mathieu Hofman>
+* Ashley Claymore  has has a `Box` polyfill that is compatible with both the records and tuple polyfill and future symbol as weakmap key, picking either an frozen object or symbol depending on what's available.
+
+[10:41:48.0364] <nicolo-ribaudo>
+> <@devsnek:matrix.org> i'm def gonna be adding Symbol.prototype.unbox to my code
+
+After talking with different people, I think that it's how we can most likely reintroduce something like boxes in a new proposal. However, we will first need to see how symbols+R&T are actually used in the wild
+
+[10:46:06.0677] <Mathieu Hofman>
+I have concerns about adding this to the existing Symbol constructor and would rather it stays separate. Main concern is that symbols are cross realm and any user land abstraction would be per-realm.
+

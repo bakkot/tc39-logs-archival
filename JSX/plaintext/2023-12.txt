@@ -1,0 +1,172 @@
+2023-12-01
+[18:01:55.0381] <David Brito>
+> <@mhofman:matrix.org> I am ok exploring the problems of representing tree structures, but I am very skeptical it should take the shape of new syntax. Tagged templates litterals were added to the language to solve exactly this kind of problem, and the fact they have been used exactly for this same use case by other frameworks show JSX is not the only viable approach.
+
+I think that tagged templates for representing tree structures comes at the cost of runtime parsing and processing of the template. Unlike jsx which is already structured on the desired way as an object structure.
+
+[18:11:46.0967] <Mathieu Hofman>
+In both cases it's text that has to be parsed. If the tag is built-in, I don't see the difference.
+
+[18:19:05.0251] <David Brito>
+> <@mhofman:matrix.org> In both cases it's text that has to be parsed. If the tag is built-in, I don't see the difference.
+
+Would it then be some kind of special case of tagged templates with it's own specific call semantics?
+
+[18:23:32.0501] <Mathieu Hofman>
+No, why? The tag function gets passed an array of strings, and has to parse those according to the DSL it implements. If the function is natively implemented, the parsing can be as efficient as parsing the string of JS source code. Also the string array is immutable with unique identity, so the parsing can be cached.
+
+[18:27:45.0117] <David Brito>
+I see your what you mean.
+
+[18:37:46.0387] <Jack Works>
+https://facebook.github.io/jsx/#sec-why-not-template-literals
+
+well, the problem I think tagged template literal have, is exactly stated in the JSX doc
+
+[18:40:33.0798] <snek>
+if tagged templates make me write ${Component} everywhere i'm never going to use them over a babel transform
+
+[18:51:21.0520] <Mathieu Hofman>
+On the other hand, the special semantics of tag names in JSX are weird at best. From what I recall, some html tags do not require scoped references for tags by relying on the custom element registry. Of course making that generic enough yet ergonomic is the hard problem 
+
+[18:56:56.0253] <Anthony Bullard>
+The rule is simple:  tag names that start with capital letters are references to a function/component, all others are rendered by the pragma
+
+[18:57:26.0517] <Anthony Bullard>
+Pragma being createElement in React, and h in many others 
+
+[18:58:12.0400] <David Brito>
+Mathieu Hofman How  do you propose to handle type checking of props/attributes with the tagged template approach?
+
+[18:58:17.0161] <Anthony Bullard>
+Though that would seem to be strange new semantics to add to the JavaScript language itself
+
+[19:02:42.0920] <David Brito>
+> <@anthonybullard:matrix.org> The rule is simple:  tag names that start with capital letters are references to a function/component, all others are rendered by the pragma
+
+Tag names with a member expression are also rendered by the pragma.
+
+Eg.
+```
+<animated.div>
+```
+
+[19:02:46.0162] <snek>
+i think i am still of the opinion that js should not standardize any html/xml syntax stuff. as cool as it would be to write directly in browsers, i just don't think its worth it (and it would be weird to exist outside of browsers?)
+
+[19:13:55.0867] <Anthony Bullard>
+I have no super strong opinions, but I also write tons of little apps (and one large one) using h functions(and some helpers)
+
+[19:14:14.0539] <Anthony Bullard>
+I find it nice to create my own HTML DSL
+
+[19:23:25.0608] <Mathieu Hofman>
+> <@davbrito:matrix.org> Mathieu Hofman How  do you propose to handle type checking of props/attributes with the tagged template approach?
+
+Type checking and other syntax highlighting are technically possible today with tagged templates, as long as the tooling can infer the parser needed for the tagged template content.
+
+[22:27:18.0535] <ljharb>
+understanding DSLs are a fundamental blocker because it's not the default
+
+[22:27:36.0228] <ljharb>
+if you have to *do* something for your editor and tools to understand your DSL, it's a nonstarter
+
+[22:27:42.0621] <ljharb>
+ * if you have to _do_ something for your editor and tools to understand your DSL, it's mostly a nonstarter
+
+[22:28:07.0405] <ljharb>
+jsx wasn't all that viable until everyone just started defaulting to enabling/supporting it
+
+[23:09:55.0805] <Jack Works>
+> <@davbrito:matrix.org> Mathieu Hofman How  do you propose to handle type checking of props/attributes with the tagged template approach?
+
+that's TypeScript needs to take care of, although this is a very important part of template language. angular.js ends up developing their own compiler to compile template into ts file and let TypeScript check them.
+
+[23:15:31.0794] <Jack Works>
+> <@devsnek:matrix.org> if tagged templates make me write ${Component} everywhere i'm never going to use them over a babel transform
+
+yes, that example is horrible, but might be improved like this
+```
+html({ Header, Title })`
+    <Header>
+        <Title>Title</Title>
+    </Header>
+`
+```
+
+but type checking is still a problem
+
+[23:16:04.0103] <Jack Works>
+and one of rational I hope JSX can be in the language is "unfork" the language like the type annotation proposal does.
+
+[23:16:54.0167] <Jack Works>
+since JSX is already a extremely influential dialect of JavaScript, it's reasonable to consider it
+
+[04:30:54.0087] <Mathieu Hofman>
+> <@ljharb:matrix.org> if you have to _do_ something for your editor and tools to understand your DSL, it's mostly a nonstarter
+
+Agreed, but nothing prevents the tooling ecosystem to support tagged templates parsing by default. TypeScript came up with a way for the ecosystem to find types from dependencies, similar could be done for parsers of tagged templates.
+
+[04:34:05.0300] <Mathieu Hofman>
+An advantage of a built-in tagged template function is that the language specifies what it does, there is no need to resolve the parser from dependencies. At that point, I don't think there's a huge difference for the tooling to implement support whether the feature is syntax or a tagged template.
+
+[06:20:43.0468] <Ashley Claymore>
+As someone who works on a JS tooling team. It's such a 'chicken and egg' problem. Tools can support certain patterns better, but implementing that is more risky if the pattern isn't popular, but the pattern is less likely to be popular unless the tools support it better.
+My understanding is that TypeScript adding support for React flavoured JSX because of the dominance of React, especially at the time. Avoided another AtScript style fork (the Angular decorators fork)
+
+[06:21:09.0110] <Ashley Claymore>
+ * As someone who works on a JS tooling team. It's such a 'chicken and egg' problem. Tools can support certain patterns better, but implementing that is more risky if the pattern isn't popular, but the pattern is less likely to be popular unless the tools support it better.
+My understanding is that TypeScript adding support for React flavoured JSX was really driven by the dominance of React, especially at the time. Avoided another AtScript style fork (the Angular decorators fork)
+
+[08:18:58.0420] <ljharb>
+what prevents them is "what do they parse"
+
+[08:19:21.0281] <ljharb>
+iow, if we all wanted to move to *jsx* in tagged template literals, then _maybe_ that'd work fine. but that wouldn't do anything for other non-jsx DSLs
+
+[08:19:55.0474] <ljharb>
+"template literals" is really just a bad name for the feature, it doesn't work well for templating in practice.
+
+[08:55:53.0777] <Ashley Claymore>
+they work well for SQL 😅
+
+[08:56:52.0457] <eemeli>
+One feature of JSX that as far as I can tell isn't supported by any of the alternatives proposed so far is the way that something like `<Foo>` directly refers to the `Foo` that's in scope, rather than needing to have it redeclared as in the `html()` tagged template literal above. Are there any alternatives to JSX that provide this same DX?
+
+[08:59:50.0702] <Anthony Bullard>
+Yes, functions
+
+[09:00:54.0243] <eemeli>
+Any chance you could link to an example?
+
+[09:04:48.0341] <Ashley Claymore>
+https://github.com/hyperhype/hyperscript
+
+[09:09:12.0523] <Anthony Bullard>
+I’d link my own framework, but it’s basically the same as typescript
+
+[09:10:56.0761] <Anthony Bullard>
+*hyperscript 
+
+[10:05:12.0912] <eemeli>
+Ah, ok, so pretty much the function call syntax that JSX compiles to, just with a really short name?
+
+[10:52:15.0267] <Ashley Claymore>
+Yeah, the thing that inspired JSX
+
+[10:53:09.0814] <Ashley Claymore>
+Well I guess JSX was (E4X + HyperScript)
+
+[11:07:02.0514] <Anthony Bullard>
+By the way, tooling can solve the “balanced tag” issue that JSX supposedly solves.  Flutter as an example has fought back a clamber for a Dart equivalent to JSX by using the inlay hint feature available in most editors today to place a virtual text line comment with the name of the widget rendered after the ending brace for the widgets constructor (if on a separate line)
+
+This could be done on the same line as well with block comments.  An language server could implement this rather easily today
+
+[11:08:14.0104] <Anthony Bullard>
+Here’s an example 
+
+
+2023-12-02
+[03:49:30.0445] <Jack Works>
+I think the problem of function style is that you cannot visually notice "ah! this is UI". The `<` `>` symbol in JSX and HTML hints me very strongly.
+

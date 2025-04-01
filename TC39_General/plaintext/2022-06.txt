@@ -1,0 +1,726 @@
+2022-06-03
+[07:54:09.0038] <Domenic>
+What wording did TC39 end up with for "icky" features?
+
+[08:24:59.0613] <bakkot>
+> A conforming implementation of ECMAScript must implement Legacy subclauses, unless they are also marked as Normative Optional. All of the language features and behaviours specified within Legacy subclauses have one or more undesirable characteristics. However, their continued usage in existing applications prevents their removal from this specification. These features are not considered part of the core ECMAScript language. Programmers should not use or assume the existence of these features and behaviours when writing new ECMAScript code.
+
+[08:25:12.0322] <bakkot>
+ * Domenic: 
+> A conforming implementation of ECMAScript must implement Legacy subclauses, unless they are also marked as Normative Optional. All of the language features and behaviours specified within Legacy subclauses have one or more undesirable characteristics. However, their continued usage in existing applications prevents their removal from this specification. These features are not considered part of the core ECMAScript language. Programmers should not use or assume the existence of these features and behaviours when writing new ECMAScript code.
+
+[08:35:08.0294] <Richard Gibson>
+> <@bakkot:matrix.org> Domenic: 
+> > A conforming implementation of ECMAScript must implement Legacy subclauses, unless they are also marked as Normative Optional. All of the language features and behaviours specified within Legacy subclauses have one or more undesirable characteristics. However, their continued usage in existing applications prevents their removal from this specification. These features are not considered part of the core ECMAScript language. Programmers should not use or assume the existence of these features and behaviours when writing new ECMAScript code.
+
+"legacy", as seen at https://tc39.es/ecma262/multipage/fundamental-objects.html#sec-object.prototype.__proto__ and defined at the bottom of https://tc39.es/ecma262/multipage/conformance.html#sec-conformance
+
+
+2022-06-11
+[13:40:36.0027] <bakkot>
+I have been writing lots of promises lately and keep getting annoyed by awkwardness of extracting the handlers from the promise constructor. kind of want to add a helper for this. thoughts?
+
+```
+Promise.create = () => {
+  let resolve, reject;
+  let promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { resolve, reject, promise };
+};
+
+let { resolve, reject, promise } = Promise.create();
+resolve(42);
+promise; // Promise {<fulfilled>: 42}
+```
+
+[13:41:10.0676] <bakkot>
+I _could_ just copy that helper to every project but it comes up often enough for me that it seems maybe worth adding. don't know if this is something other people run into though.
+
+[13:43:03.0636] <nicolo-ribaudo>
+There is some popular prior art: jQuery's `$.deferred()` exposes the reject/resolve methods, and a `.promise()` method to get the internal promise.
+
+[14:32:18.0206] <joepie91 🏳️‍🌈>
+bakkot: the problem with deferreds like that is that, while there is a nonzero amount of cases where it's the correct solution (particularly queues), when people use it it is *almost* always because they are using promises wrong
+
+[14:33:02.0923] <joepie91 🏳️‍🌈>
+and aren't following the principle of "your `new Promise` should only contain the conversion logic necessary for a specific obsolete asynchronous API, nothing more, nothing less"
+
+[14:33:10.0614] <joepie91 🏳️‍🌈>
+and it often leads to race conditions and other reliability issues
+
+[14:33:47.0009] <joepie91 🏳️‍🌈>
+so I'd say that if you find yourself needing them in 'every project', that's probably a red flag, and it's also not something that should be too easy to do precisely because of its misuse potential :)
+
+[14:34:15.0872] <joepie91 🏳️‍🌈>
+(afaik this is basically *why* most modern Promise implementations ended up not implementing a deferred API)
+
+[15:07:44.0097] <bakkot>
+I certainly can believe that many people would use it wrong, and that's maybe a reason not to do this, though I don't agree that you should always be trying to shove your conversion logic inside of the call to the promise constructor
+
+[15:07:59.0997] <bakkot>
+also I guess I do write a lot of queues, which is probably unusual
+
+[15:54:18.0456] <joepie91 🏳️‍🌈>
+> <@bakkot:matrix.org> I certainly can believe that many people would use it wrong, and that's maybe a reason not to do this, though I don't agree that you should always be trying to shove your conversion logic inside of the call to the promise constructor
+
+the primary reason for doing so, aside from the self-contained nature of the resulting promise, is that it will also capture synchronously thrown errors in the conversion code and propagate them as promise rejections
+
+[15:54:42.0750] <joepie91 🏳️‍🌈>
+otherwise you run the risk of ending up with a half-async-half-sync API
+
+[15:55:40.0156] <joepie91 🏳️‍🌈>
+(this doesn't apply for queues where this is generally not reasonably possible at all; I'm *just* talking about conversions from weird async-cb APIs to promises here)
+
+[16:15:41.0706] <bakkot>
+I don't usually want to capture synchronously thrown errors in the conversion code, personally, because that means that I messed up _registering_ the callback rather than that the thing I was registering it to threw
+
+[16:16:16.0789] <bakkot>
+like if I'm doing `thing.on('finished', resolve(val))`, but `thing` is accidentally null at that point, that's a synchronous error and I don't want it to be wrapped up in a promise
+
+[16:16:34.0861] <bakkot>
+this is what I mean about it not making sense to try to shove all of your conversion logic inside the call to the promise constructor
+
+[16:17:31.0699] <bakkot>
+I only want an error if `thing` _itself_ produced an error, rather than if my conversion code failed
+
+[16:17:38.0048] <bakkot>
+ * I only want an error if `thing` _itself_ produced an error, rather than if my conversion code failed
+
+
+2022-06-12
+[18:59:09.0849] <ljharb>
+The spec used to have a proposed Promise.defer that did this, and Chrome shipped it for years until they finally caved and removed it. I think the potential for misuse and endorsement is far greater than the pain of writing that code/abstraction
+
+[19:45:47.0861] <flonxxd>
+ I'll help 10 individuals how to earn $20,000 in just 72 hours  from the crypto market. But you will pay me 10% commission when you receive your profit. if interested send me a direct message via WhatsApp by asking me HOW for more details on how to get started
+> +1 (2297781881
+
+
+
+[20:20:40.0144] <Jack Works>
+Finally we got cryptocurrency spam on Matrix 
+
+[20:21:22.0202] <Jack Works>
+* Finally we got cryptocurrency spam on Matrix 
+
+[20:58:53.0890] <flonxxd>
+ I'll help 10 individuals how to earn $20,000 in just 72 hours  from the crypto market. But you will pay me 10% commission when you receive your profit. if interested send me a direct message via WhatsApp by asking me HOW for more details on how to get started
+> +1 (2297781881
+
+
+
+[11:17:34.0162] <littledan>
+Bakkot, I agree that we should add a built-in Promise.defer function to do exactly that. It just keeps coming up for everyone.
+
+[11:17:55.0295] <littledan>
+(I actually removed exactly this function from V8 since it wasn’t in the standard)
+
+[15:11:43.0782] <flonxxd>
+ I'll help 10 individuals how to earn $20,000 in just 72 hours  from the crypto market. But you will pay me 10% commission when you receive your profit. if interested send me a direct message via WhatsApp by asking me HOW for more details on how to get started
+> +1 (2297781881
+
+
+
+
+2022-06-13
+[18:10:20.0999] <Justin Ridgewell>
+> <@joepie91:pixie.town> the primary reason for doing so, aside from the self-contained nature of the resulting promise, is that it will also capture synchronously thrown errors in the conversion code and propagate them as promise rejections
+
+We already lost that battle when we added `Promise.resolve`.
+
+[18:11:19.0766] <Justin Ridgewell>
+I’ve hit the queueing usecase enough times that it seems like a deferred struct is a good addition.
+
+[18:16:59.0828] <bakkot>
+ljharb: I lack experience here; what does misuse look like?
+
+[20:00:26.0113] <ljharb>
+I’ve seen tons of people use the pattern when it’s not needed; the number of times those legit use cases come up are very rare ime
+
+[20:15:03.0048] <littledan>
+I’ve seen this pattern often be needed when adapting a callback-based API to promises
+
+[20:15:53.0301] <littledan>
+Otoh I think people overused it back when promises were just coming out, async await was not yet standard, and people didn’t really understand .then
+
+[20:16:17.0408] <littledan>
+I think now would probably be a good time to add Promise.defer given the improved environment and continued need
+
+[20:17:04.0760] <littledan>
+I don’t think the legit use case is rare. It is just that, before async await, everyone was very confused all the time 
+
+[20:21:58.0494] <Kris Kowal>
+> <@nicolo-ribaudo:matrix.org> There is some popular prior art: jQuery's `$.deferred()` exposes the reject/resolve methods, and a `.promise()` method to get the internal promise.
+
+The chain of prior art continues. jQuery’s deferred() comes from the bad chain, because it conflated promise and resolver, allowing people to optionally separate them. jQuery took its cues from Python Twisted Deferred, which in turn took some of its cues from E promises. Whereas, Promise.defer() (from an early draft of the Promises proposal) takes its cues from Q.defer() is more like what @bakkot proposes, which in turn came from MarkM’s proposal for promises back in 2010, then from Tyler Close’s Waterken, which in turn took its cues from E.
+
+[20:23:53.0913] <Kris Kowal>
+That is to say, Promise.defer() => {promise, resolve, reject} is sound design (since by default promise and resolve should be held by different parties for POLA purposes), and while I named it “defer” originally as a nod to “Deferreds” in Python’s Twisted, it doesn’t suffer the same design error.
+
+[20:24:11.0060] <littledan>
+Yeah it is important that the callbacks returned close over the capability related to the individual promise (this was an issue in V8’s weird defer)
+
+[20:25:23.0095] <littledan>
+I was skeptical of defer at some point due to making all the callbacks but that was too much of a microoptimization I think 
+
+[20:28:01.0594] <Kris Kowal>
+I find myself using Promise.defer() for async queues too, but it’s stuffed in a library and only gets used that way once. But I also get a lot of use of Promise.defer() for 1. broadcasting a drain event 2. broadcasting a fast moving state change to a slow consumer (replace the deferred when the consumer observes the current state) 3. chaining mutual exclusion for stateful protocols or “baton passing”
+
+[20:29:13.0191] <Kris Kowal>
+Async queue https://github.com/endojs/endo/blob/master/packages/stream/index.js#L31-L50
+
+[20:30:12.0397] <Kris Kowal>
+(At Agoric, we’re calling Promise.defer() makePromiseKit() but Promise.defer() is definitely the right name.)
+
+[20:34:40.0383] <Kris Kowal>
+I think we ended up where we were because the Promise constructor needed to have *some* behavior and Promise.defer() was duplicative, so it could be punted indefinitely. It’s trivial to make a defer() from Promise(), so it was a disappointing concession but easy to recover from.
+
+[20:36:11.0080] <bakkot>
+yeah, it makes sense how we ended up here. it's not that it's hard to do the thing given the Promise constructor, just annoying.
+
+[20:40:10.0860] <Kris Kowal>
+I for one thing it would be worth the cost to add Promise.defer() => {promise, resolve, reject} to the language.
+
+[20:40:31.0336] <Kris Kowal>
+ * I for one thing it would be worth the cost to add Promise.defer() => {promise, resolve, reject} to the language.
+
+[20:41:43.0145] <Kris Kowal>
+Also noting that I’d also enjoy `Promise.defer() => {promise, resolve}` since `resolve(Promise.reject(error))` recovers the absent `reject`.
+
+[23:24:10.0437] <Ashley Claymore>
+> <@kriskowal:matrix.org> Also noting that I’d also enjoy `Promise.defer() => {promise, resolve}` since `resolve(Promise.reject(error))` recovers the absent `reject`.
+
+seems like a _safe_ optimisation, Whenever I’ve used this pattern I’ve only ever needed to expose resolve
+
+[23:48:42.0332] <bakkot>
+i have definitely needed reject, and it seems odd to make you write `resolve(Promise.reject(error))` in that case
+
+[02:26:31.0295] <joepie91 🏳️‍🌈>
+> <@jridgewell:matrix.org> We already lost that battle when we added `Promise.resolve`.
+
+huh? `Promise.resolve` does not do the same kind of thing - it produces an immediately-settled Promise. the problem with deferred Promises is that they produce *pending* Promises and expect some outside call to settle it
+
+[02:27:53.0887] <joepie91 🏳️‍🌈>
+and keep in mind that adding something like defer to the language spec doesn't just "make it available", it also expresses a strong endorsement of *using* it, and over the years I've repeatedly found "it's defined by the language" to be a stronger-weighing argument for people than "is this tool appropriate for the usecase".
+
+[08:35:30.0622] <Justin Ridgewell>
+How do you get the value you pass to `Promise.resolve`?
+
+[08:35:40.0477] <Justin Ridgewell>
+Likely it’s a function call.
+
+[08:36:22.0300] <littledan>
+you await it?
+
+[08:36:40.0858] <Justin Ridgewell>
+```
+const value = fn();
+Promise.resolve(value);
+```
+
+[08:36:57.0216] <Justin Ridgewell>
+That `fn()` isn’t being caught on anything
+
+[08:37:20.0371] <Justin Ridgewell>
+So we’ve arrived at the same problem of not properly catching the rejection in your promise
+
+[08:37:39.0384] <littledan>
+well, this is something that the Promise constructor does
+
+[08:37:49.0578] <littledan>
+(or maybe I misunderstand what you are asking)
+
+[08:38:22.0762] <Justin Ridgewell>
+Exposing a deferred just makes the queue case easier, and it’s impossible to express in any other way.
+
+[08:38:44.0305] <littledan>
+(it's clearly already possible)
+
+[08:39:04.0583] <Justin Ridgewell>
+People don’t use the constructor, they use `Promise.resolve` when the value is simple. We already opened that door for them.
+
+[08:39:41.0132] <Justin Ridgewell>
+> <@littledan:matrix.org> (it's clearly already possible)
+
+How? How else besides storing a deferred and resolving it later?
+
+[08:40:30.0067] <littledan>
+right, I mean, it's possible with the Promise constructor. We're not talking about adding a new capability
+
+[08:40:47.0685] <Justin Ridgewell>
+Dan, we’re talking about two separate things.
+
+[08:40:53.0702] <littledan>
+sorry for my confusion
+
+[08:41:34.0069] <Justin Ridgewell>
+The promise constructor vs `Promise.resolve`. Then whether deferred allow you to not capture a thrown error.
+
+[08:42:02.0823] <Justin Ridgewell>
+The first is already there, and people prefer `Promise.resolve`.
+
+[08:42:07.0386] <littledan>
+well, deferred is more powerful than Promise.resolve, because... it's not resolved immediately. I think that's the difference.
+
+[08:42:28.0053] <Justin Ridgewell>
+Because of that, adding deferred isn’t opening up anything g that we haven’t already opened.
+
+[08:43:22.0688] <Justin Ridgewell>
+https://matrix.to/#/!wbACpffbfxANskIFZq%3Amatrix.org/%24ucmxi_iERR-4n8X_rOaL_yKvlbNpxiaWawsRESJDwcc
+
+[08:45:50.0445] <joepie91 🏳️‍🌈>
+I find "we already have a misuse-prone thing, so we might as well add another misuse-prone thing" to not be a terribly convincing argument, personally
+
+[08:46:22.0971] <littledan>
+(I'm not free for a call right now if this is what you're suggesting, but I'm happy to drop this subject until we can do so)
+
+[08:47:13.0440] <littledan>
+if you're arguing, adding Promise.defer would not be a huge change and would be aligned with what we already have, I agree
+
+[08:47:31.0298] <Justin Ridgewell>
+Yes.
+
+[08:48:06.0176] <Justin Ridgewell>
+I also don’t think many would reach for it, except those that explicitly need the queueing case.
+
+[08:48:27.0111] <littledan>
+you don't think adapting callback-based APIs is also a big use case?
+
+[08:48:54.0211] <Justin Ridgewell>
+Can you explain?
+
+[08:50:07.0515] <James M Snell>
+Just as a datapoint, I think we'd end up using `Promise.defer()` fairly extensively on the Node.js internals. We have about 40 or so cases where we currently use that pattern internally, and we have a `createDeferredPromise()` utility to accomplish this
+
+[08:50:09.0489] <littledan>
+like, if you want to make a Promise-based setTimeout, you can do something like `let {promise, resolve} = Promise.defer(); setTimeout(resolve, 1000)`. IMO this is cleaner than using the Promise constructor
+
+[08:50:37.0685] <littledan>
+(this is where I've wanted it in the past)
+
+[08:51:57.0617] <joepie91 🏳️‍🌈>
+aside from "cleaner" being an ambiguous term, I disagree that it is more readable; you lose the visual grouping indicating that the setTimeout is internal logic for the Promise.
+
+[08:52:54.0595] <joepie91 🏳️‍🌈>
+more crucially, it is *already* possible to write precisely such a `createDeferredPromise` utility function today, trivially so, and there are several implementations of it in library form. this is not something that *needs* to be part of the language spec from a functionality perspective
+
+[08:53:59.0090] <joepie91 🏳️‍🌈>
+adding something to the language has serious implications and outsized ecosystem costs compared to shipping something in library form, and to be honest it's concerning to me how easily people gloss over the "encourages misuse" problem for something that's ultimately of extremely questionable value to have in the language to begin with
+
+[08:54:09.0493] <James M Snell>
+I would argue that the prevalence of utility functions to accomplish it are an argument in *favor* of adding the mechanism to the language. It would be nice to eliminate a dependency 
+
+[08:54:32.0824] <joepie91 🏳️‍🌈>
+"a lot of people do this" is, in and of itself, not a good argument to add something to the language
+
+[08:54:47.0613] <joepie91 🏳️‍🌈>
+that's how you end up with, say, Python's standard library
+
+[08:55:40.0721] <James M Snell>
+well, just offering my opinion on it. I think it would be a useful addition to the language. Not really wanting to argue it beyond that. 
+
+[08:56:48.0191] <joepie91 🏳️‍🌈>
+lots of things are 'useful additions to the language', though; but usefulness is just one of many factors that should be considered, considering the high costs of language/core additions
+
+[09:23:18.0790] <bakkot>
+joepie91 🏳️‍🌈: if you have thoughts on what misuse looks like here, I'm interested to hear
+
+[09:24:09.0255] <bakkot>
+the only example so far was just using it when not needed, which, while unfortunate, isn't the sort of misuse I'd be most concerned about, assuming it's similarly performant to the promise constructor
+
+[09:24:16.0284] <bakkot>
+ * the only example so far was just using it when not needed, which, while unfortunate, isn't the sort of misuse I'd be most concerned about, assuming it's similarly performant to the promise constructor
+
+[09:27:22.0492] <bakkot>
+> <@joepie91:pixie.town> "a lot of people do this" is, in and of itself, not a good argument to add something to the language
+
+I definitely agree with this, but it's a necessary-but-not-sufficient sort of thing. if it's something a lot of people do _and_ it's a reasonable thing to do _and_ it's awkward to do with the current mechanisms _and_ we don't think it's going to lead to a lot of confusion or bad patterns, that is a good reason to add it. here I think that might be the case, though with low confidence at the moment.
+
+[09:33:07.0492] <joepie91 🏳️‍🌈>
+bakkot: the problem I'm concerned about is one of maintainability rather than performance. for the "making something non-promisey work with promises" usecase, the optimal implementation from a maintainability perspective is one that is a) self-contained and b) minimal; that is, you'd be using `new Promise`, and its body would contain only the minimal wiring necessary to convert some other non-standard async API into a Promise. that way, the conversion itself can be entirely agnostic to the business logic, and all the actual business logic would exist in a 'safe' Promise-y context (ie. benefiting from the Promise error handling behaviour such as automatic propagation)
+
+this *already* gets done wrong a lot due to lacking documentation on working with Promises, in that a lot of people tend to put additional business logic within the `new Promise`, sometimes nesting several levels of (unsafe) async callbacks before eventually resolving/rejecting something, or adding needless complexity by eg. having promise chains nested *within* a `new Promise`. but in this case, at least the design of the API encourages keeping resolve/reject logic *within* that callback - so the problem is usually contained to just the contents of the `new Promise` callback, which makes it easier to fix.
+
+the problem with a defer API, then, is that the pattern it encourages is "pass your promise to one place, and your resolve/reject functions to another", which I've already seen lead to people passing resolve/reject functions through sometimes multiple layers of indirection (all of them using 'unsafe' async patterns), ending up with a huge pile of spaghetti async code that's nearly impossible to reason about or untangle even when you want to fix it. unlike with the `new Promise` API, there's nothing that 'nudges' people towards keeping it contained within a single place.
+
+(note: I'm currently sick and someone down the street seems to have just decided to start hammering something again, so I hope that all makes sense, and I don't know how long I can keep being engaged in this discussion for)
+
+[10:01:37.0254] <bakkot>
+> for the "making something non-promisey work with promises" usecase, the optimal implementation from a maintainability perspective is one that is a) self-contained and b) minimal; that is, you'd be using `new Promise`, and its body would contain only the minimal wiring necessary to convert some other non-standard async API into a Promise
+
+hm, I think I do not agree with this, or rather I agree in theory if the wiring happens to be cleanly expressed that way (say your sync API is in the `((val, err) => body` callback style) but that in many cases the wiring does happen to work out cleanly that way (say an event emitter style, where only certain events or events under particular conditions should be the trigger for the promise settling, and the other cases you're doing something else). this is kind of what your next paragraph gets at:
+
+> this already gets done wrong a lot due to lacking documentation on working with Promises, in that a lot of people tend to put additional business logic within the `new Promise`
+
+I think this is actually encouraged by the design of the Promise constructor, and part of the point of this proposal would be to make it easier to not do that. in my experience the business logic is often pretty entangled with the wiring, and can't be cleanly separated - if you only want to settle after a certain number of events, say, then the current design means that the "business" logic which counts the events _has_ to go inside of the callback to the Promise constructor (or you have to a `Promise.defer`-style helper), so that it has access to `resolve`.
+
+> which I've already seen lead to people passing resolve/reject functions through sometimes multiple layers of indirection (all of them using 'unsafe' async patterns), ending up with a huge pile of spaghetti async code that's nearly impossible to reason about or untangle even when you want to fix it
+
+that does seem like a bad outcome, thanks for the example.
+
+> note: I'm currently sick and someone down the street seems to have just decided to start hammering something again, so I hope that all makes sense, and I don't know how long I can keep being engaged in this discussion for
+
+yeah, no worries, if this does become a proposal there will be plenty of time to comment at that point
+
+[10:08:18.0904] <joepie91 🏳️‍🌈>
+> I think this is actually encouraged by the design of the Promise constructor, and part of the point of this proposal would be to make it easier to not do that. in my experience the business logic is often pretty entangled with the wiring, and can't be cleanly separated - if you only want to settle after a certain number of events, say, then the current design means that the "business" logic which counts the events has to go inside of the callback to the Promise constructor (or you have to a Promise.defer-style helper), so that it has access to resolve.
+
+to clarify, I would consider "counting the events" in that example to be part of the wiring logic, not the business logic, as it is necessary for the wiring the function - and therefore it belongs within the `new Promise` constructor. with "business logic" I am really referring to things that have nothing to do with the wiring, eg. subsequent transformations of the resolved value, multiple underlying asynchronous operations, that sort of thing.
+
+this is not the greatest example, but it happens to be from yesterday so I still have it in my history: https://bpa.st/RZVQ#1L41 -- neither the `Promise.all` nor the `JSON.parse`/`IrcBookState.FromJson` logic really belongs inside of that `new Promise`, as both are business logic unrelated to wiring up non-Promise async APIs into a Promise. now in this specific case, there *is* no useful wiring within the `new Promise` callback and that shouldn't have been used at all, hence why it's not a great example :)
+
+[10:10:24.0603] <joepie91 🏳️‍🌈>
+but I regularly see basically the same error being made within code that _does_ use `new Promise` for a legitimate reason, but just puts entirely too much stuff within it that doesn't need to be there
+
+[10:10:37.0686] <joepie91 🏳️‍🌈>
+ * but I regularly see basically the same error being made within code that _does_ use `new Promise` for a legitimate reason, but just puts entirely too much stuff within it that doesn't need to be there
+
+[10:23:23.0169] <bakkot>
+joepie91 🏳️‍🌈: yeah, so, I feel like again the "there is too much stuff inside of `new Promise`" thing is a consequence of the design of the Promise constructor, and would be improved by `Promise.defer` in many cases.
+
+like, to talk a little more concretely, consider the case of an event emitter which emits a series of chunks and then a `done` event. you could promise-ify it in a few different ways:
+
+```
+let emitter = makeChunkEmitter();
+let chunks = [];
+emitter.on('chunk', chunk => chunks.push(chunk));
+return new Promise(resolve => emitter.on('done', () => resolve(chunks)));
+```
+which has the problem that the two `on` calls are weirdly separated, which makes it hard to follow, or
+```
+let emitter = makeChunkEmitter();
+return new Promise(resolve => {
+  let chunks = [];
+  emitter.on('chunk', chunk => chunks.push(chunk));
+  emitter.on('done', () => resolve(chunks))
+});
+```
+which has the problem that there is logic unrelated to promise resolution inside of the call to the Promise constructor, and that if `emitter` is null it will incorrectly put the error inside of the Promise even though the problem wasn't inside of the emitter itself at all, or
+```
+let emitter = makeChunkEmitter();
+let { resolve, promise } = Promise.defer();
+let chunks = [];
+emitter.on('chunk', chunk => chunks.push(chunk));
+emitter.on('done', () => resolve(chunks));
+return promise;
+```
+which I think is the cleanest, but which has the problem that `Promise.defer` does not exist.
+
+[12:12:41.0870] <ljharb>
+Justin Ridgewell: Promise.try handles that resolve case :-) https://github.com/tc39/proposal-promise-try
+
+
+2022-06-14
+[01:59:36.0843] <Ashley Claymore>
+the topic of checking web compatibility of new proposals came up recently. Am I right in thinking some browsers in the past tried to track this at runtime by placing a hidden 'hook' that could see if certain props were accessed? Or was that something from a dream?
+
+[02:16:04.0074] <nicolo-ribaudo>
+That was not a dream, if I recall correctly Firefox calls them "Use Counters"
+
+[02:17:51.0696] <nicolo-ribaudo>
+https://firefox-source-docs.mozilla.org/toolkit/components/telemetry/collection/use-counters.html
+
+[02:18:30.0291] <Luca Casonato>
+An example of a recent CL adding a use counter to Chromium: https://chromium-review.googlesource.com/c/chromium/src/+/3423793
+
+[03:22:20.0196] <Ashley Claymore>
+thanks both! Much appreciated
+
+
+2022-06-16
+[17:54:00.0937] <sideshowbarker>
+FYI https://git-pulse.github.io/reports/tc39-ecma262-2022-06-15-pulse.html
+
+[17:55:12.0164] <sideshowbarker>
+that’s some output of a general tool I wrote recently for gathering useful metrics/stats from GH repos
+
+[17:56:23.0837] <sideshowbarker>
+reports for some other repos/projects are at https://git-pulse.github.io/reports/
+
+
+2022-06-22
+[07:48:59.0921] <nicolo-ribaudo>
+JavaScript question. This code should log `FAIL 1` in the first part, but is it true that the second part is host-defined?
+
+```js
+await deleteFileIfExists("./mod.js");
+
+try {
+  await import("./mod.js");
+  console.log("OK 1");
+} catch {
+  console.log("FAIL 1");
+}
+
+await createFile("./mod.js", "export const x = 1");
+
+try {
+  await import("./mod.js");
+  console.log("OK 2");
+} catch {
+  console.log("FAIL 2");
+}
+```
+
+[07:49:05.0289] <nicolo-ribaudo>
+ * JavaScript question. This code should log `FAIL 1` in the first part, but is it true that the second part is host-defined?
+
+```js
+// If it exists, delete the ./mod.js file
+
+try {
+  await import("./mod.js");
+  console.log("OK 1");
+} catch {
+  console.log("FAIL 1");
+}
+
+// Create the ./mod.js file, a valid ECMAScript module
+
+try {
+  await import("./mod.js");
+  console.log("OK 2");
+} catch {
+  console.log("FAIL 2");
+}
+```
+
+[07:49:49.0687] <nicolo-ribaudo>
+ * JavaScript question. This code should log `FAIL 1` in the first part, but is it true that the second part is host-defined?
+
+```js
+await deleteFileIfExists("./mod.js");
+
+try {
+  await import("./mod.js");
+  console.log("OK 1");
+} catch {
+  console.log("FAIL 1");
+}
+
+await createFile("./mod.js", "export const x = 1");
+
+try {
+  await import("./mod.js");
+  console.log("OK 2");
+} catch {
+  console.log("FAIL 2");
+}
+```
+
+[07:50:38.0048] <nicolo-ribaudo>
+(node logs `OK 2`, Deno and Firefox log `FAIL 2`)
+
+[07:50:40.0690] <Kris Kowal>
+In my opinion, the promises returned by import should be memoized, but I do not know where the spec stands.
+
+[07:51:15.0930] <Kris Kowal>
+At least, the eventual settlements should be memoized.
+
+[07:51:36.0153] <Ashley Claymore>
+yeah, so fresh promise. consistent settle? To avoid global mutable state
+
+[07:52:21.0002] <Kris Kowal>
+That would be satisfactory in my opinion, but I do not know where the spec stands.
+
+[07:55:55.0149] <Ashley Claymore>
+do Node, Deno and Firefox module systems support query params as a way to force a fresh module?
+
+```
+import(`./mod.js?n=${i++}`);
+```
+
+[07:56:03.0763] <Ashley Claymore>
+ * do Node, Deno and Firefox module systems support query params as a way to force a fresh module
+
+```
+import(`./mod.js?n=${i++}`);
+```
+
+[07:56:14.0597] <Ashley Claymore>
+ * do Node, Deno and Firefox module systems support query params as a way to force a fresh module?
+
+```
+import(`./mod.js?n=${i++}`);
+```
+
+[07:56:51.0000] <guybedford>
+This behaviour was allowed to be host-defined in https://github.com/tc39/ecma262/pull/1645 I believe.
+
+[07:57:18.0310] <guybedford>
+HTML had plans to add support for enabling these sorts of retries, but as far as I know it hasn't been implemented in any browser
+
+[07:57:28.0406] <nicolo-ribaudo>
+Oh thank you!
+
+[08:28:52.0629] <nicolo-ribaudo>
+Yes, they all consider them as different modules
+
+[08:28:57.0852] <nicolo-ribaudo>
+ * Yes, they all consider them as different modules
+
+[08:37:07.0347] <Kris Kowal>
+From a compartment-as-module-loader perspective, this would necessarily be host-defined, since the resolveHook produces the memo-key and would be in a position to either keep or truncate the query and hash.
+
+
+2022-06-23
+[05:00:10.0192] <sideshowbarker>
+I see the “Change Array by copy“ proposal https://tc39.es/proposal-change-array-by-copy/ seems to have been implemented (and shipped?) in Firefox — https://bugzilla.mozilla.org/show_bug.cgi?id=1729563. Has it been implemented in any other browser engines yet?
+
+[05:09:58.0133] <Ashley Claymore>
+I think it is still behind a compile time flag in Firefox.
+It has started to ship in Safari tech preview. But the spec has changed (and could change again) since it was implemented there
+
+[05:13:25.0486] <sideshowbarker>
+OK, thanks — then I’m going to suggest we close https://github.com/mdn/content/pull/9940 for now — rather than keeping it open indefinitely — and revisit it if/when things level out later.
+
+That PR’s been hanging open for more than 7 months now, and in general I don’t think it’s so great to keep PRs open that long.
+
+[05:13:35.0003] <sideshowbarker>
+ * OK, thanks — then I’m going to suggest we close https://github.com/mdn/content/pull/9940 for now — rather than keeping it open indefinitely — and revisit it if/when things level out later.
+
+That PR’s been hanging open for more than 7 months now, and in general I don’t think it’s so great to keep PRs open that long.
+
+[05:30:35.0021] <nicolo-ribaudo>
+I'm reading the `HostResolveImportedModule` description (https://tc39.es/ecma262/#sec-hostresolveimportedmodule), and I'm confused about what happens when _referencingScriptOrModule_ is `null`.
+
+If I have two iframes containing `<button type="button" onclick="import('./foo.mjs')">Click me</button>`, does `import('./foo.mjs')` have to return the same module instantiation both times (third bullet point) and thus leak an iframe's Realm to the other?
+
+[05:32:35.0942] <littledan>
+the referencing script or module is more about fetch options or the base URL/referrer; it doesn't control which realm things happen in
+
+[05:32:56.0360] <nicolo-ribaudo>
+ * I'm reading the `HostResolveImportedModule` description (https://tc39.es/ecma262/#sec-hostresolveimportedmodule), and I'm confused about what happens when _referencingScriptOrModule_ is `null`.
+
+If I have two iframes containing `<button type="button" onclick="import('./foo.mjs')">Click me</button>`, does `import('./foo.mjs')` have to return the same module instantiation both times (third bullet point) and thus leak an iframe's Realm to the other?
+
+[05:33:30.0976] <nicolo-ribaudo>
+But if it's the same referencing script/module both times, they cannot be executed in two different realms (because it can only be executed once)
+
+[05:37:06.0983] <nicolo-ribaudo>
+ * But if it's the same referencing script/module both times (and in this case it's both times `null`), they cannot be executed in two different realms (because it can only be executed once)
+
+[05:37:50.0157] <littledan>
+How so? Are you referencing the HTML spec in your analysis, or is this based on JS more generally?
+
+[05:38:12.0115] <nicolo-ribaudo>
+I'm just reading the requirements and note of https://tc39.es/ecma262/#sec-hostresolveimportedmodule in ecma262
+
+[05:38:47.0513] <nicolo-ribaudo>
+ * I'm just reading the requirements and note of https://tc39.es/ecma262/#sec-hostresolveimportedmodule in ecma262
+
+[05:39:39.0673] <littledan>
+it seems totally possible that we need to add more requirements or change the existing one. I have trouble making sense of the module import hooks without referencing HTML concretely, tbh
+
+[05:40:01.0977] <nicolo-ribaudo>
+I'll check the HTML spec to see what it does
+
+[05:41:02.0037] <littledan>
+just curious, are you looking into this in relation to the current ShadowRealm controversy about using a null referrer?
+
+[05:41:30.0042] <nicolo-ribaudo>
+Nope, I was reading it to understand how to properly describe module blocks caching
+
+[05:42:21.0700] <littledan>
+interesting, hopefully the referrer doesn't matter much in that case!
+
+[05:42:51.0982] <littledan>
+we might have an HTML PR for that feature, or maybe we didn't get around to it, I don't remember
+
+[05:42:57.0630] <nicolo-ribaudo>
+Agree! But I wanted to fully understand how caching is speified
+
+[05:48:56.0542] <nicolo-ribaudo>
+Ok, I believe that HTML violates the requirements for that host hook, but HTML does the only sensible thing and we should relax the requirement in 262. I'll open an issue with a proper description of what I think we currently do and what we should do.
+
+[05:50:00.0649] <nicolo-ribaudo>
+(or maybe I'm just wrong, and I'll relize it when writing it down 😂)
+
+[10:04:09.0112] <nicolo-ribaudo>
+littledan FYI, the issue is https://github.com/tc39/ecma262/issues/2803
+
+
+2022-06-24
+[23:38:53.0585] <yulia>
+The html spec isn't violating the idempotency requirement
+
+[23:39:46.0425] <yulia>
+The ECMA262 spec note only applies if there is a referencing script
+
+[23:40:04.0815] <yulia>
+We are explicitly creating a case where we are passing null
+
+[23:59:07.0336] <nicolo-ribaudo>
+Even if it is null we still have a (_referencingScriptOrModule_, _specifier_) pair, so it's definitely not clear 
+
+[00:22:15.0163] <nicolo-ribaudo>
+Ok, I replied on GitHub
+
+[00:31:23.0828] <yulia>
+yeah i agree!
+
+[00:57:21.0952] <yulia>
+sorry if i came across wrong there
+
+[01:08:04.0729] <nicolo-ribaudo>
+Np, it's a complex part of the spec and I'm asking multiple questions and clarifications daily 😬
+
+[01:09:37.0045] <nicolo-ribaudo>
+* Hey, I spent two days trying to understand what happens when I dynamically import something, it's a complex part of the spec and I'm asking multiple questions and clarifications daily 😬
+
+[01:09:58.0620] <nicolo-ribaudo>
+* Np, it's a complex part of the spec and I'm asking multiple questions and clarifications daily 😬
+
+[06:42:40.0550] <littledan>
+PSA: Ecma is hiring a new Secretary General. Please share this announcement and encourage qualified candidates who can work in Geneva to send in their CVs before August 1st. You can find details at https://www.ecma-international.org/news/recruitment-of-a-new-secretary-general-for-ecma-international/
+
+
+2022-06-28
+[18:47:45.0820] <Jack Works>
+https://twitter.com/nicoloribaudo/status/1541480513055371264
+
+[18:47:57.0674] <Jack Works>
+Oh no!! 
+
+[21:12:53.0700] <Kris Kowal>
+We are become emoji.
+
+[21:19:50.0634] <snek>
+took me so long to realize this is because `*️⃣` is just `*` and `⃣` with a zwj
+
+[21:22:56.0308] <snek>
+ * took me so long to realize this is because `*️⃣` is just `*` and `⃣` joined with \uFE0F
+
+[21:45:39.0546] <guybedford>
+very good troll! had me sweating
+
+[22:25:57.0385] <nicolo-ribaudo>
+I discovered it with regexps, which was even more confusing 😂 I was trying to understand why this doesn't work:
+
+/0️⃣|*️⃣/u
+
+[22:46:20.0013] <ljharb>
+you forgot `--> single line`
+
+[22:59:37.0807] <nicolo-ribaudo>
+I fear touching it, it's ever more cursed 
+
+[23:00:00.0432] <nicolo-ribaudo>
+It only works if there is no other code in the same line
+
+
+2022-06-29
+[03:33:41.0265] <nicolo-ribaudo>
+Do we have a list of places to look at to see how host hooks are used, or is the HTML spec the only host with a clearly defined ecma262 integration? I'm curious to see what hosts save in a Module Record's [[HostDefined]] slot.
+
+[04:46:23.0786] <littledan>
+HTML is the only JS embedder that I know of that has a fully textual spec for how the hooks are used, but other JS embedders make explicit efforts to have behavior which could've been based on hooks.
+
+[04:49:02.0351] <littledan>
+I feel like constructs like [[HostDefined]] are really just there for the fully textual spec crowd; if you're just thinking about following the JS spec in a hand-wavy way, it's enough to say that each thing X in JS has a set of fields Y which are vaguely associated with it (and indeed web specs sometimes talk this way, at least historically, and that wouldn't even be so bad if we thought of "vaguely associated" as being via, e.g., a WeakMap)
+
+[04:49:57.0261] <littledan>
+WeakMap modulo, you know, the category error that spec objects and JS objects must never meet
+

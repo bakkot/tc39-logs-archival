@@ -1,0 +1,92 @@
+<!DOCTYPE html><html><head>
+  <title>Pattern Matching Champions on 2022-09-09</title>
+  <link rel="stylesheet" href="../style.css">
+  <script>window.room = "Pattern Matching Champions";</script><script src="../render-roomlist.js"></script>
+  <script src="../logs.js"></script>
+</head>
+<body><div class="wrapper">
+<div class="sidebar">
+<div class="title">Pattern Matching Champions<br>2022-09-09<br><a href="plaintext/">plaintext logs</a></div>
+<div class="nav">
+<a href="2022-09-08" class="nav-link"><span>prev</span></a>
+<a href="2022-09-13" class="nav-link"><span style="float:right">next</span></a>
+</div>
+    <div class="all-rooms"><noscript>JavaScript is required to load the channel index, but you can go to <a href="../..">the static index</a> directly.</noscript></div>
+<div class="footer"><a href="https://github.com/bakkot/matrix-archive-bot">source on github</a></div>
+</div>
+<div class="rhs">
+<div class="rhs-header">
+<span id="error" style="color: red; display:none">error</span>
+
+<input type="text" id="query" size="25" placeholder="Search Pattern Matching Champions">
+<a id="search-submit" class="button icon-link" title="Search">
+  <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M505 442.7L405.3 343c-4.5-4.5-10.6-7-17-7H372c27.6-35.3 44-79.7 44-128C416 93.1 322.9 0 208 0S0 93.1 0 208s93.1 208 208 208c48.3 0 92.7-16.4 128-44v16.3c0 6.4 2.5 12.5 7 17l99.7 99.7c9.4 9.4 24.6 9.4 33.9 0l28.3-28.3c9.4-9.4 9.4-24.6.1-34zM208 336c-70.7 0-128-57.2-128-128 0-70.7 57.2-128 128-128 70.7 0 128 57.2 128 128 0 70.7-57.2 128-128 128z"></path></svg>
+</a>
+</div>
+
+<div class="log"><table id="log-table"><tbody id="log-tbody">
+
+  <tr class="msg" id="L0"><td class="ts-cell"><a class="ts" href="#L0" alt="Fri Sep 09 2022 12:33:52 GMT-0700 (Pacific Daylight Time)">19:33</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell"><p>I just put up another gist of some explorations I've been doing into different ways to introduce pattern matching to JS: <a href="https://gist.github.com/rbuckton/df6ade207eecad4fc94cedc3aae79ceb">https://gist.github.com/rbuckton/df6ade207eecad4fc94cedc3aae79ceb</a> its not exhaustive, but covers a lot of the topics from <span class="nick-14">yulia | OOO until sept 26th</span>'s layering proposal.</p>
+<p>I didn't go into great detail on the <code>match</code> expression, because that's fairly well covered by the current proposal. This document explores several interesting themes, however:</p>
+<ul>
+<li>Building pattern matching into destructuring (i.e., "any assignment is a pattern" like in Rust and Scala)</li>
+<li>Borrowing <code>if-let</code> and <code>while-let</code> from Rust</li>
+<li>Various mechanisms of gradually introducing pattern matching via <code>switch</code></li>
+<li><code>function</code> overloading (similar to what Yulia has discussed)</li>
+<li><code>catch</code> guards</li>
+<li>infix <code>is</code> expressions (i.e., <code>expr is pattern</code>)</li>
+<li><code>let</code> patterns</li>
+</ul>
+<p>Not all of the explored syntax alternatives are compatible with each other, though some are interrelated.</p>
+<p>From that exploration, I see two different paths:</p>
+<ul>
+<li>Reuse destructuring for pattern matching (similar to Rust/Scala)</li>
+<li>Treat pattern matching as something distinct from destructuring (similar to current proposal)</li>
+</ul>
+<p>In general I'd favor choosing one path over trying to implement some amalgamation of both.</p>
+</td></tr>
+  <tr class="msg" id="L1"><td class="ts-cell"><a class="ts" href="#L1" alt="Fri Sep 09 2022 12:34:37 GMT-0700 (Pacific Daylight Time)">19:34</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell">While I generally favor the "keep it distinct" path, there are some interesting features of the "reuse destructuring" path that are compelling.</td></tr>
+  <tr class="msg" id="L2"><td class="ts-cell"><a class="ts" href="#L2" alt="Fri Sep 09 2022 12:37:01 GMT-0700 (Pacific Daylight Time)">19:37</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell">The downside of reusing destructuring is that such patterns would not have strict property or element checks by default (i.e., <code>const { x, y } = { x: 0, y: 1, z: 2 };</code> needs to continue to work), as well as that you need mechanisms for distinguishing from introducing a binding vs referencing an identifier (i.e., <code>const { x: Infinity } = { x: 0 }</code> is already legal). But the upside is that we could have a single unified pattern syntax that we could easily shoehorn into <code>catch</code> guards and <code>function</code> overloads if we so wished.</td></tr>
+  <tr class="msg" id="L3"><td class="ts-cell"><a class="ts" href="#L3" alt="Fri Sep 09 2022 12:48:50 GMT-0700 (Pacific Daylight Time)">19:48</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell"><p>Some examples of the "reuse destructuring" approach:</p>
+<pre><code class="language-js">let { x: 0, y } = obj; // match obj.x to 0, bind y to obj.y, loose property matching
+let {| x: 0, y |} = obj; // match obj.x to 0, match obj.y to anything, no extra properties, bind y to obj.y
+let { x: x@0, y } = obj; // rust-style `@` binding. match obj.x to 0, bind x to obj.x, bind y to obj.y
+
+if (let Option.Some(value) = opt) ...; // `if-let` + extractors
+while (let Option.Some(message) = getNext()) ...; // `while-let` + extractors
+ 
+if (let x = foo(); x.bar) ...; // `if-let` plus C++ 17's `if-with-initializer` syntax
+while (let x = foo(); x.bar) ...; // `while-let` plus C++ 17's `if-with-initializer` syntax
+
+try { ... }
+catch (e@FileNotFoundError) { ... } // rust-style `@` and custom matcher
+catch (@TypeError) { ... } // `@` without binding and custom matcher. Needed to distinguish from id
+catch (HttpError{ statusCode: 404 }) { ... } // no need for `@` due to extractor syntax
+catch (Error{ cause: e@ReferenceError }) { ... } // `@` binding and extractors
+</code></pre>
+<p>It's very compelling, but requires workarounds like <code>@</code> to be backwards compatible, making it easy to make mistakes (like <code>{ x: NaN }</code>).</p>
+</td></tr>
+  <tr class="msg" id="L4"><td class="ts-cell"><a class="ts" href="#L4" alt="Fri Sep 09 2022 12:57:02 GMT-0700 (Pacific Daylight Time)">19:57</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell"><p>Another thing I explored is the possibility of gradually introducing pattern matching to existing syntax so as not to require complete refactors. this included ways to gradually introduce pattern matching to <code>switch</code> without requiring a complete refactor to <code>match</code> (though <span class="nick-6">ljharb</span> seems opposed to this). The "keep pattern matching distinct" version of this looks like:</p>
+<pre><code class="language-js">// adds a `case?` clause to a normal `switch` that performs pattern matching
+switch (expr) {
+  case 0: ...; // normal case
+  case? { x: 1 }: ...; // pattern matching case (block scoped, no fall-through in or out)
+}
+</code></pre>
+<p>While the "reuse destructuring" version looks like the following, instead:</p>
+<pre><code class="language-js">// adds a `case let` clause (to match `if-let`, `while-let`):
+switch (expr) {
+  case 0: ...; // normal case
+  case let { x: 1 }: ...; // pattern matching case (block scoped, no fall-through in or out)
+}
+</code></pre>
+<p>This would <em>not</em> change the semantics of <code>switch</code> (i.e., <code>switch</code> can still be non-exhaustive, normal cases can still have fall-through, etc.).</p>
+</td></tr>
+  <tr class="msg" id="L5"><td class="ts-cell"><a class="ts" href="#L5" alt="Fri Sep 09 2022 12:58:13 GMT-0700 (Pacific Daylight Time)">19:58</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell">(there <em>is</em> a potential parser ambiguity with <code>case let[x]</code> in non-strict mode, however)</td></tr>
+  <tr class="msg" id="L6"><td class="ts-cell"><a class="ts" href="#L6" alt="Fri Sep 09 2022 15:27:59 GMT-0700 (Pacific Daylight Time)">22:27</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-10" title="@tabatkins:matrix.org">TabAtkins</span>&gt;</div></td><td class="msg-cell">While I agree with and appreciate a lot of the other stuff you're talking about, I'm still strongly with Jordan on the "switch is entirely unredeemable and we should barely mention it except as a warning of how not to design such a feature". ^_^</td></tr>
+  <tr class="msg" id="L7"><td class="ts-cell"><a class="ts" href="#L7" alt="Fri Sep 09 2022 15:34:00 GMT-0700 (Pacific Daylight Time)">22:34</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-10" title="@tabatkins:matrix.org">TabAtkins</span>&gt;</div></td><td class="msg-cell">"Reusing destructuring" is similarly a no-go for precisely the reason you gave. If something as basic as an object pattern <em>doesn't actually test for the existence of the specified properties</em>, then that's not pattern-matching and isn't fit for purpose.</td></tr>
+  <tr class="msg" id="L8"><td class="ts-cell"><a class="ts" href="#L8" alt="Fri Sep 09 2022 16:06:03 GMT-0700 (Pacific Daylight Time)">23:06</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-10" title="@tabatkins:matrix.org">TabAtkins</span>&gt;</div></td><td class="msg-cell">Reading thru your gist, I think the complexities with the "extend destructuring" really are quite bad. It sticks us with the current "{x: y} means binding to y" behavior, and gives us the weird/bad "{x: Infinity} just binds to Infinity, doesn't test against Infinity" stuff unless you remember to write it out, while <code>{x: 0}</code> properly tests by default. We really need an explicit flag to indicate we're in pattern syntax, not destructuring syntax, like the <code>match</code> keyword from Yulia's docs.</td></tr>
+  <tr class="msg" id="L9"><td class="ts-cell"><a class="ts" href="#L9" alt="Fri Sep 09 2022 16:13:39 GMT-0700 (Pacific Daylight Time)">23:13</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-10" title="@tabatkins:matrix.org">TabAtkins</span>&gt;</div></td><td class="msg-cell">Oh gosh and "reuse destructuring" means that <code>{x:Infinity}</code> gets us the no-op binding (technically binds to <code>Infinity</code>, but that doesn't actually accomplish anything), but <code>{x:-Infinity}</code> gets us a value test (since it's an invalid destructuring pattern). Yeah this is just completely and totally a no-go.</td></tr>
+
+</tbody></table></div></div></div>
+</body></html>

@@ -1,0 +1,419 @@
+2023-08-03
+[04:40:30.0862] <Andreu Botella>
+I just realized that V8 implements async functions as generators
+
+[04:42:47.0396] <Andreu Botella>
+I wonder if making generators work with AsyncContext would have any effect on async functions
+
+[07:50:13.0403] <shu>
+doesn't... everyone implement async functions as generators?
+
+[07:50:25.0033] <shu>
+even transpilers do i thought
+
+[07:51:44.0930] <Andreu Botella>
+implementing AsyncContext in V8 is my first time working on a JS engine
+
+[07:51:59.0114] <Andreu Botella>
+ * implementing AsyncContext in V8 is my first time implementing something on a JS engine
+
+[07:52:09.0171] <Andreu Botella>
+so this is new to me
+
+[07:55:47.0537] <shu>
+ah
+
+[07:56:07.0964] <shu>
+basically the suspend/resumption mechanism you need for generators and async functions are the same, so you just build it once
+
+[07:56:32.0802] <shu>
+regardless whether a resume point is a yield or an await, still a resume point
+
+[07:58:04.0451] <Andreu Botella>
+yeah, I get that
+
+[07:58:29.0201] <Andreu Botella>
+actually I watched a livestream Yulia did implementing async functions in SM a number of years ago, so it didn't quite come as a shock that this worked that way
+
+[07:59:01.0507] <Andreu Botella>
+I just hadn't realized that that would be the case when starting to think about changing generators here
+
+[08:03:19.0099] <littledan>
+Yeah, I'm pretty sure the redundancy here is unobservable (the promise reaction will "already" queue up the right AsyncContext)
+
+[09:58:11.0988] <Andreu Botella>
+ * I think I might have watched a livestream Yulia did implementing async functions in SM years ago, so it didn't quite come as a shock that this worked that way
+
+[14:46:52.0596] <ljharb>
+There’s a great babel transform that implements them as purely promises, but only for a lintable subset that excludes some loop patterns. It never got to Babel core tho, sadly.
+
+
+2023-08-16
+[03:40:48.0109] <Andreu Botella>
+I opened an issue for the TPAC breakout session:
+https://github.com/w3c/tpac2023-breakouts/issues/39
+
+[04:26:27.0915] <littledan>
+Looks great, thanks!
+
+
+2023-08-17
+[02:47:23.0870] <Andreu Botella>
+In the last call I mentioned I had an engine262 implementation that I was using to write the tests. I've now opened a PR for it:
+https://github.com/engine262/engine262/pull/227
+
+[05:36:13.0149] <littledan>
+You’re on fire, Andreu!
+
+
+2023-08-22
+[10:28:27.0771] <littledan>
+https://github.com/tc39/proposal-async-context/pull/53/files
+
+[11:01:02.0661] <Andreu Botella>
+I just realized that making `HostCallJobCallback` not swap the snapshot makes it so we'd need to swap it in `CleanupFinalizationRegistry` to preserve the behavior in the current spec
+
+[11:01:51.0685] <Andreu Botella>
+and with Justin's suggestion in https://github.com/tc39/proposal-async-context/pull/41#pullrequestreview-1348745850 to store the snapshot in the PromiseCapability, we'd need to add a slot to `FinalizationRegistry` for the snapshot
+
+[11:02:19.0041] <Andreu Botella>
+so maybe we should discuss if that is needed/expected, since it doesn't fall naturally out of how `HostCallJobCallback` works
+
+[11:02:30.0019] <Andreu Botella>
+ * so maybe we should discuss if that is needed/expected, since it wouldn't fall naturally out of how `HostCallJobCallback` works anymore
+
+[13:45:57.0684] <Mathieu Hofman>
+Oh interesting, I hadn't realized that `FinalizationRegistry` is the only case of a TC39 "event callback". I would definitely expect the context of that callback to be the one that created the `FinalizationRegistry`
+
+[13:52:11.0094] <Andreu Botella>
+yeah, that makes sense
+
+[14:30:06.0976] <Mathieu Hofman>
+arguably there is another context that would make sense here: the context at the time of the `finalizationRegistry.register` call
+
+[14:30:54.0226] <Mathieu Hofman>
+in which case the context would be stored on the FinalizationRegistry cell instead of the FinalizationRegistry instance. what would make the most sense ?
+
+[14:32:37.0324] <Mathieu Hofman>
+I personally think that causing an AsyncContext's lifetime to depend on some value getting collected is a source of issues
+
+[14:33:07.0149] <Mathieu Hofman>
+and if programs want to do that, they can create a snapshot and use it as FinalizationRegistry held value
+
+
+2023-08-23
+[07:13:37.0399] <Andreu Botella>
+Looking some more at PR 41, it's not clear what to do in `NewPromiseReactionJob` if the handler is empty and the promise capability is not `undefined`
+
+[07:14:44.0478] <Andreu Botella>
+IIRC this would be the case with something like
+```js
+const delayedRejection = new Promise((_, reject) => {
+  setTimeout(reject, 1000);
+}).then();
+```
+
+[07:16:00.0314] <Andreu Botella>
+I think the right snapshot there should be the one from the promise resolution that triggered this reaction, but it's not immediately clear to me how to make that work in the spec
+
+[07:17:19.0085] <Andreu Botella>
+ * IIUC this would be the case with something like
+
+```js
+const delayedRejection = new Promise((_, reject) => {
+  setTimeout(reject, 1000);
+}).then();
+```
+
+[13:23:25.0939] <littledan>
+Andreu Botella: Do you have a case in mind where you're not sure what the observable behavior is?
+
+[13:23:46.0255] <littledan>
+I think if the handler is empty, there isn't really any snapshot propagation that you have to do in the first place
+
+
+2023-08-24
+[06:35:11.0679] <littledan>
+we learned today in a call with Yoav that they wanted to move task attribution from the context to the isolate. So this shouldn't form a barrier to implementing task attribution on top of AsyncContext.
+
+[06:36:21.0047] <littledan>
+Overall I think the call was excellent--we were able to talk through a number of core issues, not necessarily coming to any conclusion, but definitely a deeper shared understanding.
+
+[06:36:32.0859] <littledan>
+Thanks for arranging this, Andreu!
+
+[06:36:36.0975] <Andreu Botella>
+sure!
+
+[06:36:59.0505] <littledan>
+(did my comments in the call seem reasonable to you? Is there anything you'd disagree with?)
+
+[06:37:04.0142] <Yoav Weiss>
+https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/messaging/message_port.cc;l=322;drc=d76bbe1456ab0713d884cc51742ba565fb808cf8;bpv=1;bpt=1
+
+[06:37:17.0427] <littledan>
+ * Andreu, Ms2ger and I learned today in a call with Yoav that they wanted to move task attribution from the context to the isolate. So this shouldn't form a barrier to implementing task attribution on top of AsyncContext.
+
+[06:38:09.0474] <littledan>
+Yoav Weiss: Is "isolated world" there referring to extensions?
+
+[06:38:16.0717] <Yoav Weiss>
+yeah
+
+[06:39:24.0657] <Andreu Botella>
+Everything sounded reasonable, yeah.
+
+[08:54:08.0868] <Andreu Botella>
+```js
+let reject;
+new Promise((_, rejectFn) => {
+  reject = rejectFn;
+});
+
+window.onunhandledrejection = (promise, operation) => {
+    if (operation === "reject") {
+        // Creates a new unhandled promise based on `promise`,
+        // which will then call this function recursively.
+        promise.then();
+    }
+};
+
+reject();
+```
+
+[08:54:25.0269] <Andreu Botella>
+do you expect the `unhandledrejection` listener to be always called with the same snapshot?
+
+[08:57:11.0013] <Andreu Botella>
+ * ```js
+let reject;
+new Promise((_, rejectFn) => {
+  reject = rejectFn;
+});
+
+window.onunhandledrejection = (evt) => {
+    // Creates a new unhandled promise based on `promise`,
+    // which will then call this function recursively.
+    evt.promise.then();
+};
+
+reject();
+```
+
+[08:57:51.0615] <Andreu Botella>
+ * ```js
+let reject;
+new Promise((_, rejectFn) => {
+  reject = rejectFn;
+});
+
+window.onunhandledrejection = (evt) => {
+    // Creates a new unhandled promise based on `promise`,
+    // which will cause this listener to be called (again and again).
+    evt.promise.then();
+};
+
+reject();
+```
+
+[08:59:35.0663] <Andreu Botella>
+(assuming no other promises)
+
+[09:10:21.0478] <Andreu Botella>
+I think if we want this, and we also want `promise.then()` to not catch the current snapshot, we would need to add a new slot to promises
+
+[09:10:30.0607] <Andreu Botella>
+ * I think if we want this, and we also want `promise.then()` with no arguments to not catch the current snapshot, we would need to add a new slot to promises
+
+[09:13:20.0129] <Mathieu Hofman>
+Out of curiosity, what is the behavior when doing `new Promise(resolve => resolve(evt.promise))`? Is it any different than `evt.promise.then()` ?
+
+[09:17:54.0650] <Andreu Botella>
+it would behave the same, I think
+
+[09:21:54.0108] <Mathieu Hofman>
+Asking because the former is roughly what internally happens with an async function's return value. In those case, do we want the event handler to run in the context of the initial rejection, or in the context of the call to the async function ?
+
+```
+const ctx = new AsyncContext()
+
+window.onunhandledrejection = (evt) => {
+    ctx.get(); // ??
+};
+
+const wrap = async foo (p) => p;
+
+let reject;
+ctx.run(1, () => wrap(new Promise((_, rejectFn) => {
+  reject = rejectFn;
+}));
+
+ctx.run(2, reject);
+```
+
+[09:22:24.0825] <Mathieu Hofman>
+ * Asking because the former is roughly what internally happens with an async function's return value. In those case, do we want the event handler to run in the context of the initial rejection, or in the context of the call to the async function ?
+
+```js
+const ctx = new AsyncContext()
+
+window.onunhandledrejection = (evt) => {
+    ctx.get(); // ??
+};
+
+const wrap = async (p) => p;
+
+let reject;
+ctx.run(1, () => wrap(new Promise((_, rejectFn) => {
+  reject = rejectFn;
+}));
+
+ctx.run(2, reject);
+```
+
+
+2023-08-28
+[17:50:03.0583] <littledan>
+> <@abotella:igalia.com> I think if we want this, and we also want `promise.then()` with no arguments to not catch the current snapshot, we would need to add a new slot to promises
+
+I don't have a strong intuition for what would be the "best" semantics in this case, but I think `then()` is the kind of case where people who do such a strange thing should "take what they get" rather than us adding complexity for that particular case. If we didn't add a new slot to promises, what semantics would fall out/be possible?
+
+[22:34:08.0600] <ljharb>
+why is writing `.then()` a strange thing?
+
+[00:03:41.0818] <nicolo-ribaudo>
+Because usually you pass a function to it
+
+[02:54:06.0911] <Andreu Botella>
+that also applies to passing a fulfillment handler without a rejection handler to `.then()`, I think
+
+[02:54:28.0202] <Andreu Botella>
+ * you have the same issue when passing a fulfillment handler without a rejection handler to `.then()`, I think
+
+[12:17:11.0127] <Justin Ridgewell>
+> do you expect the unhandledrejection listener to be always called with the same snapshot?
+
+Yes, I think _both_ semantics (promise-init and reject-call) should have the same context here
+
+[12:17:39.0792] <Justin Ridgewell>
+ * > do you expect the unhandledrejection listener to be always called with the same snapshot?
+
+Yes, I think both_semantics (promise-init and reject-call) should have the same context here
+
+[12:17:50.0636] <Justin Ridgewell>
+ * > do you expect the unhandledrejection listener to be always called with the same snapshot?
+
+Yes, I think both\_semantics (promise-init and reject-call) should have the same snapshot here
+
+[12:19:00.0405] <Justin Ridgewell>
+> If we didn't add a new slot to promises, what semantics would fall out/be possible?
+
+I think capturing the same context is trivially done? Like, literally no work is required, it just falls out of the current specification (once we fix the bug). This is the same for both init and call time semantics.
+
+[12:19:37.0805] <Justin Ridgewell>
+ * > do you expect the unhandledrejection listener to be always called with the same snapshot?
+
+Yes, I think both semantics (promise-init and reject-call) should have the same snapshot here
+
+[12:20:32.0777] <littledan>
+> <@abotella:igalia.com> you have the same issue when passing a fulfillment handler without a rejection handler to `.then()`, I think
+
+Sorry, could you summarize what the issue is and what the semantics would be if you didn't do anything special?
+
+[12:21:02.0053] <littledan>
+probably if you give an example of a usage of `.then(cb)` it'll feel less obscure to me
+
+[12:21:44.0962] <littledan>
+> <@jridgewell:matrix.org> > If we didn't add a new slot to promises, what semantics would fall out/be possible?
+> 
+> I think capturing the same context is trivially done? Like, literally no work is required, it just falls out of the current specification (once we fix the bug). This is the same for both init and call time semantics.
+
+This is what I expected; are we anticipating any problems with fixing the bug? I mean, I thought the fix did not lead to a snapshot associated with the promise
+
+[12:23:49.0140] <Justin Ridgewell>
+I don't anticipate any issues. The snapshot must be restored to the global state before calling the `unhandledrejection` handler, and the promise will be rejected within that tick, so it should just get the context from the global state like everything else.
+
+[14:02:34.0876] <Andreu Botella>
+I'm not sure I fully understand all of the semantics that we want for `unhandledrejection`
+
+[14:05:07.0369] <Andreu Botella>
+my understanding was that the async context in which `HostPromiseRejectionTracker(promise, "reject")` should be called is the context in which the rejection of this promise was ultimately caused, even if that was in a different promise which caused the current promise to reject via reactions
+
+[14:06:19.0163] <Andreu Botella>
+```js
+const unhandledPromise1 = asyncVar.run("foo", () => Promise.reject());
+const unhandledPromise2 = unhandledPromise1.then(() => console.log("Not reached"));
+```
+
+[14:06:40.0273] <Andreu Botella>
+so when `unhandledrejection` is fired for `unhandledPromise2`, `asyncVar.get() === "foo"`
+
+[14:06:46.0122] <Andreu Botella>
+ * so that when `unhandledrejection` is fired for `unhandledPromise2`, `asyncVar.get() === "foo"`
+
+[14:07:48.0093] <Andreu Botella>
+if that is the expected behavior, then that should also hold even if the `unhandledrejection` for `unhandledPromise1` has already been called by the time `unhandledPromise2` is created
+
+[14:08:08.0171] <Andreu Botella>
+and therefore the `"foo"` snapshot must be stored somewhere
+
+[14:09:44.0219] <Andreu Botella>
+currently that snapshot isn't stored anywhere after `unhandledPromise1` because there are no promise jobs created
+
+[14:11:42.0548] <Andreu Botella>
+ * currently that snapshot isn't stored anywhere after `unhandledPromise1` because there are no promise jobs created inside the `.run` callback
+
+[14:17:05.0472] <Andreu Botella>
+but maybe calling `Promise.p.then` should always use the current snapshot at the time of the call, even for unhandledrejection
+
+[14:17:26.0075] <Justin Ridgewell>
+> so that when unhandledrejection is fired for unhandledPromise2, asyncVar.get() === "foo"
+
+This is incorrect. The reaction that creates `p2` has escaped the `foo` context, so it will only see `undefined`. Even with init-time `unhandledrejection` semantics, that wouldn't change. If we eliminate the promise reaction slot and instead store on the promise, `p2` would see `foo`.
+
+[14:18:05.0200] <Justin Ridgewell>
+(I'm using `p1` and `p2` because `unhandledPromise1` is too much)
+
+[14:19:25.0621] <Justin Ridgewell>
+> if that is the expected behavior, then that should also hold even if the unhandledrejection for unhandledPromise1 has already been called by the time unhandledPromise2 is created
+
+`unhandledrejection` execution is special if we use init-time rejection semantics, because it will copy the promise's snapshot slot into global storage before executing
+
+[14:21:16.0103] <Andreu Botella>
+I am not really familiar with V8's promise hooks, and since much of this unhandledrejection has been framed in those terms, I should probably familiarize myself with them first
+
+[14:21:16.0798] <Justin Ridgewell>
+If we use call-time semantics, then `unhandledrejection` isn't any different then `rejected.then(() => handleRejection(…))`, where `handledRejection` returns another rejected promise/throw completion
+
+[14:21:25.0713] <Andreu Botella>
+because I think otherwise there's a lot of semantics that I'm missing
+
+[14:22:21.0030] <Justin Ridgewell>
+Do you mean async hooks?
+
+[14:22:32.0366] <Andreu Botella>
+either, I guess
+
+[14:23:24.0305] <Andreu Botella>
+but I guess I had been assuming some behavior was expected when it wasn't
+
+
+2023-08-29
+[17:31:32.0220] <littledan>
+OK, thanks for explaining, Andreu: the core issue is, if you do `p.then(cb)`, and p is an unhandled rejection, do we get this run in the snapshot of `p`'s rejection, or the callsite of `.then`. If we don't store something extra, it'd be the callsite of `.then`.
+
+[17:33:37.0070] <littledan>
+I guess this would generally also apply whenever you await a rejection, which is always like a `.then` call (and not even with a trivial second callback!)
+
+[17:34:55.0948] <littledan>
+but... this is also pretty similar to the async context where the promise was allocated, isn't it? the same issue exists when you have a bunch of async functions calling each other and there's a rejection on the inside. Isn't it the outermost promise that's the "unhandled rejection"?
+
+[17:35:22.0660] <littledan>
+and so you get the outermost snapshot anyway
+
+[17:36:27.0560] <littledan>
+(is that the case currently?0
+
+[17:36:30.0641] <littledan>
+ * (is that the case currently?)
+

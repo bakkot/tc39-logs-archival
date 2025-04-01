@@ -1,0 +1,712 @@
+2024-09-03
+[01:31:57.0087] <Michael Ficarra>
+A Coq Mechanization of JavaScript Regular Expression Semantics: https://dl.acm.org/doi/10.1145/3674666
+
+[06:58:48.0287] <jmdyck>
+In 6.1, they acknowledge the distinction between main-body and annex B regexes, but don't explicitly say which they're mechanizing (as far as I could see). I'm pretty sure it's just main-body.
+
+[13:10:29.0623] <nicolo-ribaudo>
+Do the two modes have different _features_, or just different parsing rules?
+
+[13:10:41.0004] <nicolo-ribaudo>
+> These grammars do not agree on all inputs:
+for instance, the standard grammar rejects ], whereas the legacy grammar allows it and treats it as
+a valid regex matching the character ‘]’. Given this, we left parsing out of our mechanization.
+
+[13:42:02.0343] <jmdyck>
+It's mostly syntax, but it isn't *just* syntax, some of the pseudocode is different too, so it makes a difference (to the resulting mechanization) which you pick.
+
+[13:43:15.0364] <Richard Gibson>
+> <@nicolo-ribaudo:matrix.org> Do the two modes have different _features_, or just different parsing rules?
+
+just different parsing rules AFAICT, but the interpretation of various `\c…` in various possible locations gets _really_ intricate
+
+[13:44:02.0848] <jmdyck>
+For research purposes, it makes sense for them to stick to the main-body, but I think it's at least worth saying so.
+
+[13:51:28.0158] <snek>
+i experimented a bit with an nfa vm for engine262 for verifying optimizations, cool to see this approach as well
+
+[15:58:32.0950] <bakkot>
+I kind of want to propose a `Math.argmax(it, fn)` which is like `(it, fn) => Iterator.from(it).reduce((a, b) => f(a) > f(b) ? a : b)`, but apparently Python's (rather numpy's) `argmax` gives you the index of the maximum item rather actually taking a function.
+
+[15:59:26.0210] <bakkot>
+possible alternatives:
+- the `fn` arg is optional, and it just gives you the index if omitted (which is useless if the argument isn't indexable, but whatever)
+- call it `maxBy`, which is a natural enough name (and also apparently already exists in lodash, neat)
+
+[16:00:50.0428] <bakkot>
+also, I want to suggest that both this and a hypothetical `sortBy` would allow the function to return any of { number, bigint, string }, and do the natural comparison within each type, but throw if the function ever returns two different types
+
+
+2024-09-05
+[12:37:43.0341] <snek>
+what's up with the requirement that if the target is not extensible, proxy ownKeys can't return a different set of keys?
+
+[12:38:14.0611] <snek>
+like if i define the other traps to behave consistently, shouldn't it be fine
+
+[12:45:30.0000] <nicolo-ribaudo>
+I guess it's because otherwise there is no way to guarantee that it behaves as not extensible 
+
+[12:53:43.0340] <bakkot>
+how could it know that the other traps behave consistently without calling them?
+
+[12:54:03.0691] <bakkot>
+or remembering their results, I suppose
+
+[12:56:15.0036] <bakkot>
+you should understand the target as serving as a _witness_, a proof-by-example that the behavior you are representing is consistent with the essential invariants. and one of the behaviors is, if something is reported to be not-extensible, then it will never get new keys. the way this is enforced is, a proxy can only report being not-extensible if its target is not-extensible, and if the target is not-extensible then it must report having the same keys as the target. if either of these properties was not enforced then you could have behavior which is not consistent with the essential invariants.
+
+[12:56:40.0213] <bakkot>
+ * you should understand the target as serving as a _witness_, a proof-by-example that the behavior you are representing is consistent with the essential invariants (or at least, is as consistent as the underlying thing). and one of the behaviors is, if something is reported to be not-extensible, then it will never get new keys. the way this is enforced is, a proxy can only report being not-extensible if its target is not-extensible, and if the target is not-extensible then it must report having the same keys as the target. if either of these properties was not enforced then you could have behavior which is not consistent with the essential invariants.
+
+[12:57:00.0970] <bakkot>
+ * you should understand the target as serving as a _witness_, a proof-by-example that the behavior you are representing is consistent with the essential invariants (at least assuming that you don't already have something inconsistent to use as the target).
+
+and one of the behaviors is, if something is reported to be not-extensible, then it will never get new keys. the way this is enforced is, a proxy can only report being not-extensible if its target is not-extensible, and if the target is not-extensible then it must report having the same keys as the target. if either of these properties was not enforced then you could have behavior which is not consistent with the essential invariants.
+
+[12:57:15.0395] <bakkot>
+ * you should understand the target as serving as a _witness_, a proof-by-example that the behavior you are representing is consistent with the essential invariants (at least assuming that you don't already have something inconsistent to use as the target).
+
+and one of the invariants is, if something is reported to be not-extensible, then it will never get new keys. the way this is enforced is, a proxy can only report being not-extensible if its target is not-extensible, and if the target is not-extensible then it must report having the same keys as the target. if either of these properties was not enforced then you could have behavior which is not consistent with the essential invariants.
+
+[13:02:21.0850] <snek>
+currently it checks if it's consistent by calling the mop methods on the target. it could call them on itself for example.
+
+[13:02:31.0539] <snek>
+but oh well
+
+[13:02:51.0874] <bakkot>
+how could it check that the ownKeys trap is consistent over time?
+
+[13:03:05.0988] <bakkot>
+other than by remembering the results, which gets expensive
+
+[13:03:49.0700] <snek>
+imo if its not consistent you just have to enjoy the cthulhu you have unleashed
+
+[13:04:07.0931] <snek>
+but i guess folks specifying proxies felt differently
+
+[13:04:11.0810] <bakkot>
+personally I like being able to reason about programs
+
+[13:04:29.0086] <bakkot>
+and write code which is robust even if other people are doing weird stuff
+
+[13:05:33.0285] <bakkot>
+on a normal business webpage there's code from like 20 different vendors interoperating and having _some_ invariants actually enforced by the language is the only thing which makes that work at all
+
+[13:07:58.0981] <bakkot>
+(in fact I think proxies already make it far too hard to reason about code, and they should never have been added in the first place. but that ship has sailed.)
+
+[13:09:44.0552] <kriskowal>
+I saw Tom van Cutsem’s original Proxy presentation a long time ago. At lunch, Doug Crockford was behind me in line and asked “what do _you_ think of Proxy” and it was obviously a personality test.
+
+[13:11:59.0383] <kriskowal>
+I would like to think that I said something clever like, “It’s obviously sharp on both ends.”.
+
+[13:13:11.0712] <kriskowal>
+At the same meeting, Doug also said “You should pick either `import("specifier")` or `import "specifier"`. If you pick one or the other, half the room will hate it. If you pick neither, everyone will hate it.
+
+[13:13:32.0249] <shu>
+haha we did pick both
+
+[13:13:36.0728] <kriskowal>
+It hadn’t occurred to me yet that I should pick both.
+
+[13:14:02.0387] <shu>
+anyway i don't like to think
+
+[13:14:19.0450] <shu>
+the greatest disservice my college did me was to make me think i ought to enjoy thinking and strive to keep thinking
+
+[13:16:35.0453] <kriskowal>
+i’ve always assumed that people who can think get invited to better parties. but, i’ve also found that not going to parties is an effective work-around.
+
+[13:17:11.0116] <shu>
+agreed with you there
+
+[13:40:15.0642] <Mathieu Hofman>
+The only purpose of the Proxy target is to enforce invariants of the language. Proxies should not create a way to bypass these invariants, or as mentioned it makes it impossible to reason about the program (exotic behaviors already make it hard enough)
+
+[13:52:35.0134] <shu>
+i don't understand, proxies makes exotic behavior user-definable
+
+[13:53:05.0321] <shu>
+like sure, neither ordinary nor exotic behavior can violate the essential MOP invariants, but proxy's existence makes reasoning about the program much harder
+
+[14:27:52.0763] <Mathieu Hofman>
+I think I agreed with that? In particular the possibility of reentrancy or throwing when interacting with seemingly "plain" objects
+
+[14:28:55.0996] <shu>
+ah
+
+[14:29:25.0556] <Mathieu Hofman>
+Host and language exotic behavior is "well-behaved", but unfortunately proxies allow authors to create programs with surprising behaviors
+
+
+2024-09-08
+[01:10:10.0051] <Ashley Claymore>
+One "fun" thing that the proxy target doesn't enforce is that keys are in the same order. So you can have a frozen object but the key order changes over time 🫢
+
+[07:23:44.0799] <Richard Gibson>
+> <@aclaymore:matrix.org> One "fun" thing that the proxy target doesn't enforce is that keys are in the same order. So you can have a frozen object but the key order changes over time 🫢
+
+I know, and I hate it. I've been on the edge of writing a proposal to lock that down for a couple of years.
+
+
+2024-09-10
+[07:59:41.0786] <Dominic Farolino>
+I'm observing that for-await...of loops don't call an async iterator's `return` method upon exhaustion, but do run async generator finally blocks. But don't these loops always call AsyncIteratorClose() (https://tc39.es/ecma262/#_ref_6951), which I think would indeed run the `return` method on any async iterator? What am I missing?
+
+[08:13:32.0662] <nicolo-ribaudo>
+They only call AsyncIteratorClose if you exit early (either due to an error in the head, or an error/return/break in the body)
+
+[08:14:23.0100] <nicolo-ribaudo>
+They still run finally blocks because they run as part of the evaluation of the async generator body before yielding control back to the for-await loop. The for-await loop doesn't "see" that the finally block exists
+
+[08:24:17.0022] <bakkot>
+specifically the normal exit is step 6.e of ForIn/OfBodyEvaluation
+
+[08:24:41.0452] <bakkot>
+6.l is the `break` case
+
+[08:25:24.0144] <bakkot>
+ * 6.l is the `break/throw/return` case
+
+
+2024-09-12
+[20:19:44.0325] <Domenic>
+A colleague wants to know if we've seen requests from developers, especially non-web JS developers like Node/Deno devs, for "isolated module graphs". That is, same-realm, but you can load a module multiple times in different graphs, executing its side effects each time.
+
+I suspect not much but I wanted to ask.
+
+[20:29:35.0895] <Eli Grey>
+> <@domenicdenicola:matrix.org> A colleague wants to know if we've seen requests from developers, especially non-web JS developers like Node/Deno devs, for "isolated module graphs". That is, same-realm, but you can load a module multiple times in different graphs, executing its side effects each time.
+> 
+> I suspect not much but I wanted to ask.
+
+Now that you mention it, if provided, I believe that this could be ergonomic for some use cases. I can't comment in detail
+
+[20:30:39.0260] <Eli Grey>
+* Now that you mention it, if provided, I believe that this could be ergonomic for some of my envisioned use cases. I can't comment in detail
+
+[21:48:04.0234] <Mathieu Hofman>
+> <@domenicdenicola:matrix.org> A colleague wants to know if we've seen requests from developers, especially non-web JS developers like Node/Deno devs, for "isolated module graphs". That is, same-realm, but you can load a module multiple times in different graphs, executing its side effects each time.
+> 
+> I suspect not much but I wanted to ask.
+
+That's one of the goals we have for [evaluators](https://github.com/tc39/proposal-compartments/blob/master/3-evaluator.md), a part of the module harmony effort. It's particularly useful when used with a different global object, and forms the basis of compartments. A shim for compartments has been used in different production environments for light weight isolation of independent parties (in our case combined with frozen intrinsics).
+
+[21:51:15.0264] <Domenic>
+This is specifically about within a single realm.
+
+[21:53:28.0780] <Rob Palmer>
+Perhaps it would be useful for hot-reloading.
+
+[22:38:18.0574] <James M Snell>
+> <@domenicdenicola:matrix.org> A colleague wants to know if we've seen requests from developers, especially non-web JS developers like Node/Deno devs, for "isolated module graphs". That is, same-realm, but you can load a module multiple times in different graphs, executing its side effects each time.
+> 
+> I suspect not much but I wanted to ask.
+
+This idea has come up a few times, and it certainly does work in Node.js and Deno (and I think bun maybe?) when a query string or fragment is used in the import specifier:
+
+```
+// b.mjs
+export default import.meta.url
+
+// a.mjs
+import * as a from './b.mjs?1';
+import * as b from './b.mjs?2';
+console.log(a, b);
+```
+
+We end up with multiple instances of the same module loaded and evaluated as entirely different instances.
+
+That said, I've not seen much practical use of this outside of some A/B testing and experimentation.
+
+[23:15:59.0065] <Mathieu Hofman>
+> <@domenicdenicola:matrix.org> This is specifically about within a single realm.
+
+Yes, what I'm describing is within a single realm.
+
+[23:16:18.0258] <Domenic>
+You're... planning to break the realm <-> global object correspondence??!
+
+[23:19:07.0983] <Mathieu Hofman>
+Correct. A compartment can have a different global object. It's basically a set of evaluators which execute with that object as the global
+
+[23:24:21.0237] <Mathieu Hofman>
+Compartments is how tools like Lavamoat isolate npm packages from each other, and provide them only with the capabilities they're allowed to by policy. Same realm is necessary for that use case to avoid identity discontinuity issues between realms.
+
+
+2024-09-13
+[17:47:29.0496] <kriskowal>
+> <@domenicdenicola:matrix.org> A colleague wants to know if we've seen requests from developers, especially non-web JS developers like Node/Deno devs, for "isolated module graphs". That is, same-realm, but you can load a module multiple times in different graphs, executing its side effects each time.
+> 
+> I suspect not much but I wanted to ask.
+
+Yes. I’m with Mathieu in the Compartment camp. Agoric, Moddable, and MetaMask so far (that we know about) are using Compartments to isolate globals and module subgraphs. Motivating use cases are to enforce TOFU policies for transitive dependencies and separating a user space host API from guest code. The other case we are paying attention to is per-test module mocks for testing harnesses, and lightweight HMR
+
+[17:58:45.0781] <kriskowal>
+> <@kriskowal:aelf.land> Yes. I’m with Mathieu in the Compartment camp. Agoric, Moddable, and MetaMask so far (that we know about) are using Compartments to isolate globals and module subgraphs. Motivating use cases are to enforce TOFU policies for transitive dependencies and separating a user space host API from guest code. The other case we are paying attention to is per-test module mocks for testing harnesses, and lightweight HMR
+
+The notion is to distribute the module map to individual instances that retain their direct import instances. Sources can be reused and reevaluated. https://tc39.es/proposal-compartments/0-module-and-module-source.html
+
+[17:59:29.0132] <kriskowal>
+This doesn’t interfere with the host module map but allows a virtualized module graph to grow out from it. 
+
+[18:54:03.0156] <snek>
+> <@domenicdenicola:matrix.org> A colleague wants to know if we've seen requests from developers, especially non-web JS developers like Node/Deno devs, for "isolated module graphs". That is, same-realm, but you can load a module multiple times in different graphs, executing its side effects each time.
+> 
+> I suspect not much but I wanted to ask.
+
+node's vm Module api has use cases (for example, testing) and it can build a new graph in the same realm
+
+[18:54:47.0890] <snek>
+but the isolation of the compartment proposal gets in the way of that so its kind of a moot point i think
+
+[18:58:02.0747] <snek>
+actually i guess that's the realm proposal not the compartment proposal
+
+[18:59:51.0760] <snek>
+ * node's vm Module api has use cases (for example, jest uses it for testing) and it can build a new graph in the same realm
+
+[08:41:41.0175] <kriskowal>
+I would like the Module and Evaluators proposals (which are coherent with Compartments) to be suitable for the Jest case and I think they can. snek let me know if that sounds achievable and worthwhile.
+
+[10:14:56.0450] <snek>
+i don't know the specifics, but i assume as long as they can share objects it will be fine
+
+[10:15:07.0882] <snek>
+i would really just love for the vm module in node to be obsolete 
+
+[12:23:02.0649] <Mathieu Hofman>
+For test runners, in most cases a compartment ought to be sufficient. The main problem is if the test mutates the intrinsics. That can be solved a couple different ways:
+- freeze the intrinsics, but that breaks some legitimate cases, namely tripping the override mistake, and preventing tests of polyfills
+- capture the original intrinsics before running the test, and restore them after, assuming they were left configurable / extensible. That's somewhat heavy handed.
+Of course my preference would be to run everything in a world where intrinsics are frozen, as besides init code, there really should be no need for them to remain mutable for normal code
+
+[12:24:02.0646] <kriskowal>
+And can fall back to ShadowRealm for the legit cases where that’s unreasonable.
+
+
+2024-09-16
+[09:49:14.0363] <Luca Casonato>
+Somewhat on topic: we're getting some people together to file a trademark cancellation request for the JavaScript trademark with the USPTO. More Signatures are appreciated :)
+
+[09:49:22.0293] <Luca Casonato>
+ * Somewhat on topic: we're getting some people together to file a trademark cancellation request for the JavaScript trademark with the USPTO. More signatures are appreciated :)
+
+https://javascript.tm/
+
+[09:49:45.0793] <Luca Casonato>
+If any of you want to be in the headline signatures, lmk
+
+[10:07:39.0299] <snek>
+you can make me a headline signature: `snek - person on the internet`
+
+[10:45:00.0852] <shu>
+> <@lucacasonato:matrix.org> Somewhat on topic: we're getting some people together to file a trademark cancellation request for the JavaScript trademark with the USPTO. More signatures are appreciated :)
+> 
+> https://javascript.tm/
+
+who's filing the cancellation petition?
+
+[10:46:41.0456] <Luca Casonato>
+> <@shuyuguo:matrix.org> who's filing the cancellation petition?
+
+Deno Land Inc
+
+[10:47:34.0632] <Luca Casonato>
+(or a laywer working for us, its still not entirely clear whether the petitioner has to be human or not 😆)
+
+[10:47:38.0427] <Luca Casonato>
+ * (or a lawyer working for us, its still not entirely clear whether the petitioner has to be human or not 😆)
+
+[10:47:42.0610] <Luca Casonato>
+ * (or a lawyer working for us, it's still not entirely clear whether the petitioner has to be human or not 😆)
+
+[10:49:31.0718] <shu>
+🙏🙏 praying for that relief 🙏🙏
+
+[10:49:48.0681] <Luca Casonato>
+i'll keep you posted :D
+
+[10:51:15.0413] <Michael Ficarra>
+> <@lucacasonato:matrix.org> Somewhat on topic: we're getting some people together to file a trademark cancellation request for the JavaScript trademark with the USPTO. More signatures are appreciated :)
+> 
+> https://javascript.tm/
+
+/cc @apaprocki:matrix.org ☝️
+
+[10:54:13.0317] <Andrew Paprocki>
+Haha 
+
+[10:54:26.0932] <Andrew Paprocki>
+I have it all written up if you want 
+
+[10:55:03.0337] <Luca Casonato>
+Oh yeah please send it my way - lawyers@javascript.tm 😃
+
+[10:55:25.0518] <kriskowal>
+> <@lucacasonato:matrix.org> Somewhat on topic: we're getting some people together to file a trademark cancellation request for the JavaScript trademark with the USPTO. More signatures are appreciated :)
+> 
+> https://javascript.tm/
+
+Forwarding you some signatures https://x.com/kriskowal/status/1418272750733389825
+
+[10:56:55.0793] <kriskowal>
+And, glad you’re done with asking nicely.
+
+[11:17:53.0022] <shu>
+signed
+
+[13:10:26.0032] <shu>
+i hope your lawyers have studied the recent taco tuesday saga
+
+[15:05:45.0768] <Luca Casonato>
+hahaa - i mean maybe we should get the indonesian government to support us. we could free "Java" once and for all. also this one is great: https://en.wikipedia.org/wiki/Iceland_v_Iceland_Foods_Ltd
+
+[16:05:21.0220] <shu>
+it's like david and goliath, but what if david was from shropshire and is being unreasonable
+
+[16:55:23.0458] <Andrew Paprocki>
+I sent the USPTO thing to you (or whoever reads that email)Luca Casonato 
+
+
+2024-09-17
+[17:39:49.0135] <Andrew Paprocki>
+Just sent a pdf, can send the rtf if needed
+
+[19:07:58.0595] <rkirsling>
+hell yes let's goooo
+
+[05:32:01.0419] <Luca Casonato>
+Thanks Andrew Paprocki!
+
+[06:55:54.0672] <Rob Palmer>
+Hello friends,
+
+If you're anywhere close to London, you would be very welcome to attend the TypeScript London free meetup we are hosting at Bloomberg's office near Bank station on Wednesday 2nd October from 6pm.  There's a bunch of top-tier speakers + food & drink.
+
+- **Building Better CLI Apps** by Michael Molisani
+- **Optimizing JavaScript Engine Performance** by Oliver Medhurst, aka @canadahonk
+- **Faster TypeScript Compilation** by Ashley Claymore
+
+https://go.bloomberg.com/attend/invite/london-typescript-community-meetup/
+
+
+2024-09-18
+[17:43:27.0211] <rkirsling>
+exciting to see that the signatures have more than doubled in the last 24h
+
+
+2024-09-19
+[19:15:12.0030] <canadahonk>
+very random, what type of error would you expect from `(console.log(1))++`
+
+[19:31:28.0264] <rkirsling>
+"cannot increment a value"
+
+[19:32:43.0971] <rkirsling>
+JSC's `SyntaxError: Postfix ++ operator applied to value that is not a reference.` seems good
+
+[19:33:27.0109] <rkirsling>
+ * JSC's `Postfix ++ operator applied to value that is not a reference.` seems good
+
+[19:38:08.0481] <jmdyck>
+a ReferenceError, if that's what you mean by "what type of error"
+
+[19:38:19.0351] <rkirsling>
+ah yeah sorry, misread the question
+
+[19:38:57.0529] <rkirsling>
+looks like 1++ is a syntax error and yours is a reference error
+
+[19:39:53.0127] <rkirsling>
+since one can be determined early and the other can't
+
+[19:46:39.0831] <jmdyck>
+But now I'm unsure why `(console.log(1))++` *isn't* a Syntax Error.
+
+[19:48:28.0524] <jmdyck>
+Isn't the AssignmentTargetType of `(console.log(1))` ~invalid~ ?
+
+[19:48:49.0705] <bakkot>
+There is still the old issue about `f() = y` being legal syntax in engines
+
+[19:48:57.0505] <bakkot>
+This might be the same issue
+
+[19:50:30.0443] <rkirsling>
+seems likely
+
+[19:52:28.0234] <jmdyck>
+So this is a case where the spec doesn't match web reality? and tc39 hasn't been able to agree on a resolution?
+
+[20:02:12.0015] <canadahonk>
+> <@jmdyck:matrix.org> a ReferenceError, if that's what you mean by "what type of error"
+
+yeah that's what I meant, ty
+
+[20:06:34.0111] <rkirsling>
+this was the pre-pandemic state of affairs
+https://github.com/tc39/ecma262/issues/257#issuecomment-502878708
+
+[20:06:59.0642] <rkirsling>
+not sure whether this discussion has advanced significantly since
+
+[20:20:03.0825] <bakkot>
+> <@jmdyck:matrix.org> So this is a case where the spec doesn't match web reality? and tc39 hasn't been able to agree on a resolution?
+
+Less "hasn't been able to agree" and more "hasn't gotten around to"
+
+[20:33:58.0114] <rkirsling>
+Rick had made a PR (https://github.com/tc39/ecma262/pull/2193) but I'm not sure whether it was ever discussed in plenary?
+
+[20:36:11.0094] <rkirsling>
+if the course of action is clear -- syntax error in strict mode ( / for logical assignment), reference error in sloppy mode for web compatibility -- then it does seem just a matter of finally doing it
+
+[20:55:24.0793] <Domenic>
+I don't think web compat is the issue, for types of errors? I think it's more about implementation burden of adding more/different special case code. I suspect a strict/sloppy split would make that burden worse....
+
+[20:56:14.0604] <Domenic>
+Although I guess I am wrong, since it's mentioned that JSC and SpiderMonkey already have a strict/sloppy split.
+
+[20:56:48.0874] <Domenic>
+Maybe I am remembering some other ReferenceError vs. TypeError issue.
+
+[21:43:27.0784] <bakkot>
+Domenic you may be thinking of https://github.com/tc39/ecma262/pull/1527, though engines were also willing to do that one
+
+[21:44:11.0519] <bakkot>
+(or rather, really, were willing to accept rkirsling's patches to do it)
+
+[21:44:54.0814] <rkirsling>
+yes, that one time when I went for the trifecta
+
+[03:19:12.0743] <canadahonk>
+so is it technically a parser bug if it throws a SyntaxError for that? 🧐
+
+[03:38:46.0359] <canadahonk>
+ * <del>so is it technically a parser bug if it throws a SyntaxError for that? 🧐</del> nvm
+
+
+2024-09-23
+[15:43:43.0184] <whosy>
+ljharb: I took a look at the original material and it was very clear.
+But reading articles, with lines such as "is a proposal that would allow for the inclusion of types in JavaScript code", it's no wonder people would get the wrong idea.
+(I wish they'd said 'type-like syntax' or something to that degree)
+
+[15:44:32.0618] <ljharb>
+i certainly wasn't trying to suggest it's the fault of those that have a misunderstanding, just that misunderstandings are rampant
+
+[15:45:12.0682] <ljharb>
+and yes, i agree, the proposal isn't very consistently or clearly articulated, and documentation hasn't been thoroughly updated incorporating feedback from the two plenary discussions we've had
+
+[15:45:17.0572] <whosy>
+I was more affirming your comment on (social/)media causing the misunderstanding.
+
+[15:48:44.0407] <whosy>
+It does look rather interesting though. Engines can use or ignore it. And no doubt someone will find some completely different use for it.. I look forward to that though.
+
+[15:48:50.0635] <whosy>
+ * It does look rather interesting as a proposal. Engines can use or ignore it. And no doubt someone will find some completely different use for it.. I look forward to that though.
+
+[15:49:27.0837] <whosy>
+Oh, and the original material I read was at https://tc39.es/proposal-type-annotations/
+
+[15:49:45.0953] <whosy>
+ * Oh, and the original material I read was at https://tc39.es/proposal-type-annotations/ (I do think this one does a good job of explaining)
+
+[15:50:36.0091] <shu>
+engines can't use it
+
+[15:55:22.0960] <whosy>
+> <@shuyuguo:matrix.org> engines can't use it
+
+Yeah, I guess technically not. I was thinking of Bun when I said that, but it's doing its own thing with types.
+
+[15:55:43.0155] <whosy>
+> <@shuyuguo:matrix.org> engines can't use it
+
+ * Yeah, I guess technically not. I was thinking of Bun when I said that, but it's doing its own thing with TypeScript types.
+
+[15:56:01.0675] <whosy>
+ * Yeah, I guess technically not. I was thinking of Bun when I said that, but it's doing its own thing with TypeScript types. That's just incidental then.
+
+[15:56:14.0668] <whosy>
+ * Yeah, I guess technically not with the proposal. I was thinking of Bun when I said that, but it's doing its own thing with TypeScript types. That's just incidental then.
+
+[15:56:20.0243] <whosy>
+ * Yeah, I guess not with the proposal. I was thinking of Bun when I said that, but it's doing its own thing with TypeScript types. That's just incidental then.
+
+[15:56:39.0928] <whosy>
+ * Yeah, I guess not with the proposal. I was thinking of Bun when I said that, but it's doing its own thing with TypeScript types. That's just incidental then.
+Thanks for the correction.
+
+[15:56:53.0866] <whosy>
+ * It does look rather interesting as a proposal. Engines will just ignore it ~~can use or ignore it~~. And no doubt someone will find some completely different use for it.. I look forward to that though.
+
+[15:57:00.0609] <whosy>
+ * It does look rather interesting as a proposal. Engines will just ignore it. And no doubt someone will find some completely different use for it.. I look forward to that though.
+
+
+2024-09-25
+[10:43:27.0227] <snek>
+> <@bakkot:matrix.org> There is still the old issue about `f() = y` being legal syntax in engines
+
+its never too late for `array.at(-1) = y`
+
+[10:44:42.0895] <bakkot>
+😠
+
+[11:12:05.0952] <TabAtkins>
+You're right, we just need hookable square brackets, so `array.at[-1] = y` works
+
+[11:12:31.0870] <Domenic>
+There was a harmony wiki page for that from Allen I think...
+
+[11:12:48.0753] <TabAtkins>
+Yup, was referring to that obliquely ^_^
+
+[11:14:04.0282] <Domenic>
+There are such treasures hidden in those archives... look at what they took from us https://web.archive.org/web/20160429210828/http://wiki.ecmascript.org/doku.php?id=harmony:object_extension_literal_class_pattern
+
+[11:34:35.0347] <snek>
+is web archive the only place that the old wiki data exists now
+
+[11:47:22.0875] <rickbutton>
+does anyone know off top-of-head where in test262 the "Array prototype method property sets occur in 'strict mode'" semantics are asserted? having a hard time locating that sort of check in the Array prototype method tests. Any one of them for a prototype method would work, just want to assert something locally.
+
+[11:52:50.0795] <bakkot>
+by "strict mode semantics" do you mean like throwing if the assignment fails? if so, https://github.com/tc39/test262/blob/0c784ef9541fad7e38036a5e6019990ddad81659/test/built-ins/Array/prototype/fill/return-abrupt-from-setting-property-value.js is an example 
+
+[11:53:33.0739] <bakkot>
+or https://github.com/tc39/test262/blob/0c784ef9541fad7e38036a5e6019990ddad81659/test/built-ins/Array/prototype/push/set-length-zero-array-length-is-non-writable.js
+
+[11:54:08.0321] <bakkot>
+generally Array.prototype methods live under built-ins/Array/prototype and then old tests have uninformative names but new ones you can usually guess what they're getting at from the name
+
+[11:54:17.0448] <bakkot>
+ * generally tests for Array.prototype methods live under built-ins/Array/prototype and then old tests have uninformative names but new ones you can usually guess what they're getting at from the name
+
+[11:55:15.0833] <rickbutton>
+yeah exactly, throwing if assignment fails
+
+[11:56:14.0703] <rickbutton>
+and yeah I was looking there, but missed that second one you linked, ty!
+
+[11:57:04.0849] <rickbutton>
+It doesn't quite hit the specific edge case I'm testing, where an array with specifically a getter only property is set, but close enough for now.
+
+[11:58:00.0436] <rickbutton>
+ * It doesn't quite hit the specific edge case I'm testing, where an array-like with specifically a getter only property is set, but close enough for now.
+
+[15:21:36.0935] <sirisian>
+> <@devsnek:matrix.org> its never too late for `array.at(-1) = y`
+
+Even rbuckton 's ref proposal doesn't allow that sadly. let ref x = array.atRef(-1); x = y; or array.at(-1).value = y; I think, haven't looked at it in a while.
+
+[15:23:02.0680] <rbuckton>
+Also, extractors make `array.at(x) = y` mean something else.
+
+[15:23:32.0815] <snek>
+ah good call, we'll need to cancel extractors /s
+
+[15:23:44.0351] <shu>
+why do people want to type a[-1] = x anyway
+
+[15:24:44.0138] <snek>
+when you have a stack, the end of the array is the main area you work with
+
+[15:25:10.0847] <snek>
+i guess you could use shift/unshift but the performance of that across engines and such is not great not terrible
+
+[15:26:38.0759] <shu>
+like, not just peeking at the top of the stack, but actually overwriting it?
+
+[15:26:40.0288] <rbuckton>
+> <@tabatkins:matrix.org> You're right, we just need hookable square brackets, so `array.at[-1] = y` works
+
+I'd love to have hookable indexers, something like:
+```js
+class C {
+  get this[key]() { ... }
+  set this[key](value) { ... }
+}
+```
+I was just discussing this in the context of the shared structs proposal the other day, since a `SharedArray` can't have extra properties while a normal `Array` can.
+
+[15:26:43.0069] <shu>
+or as an optimization to avoid a pop/push?
+
+[15:27:28.0304] <rbuckton>
+There is/was a proposal for relative indexing, i.e. `ar[^1]`
+
+[15:28:59.0347] <shu>
+i wonder if we can actually just break negative integer indices behavior
+
+[15:28:59.0754] <snek>
+it probably is an optimization to avoid pop/push sometimes. but other times it may just match the intent more. 
+
+[15:29:33.0602] <shu>
+v8 not signing up for gathering compat data though
+
+[15:30:32.0731] <snek>
+that's ok we can just overwrite arc's firebase to inject a script to collect the data
+
+[15:30:33.0537] <rbuckton>
+> <@rbuckton:matrix.org> There is/was a proposal for relative indexing, i.e. `ar[^1]`
+
+I can't find it, but it was discussed in the context of the slice notation proposal. 
+
+[15:31:42.0478] <snek>
+> <@rbuckton:matrix.org> I'd love to have hookable indexers, something like:
+> ```js
+> class C {
+>   get this[key]() { ... }
+>   set this[key](value) { ... }
+> }
+> ```
+> I was just discussing this in the context of the shared structs proposal the other day, since a `SharedArray` can't have extra properties while a normal `Array` can.
+
+this has definitely interested me at times. i don't think i'd be against it but i'd feel a bit bad about dropping more exotic objects on implementers 😅
+
+[15:33:09.0756] <rbuckton>
+> <@devsnek:matrix.org> this has definitely interested me at times. i don't think i'd be against it but i'd feel a bit bad about dropping more exotic objects on implementers 😅
+
+The discussion was about how making indexers first class would allow us to decrease the number of exotic objects. Most of them are "exotic" because they have unique indexing capabilities. An actual indexers proposal would need to handle more than just `get`/`set` though.
+
+[15:33:52.0836] <bakkot>
+> <@shuyuguo:matrix.org> i wonder if we can actually just break negative integer indices behavior
+
+certainly not for reading; lots of code walks past the end of arrays and looks for `undefined`. probably not for writing either
+
+[15:35:15.0232] <bakkot>
+> <@shuyuguo:matrix.org> or as an optimization to avoid a pop/push?
+
+I have code which does `arr[arr.length - 1] = foo` somewhere on the order of billions of times per day, yes. though I don't think `arr[^-1]` or whatever would be notable faster
+
+[15:36:21.0579] <rbuckton>
+in the relative indexing syntax, `^` means "from end", so you'd just write `arr[^1]`, not `arr[^-1]`
+
+
+2024-09-26
+[22:26:37.0422] <Michael Ficarra>
+> <@bakkot:matrix.org> I have code which does `arr[arr.length - 1] = foo` somewhere on the order of billions of times per day, yes. though I don't think `arr[^-1]` or whatever would be notable faster
+
+probably closer to hundreds of trillions in my estimate
+
+[11:04:23.0779] <shu>
+is that a lot
+
+[11:20:07.0917] <bakkot>
+well, it's enough to care about small amounts of performance
+
+[15:28:27.0233] <annevk>
+shu: thanks for closing old issues properly, it's appreciated
+

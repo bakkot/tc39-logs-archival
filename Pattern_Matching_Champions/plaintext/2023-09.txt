@@ -1,0 +1,2484 @@
+2023-09-01
+[20:16:01.0795] <Jack Works>
+> <@rbuckton:matrix.org> How does that break that expectation?
+
+tenary does not have a "block" to be scoped
+
+[20:24:23.0006] <rbuckton>
+The block would be the block containing the ExpressionStatement, not the expression itself. 
+
+[20:26:35.0392] <rbuckton>
+Block scopes are always at the statement level, though `match`/`when` may end up being the lone exception
+
+[05:23:16.0539] <Jack Works>
+> <@rbuckton:matrix.org> The block would be the block containing the ExpressionStatement, not the expression itself. 
+
+I think that's even worse
+
+[07:25:36.0700] <rbuckton>
+That's the behavior that C# has, so there is precedent
+
+[07:26:22.0297] <rbuckton>
+And it's consistent with normal `let`/`const`
+
+[11:41:47.0062] <TabAtkins>
+Yeah, I'm not sure I see the confusion, the scopes are exactly the same as normal. The fact that the binding is established in an expression rather than a statement doesn't change anything, in my mind.
+
+[12:05:01.0161] <rbuckton>
+We just need to clarify corner cases like parenthesized statement heads in `if`, `switch`, `with`, and `while`. And maybe the expression in `for..of` and `for..in`.
+
+[12:45:03.0991] <TabAtkins>
+Yeah, statement heads are the corner case - they're halfway between the outer scope and their inner block scope. But they're already complex in various ways, so that's nothing new.
+
+[15:23:14.0357] <ljharb>
+i think statement heads making bindings make sense intuitively. i do not think expressions making bindings make sense.
+
+
+2023-09-02
+[18:03:42.0221] <rbuckton>
+> <@ljharb:matrix.org> i think statement heads making bindings make sense intuitively. i do not think expressions making bindings make sense.
+
+I don't think expression-local block scoping makes sense, but I disagree with respect to bindings. Expressions introducing bindings is quite common in many languages, so I don't think it would be difficult to adopt or learn. 
+
+[18:30:15.0128] <ljharb>
+other languages aren’t the rubric; either now or eventually, most JS devs have or will have never used another language
+
+[18:49:48.0034] <rbuckton>
+I don't find that argument compelling. It assumes JS devs cannot adapt and the language itself cannot evolve. Besides, even JS can introduce bindings in expressions and has been able to do so since it was created. It's just that most often it was unintentional. 
+
+[18:53:57.0630] <rbuckton>
+And I'm not arguing that *because X has it, we should have it". I'm arguing that it's a compelling feature with reasonable semantics in many languages that JS also shares other syntax with. It's not a huge leap to adopt the capability, and not difficult to learn or understand. I'm also arguing that it's a feature I've seen requested from several sources, one of which is a noted language designer. It's also a feature that is regularly present in FP style languages and has a long history, and a large part of the JS community uses it for functional programming. 
+
+[18:54:11.0297] <rbuckton>
+* And I'm not arguing that "because X has it, we should have it". I'm arguing that it's a compelling feature with reasonable semantics in many languages that JS also shares other syntax with. It's not a huge leap to adopt the capability, and not difficult to learn or understand. I'm also arguing that it's a feature I've seen requested from several sources, one of which is a noted language designer. It's also a feature that is regularly present in FP style languages and has a long history, and a large part of the JS community uses it for functional programming.
+
+
+2023-09-03
+[21:10:04.0372] <ljharb>
+i'm not saying that "other languages do it" is an anti-argument. i'm saying it's a very very weak argument.
+
+[21:10:41.0110] <ljharb>
+and yes, i do feel that an expression producing a binding would be a wildly surprising, brand new capability in the language, and i can't conceive of what would convince me that that capability is anything short of catastrophic
+
+[21:11:18.0789] <ljharb>
+if you're going to say "noted language designer" i'm going to ask what, besides TS, applies - because TS as a language has so many flaws that i don't think that's the "pro" you think it is.
+
+[21:12:14.0757] <ljharb>
+eg, does pascal have the ability to produce bindings in expressions? what else does?
+
+
+2023-09-04
+[01:27:24.0336] <mpcsh>
+hey y'all, as of this coming week I have reached the end of my hiatus; I'm offline tomorrow (today) for labor day, but expect me to be back going forward!
+
+[01:27:39.0666] <mpcsh>
+ * hey y'all, as of this coming week I have reached the end of my hiatus; I'm offline tomorrow (today) for labor day / family visiting, but expect me to be back going forward!
+
+[08:07:35.0573] <ljharb>
+thinking about it more, i think we still need the `if` clause in a match expression
+
+
+2023-09-05
+[04:39:17.0965] <Jack Works>
+I started to edit spec and found there is something we need to figure out before we continue
+
+[04:40:06.0621] <Jack Works>
+the current spec create a new DeclarativeEnvironment for each binding (https://tc39.es/proposal-pattern-matching/#sec-add-match-binding)
+
+[04:41:19.0914] <Jack Works>
+to support `for` head, https://tc39.es/ecma262/#sec-createperiterationenvironment, we need to pre-determinate what binding it contains
+
+[04:42:33.0805] <Jack Works>
+this brings the question: how is the `let` `const` binding work inside a pattern.
+
+[04:43:37.0502] <Jack Works>
+for example, is `[1, let a] or [2, let a]` valid? or is it an early error?
+
+[04:49:03.0500] <Jack Works>
+is every level of MatchPattern creates a DeclarationEnvironment?
+
+```
+{ // level 1 DeclEnv
+    let x,
+    y: [ // level 2 DeclEnv
+        let x, x
+    ]
+} // matches { x: 1, y: [2, 3] } and creates binding of x that is value ...?
+```
+
+[04:50:51.0644] <Jack Works>
+or only the top level MatchPattern creates a DeclarationEnvironment (in this case the previous example gives an early error)?
+
+[04:53:17.0404] <Jack Works>
+what's the syntax when it is used in `for...of`?
+
+`for (const x is pattern of expr)`? `for (match pattern of expr)`?
+
+[07:01:07.0907] <rbuckton>
+> <@ljharb:matrix.org> eg, does pascal have the ability to produce bindings in expressions? what else does?
+
+Pascal does not, to my knowledge, but there are many languages that support bindings in expressions: C#, F#, LCF, Haskell (LCF derivative), Scheme (LCF derivative), ML (LCF derivative), Python, Clojure, Racket (Scheme derivative), OCaml (ML derivative), Perl, Raku (Perl derivative) PHP, M (aka PowerQuery), and that is not an exhaustive list.
+
+[07:01:59.0089] <rbuckton>
+> <@ljharb:matrix.org> and yes, i do feel that an expression producing a binding would be a wildly surprising, brand new capability in the language, and i can't conceive of what would convince me that that capability is anything short of catastrophic
+
+I have a very difficult time believing that something like this would be catastrophic. 
+
+[07:06:22.0659] <rbuckton>
+> <@jackworks:matrix.org> for example, is `[1, let a] or [2, let a]` valid? or is it an early error?
+
+In earlier discussions, a pattern could allow multiple declarations of the same binding, such as in different branches of a disjunction. Variables that are not initialized would remain in TDZ. We did not fully describe what would happen in the case where the same declaration was initialized twice. For `let` we could either error or possibly just reassign. For `const` we would probably error (unless maybe we tried to initialize it to the same value).
+
+[07:09:27.0359] <rbuckton>
+> <@jackworks:matrix.org> for example, is `[1, let a] or [2, let a]` valid? or is it an early error?
+
+Personally, I would like this to not be an error for the sake of developer convenience, but could see an argument for it not being so. Simple disjunctions like this could be rewritten to `[1 or 2, let a]`, but more complex disjunctions that don't share much of the same shape couldn't be simplified.
+
+[07:12:46.0864] <rbuckton>
+> <@jackworks:matrix.org> is every level of MatchPattern creates a DeclarationEnvironment?
+> 
+> ```
+> { // level 1 DeclEnv
+>     let x,
+>     y: [ // level 2 DeclEnv
+>         let x, x
+>     ]
+> } // matches { x: 1, y: [2, 3] } and creates binding of x that is value ...?
+> ```
+
+Why would you create new declarative environments? My assumption was that you would descend into expressions and patterns to look for `let` and `const` bindings in `BoundNames`, and only need to create a single declarative environment for each `when` clause of `match`, or use the current declarative environment for `is`.
+
+[08:01:27.0941] <ljharb>
+> <@rbuckton:matrix.org> I have a very difficult time believing that something like this would be catastrophic. 
+
+we can certainly see what the committee thinks, but i’m surprised that you have such different expectations tbh
+
+[08:04:42.0951] <Jack Works>
+> <@rbuckton:matrix.org> Why would you create new declarative environments? My assumption was that you would descend into expressions and patterns to look for `let` and `const` bindings in `BoundNames`, and only need to create a single declarative environment for each `when` clause of `match`, or use the current declarative environment for `is`.
+
+we need to decide if `is` can leak variable bindings. it will be a breaking change adding it in the future 
+
+[08:41:56.0115] <rbuckton>
+> <@jackworks:matrix.org> we need to decide if `is` can leak variable bindings. it will be a breaking change adding it in the future
+
+My intent with `is` is that the bindings are declared in the nearest block scope, otherwise we would not be able to emulate `if let`/`while let` with `is`, which is one of the key capabilities:
+
+```
+if (x is Option.Some(let value)) {
+  value;
+}
+
+const y = x is Option.Some(let value) ? value + 1 : 0;
+```
+If the `let` is only visible within the pattern itself, it makes it useless as a destructuring mechanism.
+
+[09:40:33.0205] <ljharb>
+i think there's specific places it makes sense. an if conditional making bindings available in the block is good. a ternary conditional making bindings available in the positive branch is good too
+
+[09:40:58.0143] <ljharb>
+but `;x is Option.some(let value);` making bindings available outside the pattern seems very very bad to me.
+
+[09:41:06.0593] <rbuckton>
+You can't have one without the other without introducing some new even more complex binding mechanism.
+
+[09:41:14.0208] <ljharb>
+i don't think that's true
+
+[09:41:31.0362] <ljharb>
+certainly it will make the spec trickier to write, but that's not important
+
+[09:41:59.0714] <rbuckton>
+Bad maybe, but it will rarely be used in that way as its not the most convenient mechanism.
+
+[09:42:03.0341] <ljharb>
+ * certainly it will make the spec trickier to write, but that's not important (in terms of priority of constituencies)
+
+[09:42:28.0854] <ljharb>
+i think it would also be bad if the ternary made the bindings available in the negative branch, to be clear
+
+[09:42:37.0592] <rbuckton>
+I'd very much like to be able to have this capability.
+
+[09:42:44.0548] <ljharb>
+i'd prefer bindings never be visible outside the pattern, over leaking bindings willy nilly
+
+[09:42:56.0925] <rbuckton>
+The bindings in the negative branch would be uninitialized and thus in TDZ
+
+[09:43:12.0899] <ljharb>
+not if they use `var`
+
+[09:43:42.0892] <rbuckton>
+Then don't support `var` for this feature. I think that's far more reasonable.
+
+[09:47:55.0337] <rbuckton>
+And restricting this to only the true branch would break negation for cases like early exit:
+
+```
+if (!(x is Option.some(let value)) {
+  return; // nothing to do, exit early
+}
+value; // use 'value'
+```
+
+[09:48:34.0882] <rbuckton>
+(or possibly even `if (x is not Option.some(let value)) { ... }` should we decide to make that work as well.
+
+[09:48:39.0723] <rbuckton>
+ * (or possibly even `if (x is not Option.some(let value)) { ... }` should we decide to make that work as well)
+
+[09:55:33.0436] <ljharb>
+that only affects ternaries, not if's
+
+[09:55:38.0761] <ljharb>
+oh
+
+[09:55:42.0727] <ljharb>
+well yeah, don't do that
+
+[09:56:00.0491] <ljharb>
+you'd do `if (x not is Option.Some(let value)) { }`
+
+[09:56:31.0046] <rbuckton>
+What is `not is`? That's not proposed and doesn't read well, IMO.
+
+[09:56:47.0975] <ljharb>
+it's definitely supposed to be in the PR
+
+[09:56:53.0467] <rbuckton>
+Ternary and `if` shouldn't be treated differently.
+
+[09:57:03.0280] <ljharb>
+in this case they're the same.
+
+[09:57:14.0471] <rbuckton>
+`is not` I would expect, since `not` is part of the pattern grammar. `not is` is not a part of the proposal, IIRC.
+
+[09:57:20.0992] <ljharb>
+oh ok, fair
+
+[09:57:23.0399] <ljharb>
+`is not`, sure
+
+[09:57:32.0117] <ljharb>
+either way you'd still only get the bindings in the positive branch
+
+[09:57:50.0603] <rbuckton>
+I think that's far too confusing.
+
+[09:58:10.0223] <ljharb>
+i think anything else would be confusing.
+
+[09:59:02.0512] <ljharb>
+fwiw the committee already discussed this with https://github.com/tc39/proposal-Declarations-in-Conditionals and i recall the majority thinking that it should only be visible in the `if`, but i might be remembering wrong
+
+[10:01:20.0418] <rbuckton>
+Short-circuiting to avoid complex middle branches is a common practice, and you're proposing a mechanism that would force a specific style of coding. I'd like to be able to do this:
+
+```
+return x is not Option.Some(let value) ? "no-value" :
+  value === 1 ? "single-value" :
+  "multiple-values";
+```
+
+vs this:
+
+```
+return x is Option.Some(let value) ? 
+    value === 1 ? "single-value" :
+    "multiple-values" :
+  "no-value";
+```
+
+As the latter requires additional nesting that hampers readability, especially in more complex cases than is shown. Yes, `match` is an option, but this could be existing code that you're refactoring to use patterns.
+
+[10:01:55.0497] <ljharb>
+we often have mechanisms that somewhat force specific styles of coding.
+
+[10:02:09.0161] <ljharb>
+and nested ternaries are pretty widely considered horrifically unreadable.
+
+[10:02:12.0982] <rbuckton>
+I would very much like for this not to be one of them.
+
+[10:02:30.0084] <ljharb>
+do you have any compelling examples that don't use the comma operator or nested ternaries?
+
+[10:02:34.0275] <rbuckton>
+Ternaries nested in the second example, yes. ternaries in the first example are far more readable.
+
+[10:02:45.0849] <ljharb>
+that's subjective, i don't find either of those readable.
+
+[10:02:53.0922] <ljharb>
+not everything needs to be, or should be, a single expression
+
+[10:02:57.0280] <ljharb>
+ * not everything needs to be, or should be, a single expression/line
+
+[10:03:49.0316] <rbuckton>
+Given that it is subjective, mandating a coding style that fits your perspective essentially invalidates everyone else's style. That's what linters are for.
+
+[10:04:08.0789] <rbuckton>
+ * Given that it is subjective, mandating a coding style that fits a single perspective essentially invalidates everyone else's style. That's what linters are for.
+
+[10:05:20.0179] <ljharb>
+it's not to mandate a coding style
+
+[10:05:27.0876] <ljharb>
+it's to ensure explicit and clear variable scopes
+
+[10:05:40.0093] <ljharb>
+if some coding styles don't work with that, that's fine, they just don't work with that
+
+[10:05:47.0335] <rbuckton>
+There are plenty of examples that wouldn't use ternaries. I showed one earlier:
+
+```
+function getTypeOfPropertyOrIndexSignatureOfType(type: Type, name: __String): Type | undefined {
+    return getTypeOfPropertyOfType(type, name) ||
+        (getApplicableIndexInfoForName(type, name) is { type: const propType } &&
+            addOptionality(propType, /*isProperty*/ true, /*isOptional*/ true));
+}
+```
+
+
+
+
+[10:06:06.0632] <ljharb>
+and personally i find that very unreadable and would not try to do that in a single return statement
+
+[10:06:33.0165] <rbuckton>
+This proposal still maintains explicit variable scopes, and it is the same scoping mechanism we already have: block scoping. Introducing a _new_ scoping mechanism would be confusing.
+
+[10:06:36.0977] <ljharb>
+but please remember that both the vscode and typescript codebases are not in any way common or idiomatic for the JS ecosystem, so style arguments coming from them aren't very compelling to me.
+
+[10:07:13.0621] <rbuckton>
+This is a style preference that many projects have made, especially FP-style projects.
+
+[10:07:19.0087] <ljharb>
+an expression can't produce bindings, and adding that capability is something that would need to be its own proposal. trying to do that here would tank both efforts.
+
+[10:07:52.0615] <ljharb>
+i realize that we wouldn't necessarily be able to add it later to `is`, which makes it tricky, but that doesn't mean we can add it now either
+
+[10:08:31.0430] <rbuckton>
+I don't believe that it would, and I think this is the correct proposal to discuss this.
+
+[10:09:23.0158] <ljharb>
+i think you are severely underestimating the reaction to this aspect of the proposal.
+
+[10:09:44.0181] <rbuckton>
+I'd be happier if we _also_ had a specific expression form similar to `let..in`, which is more explicitly tailored to that case, but that wouldn't mean that `let` patterns in `is` aren't valid.
+
+[10:09:49.0189] <ljharb>
+i can tell you if i weren't a champion of pattern matching i'd die on the hill of not allowing it. as it is, i won't block on that but i would bet money others will.
+
+[10:10:20.0304] <ljharb>
+it's fine for declaration patterns to work in `is`, so they can be used later in the pattern. the question here is how much *beyond* the pattern should they be usable
+
+[10:10:47.0224] <rbuckton>
+Having been down the road of "what other statements could be made into expressions" discussion back when I first proposed `throw` expressions, I'm not sure the sentiment is that much against it.
+
+[10:10:59.0930] <ljharb>
+ * it's fine for declaration patterns to work in `is`, so they can be used later in the pattern. the question here is how much _beyond_ the pattern should they be usable (for when clauses, it's available in the RHS)
+
+[10:11:12.0333] <ljharb>
+you have a very different takeaway than i do from that discussion
+
+[10:11:12.0686] <rbuckton>
+ * Having been down the road of the "what other statements could be made into expressions" discussion back when I first proposed `throw` expressions, I'm not sure the sentiment is that much against it.
+
+[10:11:28.0229] <ljharb>
+my takeaway was that throw expressions were basically the only thing consensus would even come close to tolerating
+
+[10:11:36.0593] <ljharb>
+ * my takeaway was that throw expressions were basically the only statement-as-expression that consensus would even come close to tolerating
+
+[10:12:25.0650] <rbuckton>
+I pushed back against most statements-as-expressions at the time. The only ones I thought that were possibly worth pursuing aside from `throw` were `debugger` and `let`/`const`.
+
+[10:15:31.0170] <ljharb>
+debugger seems doable, but i'm convinced let/const isn't for the same reasons as here
+
+[10:20:25.0419] <rbuckton>
+I'm not necessarily opposed to restricting the scope of `let` patterns, I just fine that there are too many basic cases that will not work or be confusing if we enforce a specific scope. Negation/short-circuiting/early return are the most obvious examples. Introducing a `let` whose scope isn't block-scoped is another. However, I find `let` patterns to be the _best_ way out of the "what is a reference vs. what is a binding" problem from the original proposal, and that Rust also has.
+
+[10:20:33.0378] <rbuckton>
+ * I'm not necessarily opposed to restricting the scope of `let` patterns, I just find that there are too many basic cases that will not work or be confusing if we enforce a specific scope. Negation/short-circuiting/early return are the most obvious examples. Introducing a `let` whose scope isn't block-scoped is another. However, I find `let` patterns to be the _best_ way out of the "what is a reference vs. what is a binding" problem from the original proposal, and that Rust also has.
+
+[10:35:40.0247] <ljharb>
+i agree with that part
+
+[10:36:12.0375] <ljharb>
+but we can satisfy that by just always restricting bindings to the pattern, or to the RHS of the containing when clause.
+
+but, i think we can do better than that - as long as we don't open the floodgates by just naively expanding it to the containing block
+
+[10:37:55.0486] <Jack Works>
+> <@rbuckton:matrix.org> And restricting this to only the true branch would break negation for cases like early exit:
+> 
+> ```
+> if (!(x is Option.some(let value)) {
+>   return; // nothing to do, exit early
+> }
+> value; // use 'value'
+> ```
+
+looks like we have very different mental morals on this. I won't expect any binding created in the if header is available outside of the if statement 
+
+[10:38:08.0075] <Jack Works>
+* In reply to @rbuckton:matrix.org
+And restricting this to only the true branch would break negation for cases like early exit:
+
+if (!(x is Option.some(let value)) {
+  return; // nothing to do, exit early
+}
+value; // use 'value'
+
+
+looks like we have very different mental modal on this. I won't expect any binding created in the if header is available outside of the if statement
+
+[10:38:25.0526] <Jack Works>
+* looks like we have very different mental modal on this. I won't expect any binding created in the if header is available outside of the if statement
+
+
+[10:42:36.0753] <rbuckton>
+How would you propose such code be written then?
+
+[10:51:59.0531] <rbuckton>
+If anything, that convinces me that we *shouldn't* introduce a new block scope in an `if` head.
+
+[11:14:18.0888] <ljharb>
+which examples do you want me to alter?
+
+[11:14:29.0575] <rbuckton>
+The kind of complexity you are signing up for to make `let` patterns usable in such a narrow way is full-on control flow analysis. If they are just declared in the outer block scope, TDZ does all of that work for you. 
+
+[11:14:41.0627] <ljharb>
+eg
+```
+function getTypeOfPropertyOrIndexSignatureOfType(type: Type, name: __String): Type | undefined {
+    const topot = getTypeOfPropertyOfType(type, name);
+    return  ||
+        (getApplicableIndexInfoForName(type, name) is { type: const propType } &&
+            addOptionality(propType, /*isProperty*/ true, /*isOptional*/ true));
+}
+```
+
+[11:14:44.0843] <rbuckton>
+The early return example. 
+
+[11:14:54.0656] <ljharb>
+ * eg
+
+```
+function getTypeOfPropertyOrIndexSignatureOfType(type: Type, name: __String): Type | undefined {
+    const topot = getTypeOfPropertyOfType(type, name);
+    if (topot) { return topot; }
+    return  (getApplicableIndexInfoForName(type, name) is { type: const propType } &&
+            addOptionality(propType, /*isProperty*/ true, /*isOptional*/ true));
+}
+```
+
+[11:15:14.0261] <rbuckton>
+That isn't an applicable refactoring, that is a complete change to code style. 
+
+[11:15:26.0529] <ljharb>
+ * eg
+
+```
+function getTypeOfPropertyOrIndexSignatureOfType(type: Type, name: __String): Type | undefined {
+    const topot = getTypeOfPropertyOfType(type, name);
+    if (topot) { return topot; }
+
+    if (getApplicableIndexInfoForName(type, name) is { type: const propType }) {
+            return addOptionality(propType, /*isProperty*/ true, /*isOptional*/ true));
+    }
+
+    return false;
+}
+```
+
+[11:15:34.0587] <ljharb>
+i dunno, something like that (sorry for the edits)
+
+[11:15:37.0367] <rbuckton>
+I'd argue we'd keep it as is rather than use pattern matching in that case
+
+[11:15:42.0285] <ljharb>
+"change to code style" is what refactoring *is*
+
+[11:16:13.0817] <ljharb>
+early returns tend to make code more readable; i (and most of the js ecosystem) used to force everything to have one return at the bottom, per jslint, but everyone's largely shifted away from that.
+
+[11:16:28.0417] <ljharb>
+ * early returns tend to make code more readable; i (and most of the js ecosystem) used to force everything to have one return at the bottom, per jslint, but everyone's largely shifted away from that since the late 2000's.
+
+[11:17:16.0803] <ljharb>
+but yeah "don't use pattern matching" is obv a fine choice there if it doesn't mesh well with the style you prefer
+
+[11:17:17.0389] <rbuckton>
+Yes. I would like to be able to use early return in my last example, but can't if the condition including the pattern is the negative case. 
+
+[11:17:46.0790] <ljharb>
+i'm pretty sure that example works; is there something i missed, or another one with the negative caes?
+
+[11:17:48.0629] <ljharb>
+ * i'm pretty sure that example works; is there something i missed, or another one with the negative case?
+
+[11:18:48.0605] <rbuckton>
+Sorry, I was away from my PC and on my phone. I meant this example:
+
+```
+if (!(x is Option.some(let value)) {
+  return; // nothing to do, exit early
+}
+value; // use 'value'
+```
+
+[11:20:02.0650] <rbuckton>
+Specifically, the negative case in the `if`. This is an example of something I've seen in C#, which has the same "declaration pattern" concept that I'm proposing with `let` patterns.
+
+[11:22:15.0113] <ljharb>
+```
+if (x is not Option.Some(let value)) {
+   // use `value`
+}
+return;
+```
+is fine imo
+
+[11:22:39.0100] <rbuckton>
+That isn't an early return though.
+
+[11:22:46.0092] <ljharb>
+true. but not everything has to be
+
+[11:23:02.0512] <rbuckton>
+You also are incorrect in the use of `not`.
+
+[11:23:07.0831] <ljharb>
+how so?
+
+[11:23:25.0361] <rbuckton>
+The early return is if its not a match. You swapped the branches but not the condition.
+
+[11:23:34.0091] <ljharb>
+or this:
+```
+if (x is Option.Some(value)) {
+  return;
+}
+const Option.Some(value) = x;
+```
+using extractors
+
+[11:24:00.0653] <ljharb>
+ok so yes, i see what you mean
+
+[11:24:05.0073] <rbuckton>
+I'm saying that we *could* have this work in a way that is intuitive, but these restrictions make it hard to reason over.
+
+[11:24:22.0722] <rbuckton>
+Also, you're re-evaluating the match now which is completely inefficient.
+
+[11:24:41.0357] <ljharb>
+true. i don't think this kind of situation is common enough or important enough tho to warrant shredding the mental model of what can produce bindings in a block.
+
+[11:25:00.0923] <ljharb>
+what happens if you do `const Option.Some(value) = x` when it doesn't match, btw?
+
+[11:26:15.0661] <rbuckton>
+It doesn't need to be that complex. `if` doesn't make its own block, so the bindings are declared in the containing scope. TDZ handles cases where conditions failed to match or bindings weren't initialized. Scoping works as you'd expect and existing code can be refactored to patterns without completely rewriting the entire function.
+
+[11:27:44.0661] <ljharb>
+the if parens are attached to the block
+
+[11:27:52.0281] <ljharb>
+just like `for (let x in y) {}` is
+
+[11:27:54.0510] <rbuckton>
+By narrowing the scoping to inside of the `if`, or to only `true` branches in ternaries/short-circuiting, you're making things far more complicated and harder to reason over and use.
+
+[11:27:59.0780] <ljharb>
+ * just like `for (let x in y) {}` is - so there's already precedent for that mental model.
+
+[11:28:05.0357] <ljharb>
+ * just like `for (let x of y) {}` is - so there's already precedent for that mental model.
+
+[11:28:16.0754] <rbuckton>
+That doesn't need to be the case, since `if` isn't `for`.
+
+[11:28:24.0533] <ljharb>
+yes but that's what users already expect
+
+[11:28:28.0139] <ljharb>
+that's what will be easy to reason about
+
+[11:28:36.0372] <ljharb>
+doing anything *different* is what will be complicated and confusing
+
+[11:29:00.0059] <rbuckton>
+Users expect `for` declarations to be scoped, but that doesn't apply to _Expression_.
+
+[11:29:14.0256] <ljharb>
+users don't think about grammar at all
+
+[11:29:25.0192] <rbuckton>
+for example, there's no reason that a `let` pattern in the Expression of a `for` statement head should be scoped to the `for`.
+
+[11:30:01.0502] <ljharb>
+`for (let i = 0; i < 3; ++i) { } i;` will error because i is not defined
+
+[11:30:09.0764] <ljharb>
+so there is a reason, because *that's already how it works* since 2015
+
+[11:30:13.0621] <ljharb>
+we can't change that, period
+
+[11:30:17.0947] <rbuckton>
+```
+for (let x of y is Option.some(let value) ? value : []) {
+}
+value; // could be legal here
+```
+
+[11:30:29.0100] <ljharb>
+could be. but that would be different and surprising.
+
+[11:30:31.0530] <ljharb>
+and thus, shouldn't be.
+
+[11:30:36.0791] <rbuckton>
+Yes, that's the `for` declaration. That's separate from the `expression` part.
+
+[11:30:38.0419] <ljharb>
+ * and thus, shouldn't be, even if some people would find it useful.
+
+[11:30:48.0861] <ljharb>
+users don't think about it that way
+
+[11:31:04.0036] <ljharb>
+it's "things bound inside the for (…) are only in scope in the `{ … }`"
+
+[11:31:12.0475] <ljharb>
+obviously we *could* do it. but nobody will expect that.
+
+[11:31:27.0527] <rbuckton>
+And maybe it makes sense to have `for` and `while` scope their expressions to the per-iteration block, but `if` is not per-iteration, so it doesn't need to obey those rules.
+
+[11:31:41.0561] <ljharb>
+arguably if is an iteration of one :-p but sure
+
+[11:31:53.0855] <ljharb>
+it doesn't *need* to. but it *should* because that's what users will expect. and that always trumps "what we could get away with"
+
+[11:32:11.0830] <rbuckton>
+But I could definitely see this being useful:
+
+```
+while (x is not Option.Some(let value)) {
+  x = nextX();
+}
+value;
+```
+
+[11:32:31.0327] <ljharb>
+"it could be useful" is never sufficient to override "it will probably be surprising"
+
+[11:32:55.0789] <rbuckton>
+I don't find it surprising, and I'm not convinced the general developer population would either.
+
+[11:34:13.0141] <rbuckton>
+What I would find surprising is if this:
+
+```
+if (x is Option.Some(let value)) {
+  value;
+}
+return;
+```
+
+can't be refactored to the negative case like it can for every other expression:
+
+```
+if (!(x is Option.Some(let value))) {
+  return;
+}
+value;
+```
+
+
+[11:34:35.0972] <ljharb>
+then the solution to that surprise is no bindings at all, really.
+
+[11:34:45.0548] <ljharb>
+which i don't think any of us want
+
+[11:35:13.0916] <ljharb>
+because no expression can create bindings yet, so that would be a much larger surprise.
+
+[11:35:21.0026] <rbuckton>
+If we can't introduce bindings in patterns to capture matched values, pattern matching has almost no value.
+
+[11:35:39.0746] <ljharb>
+to use your "but this is different so its ok" argument, then "an expression with let/const/var inside" is different, and it's fine if it follows different rules
+
+[11:35:50.0228] <ljharb>
+ * to use your "but this is different so its ok" argument, then "an expression with let/const/var inside" is different, and it's fine if it follows different rules, including that you can't naively refactor it like you can normal expressions.
+
+[11:36:06.0604] <rbuckton>
+Pattern matching itself is a very complex feature. You're not going to get away with just assuming how things work without reading some kind of documentation, so I'm not sure its going to be that surprising.
+
+[11:36:51.0179] <ljharb>
+sure. but that argument works for all of our positions in varying degrees.
+
+[11:36:58.0774] <ljharb>
+including refactorability
+
+[11:37:59.0257] <rbuckton>
+Principle of least surprise. Which is more surprising?
+1. A `let` pattern introduces a binding that is scoped to the nearest outer block.
+2. I can't swap an `if` condition to its inverse without a complete rewrite of the surrounding code.
+
+[11:38:19.0869] <ljharb>
+personally, the former.
+
+[11:38:29.0786] <rbuckton>
+All `let` declarations are currently scoped to the nearest outer block.
+
+[11:38:31.0308] <ljharb>
+because i just don't hold that second assumption at all
+
+[11:38:47.0470] <ljharb>
+for example, if you return inside the block, or throw, or do something async, etc, you can't swap it without larger rewrites
+
+[11:39:08.0749] <ljharb>
+> <@rbuckton:matrix.org> All `let` declarations are currently scoped to the nearest outer block.
+
+sure, and no expressions can create bindings. both current scenarios aren't super relevant here?
+
+[11:39:30.0063] <rbuckton>
+I've already imagined a number of cases for (2) in multiple codebases where I wouldn't be able to employ pattern matching in cases where it would be extremely useful, without having to even further complicate my code.
+
+[11:40:14.0267] <rbuckton>
+Both (1) and (2) are assuming expressions can create bindings, they're just talking about scoping. We've already spent the cost of that surprise for these cases.
+
+[11:40:41.0618] <ljharb>
+ok, but as i said, 2 is just not a valid assumption without a bunch of caveats
+
+[11:41:00.0371] <ljharb>
+and pattern matching doesn't have to be useful everywhere. there's still a vast number of places it will be useful.
+
+[11:41:07.0333] <rbuckton>
+If it helps, I can reach out to Anders and the C# team to get additional context as to why they chose the variable scope they did for `is`.
+
+[11:41:30.0820] <ljharb>
+it can't hurt, but i'm not sure it'll make much difference. JS isn't C#.
+
+[11:41:41.0334] <rbuckton>
+What caveats? I showed a very basic case that shows the discrepancy already.
+
+[11:42:11.0254] <ljharb>
+there exist less basic cases where you can't just swap the condition without a larger code change.
+
+[11:42:15.0110] <rbuckton>
+I find (1) the least surprising because it matches what `let` already does. It declares the variable in the containing block scope. 
+
+[11:42:32.0811] <ljharb>
+ * there exist less-basic cases where you can't just swap the condition without a larger code change.
+
+[11:42:39.0424] <rbuckton>
+Yes, but those cases are going to be complicated regardless as to how pattern matching works.
+
+[11:42:54.0239] <ljharb>
+right but it illustrates why it's an invalid assumption that you can just inverse an `if`
+
+[11:42:57.0340] <ljharb>
+ * right but it illustrates why it's an invalid assumption that you can just easily inverse an `if`
+
+[11:42:57.0959] <rbuckton>
+Its not more or less complex with pattern matching.
+
+[11:43:02.0839] <ljharb>
+that's not generally true, so it's false
+
+[11:43:13.0218] <rbuckton>
+If you can't inverse an `if` in the simple case, the more complex cases aren't relevant.
+
+[11:43:42.0692] <ljharb>
+i hear you that some very basic if's would be inversable, and pattern matching with contained bindings would make that not the case
+
+[11:43:54.0837] <ljharb>
+but to me that makes things *more* consistent - that you can count on inverting the if even *less*.
+
+[11:44:00.0583] <ljharb>
+because that's just not something you should ever rely on.
+
+[11:46:45.0949] <ljharb>
+ * i hear you that some very basic if's would be trivially inversable, and pattern matching with contained bindings would make that not the case
+
+[11:46:48.0909] <rbuckton>
+IMO, this gives pattern matching even more jagged edges that would make it harder to use. With my proposed scoping, things you might expect to work just work, rather than needing to consult documentation on why you can't do the thing that looks like it should work just fine.
+
+[11:46:54.0716] <ljharb>
+ * but to me that makes things _more_ consistent - that you can count on trivially inverting the if even _less_.
+
+[11:47:20.0778] <ljharb>
+a surprising binding will cause a lot more problems than a surprising error.
+
+[11:48:43.0416] <rbuckton>
+I don't agree, especially when the error requires significantly more knowledge of the complexities of pattern matching, scopes and bindings. 
+
+[11:49:28.0839] <rbuckton>
+Especially when we could have chosen the approach that works, lets me do the thing that seems like it should obviously work, and adds utility.
+
+[11:49:38.0809] <rbuckton>
+ * Especially when we could have chosen the approach that lets me do the thing that seems like it should obviously work, and adds utility.
+
+[11:50:42.0316] <ljharb>
+"obviously" is very subjective.
+
+[11:50:52.0806] <rbuckton>
+What would you propose the scope of `value` be in this case:
+```
+const y = x is Option.Some(let value) ? value : 2;
+```
+Because if its just the expression, then I can't even work around the inversion of `if` by pulling the expression out.
+
+[11:52:02.0449] <rbuckton>
+i.e., a potential refactor of the inverted `if` might be:
+```
+const tmp = x is Option.Some(let value);
+if (!tmp) {
+  return;
+}
+value;
+```
+
+But even that wouldn't work if we choose more complex, restrictive scoping.
+
+[11:56:09.0736] <ljharb>
+i would assume the `value` is available in one of two scopes - either, only in the expression in the positive branch, or, only in the entire remainder of the ternary expression. but never outside of the ternary.
+
+[11:58:59.0208] <rbuckton>
+There isn't a ternary in the 2nd example.
+
+[11:59:49.0644] <rbuckton>
+both of those assumptions severely limit the utility of the feature. If that were the case, you wouldn't be able to use it in the true or false branch of `if`, or in `while`, which are two places that we *really* want this feature.
+
+[12:00:22.0818] <rbuckton>
+If its "only in the true branch, except in `if` or `while` or `switch`", you're adding even more and more complexity.
+
+[12:01:10.0026] <rbuckton>
+I think "`let` patterns are bound in the containing block scope" is simple and matches existing `let`/`const`. It requires none of this complexity or second guessing. 
+
+[12:01:52.0240] <rbuckton>
+If you want it scoped to the expression itself, use `do` since it introduces a block scope into an expression.
+
+[12:03:35.0902] <rbuckton>
+then you can have `const y = do { x is Option.Some(let value) ? value : 2 };` and keep it scoped to the expression if that's what you want.
+
+[12:05:30.0042] <rbuckton>
+Then the block scope boundary remains the same as everywhere else in JS, the containing block scope. Don't have `if` declare a block scope on its own, since it doesn't currently. `while` might require a bit more discussion, but I'm also not certain it needs its own block scope either since not having one would be useful for checking for loop exit conditions with patterns.
+
+[12:31:33.0371] <ljharb>
+oh sure, i don't think the 2nd example should work at all
+
+[12:31:40.0201] <ljharb>
+testing and extracting are different operations.
+
+[14:28:08.0105] <rbuckton>
+> <@ljharb:matrix.org> testing and extracting are different operations.
+
+That's somewhat antithetical to pattern matching. The point is that testing and extraction should be the same operation.
+
+[14:28:25.0487] <ljharb>
+in `match` yes
+
+[14:28:29.0736] <ljharb>
+but `is` isn't pattern matching, it's just testing
+
+[14:28:33.0288] <rbuckton>
+That was the biggest problem with the `let when` proposal, IMO.
+
+[14:28:41.0365] <ljharb>
+ * but `is` isn't pattern matching, it's just testing (using pattern matching's patterns)
+
+[14:28:43.0173] <rbuckton>
+`is` is pattern matching, that's why it exists.
+
+[14:28:58.0989] <ljharb>
+it's not *matching* tho, it's testing
+
+[14:29:01.0369] <ljharb>
+like regex match vs test
+
+[14:29:11.0044] <ljharb>
+it's a boolean operation, like test. it doesn't produce matched stuff.
+
+[14:29:21.0741] <rbuckton>
+No, I think that's the wrong metaphor.
+
+[14:29:46.0723] <rbuckton>
+That may be your intuition, but that's not why I proposed `is`.
+
+[14:30:23.0246] <rbuckton>
+The `is` expression is derived from C#'s `is` for pattern matching, including declaration patterns.
+
+[14:30:42.0980] <ljharb>
+ok but it's a boolean operator, and it doesn't matter what it does in C#, in JS people will expect it to be a pure operation that produces a boolean, just like instanceof or in
+
+[14:30:46.0946] <ljharb>
+ * ok but it's a boolean operator, and it doesn't matter what it does in C#, in JS people will expect it to be a pure operation that produces a boolean, just like `instanceof` or `in`
+
+[14:31:18.0676] <ljharb>
+giving it extra semantics in special places where it makes sense is one thing; turning it into the first non-pure binary operator doesn't make sense to me.
+
+[14:31:32.0631] <rbuckton>
+I don't think that expectation is relevant given that its pattern matching syntax.
+
+[14:31:42.0417] <ljharb>
+the LHS and the operator aren't.
+
+[14:31:47.0109] <ljharb>
+only the RHS is.
+
+[14:31:56.0603] <rbuckton>
+What do you mean by "non-pure binary operator"?
+
+[14:32:10.0423] <ljharb>
+like a binary operator that has effects outside of producing a value or throwing an exception.
+
+[14:32:13.0925] <rbuckton>
+Because my definition of purity is probably not that.
+
+[14:32:30.0152] <rbuckton>
+All operators can have effects outside of producing a value.
+
+[14:32:31.0137] <ljharb>
+(obv a binary operator may invoke user code that has side effects, that's not what i mean)
+
+[14:32:46.0902] <ljharb>
+they don't by default. that's just the exceptional case.
+
+[14:33:18.0704] <rbuckton>
+`is` isn't `instanceof` or `in`. It is more than that.
+
+[14:33:34.0657] <ljharb>
+at the operator level it's precisely that
+
+[14:33:47.0694] <ljharb>
+`is` would also invoke a custom matcher, just like instanceof can invoke a Symbol.hasInstance method
+
+[14:34:00.0911] <ljharb>
+that there's syntax doesn't make it not a binary operator.
+
+[14:34:30.0046] <ljharb>
+but to step back, it sounds like this is a dealbreaker for being ready for advancement in september
+
+[14:34:44.0528] <rbuckton>
+I strongly disagree with the position that `is` should only test. 
+
+[14:34:55.0948] <ljharb>
+i would be shocked if anyone else expected it to be any different.
+
+[14:35:09.0383] <ljharb>
+ * i would be shocked if anyone else expected it to be anything but testing, aside from the special binding cases we've discussed.
+
+[14:35:20.0504] <ljharb>
+and "is" isn't the proper spelling of something that extracts bindings anyways
+
+[14:35:31.0189] <ljharb>
+"is" is the prefix for a predicate function. something pure that only produces a boolean.
+
+[14:35:32.0268] <rbuckton>
+Maybe we need to pick a different name for the operator, but I'd be strongly opposed to giving `is` less pattern matching capabilities than `match`.
+
+[14:35:39.0775] <ljharb>
+what would be the point then?
+
+[14:35:42.0672] <ljharb>
+`match` can already do it
+
+[14:35:54.0902] <ljharb>
+the only benefit to `is` was that it's sugar for the common case of matching to true or false
+
+[14:35:57.0015] <rbuckton>
+`match` can't introduce bindings outside of its match legs.
+
+[14:36:16.0720] <ljharb>
+i would also bet money that literally none of us expected that was the purpose of `is`.
+
+[14:36:18.0900] <rbuckton>
+I proposed `is` primarily for `if` and `while`, but also for in-expression extraction.
+
+[14:36:30.0115] <ljharb>
+that latter part imo is an anti-goal. we should never have that.
+
+[14:36:50.0439] <rbuckton>
+I proposed `is` to this group at the same time as `let` patterns. 
+
+[14:37:09.0077] <ljharb>
+sure, but there were no examples i recall that demonstrated that a bare expression produced bindings in the block.
+
+[14:37:11.0995] <rbuckton>
+I completely disagree with that point. I strongly believe we should have that.
+
+[14:37:21.0779] <ljharb>
+ok, but given consensus requirements, we won't
+
+[14:37:23.0961] <ljharb>
+so where do we go now?
+
+[14:37:36.0909] <rbuckton>
+There have been examples of such since I first proposed it.
+
+[14:38:06.0960] <rbuckton>
+I think a larger group discussion is in order, at the very least.
+
+[14:38:43.0129] <ljharb>
+sure, that's fine. we met yesterday and have another one next monday
+
+[14:39:00.0386] <ljharb>
+i apologize if i missed those examples; i'd immediately have called out the problem if i'd seen them.
+
+[14:39:15.0044] <rbuckton>
+Ah, yesterday was a holiday. I was unaware there was still a meeting scheduled.
+
+[14:39:16.0696] <rbuckton>
+https://gist.github.com/rbuckton/e49581c9031a73edd0fce7a260748994#layer-3-pattern-matching-syntax
+
+[14:39:36.0322] <rbuckton>
+```
+if (opt is Option.Some{ value: let value }) print(value);
+```
+was the first example if `is` and `let`
+
+[14:39:49.0543] <ljharb>
+that's an `if` not a bare expression
+
+[14:39:54.0107] <ljharb>
+all the `if` examples make sense to me
+
+[14:40:06.0692] <rbuckton>
+ * ```
+if (opt is Option.Some{ value: let value }) print(value);
+```
+
+was the first example of `is` and `let`
+
+[14:40:17.0317] <ljharb>
+and all the `let when` examples were block-level declarations, so that wasn't a problem either (for this reason, at least)
+
+[14:41:01.0731] <rbuckton>
+I proposed `is` as an infix expression. There were no restrictions on what patterns were permitted. We also discussed scoping for `is` in multiple meetings.
+
+[14:41:58.0815] <ljharb>
+i'll take your word for it, but again, i don't recall any discussion of scoping outside of a `when` RHS, or a special header (if/while/for)
+
+[14:49:25.0726] <rbuckton>
+IIRC, we've even discussed in this channel what the scope should be for the simplest case of a `let` pattern, i.e., `x is let y;`. I'd argue that you're not likely to see that happen often in practice as there are better ways to do that for simple cases, but its a capability that falls out of the syntax and the feature.
+
+
+2023-09-08
+[08:17:45.0099] <rkirsling>
+it really is super cool how `when { numOrString: String }` just magically reads as a typecheck
+
+[10:05:36.0664] <TabAtkins>
+Yeah that's exactly one of the big reasons I was cool with switching the bindings syntax elsewhere.
+
+[10:53:59.0495] <ljharb>
+it indeed lends itself well to TS being able to infer types from it :-)
+
+[14:29:42.0377] <rbuckton>
+I haven't had the time to review the PR yet as I've been heads down in testing out the Shared Structs origin trial. I should have some time to look at it on Monday
+
+[14:49:31.0055] <TabAtkins>
+Don't worry about it, it's not finished yet.
+
+[14:49:36.0273] <TabAtkins>
+I got distracted with planning for TPAC.
+
+
+2023-09-10
+[05:57:54.0937] <Jack Works>
+> <@rkirsling:matrix.org> it really is super cool how `when { numOrString: String }` just magically reads as a typecheck
+
+I like things like { numOrStr: typeof "string" }
+
+[06:03:34.0118] <Jack Works>
+we can have an update at the plannery but I don't think we can finish the spec in 10 days
+
+[07:48:06.0974] <ljharb>
+i agree. I don’t think we have complete champion group consensus yet anyways 
+
+
+2023-09-12
+[04:56:01.0222] <Jack Works>
+do we have if pattern?
+
+[04:57:38.0461] <Jack Works>
+if we have if pattern, some structure can be composed with it
+
+[04:59:09.0004] <Jack Works>
+* ```
+// before
+when pattern if (expr): expr // match with guard
+// after
+when pattern and if (expr): expr // the whole thing is a pattern, no need special syntax for match + guard
+```
+
+[04:59:14.0806] <Jack Works>
+* ```js
+// before
+when pattern if (expr): expr // match with guard
+// after
+when pattern and if (expr): expr // the whole thing is a pattern, no need special syntax for match + guard
+```
+
+[04:59:29.0714] <Jack Works>
+```js
+// before
+when pattern if (expr): expr // match with guard
+// after
+when pattern and if (expr): expr // the whole thing is a pattern, no need special syntax for match + guard
+```
+
+[04:59:54.0686] <Jack Works>
+* <code>
+// before
+when pattern if (expr): expr // match with guard
+// after
+when pattern and if (expr): expr // the whole thing is a pattern, no need special syntax for match + guard
+</code>
+
+[05:00:16.0442] <Jack Works>
+* `// before
+when pattern if (expr): expr // match with guard
+// after
+when pattern and if (expr): expr // the whole thing is a pattern, no need special syntax for match + guard`
+
+[05:00:33.0486] <Jack Works>
+* // before
+when pattern if (expr): expr
+// match with guard
+
+// after
+when pattern and if (expr): expr
+// the whole thing is a pattern, no need special syntax for match + guard
+
+
+[05:01:42.0271] <Jack Works>
+// before
+match (...) {
+...
+if (expr): ...
+}
+
+// after
+match (...) {
+...
+when if (expr): ...
+}
+
+[07:26:12.0270] <ljharb>
+i think we still need it
+
+[07:36:56.0121] <rbuckton>
+Jack Works: is your question "Do we still have a form of `if` in `match`?" or is it "Do we have an `if` _pattern_ that can be placed anywhere in a pattern, or an `if` _clause_ that must come after the pattern?"? While I like the idea of an `if` _pattern_, that would have ramifications on how `let` patterns are initialized. 
+My intent for `let`/`const` patterns was for the bindings to be initialized only once after an entire pattern has matched successfully. That doesn't quite work if `if` is a _pattern_, since they would need to be initialized immediately.
+
+[07:41:40.0527] <rbuckton>
+in other words:
+
+```
+if (x is [let y and if (y > 1)]) {
+  y; // ok, 'y' is initialized
+} else {
+  y; // expected to error as 'y' in TDZ/uninitialized, but won't because 'y' was initialized immediately.
+}
+```
+Though, we could possibly do both by having both outer bindings and per-pattern bindings, such that the outer bindings are initialized with the per-pattern bindings from the success path of the match, not unlike per-iteration bindings in `for` statements.
+
+[07:44:15.0310] <rbuckton>
+One benefit of `if` patterns is that they could be a mechanism to use predicates, had we gone the route of doing `instanceof` checks by default, though they wouldn't have been quite as elegant: `let y and if (isFoo(y))`
+
+[09:50:36.0092] <ljharb>
+we should still have if clauses in match; id never considered an if pattern
+
+[09:56:52.0753] <Jack Works>
+is pattern (let x and F) calls F as a predicate function when F is a function and there is no @@matcher on it?
+
+[09:57:39.0422] <Jack Works>
+I think it should at least be (let x and F()) or something to indicate it will call the function? but it will also conflict with the extractor maybe?
+
+[10:31:14.0810] <rbuckton>
+> <@jackworks:matrix.org> I think it should at least be (let x and F()) or something to indicate it will call the function? but it will also conflict with the extractor maybe?
+
+That would conflict with Extractors, yes. 
+
+
+2023-09-13
+[18:11:35.0378] <Jack Works>
+Eh
+
+[18:11:52.0293] <Jack Works>
+I forgot the separator
+
+[18:12:05.0649] <Jack Works>
+how do we do this? using `,` or `;`?
+
+[18:45:54.0922] <rbuckton>
+I'd be tempted to suggest `,`, since `;` might run afoul of ASI so we'd have to add restrictions to ASI interpretation such as the one for `for` in https://tc39.es/ecma262/#sec-rules-of-automatic-semicolon-insertion
+
+[18:47:36.0376] <rbuckton>
+But I'd rather get feedback from everyone else on that one. If its `,`, then you would need to use something other than _Expression_ in each leg since that also consumes `,`.
+
+[18:48:52.0825] <rbuckton>
+ * But I'd rather get feedback from everyone else on that one. If its `,`, then you would need to use _AssignmentExpression_ rather than _Expression_  in each leg since _Expression_ also consumes `,`.
+
+[23:13:08.0813] <ljharb>
+i'm confused, which separator
+
+[23:13:17.0428] <ljharb>
+after a RHS expression? 1000% semicolon
+
+[23:13:51.0004] <ljharb>
+we don't need to cater to ASI people at all as long as we leave the "style" possible, they can stick semicolons in the front of lines where it conflicts
+
+[23:14:18.0849] <ljharb>
+the committee already has consensus on that (it's ok to add new ASI restrictions) even tho we couldn't quite get consensus on telling people to just use semicolons
+
+[03:40:37.0169] <TabAtkins>
+> <@rbuckton:matrix.org> in other words:
+> 
+> ```
+> if (x is [let y and if (y > 1)]) {
+>   y; // ok, 'y' is initialized
+> } else {
+>   y; // expected to error as 'y' in TDZ/uninitialized, but won't because 'y' was initialized immediately.
+> }
+> ```
+> Though, we could possibly do both by having both outer bindings and per-pattern bindings, such that the outer bindings are initialized with the per-pattern bindings from the success path of the match, not unlike per-iteration bindings in `for` statements.
+
+Why would you expect y to be TDZ there? The binding was established, even if the pattern eventually failed. `if( x is [let y] && y > 1)` wouldn't TDZ, for instance.
+
+[03:49:17.0620] <rbuckton>
+> <@tabatkins:matrix.org> Why would you expect y to be TDZ there? The binding was established, even if the pattern eventually failed. `if( x is [let y] && y > 1)` wouldn't TDZ, for instance.
+
+When we discussed this before, the `y` would be uninitialized if the pattern failed to match. 
+
+[08:33:28.0874] <Jack Works>
+> <@rbuckton:matrix.org> But I'd rather get feedback from everyone else on that one. If its `,`, then you would need to use _AssignmentExpression_ rather than _Expression_  in each leg since _Expression_ also consumes `,`.
+
+Ah, I'm not familiar with that. There are so many expressions and I can't tell difference from their name. `Assignment...` `Member...`
+
+[09:14:20.0402] <rbuckton>
+`Expression` is just `AssignmentExpression` or comma
+
+[09:16:19.0511] <rbuckton>
+> <@rbuckton:matrix.org> When we discussed this before, the `y` would be uninitialized if the pattern failed to match.
+
+My intent was that we could leverage TDZ to ensure you can only use successfully matched variables rather than having to introduce some kind of control flow analysis mechanism into ECMAScript, and instead let linters and type systems give you early warnings like they can do currently for use-before-init class errors.
+
+[09:18:45.0523] <rbuckton>
+If there is pushback I'm happy to relax the TDZ restriction, since TypeScript will still do CFA anyways, but I don't want JS devs to feel like they have to rely solely on a type system or other external static analysis tool to catch this kind of error.
+
+[09:26:30.0812] <rbuckton>
+> <@tabatkins:matrix.org> Why would you expect y to be TDZ there? The binding was established, even if the pattern eventually failed. `if( x is [let y] && y > 1)` wouldn't TDZ, for instance.
+
+My point to that comment was that if we want to preserve the TDZ semantics we've discussed *outside* of the pattern, then we would need an additional pattern-local binding *inside* of the pattern for `if`-patterns to work correctly. I don't think that would be terribly complex though:
+
+- All `let`/`const` patterns in an `is` would be added to the `BoundNames` of the outer block scope, and thus are declared in that block scope's Environment Record.
+- As you evaluate each _MatchPattern_ you push a new Environment Record with the names declared in that pattern, and initialize them as the pattern evaluates, and hold onto the environment records for the successful branches of that pattern.
+- When matching completes you initialize the bindings in the outer block scope that match the initialized bindings from the successful branches of the pattern.
+
+[09:27:22.0829] <rbuckton>
+Basically, take what `for` does for per-iteration bindings and expand on it a bit.
+
+
+2023-09-14
+[09:00:55.0493] <Jack Works>
+> then we would need an additional pattern-local binding inside of the pattern for if-patterns to work correctly.
+
+we need it for _all_ patterns to work correctly. `[let a, a]` need it (matches [1, 1] not [1, 2])
+
+
+2023-09-15
+[10:36:52.0833] <rbuckton>
+The negated `in`/`instanceof` proposal is interesting, but potentially covered by pattern matching with relational patterns:
+
+```
+x !in y // negated-in
+x !instanceof Y // negated-instanceof
+
+x is not in y; // negated relational pattern
+x is not Y; // negated custom match
+x is not instanceof y; // negated relational pattern (generally covered by regular `is` though)
+```
+
+[10:54:28.0832] <ljharb>
+indeed, but still useful separately and as a smaller piece
+
+[10:54:37.0497] <ljharb>
+especially if it's spelled `x not in y` and `x not instanceof y`
+
+[10:54:49.0748] <ljharb>
+just like how throw expressions would still be useful even if we had do expressions
+
+[10:55:42.0448] <rbuckton>
+If it exists on its own, I think `!in` is better than `not in`, as `not in` could be confused with `is not ...` in pattern matching.
+
+[10:56:38.0822] <ljharb>
+in these two cases it'd work the same, so i don't think it'd be confusing
+
+[10:56:55.0187] <ljharb>
+it'd just mean that potentially both `x not in y` and `x is not in y` work, with identical semantics
+
+[10:57:26.0045] <ljharb>
+btw, i'm going to put a 5 minute update on the agenda for pattern matching. i'm explicitly not going to talk about any specifics, so i'm not being recklessly ambitious with the timebox - just going to state that the champion group is close to consensus on an updated form of the proposal, and that it takes into account implementor/spidermonkey/plenary feedback, and should require much less added syntax, and that we'll be back at a future meeting with an extensive update.
+
+[10:59:32.0576] <rbuckton>
+I'm not sure what expectation "much less added syntax" is intended to set? IIRC, its about the same amount of syntax as what's been presented to committee before, though far less than the `let when` variant. I can't recall if `let when` was ever presented to committee.
+
+[11:32:03.0972] <ljharb>
+maybe i won't say that part then
+
+[11:32:18.0868] <ljharb>
+the `${}` syntax is gone, in particular
+
+
+2023-09-16
+[19:10:47.0014] <rkirsling>
+but not forgotten 😢
+
+[01:59:32.0134] <Jack Works>
+are we going to present update in the meeting? I think there is still lot of details (especially with scoping) we haven't figured out yet (and 5m looks too short)
+
+[02:00:31.0911] <Jack Works>
+> <@rbuckton:matrix.org> The negated `in`/`instanceof` proposal is interesting, but potentially covered by pattern matching with relational patterns:
+> 
+> ```
+> x !in y // negated-in
+> x !instanceof Y // negated-instanceof
+> 
+> x is not in y; // negated relational pattern
+> x is not Y; // negated custom match
+> x is not instanceof y; // negated relational pattern (generally covered by regular `is` though)
+> ```
+
+then I suggest they use `not in` and `not instanceof` so we can match on syntax
+
+[02:03:05.0233] <Jack Works>
+> <@ljharb:matrix.org> btw, i'm going to put a 5 minute update on the agenda for pattern matching. i'm explicitly not going to talk about any specifics, so i'm not being recklessly ambitious with the timebox - just going to state that the champion group is close to consensus on an updated form of the proposal, and that it takes into account implementor/spidermonkey/plenary feedback, and should require much less added syntax, and that we'll be back at a future meeting with an extensive update.
+
+I don't think new version has "less added syntax", it adds more and it becomes more powerful, I like the new one
+
+
+2023-09-18
+[03:36:10.0897] <mpcsh>
+hey y'all, I'm feeling ill and also not caught up, going to be out today
+
+[09:01:10.0420] <Jack Works>
+oh sorry I totally forgot the meeting today
+
+[09:01:22.0049] <Jack Works>
+what has been discussed?
+
+[09:47:22.0861] <TabAtkins>
+Recorded the meeting notes in <https://github.com/tc39/proposal-pattern-matching/issues/298>
+
+[09:47:41.0302] <TabAtkins>
+(auto-closed the issue just to keep things less cluttered; I'll make a label for it)
+
+[09:50:38.0279] <mgaudet>
+I'm trying to spin up on the binding stuff -- both in the PR and from the notes; it's not clear to me what's the current decision and what's open still. 
+
+In the PR, it says for combinators (or for example): " Or patterns introduce all the bindings from the successful sub-pattern. They also introduce all non-conflicting bindings from their unsuccessful or skipped sub-patterns (that is, any that don't have the same name as a binding from the successful pattern), but bound to `undefined`." 
+
+So for a match example: 
+
+```
+match (x) { 
+	when (Number and let a) or (String and let b) or (RegExp and let c) { 
+		// if x is number, then only binding a exists and so 
+		// - access to b issues ReferenceError
+		// - access to c issues ReferenceError
+		// if x is a string, then a is undefined, access to c issues a ReferenceError and b is the string.
+		// if x is a RegExp, then c is that regexp, a and b are undefined?  
+	}
+}
+```
+
+Am I reading this right?
+
+
+[09:53:35.0556] <TabAtkins>
+I think we're gonna change the "undefined" thing currently written in the draft to be TDZ-poisoned, for consistency.
+
+[09:53:40.0117] <TabAtkins>
+But otherwise yes, all correct.
+
+[09:53:51.0000] <TabAtkins>
+(But I'm open to opinions on this.)
+
+[09:54:13.0591] <TabAtkins>
+I think we need to be consistent in this regard for all skipped things, tho.
+
+[09:55:31.0386] <mgaudet>
+Yeah -- I'm trying to evaluate how this can get implemented. Did a conclusion happen about `is` introducing bindings in that conversation
+
+[09:56:13.0203] <mgaudet>
+ie, in the middle of block, if you have `y is Number and let z`, if the match doesn't happen, z is still defined but just TDZ uninit?
+
+[09:56:54.0543] <TabAtkins>
+Yes, that's our current tentative conclusion; from the notes, me and Ron think that's a necessary consequence.
+
+[09:59:36.0990] <mgaudet>
+Ok. I think this works so long as bindings aren't introduced out of thin air and we can always form a nesting that makes sense to do code generation within
+
+[10:00:52.0931] <mgaudet>
+Actually, it may be that I still have an issue for my original case (may be better if a b and c are always defined and tdz poisoned, but have meeting and need to task switch now, so will need to return to this
+
+[10:02:39.0784] <mgaudet>
+(concern being it's hard for the same code to execute in an environment where something can be {Defined/Undefined/TDZ} -- because we have to handle this for `with` it can be done, but everything takes slow paths then) 
+
+[10:05:13.0769] <TabAtkins>
+(feel free to respond async; i'm about to go jump on my bike to head to the office anyway)
+
+[10:07:08.0878] <TabAtkins>
+So it sounds like you want the bindings to always be "defined" but are okay if they have *either* a value or an uninit - is this right? If so, then I strongly agree, and I believe the whole champion group does. Avoiding the mistakes of `with` is definitely good, and we'd likely be willing to compromise if necessary to ensure that.
+
+[10:08:05.0479] <TabAtkins>
+Or is it that you're fine with "has a value" vs "undefined", but not mixing "has a value" with "uninit"?
+
+[10:20:13.0075] <Jack Works>
+> Jordan points out we could ban binding patterns in patterns used in plain expression statements.
+
+Not really if we want `const firstEqSecond = array is [let x, x]` work.
+
+[10:21:33.0814] <TabAtkins>
+He meant just disallowing `array is [let x, x];` all by itself.
+
+[10:24:28.0380] <Jack Works>
+> <@tabatkins:matrix.org> I think we're gonna change the "undefined" thing currently written in the draft to be TDZ-poisoned, for consistency.
+
+TDZ-poisoned makes developers hard to find out which branch is hit (they'll need to use try-catch). Also I see engines start to hate TDZ right now
+
+[10:26:13.0474] <TabAtkins>
+Yeah I don't think I have a strong opinion on which way we go for bindings that weren't executed. The *rest* of the argument I think is pretty important, but whether we say unexecuted bindings are `undefined` or TDZ doesn't matter, I think.
+
+[10:34:07.0416] <Jack Works>
+> <@rbuckton:matrix.org> If it exists on its own, I think `!in` is better than `not in`, as `not in` could be confused with `is not ...` in pattern matching.
+
+we discussed this in JSCIG today and found we cannot use `!`.
+
+For old version of TypeScript, it will treat `x ! in y` as `(x!) in y` with no error, but the semantics totally reversed
+
+[10:40:34.0951] <rbuckton>
+Ah, that's a good point. Though postfix-`!` is still very much a thing in current TypeScript
+
+[10:43:32.0468] <Jack Works>
+> `(x or let y) and (z or let y) `
+> if both x and z succeed, y establishes a binding from its first pattern, then runtime errors on the second
+
+ah this possibly make sense but it requires more work to distinguish if a binding is "set" by a binary expression `y = 1` (this should have no error), or a "duplicated" init of the same binding.
+
+[10:58:11.0427] <mgaudet>
+> <@tabatkins:matrix.org> Or is it that you're fine with "has a value" vs "undefined", but not mixing "has a value" with "uninit"?
+
+So, when we do code generation we need to decide where we find a binding; if a binding is known to be defined, (but possible uninit) that's fine; if a binding isn't known we have to walk outwards to find it, which is also fine. What would be hard / not fine, is the idea that conditionally we have the binding, but sometimes we don't. Particularly when there's potential shadowing with exterior scopes -- all things are possible in software, but it seems to make things much more complicated for limited value. 
+
+[11:08:07.0396] <TabAtkins>
+Yeah, so we shouldn't get conditional bindings in our desired semantics, then. The presence of a binding pattern ensures that the binding *will* be established. After I get the latest conclusion into the draft, please feel free to point out if I'm writing something in a problematic way.
+
+[12:03:42.0267] <mgaudet>
+> <@tabatkins:matrix.org> Yeah, so we shouldn't get conditional bindings in our desired semantics, then. The presence of a binding pattern ensures that the binding *will* be established. After I get the latest conclusion into the draft, please feel free to point out if I'm writing something in a problematic way.
+
+Yes. That sounds good. Feel free to @ me when you're wanting a look
+
+[12:08:43.0388] <ljharb>
+the binding will be established but there's still TDZ semantics for uninitialized bindings, right?
+
+[12:08:55.0163] <TabAtkins>
+yeah
+
+[12:15:10.0348] <TabAtkins>
+in other words, `{ fn(x); val is <pattern>; }` will be a `ReferenceError` from TDZ or a lookup in parent scope based on the source text of `<pattern>`, not the runtime results of evaluating the pattern. (I'm p sure this is what mgaudet is referring to.)
+
+[12:17:04.0216] <TabAtkins>
+ * in other words, `{ fn(x); val is <pattern>; }` will be a `ReferenceError` from TDZ or a lookup in parent scope based on the source text of `<pattern>` (whether a `let x` pattern is there or not), not the runtime results of evaluating the pattern. (I'm p sure this is what mgaudet is referring to.)
+
+[12:17:59.0988] <mgaudet>
+Yes; if `<pattern>` establishes the binding for x, it's fine that we're in TDZ for said binding. I don't want the bindings existence to be determined by the evaluation of the pattern
+
+[12:38:49.0673] <ljharb>
+100%, i'm pretty sure some SES folks would take great exception to dynamically generated bindings :-)
+
+[12:38:58.0330] <ljharb>
+ * 100%, i'm pretty sure some SES folks would take great exception to dynamically determined bindings :-)
+
+[12:44:42.0138] <TabAtkins>
+just checking, the *type* of binding also needs to be statically known, right? So `(foo and let x) or const x` needs to be an error, right?
+
+[12:45:46.0187] <rbuckton>
+> <@tabatkins:matrix.org> just checking, the *type* of binding also needs to be statically known, right? So `(foo and let x) or const x` needs to be an error, right?
+
+I would expect so, yes
+
+[12:55:59.0175] <ljharb>
+hm, actually
+
+[12:56:23.0763] <ljharb>
+does it? since the first one to be "hit" is "the one", why couldn't it be either a let or a const, depending
+
+[12:56:48.0481] <ljharb>
+i could see reassigning only in one branch and wanting maximum `const`ness
+
+[12:56:53.0019] <ljharb>
+ * i could see reassigning only in one later branch and wanting maximum `const`ness
+
+[13:34:27.0893] <TabAtkins>
+Well `(foo and let x) or var x` definitely impinges on the "where is this defined" issue
+
+[13:36:20.0123] <TabAtkins>
+Also, I've realized that with `if()` patterns we can technically still achieve interpolation patterns. Like, instead of `[let a, ${a + "suffix"}]`, you *could* write `[let a, let b and if(b = a+"suffix" && 1) and b]`
+
+[13:36:23.0574] <TabAtkins>
+Clumsy as hell, but hey
+
+[13:36:58.0323] <TabAtkins>
+(that would match on `["foo", "foosuffix"]`, to be clear.)
+
+[16:07:24.0026] <ljharb>
+> <@tabatkins:matrix.org> Well `(foo and let x) or var x` definitely impinges on the "where is this defined" issue
+
+sure, but that answer doesn't need to be known until one of them is "hit"
+
+[16:07:46.0953] <ljharb>
+oh, i guess "any of them is `var`" means it'd always have var semantics by default
+
+[16:08:48.0769] <TabAtkins>
+Well at the moment the answer "it's a parse error if you mix binding types for a single name", so they'd all have to be `var`
+
+[16:24:47.0747] <rbuckton>
+> <@ljharb:matrix.org> oh, i guess "any of them is `var`" means it'd always have var semantics by default
+
+Also, in a given block scope you have to introduce bindings ahead of time, including their mutability, so you can only really have one. 
+
+[16:26:06.0808] <rbuckton>
+i.e., you have to collect VarDeclaredNames and BoundNames and set up bindings accordingly, and at that point if you had `(foo and let y) or (const y)` you would get an error.
+
+[16:26:52.0701] <rbuckton>
+That's before anything is evaluated or any patterns are matched, and it doesn't matter what we consider to be the scope for `let` patterns.
+
+[16:27:45.0883] <rbuckton>
+Either way, I think its just easier and clearer to enforce all same-named bindings must be declared the same way, `var`, `let`, or `const`.
+
+[16:30:47.0240] <rbuckton>
+By the way, if it comes up I am opposed to pattern matching introducing `using` bindings for the same reasons that `using` isn't allowed to have binding patterns. declaration (i.e., `let`) patterns don't quite have the same issue, since they are declared per-binding, but I think adding a `using` pattern would make it very difficult to judge the lifetime of a resource in an abandoned disjunction.
+
+[16:52:44.0671] <ljharb>
+oh, you mean `using` inside a pattern? yeah that doesn't make any sense to me
+
+[16:53:16.0675] <ljharb>
+> <@rbuckton:matrix.org> Either way, I think its just easier and clearer to enforce all same-named bindings must be declared the same way, `var`, `let`, or `const`.
+
+it definitely is easier. it just means if i want a mix of let and const i have to split it into two patterns (like how i currently have to split into two destructurings for the same reason)
+
+
+2023-09-19
+[17:31:28.0629] <TabAtkins>
+Agreed on disallowing `using` declarations.
+
+[17:32:23.0688] <TabAtkins>
+Okay, so for the rest of the room, I believe the first draft of the new proposal text is complete, at <https://github.com/tc39/proposal-pattern-matching/pull/293>. Feel free to review.
+
+[17:32:40.0892] <TabAtkins>
+I *believe* I've accurately captured champion-group consensus on all points.
+
+[01:37:13.0702] <rkirsling>
+so `when if` feels like a big step backwards
+
+[01:37:49.0623] <rkirsling>
+I'm inferring that the rationale is to make it clear that an guard pattern is a pattern, but
+
+[01:37:52.0419] <rkirsling>
+ * I'm inferring that the rationale is to make it clear that a guard pattern is a pattern, but
+
+[01:38:28.0764] <rkirsling>
+also I see in the notes that
+> Assuming binding semantics are well-established (looks like we're in agreement, see below), everyone's fine with using if() patterns and not doing separate if clauses in match().
+
+
+[01:39:38.0120] <rkirsling>
+the only reason I can see for us wanting to do this is for short-circuiting but like
+
+[01:40:36.0836] <rkirsling>
+ * the only reason I can see for us wanting to do this is for short-circuiting (somehow, in theory) but
+
+[01:41:03.0665] <rkirsling>
+feel like that may indicate that we're getting carried away with combinators?
+
+[01:50:28.0360] <rkirsling>
+the gist comments suggest a desire to have it usable with `is` but that's actually super dangerous?
+
+[01:50:56.0710] <rkirsling>
+like having `if ()` be two totally different things only works if they have two very obviously separated contexts
+
+[01:53:11.0927] <rkirsling>
+which is facilitated by having `if` be a rigid clause in pattern matching, since an `if` statement is similarly rigid by virtue of being a statement
+
+[01:58:58.0328] <rkirsling>
+"`if` patterns directly within `if` statement conditionals" definitely feels block-worthy
+
+[02:03:11.0285] <rkirsling>
+ * I usually lack the assertiveness to block things, but "`if` patterns directly within `if` statement conditionals" is simply too far.
+
+[02:03:34.0579] <rkirsling>
+ * I usually lack the assertiveness to block things, but "`if` patterns directly within `if` statement conditionals" is simply going too far.
+
+[03:23:12.0348] <Jack Works>
+do we still need `when (pattern) if (expr)`? we now can use `when (pattern and if (expr))`
+
+[07:42:15.0992] <TabAtkins>
+rkirsling: I'm not sure I understand the concern. You don't *have* to do an if() pattern when you're using `is` unless you need to condition a branch immediately; otherwise just doing `x is <pattern> && <some test>` is fine
+
+[07:43:01.0641] <TabAtkins>
+And in general context-sensitivity is a bad thing that we try to avoid. Having `if()` patterns be usable in `match()` but not in `is` seems bad. 
+
+[07:44:04.0292] <rkirsling>
+well I mean that was a very real-time series of thoughts
+
+[07:45:22.0226] <rkirsling>
+step one is that `when if` is a regression so I was thinking through why we'd want to do that, to the point that I was like, well this might be a bit much for a PR thread
+
+[07:46:09.0377] <rkirsling>
+direct answer is clear (because pattern) but that immediately turns into a second "but why"
+
+[07:48:05.0776] <TabAtkins>
+yeah, and the answer there is indeed mostly "early exit"
+
+[07:48:50.0011] <rkirsling>
+so at that point you'd ask, why is JS so special to need that
+
+[07:50:47.0420] <rkirsling>
+I briefly tried searching for any statements on the subject and the one I found was saying "because it'd be neat to have in the presence of `is`"
+
+[07:51:33.0156] <rkirsling>
+at which point we realize we've actually proposed something blockworthy
+
+[07:51:55.0845] <rkirsling>
+I see nothing good about this whatsoever
+
+[11:28:36.0763] <rbuckton>
+> <@rkirsling:matrix.org> so at that point you'd ask, why is JS so special to need that
+
+Are you asking "Why is JS so special" in terms of `if` patterns or `when..if` in general? 
+
+[11:30:08.0503] <rbuckton>
+In the general sense, it's not special. `when..if` is present in most languages that support pattern matching. If it is about `if` patterns, then yes JS would be unique
+
+[11:33:57.0384] <rbuckton>
+ * In the general sense, it's not special. A form of `when..if` is present in most languages that support pattern matching. If it is about `if` patterns, then yes JS would be unique
+
+
+2023-09-20
+[18:40:41.0695] <rkirsling>
+I didn't say anything about `when ... if`
+
+[18:43:52.0438] <rkirsling>
+ * I didn't say anything about `when ... if`; guards are necessary but I've never heard of them being patterns
+
+[18:49:30.0490] <rkirsling>
+it's objectively nasty to read `when if ...:` instead of `if ...:` so I'd expect there to be an undeniable benefit
+
+[18:50:13.0925] <rkirsling>
+ * it's objectively nasty to read `when if ...:` instead of `if ...:` so I'd expect there to be an undeniable benefit, but I'm only seeing further negatives
+
+[20:55:45.0293] <rbuckton>
+Ah, I see what you mean. 
+
+
+2023-09-23
+[10:52:06.0836] <TabAtkins>
+> <@rkirsling:matrix.org> it's objectively nasty to read `when if ...:` instead of `if ...:` so I'd expect there to be an undeniable benefit, but I'm only seeing further negatives
+
+I gave the benefits, please don't hyperbolize. I can't engage with hyperbole.
+
+
+2023-09-24
+[18:23:57.0036] <rkirsling>
+the bit you just quoted _isn't_ hyperbole
+
+[18:24:05.0294] <rkirsling>
+it's literally a problem statement
+
+[18:25:13.0553] <rkirsling>
+my tone may have been an upset/shocked one, but I was genuinely waiting to hear a single concrete benefit
+
+[18:31:54.0612] <rkirsling>
+I brought this discussion outside of the PR because I expected a conversation
+
+[18:33:21.0533] <rkirsling>
+if this proposal is a story of repeatedly trying to go too far and needing to rewrite, then "why do we need this?" is THE most important question to ask about any facet of it
+
+[18:35:54.0641] <rkirsling>
+it would need to be extremely clear why JS requires `if` patterns if that is an unusual concept for pattern matching constructs crosslinguistically
+
+[18:43:31.0767] <rkirsling>
+and in attempting to figure out the rationale myself, I identified an even larger concern than the one I initially had, but I did _not_ manage to identify why greater ability to short-circuit should constitute an undeniable benefit
+
+[18:44:22.0489] <rkirsling>
+I think you're reacting to "objectively nasty", and that's super unfortunate because I said that as a "laugh together" phrase
+
+[18:49:09.0838] <rkirsling>
+ * if this proposal is a story of repeatedly trying to go too far and needing to rewrite, then "why do we need this?" is THE most important question to ask about any facet of it
+(_I mean, I think it's the most important question about any proposal, but yeah._)
+
+[19:09:25.0467] <rbuckton>
+IIRC, one of the reasons we considered `if` patterns was to provide a way to continue to have some ability to evaluate expressions in-situ within the pattern without needing the full `${}` syntax, which was also unique to this proposal in comparison to other pattern matching systems. `if` patterns were at least *close* to existing syntax, by expanding `when ... if ...` to be more flexible. I'm not sure if there were other reasons.
+
+[19:12:59.0450] <rbuckton>
+I personally found `${}` to be more problematic because it allowed completely arbitrary expressions, which could make patterns completely unreadable, and because it would prevent future use of `identifier{` due to `$` being a legal identifier.
+
+[19:25:14.0530] <rbuckton>
+`if` patterns, at least, provide some additional benefit. For example:
+
+```
+match ([1, "a"]) {
+  when [Number and let x, String] or [1 or "1", "a"] if (x % 2 === 0): ...; // (a)
+  when [Number and let x and if (x % 2 === 0), String] or [1 or "1", "a"]: ...;  // (b)
+}
+```
+With `if` as a clause and not a pattern (a), the first branch of the disjunction succeeds, but the `if` clause fails, even though the second branch of the disjunction would have succeeded. 
+With `if` as a pattern (b), we can perform the check locally within the subpattern. As a result, the first branch fails, but the 2nd branch succeeds.
+
+
+[19:26:39.0366] <rbuckton>
+Now consider this modified example:
+
+```
+match (["1", "a"]) {
+  when [Number and let x, String] or [1 or "1", "a"] if (x % 2 === 0): ...; // (a)
+  when [Number and let x and if (x % 2 === 0), String] or [1 or "1", "a"]: ...;  // (b)
+}
+```
+
+Here `x` is not defined in the 2nd branch of (a), so the `if` clause would result in a TDZ error. There would be no way around this aside from introducing a dummy `let x` somewhere just to ensure its valid on both sides.
+
+[19:28:24.0870] <rbuckton>
+Having two separate `when` clauses isn't necessarily an option if you don't want to repeat the expression in `...`. I can't recall whether `when` branches have fall-through for empty bodies like `case` does, but I don't imagine they do.
+
+[19:29:32.0156] <rbuckton>
+Also, `if` patterns don't preclude us from having a standalone `if` clause so that you don't need to do `when if (x): ` on its own and could just use `if(x):`
+
+[19:44:18.0033] <rbuckton>
+One could also argue that we don't need `when` at all. It isn't strictly necessary as a syntactic disambiguation. We could have made `match` syntax look like this instead:
+
+```
+match (x) {
+  String: ...;
+  [Number]: ...;
+  { y: let y } and if (y.foo()): ...;
+  if (x > 0): ...;
+  default: ...;
+}
+```
+
+[19:50:31.0816] <rbuckton>
+As a contrast, C# doesn't use a clause keyword like `when`:
+```cs
+vehicle switch {
+  Car _ => ...,
+  Truck _ => ...,
+  _ => throw new ArgumentNullException(),
+};
+```
+Rust doesn't either:
+```rs
+match x {
+  Some(x) => Some(x + 1),
+  None => None
+}
+```
+
+[19:51:56.0655] <rbuckton>
+ * As a contrast, C# doesn't use a clause keyword like `when` to introduce a new match leg:
+
+```cs
+vehicle switch {
+  Car _ => ...,
+  Truck _ => ...,
+  _ => throw new ArgumentNullException(),
+};
+```
+
+Rust doesn't either:
+
+```rs
+match x {
+  Some(x) => Some(x + 1),
+  None => None
+}
+```
+
+[19:52:19.0163] <rbuckton>
+ * C# doesn't use a clause keyword like `when` to introduce a new match leg:
+
+```cs
+vehicle switch {
+  Car _ => ...,
+  Truck _ => ...,
+  _ => throw new ArgumentNullException(),
+};
+```
+
+Neither does Rust:
+
+```rs
+match x {
+  Some(x) => Some(x + 1),
+  None => None
+}
+```
+
+[20:00:50.0603] <rbuckton>
+In fact, I've mentioned before how it's unfortunate that we don't have an "irrefutable match" pattern, aside from the `let`/`const`/`var` declaration patterns which introduce bindings. If we had one, we wouldn't need `default` at all. I'd suggested `void` as a potential "irrefutable match" pattern with the semantic meaning of "match whatever, it doesn't matter" being close enough to `void` to be meaningful. Without the `when` clause head, and using `void` for an irrefutable match, it could be patterns all the way down:
+
+```
+const transform = point => match (point) {
+  { x: let x, y: let y and if (y > x) } : new Point(x + y, y);
+  { x: let x, y: let y and if (y < x) } : new Point(x - y, y);
+  { x: let x, y: let y }                : new Point(2 * x, 2 * y);
+  void                                  : new Point(0, 0)
+}
+```
+
+[20:01:46.0947] <Jack Works>
+if pattern to me is an escape hatch w
+
+[20:02:04.0639] <Jack Works>
+* if pattern to me is an escape hatch when the pattern is not expressive enough 
+
+[20:02:48.0414] <Jack Works>
+for example today you cannot match `> 0`, but you can make it via if pattern
+
+[20:05:14.0728] <rbuckton>
+I'll admit the above example doesn't showcase the need for the escape hatch in the presence of relational patterns like `>`:
+```
+const transform = point => match (point) {
+  { x: let x, y: > x and let y } : new Point(x + y, y);
+  { x: let x, y: < x and let y } : new Point(x - y, y);
+  { x: let x, y: let y }         : new Point(2 * x, 2 * y);
+  void                           : new Point(0, 0)
+}
+```
+
+However, a better example might be method calls (again using a `when`-less variant of the syntax):
+
+```
+match (x) {
+  { foo: let y and if (y.bar()), baz }: ...,
+}
+```
+
+[20:05:54.0142] <rbuckton>
+ * I'll admit the above example doesn't showcase the need for the escape hatch in the presence of relational patterns like `>`:
+
+```
+const transform = point => match (point) {
+  { x: let x, y: > x and let y } : new Point(x + y, y);
+  { x: let x, y: < x and let y } : new Point(x - y, y);
+  { x: let x, y: let y }         : new Point(2 * x, 2 * y);
+  void                           : new Point(0, 0)
+}
+```
+
+However, a better example might be method calls (again using a `when`-less variant of the syntax):
+
+```
+match (x) {
+  { foo: let y and if (y.bar()), baz: String }: ...,
+}
+```
+
+[20:06:26.0137] <rbuckton>
+ * I'll admit the above example doesn't showcase the need for the escape hatch in the presence of relational patterns like `>`:
+
+```
+const transform = point => match (point) {
+  { x: let x, y: > x and let y } : new Point(x + y, y);
+  { x: let x, y: < x and let y } : new Point(x - y, y);
+  { x: let x, y: let y }         : new Point(2 * x, 2 * y);
+  void                           : new Point(0, 0)
+}
+```
+
+However, a better example might be method calls (again using a `when`-less variant of the syntax):
+
+```
+match (x) {
+  { foo: let y and if (y.bar()), baz: String }: ...;
+}
+```
+
+[20:08:47.0675] <rbuckton>
+Hmm. I wonder if `*` would make for a good "irrefutable pattern" token? 
+
+```
+match (obj) {
+  { x: Number, y: * }: ...;
+  *: ...;
+}
+```
+
+My only concern would be using up a token that could have other more useful potential meanings in the future.
+
+[20:09:15.0276] <rbuckton>
+(It's a shame we can't use `_` as a discard)
+
+[20:10:47.0825] <rbuckton>
+> <@rbuckton:matrix.org> In fact, I've mentioned before how it's unfortunate that we don't have an "irrefutable match" pattern, aside from the `let`/`const`/`var` declaration patterns which introduce bindings. If we had one, we wouldn't need `default` at all. I'd suggested `void` as a potential "irrefutable match" pattern with the semantic meaning of "match whatever, it doesn't matter" being close enough to `void` to be meaningful. Without the `when` clause head, and using `void` for an irrefutable match, it could be patterns all the way down:
+> 
+> ```
+> const transform = point => match (point) {
+>   { x: let x, y: let y and if (y > x) } : new Point(x + y, y);
+>   { x: let x, y: let y and if (y < x) } : new Point(x - y, y);
+>   { x: let x, y: let y }                : new Point(2 * x, 2 * y);
+>   void                                  : new Point(0, 0)
+> }
+> ```
+
+Note that the example here is adapted from this example in the C# documentation: https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/operators/switch-expression#case-guards
+
+[21:31:45.0462] <rkirsling>
+> <@rbuckton:matrix.org> `if` patterns, at least, provide some additional benefit. For example:
+> 
+> ```
+> match ([1, "a"]) {
+>   when [Number and let x, String] or [1 or "1", "a"] if (x % 2 === 0): ...; // (a)
+>   when [Number and let x and if (x % 2 === 0), String] or [1 or "1", "a"]: ...;  // (b)
+> }
+> ```
+> With `if` as a clause and not a pattern (a), the first branch of the disjunction succeeds, but the `if` clause fails, even though the second branch of the disjunction would have succeeded. 
+> With `if` as a pattern (b), we can perform the check locally within the subpattern. As a result, the first branch fails, but the 2nd branch succeeds.
+
+thanks, (b) is definitely a nice example
+
+[21:33:59.0675] <rkirsling>
+(I too am forever sad that `_` isn't usable)
+
+[21:34:56.0161] <rkirsling>
+have we spent time discussing the omission of `when` (or another keyword)? I feel I wouldn't be surprised if that had come up previously and been objected to on some basis that's not occurring to me
+
+[21:35:05.0213] <rkirsling>
+ * have we spent time discussing the omission of `when` (or any other keyword)? I feel I wouldn't be surprised if that had come up previously and been objected to on some basis that's not occurring to me
+
+[21:35:24.0328] <rkirsling>
+ * have we spent time discussing keywordless branches? I feel I wouldn't be surprised if that had come up previously and been objected to on some basis that's not occurring to me
+
+[21:36:12.0645] <rkirsling>
+ * have we spent time discussing keywordless clauses? I feel I wouldn't be surprised if that had come up previously and been objected to on some basis that's not occurring to me
+
+[21:51:25.0497] <rkirsling>
+But yeah, my concerns boil down to:
+
+1. We obviously can't just look at `when if (x % 2 === 0):` and be like "yup, that's fine". 😅 I can understand if making the keyword droppable in just this case would feel special-casey, but if we really want `if` patterns, then that instead means we need to re-evaluate the keyword `when` itself. After all, if it were `case if (...):` then there'd be no particular nastiness to speak of.
+
+2. `if (... is if (...))` feels like a downright scary thing to have proposed to be valid JS. I would not feel this way if there were braces involved, say.
+
+[21:53:48.0635] <rkirsling>
+Also I hope it's clear that my shocked tone is coming from being totally blindsided by these. `when if` doesn't even make an appearance until the appendix of the document (https://github.com/tc39/proposal-pattern-matching/pull/293/files#diff-b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5R1407-R1408) and `is if` doesn't make an appearance at al
+
+[21:53:50.0504] <rkirsling>
+ * Also I hope it's clear that my shocked tone is coming from being totally blindsided by these. `when if` doesn't even make an appearance until the appendix of the document (https://github.com/tc39/proposal-pattern-matching/pull/293/files#diff-b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5R1407-R1408) and `is if` doesn't make an appearance at all
+
+[22:23:13.0049] <rbuckton>
+> <@rkirsling:matrix.org> But yeah, my concerns boil down to:
+> 
+> 1. We obviously can't just look at `when if (x % 2 === 0):` and be like "yup, that's fine". 😅 I can understand if making the keyword droppable in just this case would feel special-casey, but if we really want `if` patterns, then that instead means we need to re-evaluate the keyword `when` itself. After all, if it were `case if (...):` then there'd be no particular nastiness to speak of.
+> 
+> 2. `if (... is if (...))` feels like a downright scary thing to have proposed to be valid JS. I would not feel this way if there were braces involved, say.
+
+I mean, we have `if (... ? ... : ...)` already today, so the _capability_ exists if not the syntax.
+
+[22:24:28.0573] <rbuckton>
+Also, I consider `is if ()` to be a degenerate case. Yes, its possible because it falls out of the syntax, but you probably won't see it in practice.
+
+[22:27:29.0295] <rkirsling>
+right and it could even be linted against but
+
+[22:29:34.0870] <rbuckton>
+All syntax has cases like that, and I'm not sure its worth being overly pedantic in that case. Especially because I *can* see uses for it, contrived though they may be:
+
+```
+for (let i = 0; i < 10; i++) {
+  x = ar[i].foo() is if (i % 2 === 0) and String;
+
+  // observable semantics:
+  // - element `i` is read from `ar`
+}
+```
+This is a fairly contrived example
+
+[22:30:17.0672] <rbuckton>
+ * All syntax has cases like that, and I'm not sure its worth being overly pedantic in that case. Especially because I _can_ see uses for it, contrived though they may be:
+
+```
+for (let i = 0; i < 10; i++) {
+  x = ar[i].foo() is if (i % 2 === 0) and String;
+
+  // observable semantics:
+  // - element `i` is read from `ar`
+  // - `ar[i].foo()` is called
+  // - the result is tested
+}
+```
+no temp variable is necessary to capture the result of `ar[i].foo()`
+
+[22:30:51.0864] <rbuckton>
+But as I said, that's not likely to come up in practice.
+
+[22:34:44.0003] <rkirsling>
+even if the "the keywords read weirdly together" were avoided, my primary worry is about `if (o is { x: let x, y: let y } and if (x > y))`
+
+[22:35:06.0657] <rkirsling>
+the point about the functionality being there with a ternary is valid, but
+
+[22:35:32.0729] <rkirsling>
+in theory you could keep nesting `is if`s
+
+[22:35:35.0494] <rkirsling>
+ * in theory you could keep nesting `is ... if`s
+
+[22:35:47.0701] <rkirsling>
+ * in theory you could keep nesting `is ... if (...)`s
+
+[22:35:53.0519] <rbuckton>
+I'll be honest, that example looks fine to me, and actually warranted if there are more pattern terms following the `if`
+
+[22:36:26.0440] <rkirsling>
+I don't think it's a ridiculous thing to want, to be clear
+
+[22:36:38.0733] <rbuckton>
+Though you're still more likely to see it as `&& x > y` in practice 
+
+[22:37:08.0309] <rbuckton>
+It's kind of like writing `[...[]] = []`. There's not much benefit to doing it that way.
+
+[22:38:39.0772] <rbuckton>
+Or people writing things like `[+[]][+[]]`. Perfectly legal JS, evaluates to `0`.
+
+[22:39:01.0977] <rkirsling>
+like maybe I'm actually worried about `is` in general
+
+[22:39:28.0010] <rkirsling>
+that was supposed to make `match` integrate better into the language IIUC but
+
+[22:39:30.0331] <rbuckton>
+I think `is` is wonderful, but I'm biased. 
+
+[22:39:55.0346] <rkirsling>
+ * that was supposed to make `match` integrate better into the language IIUC and I didn't initially think that to be bad, but
+
+[22:41:02.0013] <rkirsling>
+combined with combinators and if patterns it's as if we're now not just redoing `switch` but also redoing destructuring, boolean operators, and ternaries
+
+[22:41:05.0654] <rbuckton>
+It also provides us with `if-let` and `while-let`-like semantics, which `match` does not:
+
+```
+while (ar.pop() is not undefined and let x) {
+  ...
+}
+
+if (value is Option.Some(let x)) {
+  ...
+}
+```
+
+[22:41:28.0287] <rkirsling>
+ * combined with combinators and if patterns it's as if we're now not just redoing `switch` but also redoing destructuring, boolean operators, and ternaries; it feels like a bifurcation of the language
+
+[22:42:28.0158] <rbuckton>
+> <@rkirsling:matrix.org> combined with combinators and if patterns it's as if we're now not just redoing `switch` but also redoing destructuring, boolean operators, and ternaries; it feels like a bifurcation of the language
+
+That's kind of what pattern matching _is_. It's a very powerful tool in the FP programmers toolbox.
+
+[22:43:49.0792] <rbuckton>
+I don't think the original premise of the pattern matching proposal was "let's make a better `switch`", it was "let's do pattern matching, and while we're at it let's not repeat the same mistakes as `switch`"
+
+[22:47:00.0434] <rkirsling>
+one can reasonable expect that a pattern matching feature would be confined to a `match` statement though
+
+[22:47:08.0013] <rkirsling>
+ * one can reasonably expect that a pattern matching feature would be confined to a `match` statement though
+
+[22:47:29.0889] <rbuckton>
+Maybe? That's not the case in a large number of languages with pattern matching though.
+
+[22:48:12.0457] <rbuckton>
+Rust has patterns everywhere, as well as `if-let` and `while-let`. C# has `switch` expressions, improved `switch` statements, and `is`.
+
+[22:48:39.0670] <rbuckton>
+`match` is a better `switch`, `is` is a better `instanceof` :)
+
+[22:49:11.0369] <rkirsling>
+I mean, `is` is basically a rewrite of boolean expressions
+
+[22:49:39.0761] <rbuckton>
+boolean expressions that only target a single value, maybe.
+
+[22:50:04.0516] <rbuckton>
+aside from `if` patterns, `is` can only operate on the left-hand side expression and its properties
+
+[22:50:25.0971] <rbuckton>
+so `is` is never going to replace regular boolean expressions. That wasn't the case in C# either.
+
+[22:50:50.0699] <rbuckton>
+It will certainly grow to fill its niche, but it won't take over.
+
+[22:51:45.0450] <rkirsling>
+it's really hard to keep up with you but
+
+[22:51:57.0228] <rbuckton>
+Besides with the potential for relational patterns in the future, I find `x is > 0 and <= 10` to be a vast improvement over `x >= 0 && x <= 10` in terms of readability.
+
+[22:52:37.0632] <rbuckton>
+ * Besides with the potential for relational patterns in the future, I find `x is > 0 and <= 10` to be a vast improvement over `x > 0 && x <= 10` in terms of readability.
+
+[22:52:50.0057] <rkirsling>
+what other languages do only informs so much; one is obliged to begin any conversation about pattern matching in JS with concern for whether that can be suitably realized in a dynamic language that's obliged to never break the web
+
+[22:53:18.0970] <rkirsling>
+obviously I would like there to be a way to realize it in a way that suits JS and not some other language
+
+[22:53:39.0374] <rkirsling>
+but "here's a billion new things we can do" is not a thing I ever want to hear about JS
+
+[22:54:58.0954] <rbuckton>
+Yes, but I also want to avoid the "death by 1,000 papercuts" that JS often is. pattern matching makes it easy to express complex things simply, which is a huge improvement to readability as it gains adoption. 
+
+[22:55:05.0319] <rkirsling>
+a `match` statement is quite a comfortable space to work in, and if you ask a random JS dev about pattern matching, you'd expect that they'd view those as synonymous
+
+[22:56:43.0422] <rkirsling>
+I understood the rationale of `is` to be a way to make the feature deployable in smaller phases by having patterns be a standalone concept but
+
+[22:56:54.0455] <rbuckton>
+My goal isn't to shove as many things as possible into JS, my goal is to add features that remove the sharp edges from the language and improve developer productivity. To benefit various camps of developers coming _to_ JS _from_ other languages, as well as those starting from scratch.
+
+[22:57:13.0493] <rbuckton>
+> <@rkirsling:matrix.org> I understood the rationale of `is` to be a way to make the feature deployable in smaller phases by having patterns be a standalone concept but
+
+That is one of its intended values, yes.
+
+[22:57:18.0333] <rkirsling>
+tbh I haven't really known how I've felt about this proposal _since_ that moment
+
+[22:57:38.0828] <rkirsling>
+I liked the proposal that that came as a response to
+
+[22:57:42.0855] <rbuckton>
+It's a good introduction to "here is what a pattern is"
+
+[22:58:58.0415] <rbuckton>
+The `let when` proposal? I had a strong dislike for the syntax in that design. It felt so convoluted. I didn't disagree with the principals it espoused though. 
+
+[23:00:27.0373] <rbuckton>
+But if you want to break things down into layering in terms of a framework to build an understanding of the feature, it isn't "here is `is`, then here is all of the patterns, and finally here is `match`." It's far more nuanced.
+
+[23:01:37.0647] <rkirsling>
+so in particular, I actually liked `${}` a lot, because I felt like it was really comfortable wrt how bindings work in the pattern matching constructs that I'm used to
+
+[23:01:47.0338] <rbuckton>
+I see it more as "here is `is`. It lets you test a value against a pattern, and either succeeds (`true`) or fails (`false`). `match` extends this concept into multiple branches.
+
+[23:01:58.0868] <rbuckton>
+> <@rkirsling:matrix.org> so in particular, I actually liked `${}` a lot, because I felt like it was really comfortable wrt how bindings work in the pattern matching constructs that I'm used to
+
+In which language?
+
+[23:01:59.0657] <rkirsling>
+but that's fine, I can see that var/let/const is going to make people happier _as JS_
+
+[23:02:48.0742] <rkirsling>
+like Haskell/ML, say; I found it comfortable to view the binding as the default thing and demarcate the stuff that is going to behave in a fancy way
+
+[23:03:27.0407] <rkirsling>
+ * like Haskell/ML, say; I found it comfortable to view binding as the default behavior and demarcate the stuff that is going to behave in a fancy way
+
+[23:03:47.0800] <rkirsling>
+I also have desire for `if-let`, as a separate matter
+
+[23:04:25.0984] <rbuckton>
+My biggest gripe with Rust's pattern matching syntax is that Reference vs. Binding wholly depends on whether the thing already exists in scope.
+
+[23:04:38.0036] <rkirsling>
+> <@rbuckton:matrix.org> I see it more as "here is `is`. It lets you test a value against a pattern, and either succeeds (`true`) or fails (`false`). `match` extends this concept into multiple branches.
+
+this is a very nice phrasing, particular if `is` really were deployed as an earlier feature
+
+[23:04:46.0632] <rkirsling>
+> <@rbuckton:matrix.org> I see it more as "here is `is`. It lets you test a value against a pattern, and either succeeds (`true`) or fails (`false`). `match` extends this concept into multiple branches.
+
+ * this is a very nice phrasing, particularly if `is` really were deployed as an earlier feature
+
+[23:05:36.0188] <rkirsling>
+and I mean, in that space, you'd have the ability to clearly see what seems like a clear improvement to the language as opposed to just "a new way to do all the same stuff"
+
+[23:05:36.0384] <rbuckton>
+I look at `let` bindings as something you talk about first in terms of `match`, as the way to get values out of the pattern in each branch, and then you bring it back to `is` for its use with `if` and `while`, in particular.
+
+[23:08:57.0812] <rbuckton>
+And, while I admit it's no where near as clean as `let ... in ...` in other languages, you can use `let` patterns to achieve much of the same effect:
+
+```
+// with let ... in ...
+x = let y = 1 in y + y;
+
+// with `is let`
+x = 1 is let y && y + y;
+```
+
+It's not _great_, to be fair, but it is mostly sufficient for that purpose.
+
+[23:09:26.0292] <rbuckton>
+ * And, while I admit it's no where near as clean as `let ... in ...` in other languages, you can use `let` patterns to achieve much of the same effect:
+
+```
+// with let ... in ...
+x = let y = 1 in y + y;
+
+// with `is let`
+x = 1 is let y, y + y;
+```
+
+It's not _great_, to be fair, but it is mostly sufficient for that purpose.
+
+[23:09:39.0273] <rbuckton>
+ * And, while I admit it's no where near as clean as `let ... in ...` in other languages, you can use `let` patterns to achieve much of the same effect:
+
+```
+// with let ... in ...
+x = let y = 1 in y + y;
+
+// with `is let`
+x = 1 is let y && y + y;
+```
+
+It's not _great_, to be fair, but it is mostly sufficient for that purpose.
+
+[23:10:26.0905] <rkirsling>
+oh wow
+
+[23:10:27.0290] <rbuckton>
+ * And, while I admit it's nowhere near as clean as `let ... in ...` in other languages, you can use `let` patterns to achieve much of the same effect:
+
+```
+// with let ... in ...
+x = let y = 1 in y + y;
+
+// with `is let`
+x = 1 is let y && y + y;
+```
+
+It's not _great_, to be fair, but it is mostly sufficient for that purpose.
+
+[23:10:33.0528] <rkirsling>
+wouldn't've thought of that usgae
+
+[23:10:35.0273] <rkirsling>
+ * wouldn't've thought of that usaeg
+
+[23:10:36.0720] <rkirsling>
+ * wouldn't've thought of that usage
+
+[23:11:15.0567] <rbuckton>
+I _really_ would like some form of `let ... in ...`, but I'm happy enough with that at least being possible if not convenient.
+
+[23:14:45.0027] <rbuckton>
+I too often see code like this (even as recently in some C++ code I was reviewing):
+
+```js
+let temp;
+if (foo() && (temp = bar()) && baz(temp)) {
+  ...
+}
+```
+
+where the temp variable is far divorced from its assignment. `let ... in ...` or `is let` achieves locality to the declaration. Especially when you'd rather it be declard as `const` instead:
+
+```
+if (foo() && bar() is let temp && temp && baz(temp)) {
+}
+```
+
+[23:15:05.0129] <rbuckton>
+ * I too often see code like this (even as recently in some C++ code I was reviewing):
+
+```js
+let temp;
+if (foo() && (temp = bar()) && baz(temp)) {
+  ...
+}
+```
+
+where the temp variable is far divorced from its assignment. `let ... in ...` or `is let` achieves locality to the declaration. Especially when you'd rather it be declard as `const` instead:
+
+```
+if (foo() && bar() is const temp && temp && baz(temp)) {
+}
+```
+
+[23:15:57.0910] <rbuckton>
+ * I too often see code like this (even as recently in some C++ code I was reviewing):
+
+```js
+let temp;
+if (foo() && (temp = bar()) && baz(temp)) {
+  ...
+}
+```
+
+where the temp variable is far divorced from its assignment. `let ... in ...` or `is let` achieves locality to the declaration. Especially when you'd rather it be declared as `const` instead:
+
+```
+if (foo() && bar() is const temp && temp && baz(temp)) {
+}
+```
+
+[23:20:20.0633] <rbuckton>
+One thing I like about `let`/`const` patterns is that you can mix and match them:
+
+```
+if (obj is { x: let x, y: const y }) {
+}
+```
+
+You can't do that with binding patterns. They're either all `let` or all `const` (or `var`).
+
+[11:01:58.0987] <TabAtkins>
+> <@rkirsling:matrix.org> I think you're reacting to "objectively nasty", and that's super unfortunate because I said that as a "laugh together" phrase
+
+No, I was reacting to "I'd expect to see an undeniable benefit, but I'm only seeing negatives". I provided a benefit, and it's undeniable. We can certainly argue whether the benefit is *sufficiently worthwhile*, but you can't deny that it is, indeed, a benefit of the syntax. The only response I can give to feedback like this is "this is incorrect, I'll repeat the benefit that I previously listed".
+
+[11:05:05.0562] <TabAtkins>
+> <@rbuckton:matrix.org> One could also argue that we don't need `when` at all. It isn't strictly necessary as a syntactic disambiguation. We could have made `match` syntax look like this instead:
+> 
+> ```
+> match (x) {
+>   String: ...;
+>   [Number]: ...;
+>   { y: let y } and if (y.foo()): ...;
+>   if (x > 0): ...;
+>   default: ...;
+> }
+> ```
+
+I do think we should consider this actually. While I like how the final `default` clause reads, given that I've snuck `void` patterns in, it is indeed unnecessary.
+
+[11:06:07.0144] <TabAtkins>
+And if rkirsling 's main objection to if patterns is how `when if(...)` looks, that would address it too.
+
+[11:06:35.0808] <TabAtkins>
+(But I still don't think the aesthetics of that particular, assumed rare, case are that important to hang an objection off of.)
+
+[12:51:37.0582] <ljharb>
+ftr i think the “when” is a very valuable marker, and i still don’t think we should be including void patterns here - that should be a follow on.
+
+[12:52:08.0586] <ljharb>
+i don’t care how “when” is spelled ofc, but i would still prefer to use else instead of default, and that’s only possible without a bare top level if.
+
+[16:29:30.0523] <rbuckton>
+I don't have a strong preference for keeping or dropping `when`, but I don't find it all that valuable. It is somewhat like having to write `function` over and over again in expression positions. Everyone was much happier when arrow functions came around and removed that burden.
+Also, if we drop `when` as the _clause_ we might be able to use `when` instead of `if` for the pattern syntax, which frees us up to use `else` instead of `default`:
+```
+const transform = point => match (point) {
+  { x: let x, y: let y } when x < y: ...;
+  { x: let x, y: let y } when x > y: ...;
+  when point.isEmpty()             : ...;
+  else                             : ...;
+}
+```
+
+
+
+2023-09-25
+[18:28:46.0299] <ljharb>
+not everyone, i still prefer `function` most of the time :-)
+
+[18:29:03.0135] <ljharb>
+i'm fine freeing up `when` but we don't have to drop it for that, we could come up with another word for it
+
+[20:33:00.0398] <rkirsling>
+> <@tabatkins:matrix.org> No, I was reacting to "I'd expect to see an undeniable benefit, but I'm only seeing negatives". I provided a benefit, and it's undeniable. We can certainly argue whether the benefit is *sufficiently worthwhile*, but you can't deny that it is, indeed, a benefit of the syntax. The only response I can give to feedback like this is "this is incorrect, I'll repeat the benefit that I previously listed".
+
+an example of the benefit hadn't been provided...I didn't feel like you'd even listened to my concern
+
+[20:34:59.0060] <rkirsling>
+so no, I was not exaggerating in any way. I truly only could see negatives. you "repeating yourself" would've constituted truly speaking to me for the first time.
+
+[20:36:37.0540] <rkirsling>
+> <@rbuckton:matrix.org> I don't have a strong preference for keeping or dropping `when`, but I don't find it all that valuable. It is somewhat like having to write `function` over and over again in expression positions. Everyone was much happier when arrow functions came around and removed that burden.
+> Also, if we drop `when` as the _clause_ we might be able to use `when` instead of `if` for the pattern syntax, which frees us up to use `else` instead of `default`:
+> ```
+> const transform = point => match (point) {
+>   { x: let x, y: let y } when x < y: ...;
+>   { x: let x, y: let y } when x > y: ...;
+>   when point.isEmpty()             : ...;
+>   else                             : ...;
+> }
+> ```
+
+oh wow regardless of the default/else thing, if we could write `when` instead of `if`, then my subsequent and larger concern about "nesting if patterns within if statement conditions" would go away
+
+[20:38:18.0810] <rkirsling>
+ * oh wow regardless of the default/else thing, if we could write `when` instead of `if`, then my subsequent and larger concern about `is` allowing "if patterns within if statement conditions" would go away
+
+[20:38:53.0826] <rkirsling>
+ * so no, I was not exaggerating. I truly only could see negatives. you "repeating yourself" would've constituted truly speaking to me for the first time.
+
+[20:39:08.0797] <rkirsling>
+ * oh wow regardless of the default/else thing, if we could write `when` instead of `if`, then my subsequent and larger concern about `is` allowing "`if` patterns within `if` statement conditions" would go away
+
+[20:39:36.0933] <rkirsling>
+ * so no, I was not exaggerating. I truly only could see negatives. you "repeating yourself" would've constituted truly speaking to me for the first time from my perspective.
+
+[21:19:45.0955] <rkirsling>
+ * so no, I was not exaggerating. I truly only could see negatives and was seeking a demonstration of why the additional functionality would be desirable and not merely a risk. you "repeating yourself" would've constituted truly speaking to me for the first time from my perspective.
+
+[22:00:55.0792] <TabAtkins>
+> <@rkirsling:matrix.org> an example of the benefit hadn't been provided...I didn't feel like you'd even listened to my concern
+
+If you feel like I hadn't sufficiently engaged with your feedback, or hadn't given sufficient justification for my reasoning, say so. That's fine to say! That way I know what it is I can actually engage with. That's my point here - your feedback wasn't engageable. Now it is; let's go straight to this point next time. ^_^
+
+[22:03:16.0070] <TabAtkins>
+> <@rkirsling:matrix.org> oh wow regardless of the default/else thing, if we could write `when` instead of `if`, then my subsequent and larger concern about `is` allowing "`if` patterns within `if` statement conditions" would go away
+
+I don't quite understand what you're saying here. It sounds like you might have misread what Ron was suggesting? He was saying we could drop the `when` keyword at the start of each branch. If I'm reading you correctly, you seem to have instead understood him as saying "spell guard patterns as `when()` rather than `if()`".
+
+[22:03:43.0512] <rbuckton>
+> <@tabatkins:matrix.org> I don't quite understand what you're saying here. It sounds like you might have misread what Ron was suggesting? He was saying we could drop the `when` keyword at the start of each branch. If I'm reading you correctly, you seem to have instead understood him as saying "spell guard patterns as `when()` rather than `if()`".
+
+I also made that suggestion.
+
+[22:03:57.0479] <TabAtkins>
+Ah, ok, there was a lot of text so I must have skipped it.
+
+[22:04:06.0262] <rbuckton>
+If you replace `if` with `when`, there's less of a concern about confusion about `if`/`else`
+
+[22:04:26.0488] <TabAtkins>
+(Sorry, I've been out of action the last week because I caught COVID either at or just after TPAC.)
+
+[22:04:30.0905] <rbuckton>
+And its less confusing to see `if (x is when (...))` compared to `if(x is if(...))`
+
+[22:04:46.0003] <rbuckton>
+ * And its less confusing to see `if (x is when (...))` compared to `if(x is if (...))`
+

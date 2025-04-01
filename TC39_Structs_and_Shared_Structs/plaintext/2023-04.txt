@@ -1,0 +1,1160 @@
+2023-04-24
+[16:58:49.0231] <shu>
+finally catching up on old code sharing threads
+
+
+2023-04-25
+[17:03:07.0685] <shu>
+rbuckton: i applaud the scope of "shared modules" but i feel that is tantamount to designing a new language, which is not incremental and significantly increases risk of adoption or shipping anything.
+
+put another way, IMO the only realistic way to move the needle for multithreading for JS is to have an opt-in carve out for shared memory. shared structs _is_ that opt-in. to have "shared modules" seems to require the capability to write code that is actual parallel and threadsafe _in general_, including a threadsafe stdlib. were i to do a greenfield project i'd design a stdlib with that in mind but i feel like that would be too much to bite off at the moment?
+
+[17:04:07.0407] <shu>
+more i think about it, i think the non-threadsafe stdlib thing is the actual showstopper for me
+
+
+2023-04-26
+[05:00:10.0709] <rbuckton>
+> <@shuyuguo:matrix.org> rbuckton: i applaud the scope of "shared modules" but i feel that is tantamount to designing a new language, which is not incremental and significantly increases risk of adoption or shipping anything.
+> 
+> put another way, IMO the only realistic way to move the needle for multithreading for JS is to have an opt-in carve out for shared memory. shared structs _is_ that opt-in. to have "shared modules" seems to require the capability to write code that is actual parallel and threadsafe _in general_, including a threadsafe stdlib. were i to do a greenfield project i'd design a stdlib with that in mind but i feel like that would be too much to bite off at the moment?
+
+I'm coming at this from two different directions, with two different outcomes:
+
+1. Design something transformative for the language, adding cohesive and comprehensive new capabilities.
+2. Design something tacked on to the language, adding a minimal set of capabilities necessary to solve a specific problem.
+
+Option 1 is complex, takes longer, and requires a fair amount of "big design upfront", all to support capabilities we may or may not need. However, the end goal is to have something cohesive that is future-leaning with few "warts". That's what "shared modules" is, or is intended to be.
+
+Option 2 is far simpler (though not trivial), shorter term, and focused. While this approach allows for incremental change, we may in the future find that related capabilities are harder to implement in the future because of design decisions we make now, potentially leaving more "warts" in the design over time.
+
+I'm not opposed to either direction, but its worth considering the former even if only to inform the latter.
+
+[05:01:29.0557] <rbuckton>
+> <@shuyuguo:matrix.org> more i think about it, i think the non-threadsafe stdlib thing is the actual showstopper for me
+
+The "shared modules" approach would have required a threadsafe stdlib subset (i.e., make operations threadsafe if possible, and throw when not).
+
+[05:02:42.0059] <rbuckton>
+I find the "only share data, but register per-thread behavior" approach acceptable, so long as we have a reasonable way to register per-thread behavior.
+
+[05:04:58.0534] <rbuckton>
+That's the approach I took with https://esfx.js.org/esfx/api/struct-type.html?tabs=ts, though it's not so much "registration" and is more of a "wrap an ArrayBuffer with a DataView"-like approach.
+
+[07:30:50.0550] <shu>
+i'm saying something stronger for (1). my intuition is that "transformative" for JS actually means "not adoptable and unrealistic"
+
+[10:42:59.0088] <littledan>
+Yeah, I think it's good to *consider* 1, but after years of considering it, I haven't seen a realistic path for it. Do you? This informs my agreement with Shu's choice of 2.
+
+[10:43:20.0356] <littledan>
+Are there other things about it we should consider? Other potential takeaways to inform things further?
+
+[13:29:34.0496] <Mathieu Hofman>
+I remain convinced that sharing initialization code between realms, and in this case between agents, is also a general problem that is relevant for this proposal and for others (extensible cloning for example, or recursive initialization of ShadowRealms). I believe this problem can be solved without being transformative to the language, just with targeted API additions and relying on other proposals in progress like module expressions. So going towards (2) does not mean the solution has to be specific to this proposal.
+
+[13:30:15.0475] <littledan>
+We're all agreed on sharing code, the question is whether to has to be the same copy of the code or not
+
+[13:30:51.0930] <littledan>
+my idea with module expressions has always been, it's the same code but different copies of it; different instances of the same module
+
+[13:32:42.0755] <Mathieu Hofman>
+Right I agree. I think multiple copies is sufficient, we just need to solve the registration ergonomics, which has different approaches possible, and where rbuckton and I disagree on.
+
+[13:33:40.0643] <littledan>
+yeah I agree registration economics is fraught. Could you elaborate on the disagreement?
+
+[13:33:46.0510] <littledan>
+bterlson: I think I saw you typing?
+
+[13:34:08.0120] <littledan>
+ * yeah I agree registration ergonomics is fraught. Could you elaborate on the disagreement?
+
+[13:34:29.0946] <Mathieu Hofman>
+Basically Ron suggested an implicit shared cross agent registry, which is a non starter in my book.
+
+[13:34:30.0836] <bterlson>
+littledan: I was just catching up and typed a bit :-D Just got back from paternity and have been out for many an eon, have no idea whats going on
+
+[13:34:54.0868] <bterlson>
+(and I want this feature in my project I'm working on)
+
+[13:35:19.0248] <littledan>
+> <@mhofman:matrix.org> Basically Ron suggested an implicit shared cross agent registry, which is a non starter in my book.
+
+Huh, I don't see why we'd bother with a new registry when we already have the module map
+
+[13:35:27.0429] <littledan>
+> <@bterlson:matrix.org> (and I want this feature in my project I'm working on)
+
+Oh! Could you say more?
+
+[13:36:37.0767] <bterlson>
+wasm stuff, can't say more yet :P
+
+[13:37:14.0012] <littledan>
+are we going to start living the multithreaded wasm gc dream?
+
+[13:37:26.0568] <Mathieu Hofman>
+The module map is agent specific, different agents may have a different module map. The main question is independent initialization and what happens when you receive a shared struct from another agent, whether there is a relation to the "same" shared struct that may have been declared in the local agent
+
+[13:38:08.0225] <Mathieu Hofman>
+basically identity discontinuity
+
+[13:39:03.0630] <littledan>
+wait, I thought a limited form of "identity discontinuity" was a given: We're taking that we have different *copies* of the functions and prototype (which ideally do the same thing)
+
+[13:39:39.0513] <littledan>
+do you mean, the risk that it won't just be identity discontinuity, but a greater level where the actual behavior won't match up?
+
+[13:40:19.0958] <littledan>
+for example, I imagined that each thread has its own global object which is mutable and all, and so different prototypes on different threads will access different things and experience different behavior
+
+[13:40:49.0113] <littledan>
+but that this is smoothed over because [[GetPrototype]]() finds the "current" prototype given your agent
+
+[13:41:06.0102] <littledan>
+ * but that this is smoothed over because `[[GetPrototype]]()` finds the "current" prototype given your agent
+
+[13:41:21.0559] <Mathieu Hofman>
+if you receive Vector for agent 1, and yourself define and instantiate Vector, should these 2 objects share the same implementation locally?
+
+[13:41:51.0650] <Mathieu Hofman>
+ * if you receive Vector from agent 1, and yourself define and instantiate Vector, should these 2 objects share the same implementation locally?
+
+[13:41:52.0907] <littledan>
+they *should*, but defining "same implementation" is a bit complicated
+
+[13:42:05.0011] <littledan>
+and I guess it's a question of whether "should" or "must" is what we're going for
+
+[13:42:12.0212] <Mathieu Hofman>
+should you see the same prototype object ?
+
+[13:42:37.0351] <littledan>
+oh sorry I misread the question... yes they should have the identical prototype identity IMO
+
+[13:42:44.0802] <Mathieu Hofman>
+or is it acceptable for these 2 objects to have equivalent prototype objects that are not the same
+
+[13:42:58.0889] <littledan>
+what difficulties would we have in getting there?
+
+[13:44:38.0030] <Mathieu Hofman>
+How do you make that happen when both agents have independently defined their own `Vector` shared struct. I suppose how did they define the behavior of those shared structs is the question 
+
+[13:45:02.0329] <Mathieu Hofman>
+what is the identity used to say they're the "same"
+
+[13:45:32.0786] <littledan>
+I think this identity could be keyed by a module specifier. This could be either a string specifier or module block
+
+[13:45:44.0404] <littledan>
+that is, if you want to make a shared struct with a non-null prototype, it has to be exported from a module
+
+[13:46:02.0676] <littledan>
+the pair of the (absolute) module specifier + export name is the key
+
+[13:46:16.0206] <Mathieu Hofman>
+if it's a string, you're dealing with module maps that may not resolve the same way between agents
+
+[13:46:34.0509] <Mathieu Hofman>
+module blocks do not currently preserve their identity through structured cloning
+
+[13:46:42.0542] <littledan>
+both good points
+
+[13:46:55.0526] <littledan>
+> <@mhofman:matrix.org> module blocks do not currently preserve their identity through structured cloning
+
+we would have to switch this attribute of module blocks if we wanted to enable this usage
+
+[13:47:06.0384] <littledan>
+> <@mhofman:matrix.org> if it's a string, you're dealing with module maps that may not resolve the same way between agents
+
+I'm willing to take this risk, but it's a value judgement
+
+[13:47:38.0144] <Ashley Claymore>
+I'm curious where we imagine the module loading would be awaited
+
+[13:47:39.0855] <littledan>
+re: the string risk, this is *not* a risk for meeting this property of the shared struct prototypes not matching. It just means different methods would be available on the different sides of the boundary
+
+[13:48:01.0708] <littledan>
+> <@aclaymore:matrix.org> I'm curious where we imagine the module loading would be awaited
+
+this is also an important problem. My suggestion would be, [[GetPrototype]]() throws if the module isn't already loaded.
+
+[13:48:05.0967] <Mathieu Hofman>
+module blocks is however my suggestion, and it doesn't solve the independent initialization use case. By definition one agent has to init first, and share the module block definition through postMessage, then agent 2 has to define the shared struct
+
+[13:48:14.0389] <littledan>
+> <@aclaymore:matrix.org> I'm curious where we imagine the module loading would be awaited
+
+ * this is also an important problem. My suggestion would be, `[[GetPrototype]]()` throws if the module isn't already loaded.
+
+[13:49:20.0687] <littledan>
+> <@mhofman:matrix.org> module blocks is however my suggestion, and it doesn't solve the independent initialization use case. By definition one agent has to init first, and share the module block definition through postMessage, then agent 2 has to define the shared struct
+
+well, what if agent 1 doesn't bother sending over the module block, and just starts by sending the shared struct?
+
+[13:49:29.0947] <Mathieu Hofman>
+I believe however that having the same prototype object is not strictly necessary for most use cases
+
+[13:49:51.0829] <littledan>
+I worry that *forcing* module blocks rather than also allowing string specifiers will make initialization of programs too awkward and therefore impractical
+
+[13:51:22.0639] <Mathieu Hofman>
+it's possible that the answer is indeed to do both
+
+[13:52:05.0752] <rbuckton>
+> <@mhofman:matrix.org> The module map is agent specific, different agents may have a different module map. The main question is independent initialization and what happens when you receive a shared struct from another agent, whether there is a relation to the "same" shared struct that may have been declared in the local agent
+
+I'm not so concerned about identity discontinuity. If each agent/realm is required to load its own copy of the behavior for a struct, the code defining that behavior could be different per agent/realm because of bundling/minification/tree shaking.
+
+[13:53:14.0103] <Mathieu Hofman>
+How is it a problem that it's different?
+
+[13:53:33.0674] <rbuckton>
+> <@rbuckton:matrix.org> I'm not so concerned about identity discontinuity. If each agent/realm is required to load its own copy of the behavior for a struct, the code defining that behavior could be different per agent/realm because of bundling/minification/tree shaking.
+
+I may have misinterpreted "identity discontinuity". I'm thinking about behavior, not identity. 
+
+[13:54:31.0938] <littledan>
+Good, we are all trying to accomplish the same thing then
+
+[13:55:25.0543] <Mathieu Hofman>
+by identity discontinuity I meant that the prototype object for a vector received from another agent may not be the same as the prototype object for a vector object defined and instantiated in the local agent.
+
+[13:56:44.0472] <rbuckton>
+What matters to me is that there is a way to define `Vector` in two threads (A and B) such that a `Vector` created in A is also a `Vector` in B, and vise versa. Also, that a `Vector` created in A, sent to B, and then sent back to A is still a `Vector` in A.
+
+[13:57:42.0719] <rbuckton>
+A and B may have subtly different implementations of `Vector` (due to tree shaking), so there needs to be some way for A and B to coordinate what a `Vector` is.
+
+[13:57:57.0456] <rbuckton>
+ * A and B may have subtly different implementations of `Vector` (due to tree shaking, etc.), so there needs to be some way for A and B to coordinate what a `Vector` is.
+
+[13:59:19.0740] <rbuckton>
+The tree shaking concern isn't conjecture either. If "the way" to do multithreading in JS is going to require duplicating runtime code in each thread, developers are going to want to find ways to minimize the memory footprint of short-lived threads by tree shaking away unused functionality.
+
+[13:59:23.0741] <Mathieu Hofman>
+Right, but the main question is whether this should be possible without an explicit "synchronization" message between A and B
+
+[14:00:31.0091] <littledan>
+> <@rbuckton:matrix.org> A and B may have subtly different implementations of `Vector` (due to tree shaking, etc.), so there needs to be some way for A and B to coordinate what a `Vector` is.
+
+so, I guess the question is, whether we especially want to permit this difference
+
+[14:00:32.0622] <rbuckton>
+> <@mhofman:matrix.org> Right, but the main question is whether this should be possible without an explicit "synchronization" message between A and B
+
+Or a way to register the prototype via a Worker
+
+[14:01:07.0308] <rbuckton>
+> <@littledan:matrix.org> so, I guess the question is, whether we especially want to permit this difference
+
+I think it's important to permit it. If we can't share code, we need to be able to reduce overhead in other ways. 
+
+[14:01:45.0030] <littledan>
+> <@rbuckton:matrix.org> The tree shaking concern isn't conjecture either. If "the way" to do multithreading in JS is going to require duplicating runtime code in each thread, developers are going to want to find ways to minimize the memory footprint of short-lived threads by tree shaking away unused functionality.
+
+I can see how this is nice to have; what I have trouble understanding is whether it's an absolute blocker. There are reasons, on the other hand, to prefer that this correspondence in the code loaded is mandatory
+
+[14:01:51.0871] <Mathieu Hofman>
+Aka if and how can A and B define their `Vector` independently and for the vector instance send by A to B to have the same prototype as the one created independently by B
+
+[14:03:14.0358] <littledan>
+Actually: I think it should work just fine to use a small module which just contains the field definitions, and then have other chunks of code (different in different workers/agents) which go back and install methods on the class.
+
+[14:03:22.0647] <Mathieu Hofman>
+My understanding is that module identifiers are somewhat problematic with bundlers
+
+[14:03:47.0179] <Mathieu Hofman>
+and I don't see a way to accomplish this with module blocks
+
+[14:04:06.0167] <rbuckton>
+Bundlers, minifiers, and treeshakers exist for a reason. Performance is important, so whatever solution we come up with must be able to handle web reality.
+
+[14:04:12.0779] <littledan>
+> <@littledan:matrix.org> Actually: I think it should work just fine to use a small module which just contains the field definitions, and then have other chunks of code (different in different workers/agents) which go back and install methods on the class.
+
+these later "installation" chunks of code could use various different techniques to minimize the memory footprint, as rbuckton mentioned
+
+[14:04:37.0369] <littledan>
+the must-be-the-same parts are really limited to, what field names are there (which is mandatory to correspond anyway)
+
+[14:05:39.0647] <Mathieu Hofman>
+How do you "attach" the behavior to a struct definition? What is the shared identity of the struct definition
+
+[14:05:52.0556] <littledan>
+> <@mhofman:matrix.org> How do you "attach" the behavior to a struct definition? What is the shared identity of the struct definition
+
+by mutating the prototype
+
+[14:06:01.0036] <littledan>
+this is just about making sure that we can call methods on these instances
+
+[14:06:12.0325] <littledan>
+you'd just be mutating the prototype on your own agent-local copy of course
+
+[14:07:15.0070] <littledan>
+> <@rbuckton:matrix.org> Bundlers, minifiers, and treeshakers exist for a reason. Performance is important, so whatever solution we come up with must be able to handle web reality.
+
+I think we don't quite know yet how much of this will need to differ per agent in a single cooperating application. But generally I see your point. But I think the technique I explained above should be enough.
+
+[14:07:29.0904] <rbuckton>
+My suggestion is to use a registry, possibly scoped to the Worker. Rather than message synchronization, the code loaded in the worker thread must register an association between a string key and a prototype. The thread that creates the Worker must also register the same key with a prototype, otherwise the behavior isn't available.
+
+[14:07:55.0167] <littledan>
+Ron, you know that TC39 doesn't like this kind of registry. Let's try to think of something else.
+
+[14:08:14.0758] <littledan>
+I don't yet understand the problem with my suggestion to use module specifiers, given that the weighty part of the class (the method definitions) can be factored out
+
+[14:09:16.0061] <Mathieu Hofman>
+as I've mentioned before a mutable registry with forgeable string keys scoped to an agent or realm is a non starter for me 
+
+[14:10:03.0220] <littledan>
+I see how the registry solves the problem, but I don't understand why the other solution doesn't work as well.
+
+[14:10:26.0530] <rbuckton>
+Something like:
+
+```js
+// main.js
+import { Worker } from "worker_threads";
+import { Vector } from "./vector.js";
+
+const worker = new Worker("./worker.js", { structTypes: { "some-string-for-vector": Vector.prototype } });
+worker.postMessage(new Vector());
+
+// worker.js
+import { parentPort } from "worker_threads";
+import { Vector } from "./vector.js";
+
+parentPort.addStructType("some-string-for-vector", Vector.prototype);
+parentPort.onmessage = msg => {
+  msg // a Vector
+};
+```
+
+[14:11:25.0698] <Mathieu Hofman>
+A per channel registry however is fine
+
+[14:11:35.0884] <Mathieu Hofman>
+ * A per channel registry however like above is fine
+
+[14:11:43.0492] <rbuckton>
+What I'm suggesting is a per-channel registry.
+
+[14:12:50.0735] <littledan>
+huh, I don't understand how this would be implemented. It has to be that we *don't* have wrapper objects per instance. So the channel can't be transforming what goes across it.
+
+[14:12:58.0430] <rbuckton>
+An alternative, which makes things even less mutable might be:
+
+```js
+import { parentPort, MessagePortWrapper } from "worker_threads";
+const parent = new MessagePortWrapper(parentPort, { structTypes: { ... } });
+parent.onmessage = msg => { ... };
+```
+
+[14:13:55.0460] <littledan>
+I don't see how a registry scoped to the agent could satisfy the no-linear-work-across-postmessage property
+
+[14:14:03.0813] <littledan>
+ * I don't see how a registry not scoped to the agent could satisfy the no-linear-work-across-postmessage property
+
+[14:14:39.0432] <rbuckton>
+Ah, I think I see what you mean. You want the remote agent to define these types once for the agent.
+
+[14:16:47.0534] <littledan>
+well, I don't necessarily want that particular thing. For this no-linear-work requirement, an agent-scoped registry would work if defined inside that agent (it just wouldn't meet Matthieu's goals)
+
+[14:16:55.0345] <rbuckton>
+But the same problem exists in the main thread as well. We wouldn't be able to handle per-channel prototype associations either.
+
+[14:16:57.0026] <littledan>
+also using the module map would work
+
+[14:17:07.0398] <rbuckton>
+> <@littledan:matrix.org> also using the module map would work
+
+Except for bundling?
+
+[14:17:16.0906] <rbuckton>
+brb, meeting.
+
+[14:17:30.0464] <littledan>
+> <@rbuckton:matrix.org> But the same problem exists in the main thread as well. We wouldn't be able to handle per-channel prototype associations either.
+
+That's right. The prototype has to be per-agent (resolved in GetPrototype), not per-channel
+
+[14:18:23.0047] <littledan>
+> <@rbuckton:matrix.org> Except for bundling?
+
+Yes, that's right, doing something based on the module map would require usage of *native* ESM. That's an argument against this approach. It's also a reason why module expressions might be relevant (if we fixed the cloning behavior)
+
+[14:19:05.0502] <littledan>
+I guess I just sort of believe that we're getting to a point where it can be OK to bet on native ESM
+
+[14:19:30.0323] <Mathieu Hofman>
+Module expressions require an explicit introduction however before defining the struct
+
+[14:20:06.0391] <littledan>
+> <@mhofman:matrix.org> Module expressions require an explicit introduction however before defining the struct
+
+yes, definitely introduces its own awkwardness
+
+[14:21:56.0642] <shu>
+Mathieu Hofman: to clarify, an _additional_ mutable registry is a non-starter for you, is that right?
+
+[14:22:14.0923] <shu>
+like, one rather crude thing is to use an existing mutable registry, like, the global scope
+
+[14:22:27.0927] <littledan>
+not the global scope!!!
+
+[14:22:59.0916] <shu>
+bro why
+
+[14:23:01.0339] <shu>
+it's already there
+
+[14:23:14.0562] <shu>
+love to use things that are already there!
+
+[14:23:25.0796] <Mathieu Hofman>
+depends on what is used as keys. if using forgeable string keys, it is. if using unforgeable objects, then it's equivalent to a WeakMap, which is fine
+
+[14:23:40.0587] <littledan>
+it's icky
+
+[14:24:13.0252] <shu>
+i'm gonna make a shirt that says "globals lover"
+
+[14:24:20.0976] <shu>
+the o in "global" will be a heart
+
+[14:24:39.0217] <Mathieu Hofman>
+oh the global scope is not shared across agents, the problem is that the registry would have to be shared between realms/agents for it to be useful, no ?
+
+[14:25:08.0784] <shu>
+i don't think it's a hard requirement for me the registry itself be shared
+
+[14:25:31.0571] <shu>
+it's already part of the model that the app is responsible to ensuring the same code is loaded across agents, and hopefully we'll make that not too hard
+
+[14:25:47.0627] <rbuckton>
+Just to clarify, per-channel prototypes are a non-starter, which means a per-channel registry is probably a non-starter.
+
+[14:26:01.0014] <shu>
+ensuring the same key is used for the copies of the code would be part of that responsibility
+
+[14:26:15.0406] <shu>
+ * it's already part of the model that the app is responsible for ensuring the same code is loaded across agents, and hopefully we'll make that not too hard
+
+[14:26:18.0734] <littledan>
+shu: By that, do you mean, of course there needs to be a happy path where you load the same-acting prototype in each agent, but it's OK if you're able to load non-matching things?
+
+[14:26:31.0682] <shu>
+yes
+
+[14:26:32.0944] <littledan>
+(if so I agree; I don't see it being necessary that we force it to be the same code)
+
+[14:26:52.0956] <rbuckton>
+Which means the struct value->prototype relationship must be per-thread.
+
+[14:27:30.0598] <littledan>
+> <@rbuckton:matrix.org> Which means the struct value->prototype relationship must be per-thread.
+
+yes this is a given at the outset of the conversation; I thought we've been talking in those terms this whole time
+
+[14:28:02.0818] <Mathieu Hofman>
+In this "use the global scope" idea, what happens if the registration changes, aka the global property gets redefined. Do existing objects have their proto automagically change to the new object ?
+
+[14:28:06.0303] <rbuckton>
+> <@littledan:matrix.org> yes this is a given at the outset of the conversation; I thought we've been talking in those terms this whole time
+
+I'm just clarifying things, for myself if for no one else
+
+[14:29:07.0928] <littledan>
+> <@mhofman:matrix.org> In this "use the global scope" idea, what happens if the registration changes, aka the global property gets redefined. Do existing objects have their proto automagically change to the new object ?
+
+It would be like, each time you do a property access resulting in [[GetPrototypeOf]] (so it's not an own property), the global would be looked up to see how it resolves
+
+[14:29:35.0955] <Mathieu Hofman>
+My concern with a forgeable key global registry was about libraries fighting to define the same thing
+
+[14:29:51.0675] <shu>
+why is that different than loading competing polyfills?
+
+[14:30:10.0106] <shu>
+or rather, is it different? maybe it is
+
+[14:30:13.0167] <littledan>
+I mean, I think TC39 added modules to solve this problem
+
+[14:30:17.0625] <rbuckton>
+So, value->prototype is per-thread, and _n_ threads need to coordinate this value->prototype relationship to properly communicate, which means there must be some type of unique identity associated with the value->prototype relationship that can be reproduced in each thread.
+
+[14:30:23.0726] <littledan>
+because competing over globals *was* a real problem in JS
+
+[14:30:39.0811] <Mathieu Hofman>
+Shared struct object wouldn't allowed to be frozen, would they ?
+
+[14:31:16.0714] <shu>
+no, they can't be frozen without violating the "immutable shapes" requirement
+
+[14:31:21.0680] <shu>
+else all property accesses would need to synchronize
+
+[14:31:37.0264] <littledan>
+sure but there can be born-frozen shared structs (hypothetically--not arguing it should be prioritized)
+
+[14:31:39.0718] <shu>
+they should be able to be made frozen-from-construction, however
+
+[14:31:40.0130] <shu>
+yes
+
+[14:31:54.0133] <littledan>
+(I don't see a reason to add this, but I also don't see what it would break)
+
+[14:31:54.0329] <shu>
+oops, editor call and other mtgs, bbl
+
+[14:32:06.0655] <Mathieu Hofman>
+the prototype of a frozen object cannot change
+
+[14:32:23.0484] <Mathieu Hofman>
+so it can't be looked up dynamically for these frozen structs
+
+[14:32:26.0030] <littledan>
+well, it would never change within an agent
+
+[14:32:28.0766] <littledan>
+oh, right
+
+[14:32:42.0978] <littledan>
+yeah, that's something we could accomplish with modules but not globals
+
+[14:32:54.0962] <littledan>
+it'd have to be a const module export!
+
+[14:36:06.0953] <Mathieu Hofman>
+I also have got to get back to work. littledan hopefully that highlights where the remaining problems are with different copies of behavior code
+
+[14:42:04.0096] <littledan>
+I have to work too! I think this helped advance all of our understanding and we're at a good place to stop
+
+[14:42:41.0906] <littledan>
+I'm more OK with different copies/behaviors of code than I am with using the global object, which leads to classic namespace management problems
+
+[14:43:52.0731] <rbuckton>
+I wonder if we could accomplish a per-thread registry with workers via a preload mechanism? Would that be an acceptable compromise for that approach?
+
+Consider:
+- The main thread must load/evaluate all struct types it intends to use to communicate with workers.
+- Struct types with behavior must have an associated unique identity (possibly user defined).
+- When the main thread constructs a Worker, it must specify a `preload` module in addition to the regular worker script.
+- The `preload` module is loaded in the Worker first, and should load/evaluate all struct types so that their type->prototype mapping is loaded. This is to be considered a privileged operation, so developers should take care with how third-party code is loaded at this time.
+- After the `preload` module has been evaluated, the Worker's struct type registry is locked down and the regular worker script/module is evaluated. It reuses the same module cache as the `preload` script, so module identities and reference identities are consistent between `preload` and normal execution.
+
+[14:44:43.0506] <rbuckton>
+This approach is similar to Electron's preload mechanism
+
+[14:46:35.0191] <rbuckton>
+https://www.electronjs.org/docs/latest/tutorial/tutorial-preload, for reference.
+
+[14:50:45.0127] <rbuckton>
+In that approach, you might write something like:
+
+```js
+// point.js
+@Reflect.StructIdentity("796eb01e-70d2-42c6-a30f-8bdce572db3d")
+export shared struct Point {
+  x;
+  y;
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+  }
+  toString() {
+    return `${this.x},${this.y}`;
+  }
+}
+
+// main.js
+import { Point } from "./point.js";
+import { Worker } from "worker_threads";
+
+const worker = new Worker("worker.js", { type: "module", preload: "preload.js" });
+worker.postMessage(new Point(0, 0));
+
+// preload.js
+import "./point.js";
+
+// worker.js
+import { parentPort } from "worker_threads";
+parentPort.onmessage = msg => {
+  console.log(msg.toString()); // prints: 0,0
+}
+```
+
+[14:51:35.0306] <littledan>
+I think this requires a kind of centralized coordination that I'd prefer to not require
+
+[14:53:14.0771] <rbuckton>
+It's pretty much a given that we must perform some kind of coordination. I'm borrowing from electron's model because its fairly widely adopted.
+
+[14:53:56.0357] <littledan>
+sure there's coordination across threads to load the corresponding code, but coordinating all the "preload" code to be packaged up together seems like a different kind of thing
+
+[14:54:27.0241] <littledan>
+also Electron is using this for privileged APIs, but I'd prefer that this is conceptually unprivileged
+
+[14:54:27.0742] <rbuckton>
+A different approach might be something fully statically analyzable during module import evaluation, so long as it still allows bundling/minification/tree shaking.
+
+[14:55:35.0721] <Mathieu Hofman>
+Skimming back really quick, but the ability to define modules that are evaluated when constructing a new realm is exactly what I'd want.
+
+[14:56:32.0740] <rbuckton>
+> <@mhofman:matrix.org> Skimming back really quick, but the ability to define modules that are evaluated when constructing a new realm is exactly what I'd want.
+
+Are you talking about the `preload` mechanism?
+
+[14:57:36.0738] <Mathieu Hofman>
+well more general, but yeah, modules that are executed right after the realm is instantiated by the engine, but before other code runs
+
+[14:58:12.0404] <Mathieu Hofman>
+can be used to seamlessly apply transformations to the realm
+
+[14:59:35.0395] <Mathieu Hofman>
+any realm created from your realm applies the list of registered modules
+
+[15:02:48.0663] <littledan>
+But do you want that mechanism plus not being able to define new shared structs later?
+
+[15:17:35.0706] <Mathieu Hofman>
+I don't see why we need to disallow the definition of new shared structs, but I haven't fully thought it through in this context
+
+[15:32:17.0616] <rbuckton>
+I would allow them to be defined, but they wouldn't be registered so a prototype walk from a foreign struct value would fail.
+
+[15:35:02.0259] <Mathieu Hofman>
+I'd still like a mechanism to manually synchronize so that you can use the prototype of a foreign struct that isn't pre-registered. It just means you can share the prototype with the "equivalent" struct declared locally
+
+[15:35:51.0919] <rbuckton>
+How would you do this in a way that doesn't involve:
+- A mutable shared registry, or
+- A wrapper object per instance
+
+[15:36:03.0622] <Mathieu Hofman>
+and as littledan said, maybe it's just by creating an empty prototype object the first time that can be attached props
+
+[15:36:50.0136] <Mathieu Hofman>
+so the seeing a struct the first time would create a registration, but it's not mutable
+
+[15:40:53.0185] <Mathieu Hofman>
+or as I had in my earlier suggestion in january, a way to share over post message an unforgeable representative of the struct kind, allowing to define the local prototype object for structs of that kind
+
+[15:41:08.0905] <shu>
+oh creating an empty proto is an interesting alternative i hadn't thought about before
+
+[15:41:20.0087] <rbuckton>
+So, if its registered you get the registered prototype, if its unregistered you get an empty prototype? How would you warn a user that they tried to walk the prototype of a foreign struct value that has no associated behavior?
+
+[15:41:35.0256] <shu>
+the warning is that the app doesn't work, i feel like?
+
+[15:42:06.0811] <Mathieu Hofman>
+yes that's for allowing inband synchronization.
+
+[15:42:33.0751] <Mathieu Hofman>
+You send a post message saying, here is an object of kind "foo", please init its proto as needed
+
+[15:42:51.0252] <Mathieu Hofman>
+and you attach a dummy instance of the struct
+
+[15:42:52.0268] <rbuckton>
+I was hoping for a better developer experience, and by "better developer experience" I mean "throw an error with a message I can search for on stackoverflow"
+
+[15:44:03.0647] <Mathieu Hofman>
+well my suggestion for having a kind representative and having to register using that would allow to throw message if you walk the proto of a struct that wasn't registered
+
+[15:44:18.0963] <Mathieu Hofman>
+ * well my suggestion for having a kind representative and having to register using that would allow to throw an explicit message if you walk the proto of a struct that wasn't registered
+
+[15:44:35.0546] <Mathieu Hofman>
+it is however a little more API complexity
+
+[15:44:45.0307] <rbuckton>
+Like, an exotic object that throws on property access. That's still achievable with the "empty prototype" idea, except you have to do: value -> empty prototype -> throw-on-access-object
+
+[15:45:38.0695] <rbuckton>
+Where the "throw-on-access-object" is analogous to a revoked proxy.
+
+[15:45:46.0420] <Mathieu Hofman>
+please no more exotic object
+
+[15:46:19.0391] <Mathieu Hofman>
+I'd prefer normal objects for the prototype
+
+[15:46:33.0267] <Mathieu Hofman>
+the instances are already exotic enough ;)
+
+[15:46:49.0549] <rbuckton>
+It doesn't have to be exotic
+
+[15:47:42.0796] <rbuckton>
+IIRC, a revoked Proxy isn't exotic, so it could be spec'd similarly.
+
+[15:50:55.0625] <rbuckton>
+Alternatively, the "empty prototype" could be an ordinary object with hooks similar to a proxy that throws on attempts to read/write to non-existent properties, but still allow you to use `Object.defineProperty`.
+
+[15:51:06.0502] <rbuckton>
+ * Alternatively, the "empty prototype" could itself be an ordinary object with hooks similar to a proxy that throws on attempts to read/write to non-existent properties, but still allow you to use `Object.defineProperty`.
+
+[15:55:49.0758] <rbuckton>
+What would the API look like? Something like this?
+
+```js
+// worker.js
+import { parentPort } from "worker_threads";
+import { Point } from "./point.js";
+
+parentPort.onunhandledstruct = (id, prototype) => {
+  switch (id) {
+    case "796eb01e-70d2-42c6-a30f-8bdce572db3d":
+      Object.defineProperties(prototype, Object.getOwnPropertyDescriptors(Point.prototype));
+      break;
+  }
+};
+```
+
+That kind of registration could have issues if shared structs are allowed to have private fields/methods (and I'd like us to consider them in the future).
+
+[15:56:10.0713] <Mathieu Hofman>
+a proxy object is the definition of exotic
+
+[15:56:32.0285] <Mathieu Hofman>
+a proxy object is how user land can make exotic objects
+
+[15:56:37.0936] <rbuckton>
+> <@mhofman:matrix.org> a proxy object is the definition of exotic
+
+ProxyCreate calls MakeBasicObject, which creates an ordinary object.
+
+[15:57:36.0370] <rbuckton>
+I think having a way to signal to a developer _why_ a value isn't behaving appropriately is important, especially considering the complex mechanisms in play necessary to make this work.
+
+[15:58:35.0875] <rbuckton>
+If our answer is "you just get a ReferenceError", we're not doing the development community any favors.
+
+[15:58:44.0699] <Mathieu Hofman>
+I'd agree. But I'd really prefer avoiding more exotic like behavior
+
+[15:58:49.0880] <rbuckton>
+ * If our answer is "you just get a plain old ReferenceError because its a plain old object", we're not doing the development community any favors.
+
+[15:59:16.0349] <rbuckton>
+The whole idea of shared structs is exotic-like behavior.
+
+[16:01:30.0604] <Mathieu Hofman>
+on the instances. Is the argument that we already have exotic behavior there so, exotic behavior on the prototype is ok?
+
+[16:03:08.0371] <rbuckton>
+Also, is there any reason we can't do an API like this instead:
+
+```js
+// called _before_ the runtime assigns a prototype to an unregistered foreign struct for the first time.
+parentPort.onunhandledstruct = (id) => {
+  switch (id) {
+    case "796eb01e-70d2-42c6-a30f-8bdce572db3d":
+      return Point.prototype;
+  }
+};
+```
+
+[16:03:51.0888] <rbuckton>
+Though both of the API sketches above don't seem like they'd work per-realm in the same thread (if that was a requirement?)
+
+[16:05:33.0288] <rbuckton>
+> <@mhofman:matrix.org> on the instances. Is the argument that we already have exotic behavior there so, exotic behavior on the prototype is ok?
+
+All I care about regarding this point is that we want a good developer experience, or at least the best we can offer. 
+
+[16:07:45.0344] <rbuckton>
+Though, if we have an API design like one that has `return Point.prototype` above, we could potentially have unregistered and unhandled foreign struct values just have a `null` prototype, and tailor the `ReferenceError` message based on the fact the value itself is a struct value.
+
+[16:08:42.0375] <rbuckton>
+That's still tantamount to a mutable registry though, even if it is first-in-wins.
+
+[16:10:58.0180] <rbuckton>
+I'm not really sure how any dynamic "cure an unhandled foreign struct value prototype" mechanism isn't just another way to say "shared registry"
+
+[16:11:02.0603] <rbuckton>
+ * I'm not really sure how any dynamic "cure an unhandled foreign struct value prototype" mechanism isn't just another way to say "mutable shared registry"
+
+[16:11:22.0636] <rbuckton>
+ * I'm not really sure how any dynamic "cure an unhandled foreign struct value's prototype" mechanism isn't just another way to say "mutable shared registry"
+
+[16:18:37.0752] <Mathieu Hofman>
+It really feels like this pre-registration stuff really is realm "arguments". With preload or other generic realm init, you can only express the identity of a struct as a string in code, where if you had a way to pass arguments to that init logic, you could pass handles to the struct definitions.
+
+[16:19:22.0694] <Mathieu Hofman>
+at the end of the day, the "parentPort" is an implicit argument of the new Worker
+
+[16:20:14.0846] <Mathieu Hofman>
+maybe we should have a global called "initArgs"
+
+[16:21:55.0849] <Mathieu Hofman>
+ * It really feels like this pre-registration stuff really is realm "arguments". With preload or other generic realm init, you can only express the identity of a struct kind as a string in code, where if you had a way to pass arguments to that init logic, you could pass handles to the struct definitions.
+
+[16:22:54.0489] <rbuckton>
+Well, `parentPort` in this case is already a thing in NodeJS. So is something like `initArgs` (i.e., `workerData`)
+
+https://nodejs.org/dist/latest-v20.x/docs/api/worker_threads.html#workerparentport
+
+https://nodejs.org/dist/latest-v20.x/docs/api/worker_threads.html#workerworkerdata
+
+[16:23:30.0008] <Mathieu Hofman>
+TIL about `workerData`. I guess yes
+
+[16:27:07.0323] <rbuckton>
+> <@mhofman:matrix.org> It really feels like this pre-registration stuff really is realm "arguments". With preload or other generic realm init, you can only express the identity of a struct kind as a string in code, where if you had a way to pass arguments to that init logic, you could pass handles to the struct definitions.
+
+What do you mean by handles?
+
+[16:29:32.0845] <Mathieu Hofman>
+> <@mhofman:matrix.org> ```js
+> // vector2d.js
+> // Each shared struct type, whether data only or "prepared" has its own unique type
+> export const vector2Dtype = SharedStructType.prepare(["x", "y"]);
+> 
+> const _Vector2D = SharedStructType.getConstructor(vector2Dtype);
+> 
+> // custom construction behavior
+> export function Vector2D(x = 0, y = 0) {
+>   const _this = Reflect.construct(_Vector2D, [], new.target);
+>   _this.x = x;
+>   _this.y = y;
+>   return _this;
+> }
+> 
+> // prototype methods
+> Vector2D.prototype.distanceTo = function (v) {
+>   const dx = this.x - v.x;
+>   const dy = this.y - v.y;
+>   return Math.sqrt(dx * dx + dy * dy);
+> };
+> 
+> SharedStructType.registerPrototype(vector2Dtype, Vector2D.prototype);
+> 
+> // main.js
+> import { Vector2D, vector2DType } from "./vector2d.js";
+> const v1 = new Vector2D(1, 2);
+> const worker = new Worker("worker.js");
+> worker.postMessage([vector2DType, v1]);
+> 
+> // worker.js
+> // worker imports Vector2D, which causes registration as a side-effect.
+> import { Vector2D, vector2DType } from "./vector2d.js";
+> 
+> const v2 = new Vector2D(3, 4);
+> 
+> parentPort.on("message", ([mainVector2DType, v1]) => {
+>   SharedStructType.registerPrototype(mainVector2DType, Vector2D.prototype);
+>   assert(mainVector2DType !== vector2DType);
+>   assert(
+>     SharedStructType.getConstructor(mainVector2DType) !==
+>       SharedStructType.getConstructor(vector2Dtype)
+>   );
+>   assert(v1 instanceof Vector2D); // by virtue of sharing a prototype
+>   v1.x; // 1
+>   v1.distanceTo(v2); // ok
+>   v1.toString(); // ok
+> });
+> 
+> ```
+> 
+> SharedStructType.getConstructor() is needed to allow the program to avoid duplicating type definitions in each agent/realm. I think the burden of such deduplication should be on the program, not on the engine.
+> 
+> If the engine had to deduplicate itself, you'd either need a user provided type identifier at "prepare" time, and a global lock around such type definitions, or you'd need to somehow be able to collapse separate definitions into a single one. In either case you'd have to figure out what to do if the shape definition does not match, and in the case of definition collapse, how do you communicate the error to the program?
+> 
+> By having the type definition generate the unique type identifier, you avoid all those complications in the engine, at the cost of putting more type hydration burden on the program.
+
+rbuckton: this
+
+[16:35:19.0186] <rbuckton>
+That doesn't clarify things for me. Are you saying the "handle" is the thing produced by `.prepare`? I don't think that works without a user-defined type identifier (which you call out yourself), so the handle is meaningless on its own. 
+
+[16:36:09.0898] <Mathieu Hofman>
+Yes the handle is what I called the type in that example.
+
+[16:36:41.0768] <rbuckton>
+I need to break for the day and make dinner. I'll come back to this tomorfow
+
+[16:36:49.0934] <rbuckton>
+* I need to break for the day and make dinner. I'll come back to this tomorrow
+
+[16:46:49.0119] <Mathieu Hofman>
+And the prepare minting the handle is sufficient if you have `workerData` and `preload`:
+- Main thread initially defines the struct using `prepare`, and defines it's local behavior (registers its local prototype)
+- When creating a worker, the main thread puts the struct handle in workerData, like `{ handles: { foo: fooHandle } }`
+- The preload code in the worker looks up the `handles` in the `workerData` and defines the its local behavior. It's app specific init behavior dealing with an app specific `workerData` structure.
+- Until registered a struct's prototype is null, and can throw with an explicit message if accessed.
+- You can always postMessage a struct handle at any point, and a realm can update the prototype for that struct kind using its handle
+- For frozen by construction structs, you can only register the prototype if no structs of that kind has been seen by the local realm
+
+[16:50:20.0025] <rbuckton>
+You're still using a string key (here `"foo"`) to communicate. Otherwise the worker doesn't know one handle from another, so the handle itself isn't meaningful
+
+[16:51:26.0759] <rbuckton>
+At least, not if the key is encoded into the struct value itself (like with my decorator-based example above). 
+
+[16:53:02.0250] <rbuckton>
+That design also seems to imply you can do `{ handles: { foo: fooHandle, bar: fooHandle } }`, but the same struct type can't really be used twice. 
+
+[16:55:49.0258] <rbuckton>
+It also requires coordinating a struct type with an identity where you create the worker, which could happen in more than one place in your code, which increases the likelihood of a mistranscription. If the identity is defined on the struct type at the struct declaration site, then it only needs to be written once per thread, and maybe even once for the whole program if importing the same file in multiple threads
+
+[16:55:55.0478] <Mathieu Hofman>
+yes but the string key is only in app logic, it's not part of the shared struct API
+
+[16:56:30.0488] <rbuckton>
+That just increases the potential for mistakes
+
+[16:56:37.0353] <Mathieu Hofman>
+my concern is with enshrining a forgeable key in a built-in registry
+
+[16:57:58.0296] <Mathieu Hofman>
+I don't see how it creates more potential for mistakes. it just moves the knowledge of string identifiers to the application layer
+
+[16:58:35.0541] <Mathieu Hofman>
+and it makes it possible to define new behavior after init the same way behavior during init is defined
+
+[16:59:29.0283] <rbuckton>
+> <@mhofman:matrix.org> I don't see how it creates more potential for mistakes. it just moves the knowledge of string identifiers to the application layer
+
+This makes it hard for multiple packages to share a common shared struct definition without that common definition also enshrininf the key as an exported `const` or some such. 
+
+
+2023-04-27
+[17:00:16.0556] <rbuckton>
+* This makes it hard for multiple packages to share a common shared struct definition without that common definition also enshrining the key as an exported `const` or some such. 
+
+[17:04:04.0134] <rbuckton>
+App developers don't like to copy paste protocol definitions, they like to reuse them (see protobuf and other packages). This design adds completely that is likely to result in someone in the ecosystem wrapping it with something easier to use that promotes reuse. 
+
+[17:07:51.0715] <Mathieu Hofman>
+maybe, but I'm opposed to a shared registry keyed on forgeable values, even just at "init". That approach also doesn't solve the use case of structs defined after init.
+
+[17:26:47.0677] <littledan>
+> <@shuyuguo:matrix.org> oh creating an empty proto is an interesting alternative i hadn't thought about before
+
+I actually wasn’t suggesting this myself but it is an interesting idea!
+
+[17:34:57.0753] <Mathieu Hofman>
+Should there be a `constructor` on that created "empty" proto ?
+
+[17:36:11.0604] <Mathieu Hofman>
+I think there should
+
+[17:36:34.0319] <littledan>
+I think not? Others can set that later. But this is bike shedding and not fundamental
+
+[17:36:50.0826] <Mathieu Hofman>
+The main issue as ron pointed out is the ergonomic of access to proto methods that haven't been defined
+
+[17:37:59.0443] <Mathieu Hofman>
+Without an initial `constructor` property on this proto, I don't know how you could construct an instance of that struct in the receiver realm
+
+[17:39:16.0961] <littledan>
+Oh I see what you mean
+
+[17:41:33.0882] <littledan>
+But… maybe this is a separate capability from being able to handle instances
+
+[17:44:34.0754] <rbuckton>
+> <@mhofman:matrix.org> Should there be a `constructor` on that created "empty" proto ?
+
+No, it might lead someone to think they can use it to construct an instance, but it wouldn't have the necessary construction logic that the original struct had.
+
+[17:46:11.0964] <littledan>
+We could make a “clone” method on the prototype instead :)
+
+[17:46:22.0870] <littledan>
+This would not imply the same 
+
+[17:46:44.0463] <rbuckton>
+> <@mhofman:matrix.org> Without an initial `constructor` property on this proto, I don't know how you could construct an instance of that struct in the receiver realm
+
+I would say that you shouldn't be able to. If the original definition had validation logic for its inputs, the synthetic constructor would not. 
+
+[17:48:16.0754] <littledan>
+Anyway I think this new idea which we somehow collectively came up with—to make an empty prototype in each agent which is magically nominally tracked by the engine—is a natural MVP, on top of which most other things are ergonomics (or capabilities like construction, or transmitting appropriate metadata to the other side to be able to select the right methods)
+
+[17:48:43.0609] <littledan>
+This is a basis on top of which JS code can implement Ron’s registry
+
+[17:48:50.0260] <Mathieu Hofman>
+> <@rbuckton:matrix.org> No, it might lead someone to think they can use it to construct an instance, but it wouldn't have the necessary construction logic that the original struct had.
+
+What do you mean it wouldn't have the construction logic? Why can't it create an instance?
+
+[17:49:09.0330] <littledan>
+> <@mhofman:matrix.org> What do you mean it wouldn't have the construction logic? Why can't it create an instance?
+
+The constructor might do something other than just set the fields in order
+
+[17:49:22.0017] <rbuckton>
+> <@littledan:matrix.org> We could make a “clone” method on the prototype instead :)
+
+I'd like for shared structs to someday have private state, but I don't see that working well with a synthetic constructor either. 
+
+[17:49:35.0358] <littledan>
+> <@mhofman:matrix.org> The main issue as ron pointed out is the ergonomic of access to proto methods that haven't been defined
+
+Sorry what issue is this?
+
+[17:50:06.0344] <Mathieu Hofman>
+Constructor behavior would be added on top of a base construct of the instance, which literally just does a construct
+
+[17:50:10.0351] <littledan>
+> <@rbuckton:matrix.org> I'd like for shared structs to someday have private state, but I don't see that working well with a synthetic constructor either. 
+
+Yeah I would like that too, but there are so many problems…
+
+[17:50:22.0811] <rbuckton>
+> <@littledan:matrix.org> Sorry what issue is this?
+
+Providing a useful error if you try to access a method on a foreign struct value that has no associated behavior. 
+
+[17:51:23.0645] <littledan>
+> <@rbuckton:matrix.org> Providing a useful error if you try to access a method on a foreign struct value that has no associated behavior. 
+
+Oh, I think that would work out well. You would do `strct.method()` and the system would say, undefined is not a function. What is the problem?
+
+[17:51:44.0600] <Mathieu Hofman>
+too obscure
+
+[17:51:59.0364] <littledan>
+> <@mhofman:matrix.org> Constructor behavior would be added on top of a base construct of the instance, which literally just does a construct
+
+That behavior makes sense but we should maybe call it something other than constructor
+
+[17:52:12.0935] <rbuckton>
+> <@littledan:matrix.org> Oh, I think that would work out well. You would do `strct.method()` and the system would say, undefined is not a function. What is the problem?
+
+The setup for sharing behavior is complicated, so a better error would help to diagnose the issue. 
+
+[17:52:30.0393] <rbuckton>
+* The setup for sharing behavior is complicated, so a better error would help to diagnose issues
+
+[17:52:51.0497] <littledan>
+Maybe it will be possible for the engine to notice that this case is happening and say so with a better message (with no change in actual semantics)
+
+[17:53:46.0132] <rbuckton>
+> <@mhofman:matrix.org> Constructor behavior would be added on top of a base construct of the instance, which literally just does a construct
+
+For the origin trial, maybe, but I don't know if that's how we want it to work by the time we hit Stage 2 and have syntax
+
+[17:55:46.0245] <rbuckton>
+That's actually _definitely_ not the way I want it to work by Stage 2
+
+[17:58:33.0316] <Mathieu Hofman>
+Ok but whatever syntactic sugar you put on top for the constructor, at the end of the day, it constructs an instance of your shared struct (not of Object), and then runs the constructor behavior with that object as `this`. The `constructor` that would show up as the default would simply be an explicit way to construct the base instance.
+
+[17:59:21.0220] <Mathieu Hofman>
+You can replace the `constructor` on the prototype with that behavior enhance constructor you defined that captured the base constructor
+
+[17:59:28.0614] <Mathieu Hofman>
+ * You can replace the `constructor` on the prototype with that behavior enhanced constructor you defined that captured the base constructor
+
+[17:59:41.0977] <Mathieu Hofman>
+ * You can replace the `constructor` on the prototype with a behavior enhanced constructor you define that captured the base constructor
+
+[18:00:59.0653] <Mathieu Hofman>
+We need to keep in mind this is an advanced feature, and I personally don't think we need the ergonomics to be that polished
+
+[18:03:31.0006] <rbuckton>
+I understand the mechanics of what you're describing. I'm saying that I'm opposed to that. Lets say I want to define a shared struct called `Range`, and in the constructor I want to ensure that `start` is equal to or less than `end`. I can either validate or swap the arguments in the user-defined constructor to create the struct in a normalized representation. However, the worker thread could just do `new someRange.constructor(10, 0)` and wouldn't get that normalization.
+
+[18:05:33.0041] <rbuckton>
+That's even more important if we are able to have private state in a struct, where inputs and accesses are guarded. I wouldn't want someone to do `new someForeignValue.constructor(incorrectState)` and return it to the main thread which would assume it is a correct value.
+
+[18:06:58.0562] <rbuckton>
+That becomes a potential attack vector, whereas if construction is unavailable you could pass a shared struct through untrusted code (with no associated behavior) and back into trusted code
+
+[18:08:00.0742] <Mathieu Hofman>
+I honestly don't see how you can prevent that in the face of arbitrary registration of behavior for existing struct. Your only control is to register the correct behavior at init. Whether you do that through your registry, or by grabbing and overriding the original constructor, it's the same thing.
+
+[18:09:27.0590] <rbuckton>
+If preload/init is isolated from the regular worker script, you can chose what you want to associate and what you don't want to associate. The regular worker script then wouldn't be able to construct things it shouldn't.
+
+[18:09:53.0405] <Mathieu Hofman>
+of course the prototype showing up at unexpected times is the problem, and one also solved by my explicit type handle suggestion
+
+[18:10:05.0855] <rbuckton>
+If construction is on by default, to prevent it I have to do so during preload, which is a fail-open approach.
+
+[18:11:36.0389] <Mathieu Hofman>
+yes I agree that fail open is problematic, and I would much prefer an explicit registration, but that is definitely more complicated than an implicit prototype being created. And in that approach, how would you be able to get a constructor ?
+
+[18:14:15.0241] <rbuckton>
+How is that more complicated than an implicit prototype? The only reason we are discussing an implicit prototype is to do the _even more_ complicated thing to patch unregistered struct types. 
+
+[18:14:59.0199] <Mathieu Hofman>
+the API for explicit registration is more complicated
+
+[18:15:19.0864] <Mathieu Hofman>
+especially since I'm opposed to registration based on strings
+
+[18:15:32.0497] <rbuckton>
+That said, if we have syntax and decorators, we could potentially make that configurable, i.e.:
+
+```js
+@Atomics.Struct({ id: "796eb01e-70d2-42c6-a30f-8bdce572db3d", createable: true })
+export shared struct Point {
+  x;
+  y;
+}
+```
+
+[18:16:35.0562] <rbuckton>
+> <@mhofman:matrix.org> especially since I'm opposed to registration based on strings
+
+To clarify: my understanding was that you're opposed to registration based on strings associated with the declaration? The handles approach still uses string based registration.
+
+[18:19:25.0576] <rbuckton>
+I keep coming back to the registration-at-declaration approach because its fairly common in many languages. If its at declaration time, wouldn't forgeability be potentially less of an issue since its "first in wins" and we would throw on a duplicate registration so its more than likely your app would fail to start up?
+
+[19:54:17.0946] <Mathieu Hofman>
+> <@rbuckton:matrix.org> To clarify: my understanding was that you're opposed to registration based on strings associated with the declaration? The handles approach still uses string based registration.
+
+In the registration mechanism provided by the spec, yes I'm opposed to string based registration. The handle based approach does not offer a string based mechanism at the spec level.
+
+[19:57:26.0165] <Mathieu Hofman>
+> <@rbuckton:matrix.org> I keep coming back to the registration-at-declaration approach because its fairly common in many languages. If its at declaration time, wouldn't forgeability be potentially less of an issue since its "first in wins" and we would throw on a duplicate registration so its more than likely your app would fail to start up?
+
+I don't see how registration time changes anything. A first win registration based on forgeable keys provides a global communication channel that is simply unacceptable.
+
+[21:17:00.0722] <Jack Works>
+👀
+
+[21:17:56.0418] <Jack Works>
+any brief introduction about the recent progress? I have heard it has been in V8 under an experimental flag, is that version of V8 shipped with NodeJS?
+
+[00:26:51.0153] <Ashley Claymore>
+Here's the Chromium details: https://github.com/tc39/proposal-structs/blob/main/CHROMIUM-DEV-TRIAL.md
+
+[15:12:25.0467] <shu>
+Jack Works: the dev trial doesn't work with node just yet, which needs https://github.com/nodejs/node/pull/47706 to merge
+

@@ -1,0 +1,1960 @@
+2021-09-01
+[06:37:48.0472] <Ashley Claymore>
+change-array-by-copy methods dropped from 10 to 4
+https://github.com/tc39/proposal-change-array-by-copy/issues/27
+
+[06:47:37.0167] <bakkot>
+do we want to take notes for the "Response to ECMA / LF Proposed Partnership | Michael Saboff" item?
+
+[06:47:54.0207] <bakkot>
+I'm never sure for the administrative rather than technical items
+
+[06:50:14.0762] <Rob Palmer>
+yes, take notes, but we won't make them publish them publicly
+
+[06:52:44.0375] <Rob Palmer>
+the jitsi is open - same passcode as yesterday
+
+[07:44:12.0054] <littledan>
+I also strongly support the "safety value" of permissive copyright agreements/forkability
+
+[07:49:47.0242] <shu>
+just FYI here's the list of ecma members: https://www.ecma-international.org/about-ecma/members/
+
+[08:08:51.0456] <Michael Ficarra>
+ceil, floor, round, trunc, really?
+
+[08:09:11.0847] <bakkot>
+I'd actually say that stage 1 shouldn't be about extending Math specifically, just about adding more math operations for bigints
+
+[08:09:31.0082] <ljharb>
+"bigint math" indeed doesn't necessarily mean it has to be on `Math`
+
+[08:09:44.0513] <rbuckton>
+It could just be on `BigInt`
+
+[08:09:56.0939] <ljharb>
+the challenge there is, "why are these things on Number too?"
+
+[08:10:01.0219] <ljharb>
+ * the challenge there is, "why aren't these things on Number too?"
+
+[08:10:15.0017] <ljharb>
+iow, perhaps most of the Math methods belonged on Number, but here we are
+
+[08:10:21.0410] <ryzokuken>
+maybe we could later add aliases on `Number` 😀 
+
+[08:10:52.0748] <rbuckton>
+Also possible to introduce a separate global, i.e., `MathN` or `BigMath`, but I'd hate to have to do this over and over if we add more number types in the future.
+
+[08:11:24.0229] <nicolo-ribaudo>
+It could be namespaced, `Math.BigInt.*`
+
+[08:11:37.0382] <ryzokuken>
+what about `mixedArrayWithNumbersAndBigInts.map(Math.abs)`?
+
+[08:11:49.0483] <ljharb>
+ * would have to be `Math.bigint.*` then, thanks to `Temporal.Now`
+
+[08:12:03.0900] <ryzokuken>
+wait, isn't it a namespace too?
+
+[08:12:10.0637] <ljharb>
+lol nvm, i'm tired and confused myself
+
+[08:12:10.0674] <ryzokuken>
+so same capitalization
+
+[08:14:41.0954] <ljharb>
+re max/min, `1n < 3` works, so `Math.max(1n, 3)` should work.
+
+[08:15:11.0194] <ljharb>
+ * re max/min, `1n < 3` works, so `Math.max(1n, 3)` should work. i see zero concern with "mixing" in max/min
+
+[08:15:24.0493] <ljharb>
+ * re max/min, `1n < 3` works, so `Math.max(1n, 3)` should work. i see zero concern with "mixing" in max/min, because there's no accidental precision loss, which was the only motivation for mixing errors i recall
+
+[08:16:02.0655] <ljharb>
+ * re max/min, `1n < 3` works, so `Math.max(1n, 3)` should work. i see zero concern with "mixing" in max/min, because there's no accidental precision loss, which was the only motivation for mixing errors that i recall
+
+[08:16:45.0828] <Michael Ficarra>
+I fully support "maths operations for BigInts", not so sure about the choice of functions listed here
+
+[08:17:03.0605] <bakkot>
+yeah, +1 for excluding transcedentals
+
+[08:18:22.0742] <Jack Works>
+support for some kind of NS instead of `bigMax` and `bigMin`
+
+[08:18:29.0027] <bakkot>
+though also, +1 for hashing out the exact list in stage 1
+
+[08:19:30.0105] <shu>
+i don't know if it's bizarre that arbitrary precision math doesn't "just work"...
+
+[08:19:55.0247] <ljharb>
+max/min isn't "arbitrary precision", it's a form of `>` and `<`
+
+[08:20:18.0626] <ljharb>
+if i can do `999999999999999999999999999999999999999999999999999999999999999n > 1`, why can't i put those in max or min?
+
+[08:20:40.0241] <danielrosenwasser>
+> because there's no accidental precision loss
+
+`10000000000000000000000n < 10000000000000000000000.1`
+
+`> false`
+
+🤨
+
+[08:21:00.0873] <shu>
+ljharb: yes, my comment is about unqualified "math"
+
+[08:21:01.0063] <ljharb>
+in that case the loss happens on the number creation, not part of the `<`
+
+[08:21:01.0465] <nicolo-ribaudo>
+You don't know the return type of `Math.min(x, y)` when `x` is a number and `y` is a bigint
+
+[08:21:37.0181] <danielrosenwasser>
+I don't really think it's a problem in practice, but it's not like most people know the behavior off-hand
+
+[08:21:38.0934] <ljharb>
+nicolo-ribaudo: the return type is T, the type of your inputs - number if all numbers or non-numbers, bigint if all bigints, number or bigint if both
+
+[08:21:44.0118] <bakkot>
+RangeError, surely?
+
+[08:21:45.0488] <danielrosenwasser>
+ * I don't really think it's a problem in practice, but it's not like most people know the behavior off-hand
+
+[08:21:52.0464] <bakkot>
+I guess TypeError makes sense from one perspective
+
+[08:22:00.0250] <ljharb>
+why would it be an error of any kind if `<` with them isn't
+
+[08:22:05.0554] <ljharb>
+ * why would it be an error of any kind if `<` with them isn't
+
+[08:22:17.0505] <ljharb>
+bigint/number mixing errors are about losing precision _by the mixing_. this is not a problem for max/min, just like it's not one for comparison.
+
+[08:22:34.0789] <ljharb>
+ * bigint/number mixing errors are about losing precision _by the mixing_. this is not a problem for max/min, just like it's not one for comparison.
+
+[08:22:35.0780] <Michael Ficarra>
+ljharb: you can't `<` with 0 operands
+
+[08:23:13.0572] <ljharb>
+sure?
+
+[08:23:35.0998] <Michael Ficarra>
+so min/max with 0 arguments should do what?
+
+[08:23:42.0396] <ljharb>
+`Math.max()` is `-Infinity`, `Math.max(x)` is `x`, and 2+ operands is where it's useful, and also where it matters
+
+[08:24:12.0732] <ljharb>
+i don't see any issue with `Math.max(...x)` possibly returning either type. if you cared about that, you'd already be ensuring `x` has 2+ items.
+
+[08:24:43.0324] <ljharb>
+ * i don't see any issue with `Math.max(...x)` possibly returning either type. if you cared about that, you'd already be ensuring `x` has 1+ items.
+
+[08:24:46.0801] <ljharb>
+since bigint lacks an ultimate max/min value (infinity) it's nonsensical to put in < 1 items and expect a bigint back, no?
+
+[08:25:06.0047] <Michael Ficarra>
+yes, so RangeError
+
+[08:25:17.0627] <ljharb>
+if it were a bigint-only method, sure
+
+[08:25:26.0119] <ljharb>
+but in this scenario it's a bigint and/or number method.
+
+[08:25:32.0115] <ljharb>
+and it already doesn't throw an error, so it can't start now
+
+[08:26:08.0589] <ljharb>
+and making a new method, that still mixes (because not allowing mixing here is ridiculous), only to throw an error on 0 items (or maybe to satisfy some type system-like mental model?), doesn't seem sufficiently motivated to me
+
+[08:26:23.0556] <ljharb>
+ * and making a new method, that still mixes (because not allowing mixing here is ridiculous), only to throw an error on 0 items (or maybe to satisfy some type system-like mental model?), doesn't seem sufficiently motivated to me
+
+[08:26:31.0710] <Michael Ficarra>
+I'm leaning toward new methods on BigInt here
+
+[08:26:41.0393] <bakkot>
+sqrt is easy I think, but it's the only obvious sometimes-irrational one which works
+
+[08:26:45.0798] <bakkot>
+and cbrt, of course
+
+[08:27:00.0643] <ljharb>
+for max and min specifically, i would be staunchly opposed to a bigint-only one. these methods only should allow mixing. and `BigInt.max` allowing both seems odd.
+
+[08:27:11.0655] <ljharb>
+ * for max and min specifically, i would be staunchly opposed to a bigint-only one. these methods only should allow mixing. and `BigInt.max` allowing both seems odd.
+
+[08:27:48.0362] <sarahghp>
+you can already sort a mixed array, right? 
+
+[08:28:06.0760] <bakkot>
+ljharb: the only reason to allow mixing is if you have a list which has both bigint and numbers, which you should not have and it is not clear to me that the language ought to have explicit support for
+
+[08:28:11.0017] <sarahghp>
+so then Max and Min is logical
+
+[08:28:22.0434] <ljharb>
+i don't understand "should not have"
+
+[08:28:36.0276] <ryzokuken>
+me neither, why should you not have mixed arrays?
+
+[08:28:37.0323] <Michael Ficarra>
+sarahghp: are you referring to the default sort comparator? you can sort anything
+
+[08:28:55.0605] <Jack Works>
+Oh but I have some question about BigInt or Decimals in general
+
+[08:29:01.0897] <ljharb>
+ * also the language already has explicit support for it - `mixedArray.reduce((a, b) => a + b)` works fine, eg.
+
+[08:29:41.0020] <Jack Works>
+what if I do `1m/3m`? Can I get a infinite precise decimal number to represent `1/3` in Math?
+
+[08:30:04.0119] <ryzokuken>
+Jack Works: that's an open question for the bigdecimal proposal
+
+[08:30:15.0436] <ryzokuken>
+but for decimal128 that's not as big as issue
+
+[08:30:23.0344] <ryzokuken>
+or for fractions
+
+[08:30:31.0998] <sarahghp>
+> <@michaelficarra:matrix.org> sarahghp: are you referring to the default sort comparator? you can sort anything
+
+I mean the default sort on array works, and so, as a practitioner, I would expect max and min to work as well. 
+
+[08:30:51.0527] <bakkot>
+the default sort on array uses strings
+
+[08:30:52.0796] <HE Shi-Jun>
+sounds like we need Fractions? syntax like `1/3r` 
+
+[08:31:03.0564] <bakkot>
+that is, sorts by string order
+
+[08:31:11.0600] <ryzokuken>
+yeah, either fractions or decimal128 would avoid the 1/3 issue
+
+[08:31:12.0291] <sarahghp>
+yes I know why it works, but I am saying from DX not an internal reason why it would be expected to work
+
+[08:31:25.0113] <ryzokuken>
+but then there's other issues that bigdecimals solve... it's a complicated tradeoff
+
+[08:31:25.0138] <sarahghp>
+ * yes I know why it works, but I am saying from DX not an internal reason why it would be expected to work
+
+[08:32:05.0101] <bakkot>
+I do strongly think that a `bigSqrt` should truncate to a bigint rather than returning a number or decimal or anything
+
+[08:33:08.0843] <ryzokuken>
++1 for stage 1.
+
+[08:33:44.0801] <HE Shi-Jun>
+not sure we really need `bigMin/bigMax`, it seems `Infinity` is ok for empty... because the worst case is just throw TypeError so no need to have `bigMin/bigMax` if it also throw TypeError 😂
+
+[08:33:47.0794] <Tierney Cyren>
+always love to see improved math
+
+[08:34:09.0413] <Jack Works>
+and for example, in 6.1.6.2.3 BigInt::exponentiate, it doesn't say what will happen if the result is too big to represent. Should the engine give a rounded/approximated result or should the engine throw a TypeError?
+
+[08:34:56.0012] <HE Shi-Jun>
+> <@jackworks:matrix.org> and for example, in 6.1.6.2.3 BigInt::exponentiate, it doesn't say what will happen if the result is too big to represent. Should the engine give a rounded/approximated result or should the engine throw a TypeError?
+
+I suppose it should throw TypeError or OOM ??
+
+[08:35:21.0320] <Rick Waldron>
+RangeError
+
+[08:35:40.0536] <bakkot>
+I think it currently OOMs
+
+[08:35:48.0234] <Michael Ficarra>
+sarahghp: I wouldn't call this "working":
+```
+[10n, 2].sort()
+> [10n, 2]
+[10n, 200].sort()
+> [10n, 200]
+```
+
+[08:35:50.0539] <bakkot>
+which, presumably we could fix
+
+[08:35:55.0194] <bakkot>
+ * which, presumably we could fix
+
+[08:35:57.0961] <bakkot>
+(could, not should)
+
+[08:36:03.0342] <Michael Ficarra>
+ * sarahghp: I wouldn't call this "working":
+```
+[10n, 2].sort()
+> [10n, 2]
+> [10n, 200].sort()
+>  [10n, 200]
+```
+```
+
+[08:36:11.0651] <Michael Ficarra>
+ * sarahghp: I wouldn't call this "working":
+```
+[10n, 2].sort()
+> [10n, 2]
+> [10n, 200].sort()
+>  [10n, 200]
+```
+
+[08:36:38.0622] <Rick Waldron>
+bakkot: implementations all throw RangeError exceptions. 
+
+[08:36:42.0101] <HE Shi-Jun>
+Michael Ficarra: sort (without pass comparator) is always strange 😂
+
+[08:36:47.0162] <bakkot>
+Rick Waldron: oh, huh, good to know
+
+[08:37:03.0034] <bakkot>
+my recollection is evidently incorrect then
+
+[08:37:08.0955] <sarahghp>
+Michael Ficarra: in this case "works" stands for "does not throw error" 😆. Since > < works/works on a mixed array too, I think it's an argument for why it's surprising when Math functions throw on BigInt
+
+[08:37:14.0319] <Rick Waldron>
+bakkot: 262 specifies it. 
+
+[08:37:21.0314] <bakkot>
+huh!
+
+[08:37:23.0770] <Rick Waldron>
+https://tc39.es/ecma262/#sec-numeric-types
+
+[08:37:33.0718] <bakkot>
+I did not think we ever specified what to do when you hit implementation limits
+
+[08:37:39.0728] <Rick Waldron>
+T::exponentiate(x, y) -> T, may throw RangeError
+
+[08:37:42.0254] <bakkot>
+I thought we just assumed infinite memory etc
+
+[08:37:45.0495] <bakkot>
+TIL.
+
+[08:37:53.0968] <Michael Ficarra>
+sarahghp: but `<` and `>` don't Tostring, I'm confused how this is related at all
+
+[08:39:03.0206] <Michael Ficarra>
+ * sarahghp: I wouldn't call this "working":
+```
+[10n, 2].sort()
+> [10n, 2]
+[10n, 200].sort()
+>  [10n, 200]
+```
+
+[08:39:15.0056] <Michael Ficarra>
+ * sarahghp: I wouldn't call this "working":
+```
+[10n, 2].sort()
+> [10n, 2]
+[10n, 200].sort()
+> [10n, 200]
+```
+
+[08:40:39.0772] <sarahghp>
+Michael Ficarra: I'm saying that from a practitioner perspective, given `[].sort()` and `<` and `>` work on mixed types, it is surprising that `max` and `min` do not. I do understand why it makes sense internally.
+
+[08:43:46.0867] <bakkot>
+POO: can we get another note taker?
+
+[08:43:51.0045] <bakkot>
+I'm distracted currently
+
+[08:44:01.0115] <bakkot>
+missed most of Shu
+
+[08:44:07.0677] <nicolo-ribaudo>
+I can help until the break
+
+[08:44:07.0806] <Josh Blaney>
+I can help
+
+[08:46:32.0865] <Tierney Cyren>
+am I hearing someone's discord notifications lmao
+
+[08:46:41.0882] <Tierney Cyren>
+I keep thinking I'm getting pinged
+
+[08:46:42.0196] <ryzokuken>
+lol same
+
+[08:46:53.0002] <HE Shi-Jun>
+same :)
+
+[08:48:52.0774] <Richard Gibson>
+`Math.max(1, 1n)`?
+
+[08:49:33.0009] <bakkot>
+Richard Gibson: first-wins, I think
+
+[08:50:34.0255] <Michael Ficarra>
+same for `Math.min`?
+
+[08:51:10.0251] <bakkot>
+presumably
+
+[08:51:47.0706] <bakkot>
+it should be equivalent to "stable-sort by `<`, then take the first element"
+
+[08:52:12.0906] <bakkot>
+or, equivalently, a loop which does `if (cur > max) cur = max`
+
+[08:55:25.0726] <Michael Ficarra>
+`max = cur`, surely
+
+[08:57:58.0081] <bakkot>
+uhhh yeah that one
+
+[08:57:58.0471] <jschoi>
+https://github.com/js-choi/proposal-bigint-math/issues/3
+
+[09:06:57.0555] <ptomato>
+shu: to expand on something ljharb said in the last remark, there's a lot of transitive code that depends on this pattern, but arguably there's also a lot that _should_ but does not yet, because they haven't realized it's a problem
+
+[09:07:17.0874] <ptomato>
+(was going to put this as a reply on the queue, but we were out of time)
+
+[09:07:39.0702] <shu>
+i hear you, and that helps convince me this is of higher importance
+
+[09:08:07.0359] <ljharb>
+re "holistic": imo, pipeline + method extraction syntax + getIntrinsic would make for a much more ergonomic approach, on top of which perhaps a very ergonomic syntactic solution could be developed if it were warranted
+
+[09:08:21.0903] <shu>
+but you know, what i hear is also not that this is _impossible_ today, just that it sucks to have to write
+
+[09:08:39.0949] <ljharb>
+very true
+
+[09:08:46.0853] <ljharb>
+altho CSP makes some of it impossible
+
+[09:09:04.0308] <shu>
+don't put that evil on me
+
+[09:09:05.0876] <ljharb>
+ * altho CSP makes some of it impossible (but, "make syntax-reachable intrinsics just be global" would address that part)
+
+[09:09:21.0481] <shu>
+i want to remain not touching csp
+
+[09:12:04.0917] <shu>
+ljharb: oh one thing i forgot to say was i probably don't want enumeration
+
+[09:12:26.0016] <shu>
+so preference from me is separate proposal there
+
+[09:12:37.0674] <jschoi>
+> <@ljharb:matrix.org> re "holistic": imo, pipeline + method extraction syntax + getIntrinsic would make for a much more ergonomic approach, on top of which perhaps a very ergonomic syntactic solution could be developed if it were warranted
+
+I plan to collaborate with you and hopefully HE Shi-Jun on a simple method-extraction proposal (https://github.com/js-choi/proposal-bind-operator/).
+
+[09:13:06.0310] <jschoi>
+I plan to propose it next meeting. 
+
+[09:14:37.0976] <ljharb>
+looking forward to it
+
+[09:15:01.0551] <ljharb>
+> <@shuyuguo:matrix.org> ljharb: oh one thing i forgot to say was i probably don't want enumeration
+
+i agree "that preference" means it should be a separate proposal
+
+[09:15:52.0629] <TabAtkins>
+Do all the chairs have edit access to Reflector issues? I just learned of the HackMD for the agenda because it was left in the comments for the reflector issue and not put in the initial post as well.
+
+[09:16:14.0874] <ljharb>
+all the delegates do
+
+[09:16:19.0198] <shu>
+i thought they didn't like posting it because it's usually under significant flux
+
+[09:16:39.0287] <shu>
+it's a source of truth in the sense that that's the document they use to coordinate among themselves and to resolve rescheduling conflicts
+
+[09:17:00.0285] <ljharb>
+note that some people may not like it if you edit their comments, so best to only do it with explicit permission; for the record everyone is always free to fix my typos, update URLs, add missing info, things like that, as long as it's correct :-p
+
+[09:17:07.0353] <TabAtkins>
+i'm hearing in TDZ that it shoudl be trusted over the tcq, so I'm not sure
+
+[09:17:18.0919] <shu>
+it should be is my understanding
+
+[09:17:22.0376] <ljharb>
+i've only ever used TCQ as a source of "what's happening now"
+
+[09:17:29.0758] <shu>
+right
+
+[09:17:31.0277] <ljharb>
+ * i've only ever used TCQ as a source of "what's happening now", as opposed to relying on it to predict the future
+
+[09:17:49.0225] <bterlson>
+TCQ hasn't been updated with the agenda items we will bring forward, will work on that
+
+[09:20:03.0952] <shu>
+bterlson: am i up next? i.e. is it possible to accommodate adam klein's constraint request? it was added pretty late so understandable if not
+
+[09:20:25.0019] <bterlson>
+checking
+
+[09:21:28.0611] <bterlson>
+shu: confirm you mean the fixed shape item?
+
+[09:21:35.0072] <shu>
+i do, yes
+
+[09:22:13.0565] <shu>
+adam is unable to make 10-11 AM PT, so if we switch my two items to the last hour that resolves that. just not sure if possible
+
+[09:26:12.0092] <leobalter>
+shu in this case I'll need to sync with Caridy too as he should join for this discussion.
+
+[09:26:25.0047] <bterlson>
+shu: I think we can make it work, plan to present 1100 PDT
+
+[09:26:27.0000] <leobalter>
+ * shu:  in this case I'll need to sync with Caridy too as he should join for this discussion.
+
+[09:26:41.0157] <bterlson>
+leobalter: hopefully that will work for caridy?
+
+[09:27:15.0439] <leobalter>
+bterlson: I hope so, let me ping him
+
+[09:27:19.0313] <bterlson>
+rbuckton: would you be able to present regexp at 1000 PDT?
+
+[09:29:52.0638] <leobalter>
+I understand we have overflow for this meeting, but in this case, and I'll miss discussing Jordan's topic "Tightening host restrictions to improve testing". I believe this relates to EcmaScript improvements/fixes and I'm biased to prefer that over new features, but my same bias also wants some of the Stage 1 features.
+
+[09:29:55.0120] <leobalter>
+time is unfair
+
+[09:32:53.0069] <bterlson>
+The emerging plan is thus: 1:00 EDT RegExp feature parity rbuckton (with ljharb tightening host restrictions as backup in case Ron cannot present), 2:00 EDT fixed shape for objects shu, 2:45 small resizable buffers shu 
+
+[09:33:21.0501] <bterlson>
+will update TCQ in a few moments
+
+[09:34:49.0248] <shu>
+great, thank you!
+
+[09:36:04.0916] <shu>
+sorry for last minute request
+
+[09:36:15.0786] <Rob Palmer>
+TCQ is now updated. And HackMD
+
+[09:36:26.0312] <Rob Palmer>
+Next is Ron Buckton with RegExp Feature Parity
+
+[09:38:33.0889] <yulia>
+please go to the reflector for the result from this morning's session
+
+[09:39:48.0577] <yulia>
+i will get dinner
+
+[10:03:09.0413] <Rob Palmer>
+Yulia's Reflector post:  https://github.com/tc39/Reflector/issues/397
+
+[10:06:29.0276] <Michael Ficarra>
+I have no interest in just importing regexp features wholesale
+
+[10:07:31.0438] <ljharb>
+i like some of these features, but parity for the sake of parity does not sound like a good thing to me
+
+[10:08:20.0244] <Michael Ficarra>
+same
+
+[10:08:33.0947] <Michael Ficarra>
+and we should not be forced to take on unwanted features because some of them are good
+
+[10:08:51.0749] <Michael Ficarra>
+these could all be individual proposals
+
+[10:14:17.0046] <littledan>
+I think it'd make more sense to choose a specific scope, for bringing something to Stage 1
+
+[10:14:24.0188] <littledan>
+like one of these inner proposals
+
+[10:14:45.0243] <Michael Ficarra>
+sounds like that's what Ron is looking for now
+
+[10:14:47.0393] <jschoi>
+It seems like Ron is proposing forming something like a subcommittee to investigate regex gaps.
+
+[10:14:59.0621] <jschoi>
+ * It seems like Ron is proposing forming something like a subcommittee to investigate regex gaps, with individual subsequent proposals.
+
+[10:15:01.0648] <littledan>
+OK, that sounds good to me. I'm happy to see discussion reopened here
+
+[10:15:04.0535] <jschoi>
+ * It seems like Ron is proposing forming something like a subcommittee to investigate regex gaps, with individual subsequent proposals for identified gaps.
+
+[10:15:27.0557] <Michael Ficarra>
+the feature that lets you change the flags in the middle of the pattern scares me quite a bit
+
+[10:15:40.0977] <littledan>
+yeah, that's how the committee reacted last time Brian brought it up
+
+[10:15:45.0990] <shu>
+well, if ron is actually proposing another TG he should be explicit?
+
+[10:15:51.0972] <jschoi>
+ * It seems like Ron is proposing forming something like a subcommittee to investigate regex gaps with regard to other languages, with individual subsequent proposals for identified gaps.
+
+[10:15:57.0622] <Michael Ficarra>
+the context-dependency in the regexp grammar is already hard enough for people
+
+[10:16:10.0819] <littledan>
+> <@shuyuguo:matrix.org> well, if ron is actually proposing another TG he should be explicit?
+
+I guess this would be more of a temporary ad-hoc set of calls?
+
+[10:17:02.0810] <shu>
+stupid question
+
+[10:17:18.0000] <shu>
+why are textmate grammar parsers not rewritten to simply not use regexps
+
+[10:19:11.0375] <Justin Ridgewell>
+> <@shuyuguo:matrix.org> why are textmate grammar parsers not rewritten to simply not use regexps
+
+Without writing a whole scripting engine?
+
+[10:19:25.0460] <shu>
+maybe it's because i don't know what textmate grammars do
+
+[10:19:36.0964] <shu>
+textmate grammars themselves have regexps to define what an e.g. identifier should be?
+
+[10:19:45.0616] <jschoi>
+Basically. https://macromates.com/manual/en/language_grammars
+
+[10:19:49.0184] <Michael Ficarra>
+we don't need any of these textmate things because we have a *language* around our regexps, our language isn't just regexp
+
+[10:19:59.0281] <Justin Ridgewell>
+https://github.com/textmate/javascript.tmbundle/blob/master/Syntaxes/Regular%20Expressions%20(JavaScript).tmLanguage
+
+[10:20:30.0478] <Justin Ridgewell>
+VIM syntax parsers are very similar
+
+[10:20:39.0013] <bakkot>
+there's been a proposal for regex composition, which seems strictly better than this `define` thing
+
+[10:20:44.0814] <Michael Ficarra>
+yep
+
+[10:20:59.0097] <littledan>
+(also lots of people like RegExp.escape better)
+
+[10:21:16.0595] <littledan>
+Context-Free Expressions!
+
+[10:21:24.0271] <shu>
+at the whole-stack level, it seems easier to extend TextMate grammars to have functions in place of regexps than to... keep extending regexps?
+
+[10:24:01.0690] <jschoi>
+TextMate grammars are a de facto standard, so it’d have to be a de-facto extension from one vendor to do that, heh…
+
+[10:24:08.0585] <jschoi>
+ * TextMate grammars are a de-facto standard, so it’d have to be a de-facto extension from one vendor to do that, heh…
+
+[10:24:39.0023] <shu>
+that seems cheaper to me than changing JS
+
+[10:25:13.0422] <littledan>
+I don't see why JS should have part of a TextMate interpreter built-in, even if TextMate won't change
+
+[10:25:30.0006] <littledan>
+I think it's more like, TextMate may show that some things are useful
+
+[10:25:35.0663] <littledan>
+rather than that, we should completely align
+
+[10:26:05.0706] <shu>
+i'm not saying that, i'll try to explain better when the queue item comes up
+
+[10:28:45.0603] <Michael Ficarra>
+totally agree with Waldemar here about the x flag
+
+[10:30:21.0708] <jschoi>
+I think that Ron’s review of existing regex functionality is very broad, impressive, and useful—if only to see precedent and existing practice, although of course JavaScript should not adopt features from other languages wholesale.
+
+[10:30:35.0038] <jschoi>
+ * I think that Ron’s review of existing regex functionality is very broad, impressive, and useful—if only to see precedent and existing practice, although of course JavaScript should not adopt features from other languages wholesale.
+
+[10:31:25.0361] <jschoi>
+I do know that lots of people in Perl have happily used whitespace in regexes with a flag for decades, although whether it’d work in JS now is tough.
+
+[10:31:39.0408] <jschoi>
+ * I do know that lots of people in Perl have happily used whitespace and comments in regexes with a flag for decades, and it helps them quite a bit, although whether that’d work in JS now is tough.
+
+[10:32:23.0213] <HE Shi-Jun>
+agree, I really want whitespaces and comments in regexp 😃
+
+[10:32:40.0569] <jschoi>
+ * I do know that lots of people in Perl have happily used whitespace and comments in regexes with a flag for decades. Regex whitespace and comments help them quite a bit…although whether that’d work in JS now is tough.
+
+[10:34:03.0648] <ljharb>
+i want those too, but "i want to be like perl" is not a thought i can ever recall having
+
+[10:34:16.0376] <HE Shi-Jun>
+Regexp is actually a sublanguage , so I also support a RegExp TG like Chip post in the queue 😂
+
+[10:38:15.0741] <Michael Ficarra>
+to clarify, what I was referring to earlier when I said "with few exceptions, proposals are for single features", I was thinking about Rick Waldron's Math functions proposal which brought in a lot of new things at once but was all done as a single proposal
+
+[10:38:47.0707] <bterlson>
+ljharb: The buffet was presented in 2015 believe it or not
+
+[10:39:03.0765] <bterlson>
+https://esdiscuss.org/notes/2015-11-18
+
+[10:39:08.0827] <Michael Ficarra>
+was that at the MSFT meeting?
+
+[10:39:23.0543] <Michael Ficarra>
+oh, I guess not, not in November
+
+[10:39:25.0231] <jschoi>
+Yeah, this is the impressive website. I think this is great as a general reference, something like a CanIUse.
+
+[10:39:29.0734] <bterlson>
+It wasn't, but I don't remember where it was
+
+[10:39:42.0077] <jschoi>
+ * Yeah, this is the impressive website. I think this is great as a general reference, something like a CanIUse.
+https://rbuckton.github.io/regexp-features/
+
+[10:39:58.0932] <jschoi>
+ * Yeah, this is the impressive website. rbuckton: I think this is great as a general reference, something like a CanIUse. 
+https://rbuckton.github.io/regexp-features/
+
+[10:43:46.0721] <bterlson>
+shorter ljharb: this already has stage 1, bring the individual proposals now?
+
+[10:45:26.0720] <ljharb>
+yes, exactly that
+
+[10:46:06.0570] <rbuckton>
+So, roll this into "regexp buffet" and break down the proposals?
+
+[10:48:18.0487] <ljharb>
+yes
+
+[10:51:49.0510] <shu>
+i usually don't consider terseness a top goal
+
+[10:53:07.0061] <rbuckton>
+By terse I mean, better than assembly. A goal of any high level language is to remove unnecessary complexity where possible to improve expressivity and readability
+
+[10:55:28.0848] <ljharb>
+with a program containing regexes, often the unnecessary complexity is removed by moving logic away from regees
+
+[10:55:30.0419] <ljharb>
+ * with a program containing regexes, often the unnecessary complexity is removed by moving logic away from regexes
+
+[10:55:35.0960] <ljharb>
+ * with a program containing regexes, often the unnecessary complexity is removed by moving logic away from using regexes
+
+[10:56:04.0221] <jschoi>
+“Now you have two problems…”
+
+[10:56:13.0162] <jschoi>
+ * “Now you have two problems”…
+
+[11:00:03.0895] <bterlson>
+I think textmate is just a convenient generalization, not a motivation in and of itself, fwiw. There exists a set of use cases that textmate grammars are very good at (if frustrating to use) that would also be useful for many JS use cases as well.
+
+[11:01:07.0030] <bterlson>
+I continue to be sad that a dfa-based engine with all-matches semantics isn't being discussed more
+
+[11:01:39.0114] <Michael Ficarra>
+bterlson: I dunno, when implementing parsers in JS, you shouldn't be trying to shove as much of the code into regexps
+
+[11:01:49.0676] <Michael Ficarra>
+you have this whole language to use
+
+[11:02:14.0010] <bterlson>
+parsing with regexp isn't a motivator
+
+[11:02:18.0246] <bterlson>
+scanning, though...
+
+[11:02:41.0298] <bterlson>
+sure you could implement these things using js code and a while (pos < str.length) loop but
+
+[11:02:46.0296] <Michael Ficarra>
+you don't need recursion in your regexps for scanning
+
+[11:02:50.0535] <rbuckton>
+I agree that regexps can be complicated, but they can also significantly cut down on equivalent javascript code in quite a few cases.
+
+[11:03:21.0493] <bterlson>
+I'm not going to argue specifically for recursion, but it's safe to say in general that parsing JS is also not the motivator behind these :)
+
+[11:03:30.0700] <ljharb>
+less code !== less complexity
+
+[11:03:34.0472] <Michael Ficarra>
+rbuckton: but why? you have nice debugging tools for JS and nice high-level language features
+
+[11:03:49.0224] <rbuckton>
+Recursion is a huge stretch, to be fair. I'd really like support for subroutines as it improves readability.
+
+[11:04:22.0735] <Michael Ficarra>
+the DEFINE feature was a perfect example of something we definitely do not need because we have a language outside of the regexp
+
+[11:04:51.0108] <Michael Ficarra>
+if the whole language was the regexp, fair, those are nice features, but that's just not the case
+
+[11:06:10.0142] <rbuckton>
+I've written ISO8601 date/time parsers, its a lot easier with DEFINE. Without it you end up with a lot of string concatentation + `new RegExp(..)`. Writing it as pure JS is a mess :/
+
+[11:06:48.0264] <Michael Ficarra>
+okay and what's wrong with the string concatenation?
+
+[11:06:53.0942] <rbuckton>
+(part of the reason the DEFINE example was an ISO8601 date)
+
+[11:08:01.0965] <devsnek>
+i am so hyped for shared memory
+
+[11:08:08.0885] <rbuckton>
+> <@michaelficarra:matrix.org> okay and what's wrong with the string concatenation?
+
+You mention debugging. String concat a bunch of regexp patterns together to achieve what you could with DEFINE, then look at the regexp in the watch window and its unreadable.
+
+[11:09:30.0181] <rbuckton>
+> <@devsnek:matrix.org> i am so hyped for shared memory
+
+I am as well. May be a longer term goal but really need code sharing/shared functions as well.
+
+[11:10:10.0158] <devsnek>
+i wish webkit pushed more on their shared memory strawman
+
+[11:10:14.0816] <TabAtkins>
+Rather than building variables into regex, couldn't we have an escape-hatch in regex similar to `${}` that lets you sub in arbitrary sub-regexes?
+
+[11:10:34.0267] <rbuckton>
+> <@tabatkins:matrix.org> Rather than building variables into regex, couldn't we have an escape-hatch in regex similar to `${}` that lets you sub in arbitrary sub-regexes?
+
+That's Callouts and they're not great.
+
+[11:11:32.0263] <rbuckton>
+Unless its just Regexp.tag with string interpolation, which is still hard to read in a watch window.
+
+[11:12:41.0285] <TabAtkins>
+Yeah suppose it's just Regexp.tag. My fear is that the moment you want to do anything slightly more complex with the definition, you'll have to fall back on string interpolation *anyway*
+
+[11:14:47.0836] <rbuckton>
+My primary wishlist for RegExp syntax is, in order:
+
+1. Modifiers `(?imsx-imsx)` and `(?imsx-imsx:subexpr)`
+2. Possessive Quantifiers/Atomic Groups
+3. Conditionals `(?(cond)yes|no)` (even w/o DEFINE)
+4. `x` mode and comments
+5. Subroutines
+6. `n` mode
+7. `\R`
+8. `\A`, `\z`, `\Z`
+9. Rercursion (but not bullish on this one)
+
+[11:16:02.0411] <ljharb>
+i think out of that list, for me it's 4,6,7,8, and maybe 2,1
+
+[11:16:18.0717] <HE Shi-Jun>
+It allow create struct objects in JS, so I don't understand why this proposal is for wasmGC -> JS ?  
+
+[11:16:40.0516] <Michael Ficarra>
+for me it's 8, 7, 2, and... that's probably it
+
+[11:17:39.0889] <Michael Ficarra>
+ * for me it's 8, 7, 2, and... that's probably it
+
+[11:18:06.0259] <ljharb>
+i think comments are critical
+
+[11:18:27.0145] <ljharb>
+ime any regex longer than like 10 characters is unreadable, and i always have to write an "x mode" version of it in a multiline comment so it's annotated
+
+[11:18:33.0601] <ljharb>
+ * ime any regex longer than like 10 characters tends to be unreadable, and i always have to write an "x mode" version of it in a multiline comment so it's annotated
+
+[11:18:45.0937] <Michael Ficarra>
+was waldemar's argument not convincing, ljharb ?
+
+[11:18:47.0486] <devsnek>
+ron you're asking for turing completeness
+
+[11:18:47.0866] <HE Shi-Jun>
+Plain structs seems just sealed object... so what's the diff between this with `@seal class Box {}` ?
+
+[11:18:55.0420] <ljharb>
+Michael Ficarra: i must have missed it
+
+[11:19:20.0156] <rbuckton>
+Can achieve 8 with 1, which is one reason I find 1 more useful. `\A` is `(?-m:^)`, `\z` is `(?-m:$)`
+
+[11:19:35.0882] <Michael Ficarra>
+ljharb: we can't have x mode in literals because of the grammar, and if you're using the RegExp constructor, you can just concat strings and put comments between them
+
+[11:20:26.0385] <rbuckton>
+`x` mode improves readability by making whitespace insignificant. Its more than just x-mode comments
+
+[11:20:59.0797] <TabAtkins>
+yeah, `x` mode is real critical imo, i use it constantly in python *both* for whitespace and comments
+
+[11:21:20.0283] <asumu>
+> <@haxjs:matrix.org> It allow create struct objects in JS, so I don't understand why this proposal is for wasmGC -> JS ?
+
+The struct objects created in JS would (at least initially, in this minimal proposal) not be importable as Wasm GC structs as there isn't enough type information. The intention is that this proposal helps explain how the Wasm GC struct gets reflected as a JS object.
+
+[11:21:35.0565] <Michael Ficarra>
+... you both know that you can put whitespace between concatenations too
+
+[11:21:37.0226] <ljharb>
+string concat is not workable; that's not statically analyzeable (linting) or syntax highlightable (human review) and it's too easy to have bugs caused by dynamic string creation
+
+[11:21:41.0799] <TabAtkins>
+Python even makes it easier to do comments outside of the strings, since it auto-concats consecutive strings, but it would still be decently uglier to write
+
+[11:21:54.0291] <nicolo-ribaudo>
+Could someone give an example that shows why `x` in (possibly multiline) literals is impossible?
+
+[11:21:56.0763] <ljharb>
+iow if it can't be done in literals then i think it can't be done, but doing it in literals is the sole value prop
+
+[11:22:08.0005] <Michael Ficarra>
+ljharb: what do you propose we do then? x mode doesn't work with our grammar
+
+[11:22:25.0880] <ljharb>
+is there a spec for x mode that makes that a foregone conclusion?
+
+[11:22:40.0391] <TabAtkins>
+"doing it in literals is sole value prop" strong disagree from Python experience
+
+[11:22:41.0003] <ljharb>
+i certainly don't understand the grammar well enough to disagree with that assertion, but it seems overly strong at this early stage
+
+[11:22:59.0198] <Michael Ficarra>
+we could have x mode affect non-lineterminator whitespace
+
+[11:23:27.0203] <Michael Ficarra>
+but I think people would expect it to allow you to split the regexp across lines, too
+
+[11:23:35.0883] <Michael Ficarra>
+which we cannot do
+
+[11:23:45.0133] <devsnek>
+why can't we split it across lines
+
+[11:24:00.0029] <Michael Ficarra>
+it would already be valid syntax
+
+[11:24:12.0523] <nicolo-ribaudo>
+No, regexps cannot currently contain line breaks
+
+[11:24:24.0587] <Michael Ficarra>
+I didn't say it would be a regexp
+
+[11:24:38.0019] <nicolo-ribaudo>
+Then, an expression cannot start with `/`
+
+[11:25:04.0440] <nicolo-ribaudo>
+ * Then, an expression cannot currently start with `/` (if it's not a regexp)
+
+[11:25:50.0233] <devsnek>
+can one of the people saying this is ambiguous please say which production(s) it is ambiguous with
+
+[11:26:15.0599] <Michael Ficarra>
+hold on, let me try to come up with the ambiguous case that waldemar posted earlier
+
+[11:28:01.0476] <rbuckton>
+Which is easier to read?
+
+```js
+// inline (taken from ecmarkdown)
+/^<[/!]?(\w[\w-]*)(\s+[\w]+(\s*=\s*("[^"]*"|'[^']*'|[^><"'=``]+))?)*\s*>/
+
+// string concat (could use String.raw`` but its even harder to read)
+new RegExp(
+  // start of tag
+  "^<[/!]?" +
+  // tag name
+  "(\\w[\\w-]*)" +
+  // attribute(s)
+  "(\\s+" +
+    // attribute name
+    "[\\w]+" +
+    // attribute value
+    "(\\s*=\\s*(\"[^\"]*\"|'[^']*'|[^><\"'=``]+))?" +
+  // repeat attribute
+  ")*" +
+  // end tag
+  "\\s*>");
+
+// x mode
+new Regexp(String.raw`
+  # start of tag
+  ^<[/!]?
+
+  # tag name
+  (\w[\w-]*)
+
+  # attribute(s)
+  (\s+
+
+    # attribute name
+    [\w]+
+
+    # attribute value
+    (\s*=\s*("[^"]*"|'[^']*'|[^><"'=``]+))?
+
+  # repeat attribute
+  )*
+
+  # end tag
+  \s*>
+`, "x");
+```
+
+[11:28:31.0166] <rbuckton>
+Ugh with element's rendering of tagged templates in a fenced code block :/
+
+[11:29:10.0694] <rbuckton>
+Better format here: https://gist.github.com/rbuckton/856f61c4b3d9dbd8a048d0a2e99cfe73
+
+[11:30:37.0871] <Josh Blaney>
+as a note, the person speaking is not in the delegates text file
+
+[11:30:43.0492] <rbuckton>
+String concat means double-escaping, or prefixing String.raw for every line, which reduces readability and makes it easier to make mistakes.
+
+[11:31:45.0175] <littledan>
+the previous speaker was Asumu Takikawa
+
+[11:33:17.0177] <littledan>
+The string part is excellent. Just being able to postMessage a string to a Worker cheaply is a huge.
+
+[11:33:24.0164] <littledan>
+(and this doesn't require a spec change)
+
+[11:40:36.0237] <ljharb>
++1 for mark's perspective
+
+[11:42:41.0290] <devsnek>
+idk i get rust send/sync vibes from this, which is a good thing
+
+[11:49:34.0941] <devsnek>
+what is this meeting software called
+
+[11:49:56.0146] <devsnek>
+oh jitsi
+
+[11:50:32.0711] <Rob Palmer>
+(my jitsi was not locked on a user - it was just... jitsi)
+
+[11:53:21.0039] <Rob Palmer>
+15:52-15:57
+
+[12:03:00.0143] <ptomato>
+do we take notes of this item?
+
+[12:03:14.0759] <shu>
+the incubator call chartering? usually not
+
+[12:03:58.0835] <ptomato>
+ok, will delete this item unless anyone objects quickly
+
+[12:04:12.0500] <shu>
+don't think it matters if there're already notes
+
+[12:04:17.0413] <shu>
+just saying if it's missing, it doesn't matter if it's missing
+
+[12:04:23.0023] <ptomato>
+they're somewhat bot-garbled
+
+[12:04:29.0796] <shu>
+yeah, deletion sgtm
+
+[12:04:36.0476] <ptomato>
+but I can leave them too!
+
+[16:14:40.0520] <shu>
+since the two incubator call topics this time aren't proposals, i'm not sure who should be added to the stakeholders list
+
+[16:14:58.0753] <shu>
+PTAL at the new charter (https://github.com/tc39/incubator-agendas/issues/20) and add yourself if you're interested in one of the topics
+
+[16:50:25.0344] <bakkot>
+how often do you figure someone calls `codePointAt` with a negative index
+
+[16:50:31.0325] <bakkot>
+can we make that wrap
+
+
+2021-09-02
+[17:00:21.0494] <shu>
+i have no idea
+
+[17:01:43.0723] <devsnek>
+time to add analytics
+
+[22:05:20.0029] <ljharb>
+Rob Palmer: the October meeting is on London time, and the agenda says GMT - but isn't the UK on BST until 10/31/21, which is an hour different from GMT?
+
+[22:05:31.0945] <ljharb>
+ * Rob Palmer: the October meeting is on London time, and the agenda says GMT - but isn't the UK on BST until 10/31/21, which is an hour different from GMT? trying to confirm as i make the next agenda skeleton
+
+[22:12:58.0985] <ljharb>
+ * Rob Palmer (also bterlson Aki ): the October meeting is on London time, and the agenda says GMT - but isn't the UK on BST until 10/31/21, which is an hour different from GMT? trying to confirm as i make the next agenda skeleton
+
+[22:20:58.0495] <Rob Palmer>
+Ahhh. Timezones. It's London time. If BST runs then, it is BST. 
+
+[22:21:01.0758] <Justin Ridgewell>
+> <@rbuckton:matrix.org> String concat means double-escaping, or prefixing String.raw for every line, which reduces readability and makes it easier to make mistakes.
+
+Need that `String.dedent` tagged template… I should really bring that back.
+
+[06:55:14.0003] <jschoi>
+Has anyone played around with GitHub Discussions in proposal repositories, as an alternative to GitHub Issues for non-bugs?
+
+[06:55:39.0910] <jschoi>
+https://docs.github.com/en/issues/tracking-your-work-with-issues/about-issues#comparing-issues-and-discussions
+
+[06:56:46.0481] <jschoi>
+For example, I figure https://github.com/js-choi/proposal-bigint-math/issues/5 would be good as a discussion, since there’s nothing “actionable” there, but it’s still a nice thread to have (rather than disappearing as a closed issue).
+
+[06:56:54.0641] <jschoi>
+ * For example, I figure https://github.com/js-choi/proposal-bigint-math/issues/5 would be good as a Discussion rather than an Issue, since there’s nothing “actionable” there, but it’s still a nice thread to have (rather than disappearing as a closed issue).
+
+[06:57:06.0877] <jschoi>
+ * For example, I figure https://github.com/js-choi/proposal-bigint-math/issues/5 would be good as a Discussion rather than an Issue, since there’s nothing “actionable” there, but it’s still a nice thread to have as a discussion/reference (rather than disappearing as a closed issue).
+
+[07:23:00.0987] <bakkot>
+my impression is that people do not ever think to look in the discussions tab, which makes it a bad place to put discussions
+
+[07:23:05.0426] <bakkot>
+at least, I never think to look there
+
+[07:23:37.0042] <bakkot>
+sidebar: can someone mark https://github.com/guybedford/proposal-is-usv-string/issues/12#issuecomment-911265901 as off-topic and ask that commenter to stop posting this stuff on this proposal?
+
+[07:47:58.0227] <jschoi>
+> <@bakkot:matrix.org> at least, I never think to look there
+
+Yeah, people probably would find them most often whenever an issue to which they’re subscribed gets converted to a discussion—or when they search for phrases in a repository. 
+
+Closed issues seem like a similar black hole to me too, though. People might not deliberately look in discussions tabs, but people might not deliberately look in closed issues either (the default issues filter being only open issues).
+
+[07:48:13.0142] <jschoi>
+* > <@bakkot:matrix.org> at least, I never think to look there
+
+Yeah, people probably would find GitHub discussions most often whenever an issue to which they’re subscribed gets converted to a discussion—or when they search for phrases in a repository. 
+
+Closed issues seem like a similar black hole to me too, though. People might not deliberately look in discussions tabs, but people might not deliberately look in closed issues either (the default issues filter being only open issues).
+
+[07:48:41.0838] <jschoi>
+* > <@bakkot:matrix.org> at least, I never think to look there
+
+Yeah, people probably would find GitHub discussions most often whenever an issue to which they’re subscribed gets converted to a discussion—or when they search for phrases in a repository with matching discussions. 
+
+Closed issues seem like a similar black hole to me too, though. People might not deliberately look in discussions tabs, but people might not deliberately look in closed issues either (the default issues filter being only open issues).
+
+[08:15:05.0805] <bakkot>
+can't speak for anyone else, but I regularly search among all issues, including closed, and I don't think that pulls in discussions
+
+[10:56:00.0704] <shu>
+i don't even know what discussions are
+
+[10:56:18.0539] <shu>
+i mean i know the english word
+
+[10:57:34.0168] <legendecas>
+FYI https://docs.github.com/en/discussions
+
+[10:59:03.0798] <shu>
+it is highly unlikely i will be motivated enough to learn a new UI and remember to check it
+
+[10:59:03.0983] <legendecas>
+Tho there aren't many tc39 repo has enabled that feature IIRC
+
+[10:59:35.0589] <ptomato>
+I regularly search through closed issues as well when I'm opening a new issue, but I receive enough comments/issues from people (on most github/gitlab repos that I've ever maintained) that makes me think few people do
+
+[11:04:34.0261] <jschoi>
+> <@shuyuguo:matrix.org> it is highly unlikely i will be motivated enough to learn a new UI and remember to check it
+
+I figure that, if any repository used GitHub Discussions, we wouldn’t ever need to specifically check any repository’s Discussions—because updates to any Discussions (in any repository to which we’re subscribed) would show up with issue updates in our notifications anyway. 
+
+[13:06:32.0852] <shu>
+might bold of you to assume i check any GH updates :)
+
+[16:06:55.0390] <shu>
+can one of the TC39 space admins create a "Structs and Shared Structs" room for me please?
+
+
+2021-09-03
+[09:23:35.0091] <shu>
+Aki: bterlson mylesborins can one of the TC39 space admins create a "Structs and Shared Structs" room for me?
+
+[09:24:03.0934] <bterlson>
+only if I can add "oh my" to the title
+
+[09:27:52.0530] <shu>
+thank you kindly
+
+[09:27:56.0855] <shu>
+can anyone join the TC39 rooms?
+
+[09:28:03.0552] <shu>
+or rather, anyone in TC39?
+
+[09:28:56.0051] <shu>
+actually is it in the TC39 space?
+
+[09:29:12.0503] <shu>
+i don't see the TC39 logo (this happened to me when i created a room myself and found that i couldn't put it in the TC39 space)
+
+[09:37:36.0853] <bterlson>
+the permissions are anyone can join, not just tc39. I did add it to the TC39 space I think? It's under there for me anyway, in my client.
+
+[09:38:48.0670] <bterlson>
+if I right click on the space and go to manage/explore rooms, I also see the room listed there
+
+[10:23:34.0976] <shu>
+sgtm
+
+[10:58:54.0379] <shu>
+Temporal champions, why are nanoseconds a Number in Duration but a BigInt in Instant?
+
+[11:04:30.0547] <ptomato>
+shu: https://github.com/tc39/proposal-temporal/issues/1604
+
+[11:05:46.0702] <ptomato>
+it would be more consistent to have them be BigInts, but it seems like implementors would prefer doubles, and it's arguable whether they will run into the precision limits in practice
+
+[11:07:05.0992] <ptomato>
+Instant, on the other hand, must be able to store epoch nanoseconds up to ±1e8 days, the limit of legacy Date, which does not fit in a Number, so Number is definitely out
+
+[11:09:48.0486] <ptomato>
+input on that github issue is welcome!
+
+[11:19:54.0596] <shu>
+there's maybe a related question of "is nanosecond precision" a good idea that i recall coming up internally
+
+[11:20:13.0204] <shu>
+ * there's maybe a related question of "is nanosecond precision a good idea" that i recall coming up internally
+
+[11:20:26.0053] <shu>
+ptomato: thanks for the link
+
+[11:22:31.0561] <jschoi>
+> <@bterlson:matrix.org> only if I can add "oh my" to the title
+
+(For what it’s worth, I had difficulty finding the room because it didn’t have “TC39” in its name.)
+
+[11:22:49.0013] <ptomato>
+shu: another link about nanosecond precision: https://github.com/tc39/proposal-temporal/issues/1700
+
+[11:22:50.0256] <jschoi>
+* > <@bterlson:matrix.org> only if I can add "oh my" to the title
+
+(For what it’s worth, I had difficulty finding the new Structs room because it didn’t have “TC39” in its name.)
+
+[11:23:13.0087] <bterlson>
+jschoi: I added TC39 to the title, good call
+
+[13:05:38.0349] <shu>
+the UX of the Element client remains a mystery to me
+
+
+2021-09-04
+
+2021-09-05
+
+2021-09-06
+[14:21:46.0599] <jschoi>
+Is there a place where we can review meeting notes before they’re put up on tc39/notes?
+
+[14:27:42.0429] <Rob Palmer>
+jschoi the notes remain in the Google docs linked from the meeting Reflector post. Review them, edit them, and improve them, please. 
+
+[14:28:10.0171] <Rob Palmer>
+(just don't link to them from a public channel pls) 
+
+
+2021-09-07
+
+2021-09-08
+
+2021-09-09
+[05:48:49.0423] <jschoi>
+I’m having difficulty joining the TC39 Research Call’s Zoom meeting using the link in the Google Calendar. 
+
+[05:49:42.0364] <jschoi>
+* I’m having difficulty joining the TC39 Research Call’s Zoom meeting using the link in the Google Calendar. Opening it makes Zoom say it’s an invalid link. 
+
+[05:54:52.0943] <jschoi>
+ * I’m having difficulty joining the TC39 Research Call’s Zoom meeting using the link in the Google Calendar. Opening it makes Zoom (or, specifically, mozilla.zoom.us) say: “This meeting link is invalid (3,001)”.
+
+[05:59:30.0554] <jschoi>
+Ah, whoops, looks like my display wasn’t set properly to the right time zone, and it’s in two more hours. That explains that.
+
+[06:00:45.0419] <yulia>
+oh, that is likely a problem
+
+[06:00:47.0338] <yulia>
+let me fix that
+
+[07:46:27.0221] <yulia>
+there is a new link
+
+[07:46:32.0561] <yulia>
+and i amm there
+
+[09:03:27.0814] <jschoi>
+Sorry—is the Educators Outreach meeting happening right now? I’m waiting in Google Meet to be let in by someone.
+
+[11:09:41.0767] <rickbutton>
+random maybe too specific question: are there any builtin functions that exist that aren't reachable via directly traversing the global object? The only I know of so far are the hidden constructors for async functions and generators
+
+[11:13:16.0039] <Ashley Claymore>
+I think some of the iterative objects? 
+
+[11:13:20.0568] <Ashley Claymore>
+*iterator 
+
+[11:19:31.0322] <Ashley Claymore>
+`Object.getPrototypeOf("test".matchAll("t"))[Symbol.iterator]`
+
+[11:22:00.0732] <bakkot>
+https://github.com/endojs/endo/blob/3a3afddf8828c21dcc58b9c98243b31e2cc99d47/packages/ses/src/get-anonymous-intrinsics.js has a list
+
+[11:24:31.0245] <rickbutton>
+ooh this is awesome thank you bakkot 
+
+[11:59:21.0762] <Jamie Kyle>
+Hey hey, going to present https://github.com/bathos/proposal-string-cooked at the next meeting
+
+I was wondering if I could get more people to weigh in on the open questions:
+
+- Name: https://github.com/bathos/proposal-string-cooked/issues/5
+- Function signature: https://github.com/bathos/proposal-string-cooked/issues/6
+
+[13:13:23.0234] <ljharb>
+rickbutton: also see https://github.com/ljharb/get-intrinsic/blob/main/index.js which theoretically is the same list
+
+[13:18:15.0305] <bakkot>
+ljharb: I think you're missing `%RegExpStringIteratorPrototype%`
+
+[14:23:03.0353] <jschoi>
+FYI to everyone: I have cleaned up every single presentation’s transcript in the August meeting notes. I tried my best to cross-reference with presentation slides to maximize the probability that my transcriptions were correct.
+
+Please consider checking any discussions in which you participated in to make sure I did not mess up what you said, sometime before the notes get published.
+
+[14:33:15.0509] <jschoi>
+* FYI to everyone: I have cleaned up every single presentation’s transcript in the August meeting notes. I tried my best to cross-reference with presentation slides to maximize the probability that cleanups were correct.
+
+Please consider checking any discussions in which you participated in to make sure I did not mess up what you said, sometime before the notes get published.
+
+[15:44:38.0418] <Rob Palmer>
+Wow - thank you jschoi 
+
+[15:58:40.0587] <ljharb>
+> <@bakkot:matrix.org> ljharb: I think you're missing `%RegExpStringIteratorPrototype%`
+
+ha, yes i am, thanks :-p
+
+
+2021-09-10
+[17:10:45.0189] <rbuckton (AFK Sept.10-Sept.14)>
+Thinking about bringing my symbol-based cancellation protocol back to committee. When I last left off, there wasn't much in the core language that would leverage it (basically only as an extra option to `then`, `catch`, `all`, or `race`), but now we have `import()`, `Atomics.waitAsync`, and a proposal for `Array.asyncFrom` so I'm starting to think there's enough value to be had by adopting the protocol approach. It doesn't introduce a new primitive to the language for cancellation, but would allow TC39 to spec something so that `AbortController`/`AbortSignal` could work with core language APIs, and give the community some room to experiment with other cancellation primitives. If anyone has thoughts or wants to contribute, please check https://github.com/tc39/proposal-cancellation/issues/22 and I'll see if I can put something together within the next 1-2 meetings.
+
+[17:12:50.0491] <rbuckton (AFK Sept.10-Sept.14)>
+I need to make some updates, but I'd already discussed this several years ago with Domenic Denicola about what kinds of changes would need to be made in the DOM to support the protocol (which are mostly outlined in #22, but may have changed slightly in the last few years).
+
+[17:15:36.0231] <rbuckton (AFK Sept.10-Sept.14)>
+I think the big thing that needs further discussion is the subscription/unsubscription mechanism. My current design is roughly based on the Observable proposal's subscriptions and revokable proxies (i.e., you get an object back that lets you call a method to signal disinterest). 
+
+
+2021-09-11
+
+2021-09-12
+
+2021-09-13
+
+2021-09-14
+[17:07:01.0149] <jschoi>
+I’d like to have an incubator call sometime soon about a proposal (BigInt Math). I’m looking at https://github.com/tc39/incubator-agendas/issues/20 and https://github.com/tc39/how-we-work/blob/master/incubator-calls.md, but I’m not sure how I would go about adding this to the agenda.
+
+[17:13:16.0196] <Rob Palmer>
+Normally incubator calls are decided at the end of a plenary meeting. You could always just reach out to Shu directly. 
+
+[17:15:29.0550] <jschoi>
+> <@robpalme:matrix.org> Normally incubator calls are decided at the end of a plenary meeting. You could always just reach out to Shu directly. 
+
+Ah, so *that’s* what that was. Thanks; I’ll reach out.
+
+[18:08:15.0514] <shu>
+jschoi: incubator calls is really just sanctioned time between each plenary to quicken feedback the feedback loop in between meetings
+
+[18:08:40.0260] <shu>
+at the end of every meeting i try to suggest a list of proposals, mostly earlier stage, that might benefit from such a thing. champions can also ask to be added, of course
+
+[18:08:51.0742] <shu>
+ * jschoi: incubator calls is really just sanctioned time between each plenary to quicken the feedback loop in between meetings
+
+[18:10:25.0523] <shu>
+the larger proposals might opt to have their own calls regularly, but for the rest of'em, having a dedicated time helps
+
+[18:13:01.0907] <shu>
+for completeness, agendas and notes are posted https://github.com/tc39/incubator-agendas
+
+[18:13:17.0538] <shu>
+though the way the incubator calls have evolved, the agendas are largely useless, since we've moved to single-topic calls
+
+[18:13:36.0206] <shu>
+i'll try to remember to simplify the process before next meeting...
+
+[18:30:11.0324] <rkirsling>
+/me silently gives TabAtkinsa standing ovation in front of his laptop
+
+[18:30:47.0256] <rkirsling>
+people sure do love conspiracy theories
+
+[18:31:56.0676] <TabAtkins>
+Boy howdy
+
+[18:32:00.0226] <rkirsling>
+(as to why I was watching all that... uh, because I evidently have severe boundary issues...)
+
+[18:49:00.0556] <rkirsling>
+ * (as to why I was watching all that... uh, because I evidently have no capability to set boundaries for myself...)
+
+[21:30:40.0362] <devsnek>
+i enjoyed the thread immensely
+
+[01:41:46.0586] <rkirsling>
+oh ffs
+
+[01:42:52.0632] <rkirsling>
+welp, I'll look forward to seeing what becomes of that nonsense
+
+[02:24:30.0859] <yulia | OOO until Sept 27th>
+Hey folks, I will be off for two weeks. If you are waiting on information from me please send me a reminder
+
+[02:25:50.0122] <yulia | OOO until Sept 27th>
+ * Hey folks, I will be off for two weeks. If you are waiting on information from me please send me a reminder once I am back. I am not ignoring stuff, but haven't been able to get to everything and don't want to drop it on the floor.
+
+[02:35:53.0418] <littledan>
+yulia | OOO until Sept 27th: Glad you are taking time off and taking care of yourself
+
+[06:06:11.0739] <davethegr8>
+Hey fam, https://github.com/tc39/how-we-work/issues/96 was going the same direction as https://github.com/tc39/proposal-pipeline-operator/issues/205 and I chose to lock #96. Apologies if this wasn't a good decision, and if anyone needs to un-lock the issue that is fine with me.
+
+[06:09:17.0746] <Rob Palmer>
+appreciate you davethegr8 
+
+[06:10:10.0729] <davethegr8>
+np, happy to help Rob Palmer
+
+[06:29:51.0874] <davethegr8>
+Also, I _just_ saw last comment on 96
+
+[07:30:05.0981] <devsnek>
+funny issue considering so many delegates are obsessed with fp
+
+[08:19:15.0616] <Jack Works>
+I'd like to have partial applications regardless we choose F# or hack 👀
+
+[12:54:53.0937] <rkirsling>
+how does one become quite so entitled
+
+[12:55:33.0088] <rkirsling>
+this guy must think he's the most important person who writes JavaScript
+
+
+2021-09-15
+[22:39:19.0946] <Hemanth H.M>
+Is someone working on Built In Modules Proposal?
+
+[07:26:41.0228] <shu>
+no, i don't know how we would make progress on that
+
+[07:49:42.0119] <jschoi>
+Could I get admin access to https://github.com/tc39/proposal-hack-pipes ?
+It’s archived, but I just found out that its link to the new repository is broken. I’d like to unarchive it, fix the link, then rearchive it.
+
+[07:55:19.0006] <Rob Palmer>
+jschoi: it is now unarchived - please do your work
+
+[07:55:50.0399] <Rob Palmer>
+i made you an admin - so you can do the re-archiving
+
+[07:56:40.0011] <jschoi>
+Thank you!
+
+[12:01:38.0522] <TabAtkins>
+CoC members - I sent an email about banning/timeouting someone yesterday and haven't received any response, and the person continues to derail threads and be low-key aggressive in replies.
+
+[12:01:58.0135] <TabAtkins>
+I was told to contact y'all for enforcement, but I'm about to just go ahead and do a ban and let y'all correct things afterward.
+
+[12:05:13.0904] <TabAtkins>
+Argh, it looks like bans have to be done at the org level, and can't be done for individual repos.
+
+[12:27:09.0905] <jschoi>
+Is there a CoC Matrix room?
+
+[12:33:49.0510] <TabAtkins>
+No (and if there was, it's not listed in the CoC escalation guide anyway)
+
+[12:34:24.0343] <ljharb>
+i've pinged some CoC folks.
+
+[12:39:31.0441] <Jory Burson>
+well I don't know that I have the time to read 23,000 words of text _but_ TabAtkins confirmed receipt of your email
+
+[12:39:46.0405] <Jory Burson>
+what a read!
+
+[12:40:43.0022] <TabAtkins>
+I can point to more hostile comments that have arrived since I sent the email, but really you can just look at any of the recent threads and look for things hidden as offtopic/abuse; you'll find him in most of them.
+
+[12:42:02.0349] <Jory Burson>
+Yeah I don't need to look hard to see what's going on. Considering the best way to address the immediate behavior as well as the underlying issue causing these persons to participate in this way.
+
+[13:43:33.0405] <Ashley Claymore>
+I am not experienced in these matters so this is not advise but only a thought.  Is there a risk that banning this individual would turn them into a Martyr? And others would step up in their place?
+
+[13:44:39.0982] <bakkot>
+that is a thing that happens sometimes but is not a good reason to not ban people who are behaving poorly. if new people come in and also behave poorly, ban them too.
+
+[13:44:49.0194] <ljharb>
+yes, but i'd bet much less of a risk than making it clear this kind of behavior is unacceptable
+
+[13:44:59.0024] <ljharb>
+ * yes, but i'd bet much less of a risk than failing to make it clear this kind of behavior is unacceptable
+
+[13:45:56.0690] <Ashley Claymore>
+Wise words. I can see the value in making it clear what is acceptable communication and what is not.
+
+[13:49:32.0749] <bakkot>
+yeah, and it's not just about making it clear to the people who are banned: the point of the code of conduct is to make this a place where people can trust they'll be treated well (for a certain definition thereof), or that if they are not treated well then the offending party will be asked to stop and, failing that, eventually banned. That is, we've promised - to each other and the community - that it's going to be enforced. Sometimes that enforcement risks further bad behavior, which sucks, but it's still important to keep to that commitment.
+
+[13:50:03.0694] <bakkot>
+(I haven't read the particular issue here and can't comment on whether enforcement is warranted in this case, to be clear; I'm just speaking generally about CoCs.)
+
+[13:53:17.0492] <Jory Burson>
+Ashley Claymore: We have implemented a few bans for TC39; no one has been martyred to date - generally I see that as low probability even in this case
+
+[14:02:05.0359] <Ashley Claymore>
+ Thanks for that bit of data Jory 🙂 puts my mind to rest 
+
+[14:08:35.0037] <TabAtkins>
++1 to all of what Bakkot said (tho obviously I'm central to this issue and you shouldn't let me influence you).
+
+[15:12:26.0141] <leobalter>
+My personal experience says the bans are being effective restoring the repos as collaborative work venues.
+
+[15:29:30.0174] <rbuckton>
+Would it be worthwhile to add a pubic channel to discuss the various RegExp proposals (the ones I'm now drafting in an effort to split up my proposal from the last meeting, as well as RegExp set notation)? I don't want to overload the RegExp set notation repo with unrelated chatter. Having a channel for discussion wouldn't be as formal as forming a separate TG for RegExp, but would at least provide a place for the champions of the various RegExp related proposals a place to coordinate and discuss cross-cutting concerns.
+
+[15:30:59.0683] <ljharb>
+separate channels sounds great
+
+
+2021-09-16
+[20:21:14.0702] <rkirsling>
+jschoi: that history write-up is fantastic, bravo
+
+[20:33:49.0945] <jschoi>
+> <@rkirsling:matrix.org> jschoi: that history write-up is fantastic, bravo
+
+Thank you! Hopefully this will help people get more oriented… 
+
+[20:40:39.0765] <jschoi>
+(Context for others: https://github.com/tc39/proposal-pipeline-operator/pull/214)
+
+[15:00:45.0572] <TabAtkins>
+Real happy with that PR
+
+[15:05:09.0341] <Jory Burson>
+that's awesome jschoi 
+
+
+2021-09-17
+[17:31:49.0752] <Aki>
+This is spectacular jschoi  thank you so much 
+
+[17:36:19.0506] <ptomato>
+i co-sign on to all of the above, it is really good!
+
+[17:37:02.0799] <ptomato>
+should be a great resource to point people to who still think the decision was made too hastily
+
+[03:00:34.0530] <littledan>
+I would encourage the TC39 CoC to be a bit more proactive/assertive going forward. I worry that the lack of enforcement actions makes the CoC in practice pretty weak.
+
+[08:35:24.0099] <Jory Burson>
+littledan we have moderated this user (and many others) - I think the issue is not that we aren't proactive or assertive but that you are not made aware of the actions taken?
+
+[08:36:05.0098] <Jory Burson>
+that is something we can discuss; to what extent we want to share with the delegates which actions have been taken against whom
+
+[09:22:11.0531] <rkirsling>
+hmm yeah, an announcement (however vague) would've been comforting in this scenario
+
+[09:24:09.0678] <jschoi>
+I appreciate the work the CoC is doing; I’d love to know whenever _n_ number of CoC violations were handled, even without specifics. 
+
+[09:24:15.0649] <jschoi>
+A number would be cool every so often! :)
+
+[09:24:18.0179] <rkirsling>
+since it's the sort of nightmare scenario that makes one feel like "yeah, best to avoid championing things"
+
+[09:26:56.0658] <jschoi>
+* Your hard work indeed affects my own everyday work with the proposals I’m involved with, so it’s something I do indeed care about. 
+A number would be super cool every so often. :) 
+
+[10:40:54.0903] <TabAtkins>
+I won't share details publicly, but I will say I'm satisfied with the moderation results. There was an unfortunate 1-day delay due to some accidental scheduling overlaps, but that isn't a general problem that will be repeated.
+
+[10:45:11.0092] <TabAtkins>
+I'll also say that for most people, the best response to this would have been to temporarily impose interaction limits on the repo. I'm experienced with this sort of thing and was confident I could handle the influx, but I considered deploying it myself.
+
+[10:45:33.0550] <TabAtkins>
+That doesn't require CoC intervention, unlike banning (which has to be done on the org level, not individual repos).
+
+[10:48:08.0582] <TabAtkins>
+And in hindsight, I probably *should* have turned on interaction limits as soon as I logged in to see the centithread that spawned over Sunday night, just as a preventative measure while we got things handled.
+
+[10:48:59.0125] <TabAtkins>
+the CoC committee is going to compile some guidelines to help other proposal champions deal with these sorts of situations; I hope that "impose interaction limits early" shows up in those ^_^
+
+[11:28:11.0052] <shu>
+for ArrayBuffer enthusiasts, we're ironing some spec bugs during implementation of resizable buffers, and hit on an edge case with resizing buffers in the middle of a TA prototype method where i think we can design something more sensible than just copying the Array methods. feedback welcome: https://github.com/tc39/proposal-resizablearraybuffer/pull/75
+
+[11:28:48.0722] <shu>
+(to be clear, the message should still be "don't resize in the middle" just like "don't detach in the middle", but we should still say something in the spec)
+
+[11:29:00.0181] <shu>
+ * (to be clear, the message should still be "don't resize in the middle" just like "don't detach in the middle", but we should still fully define the behavior in the spec)
+
+
+2021-09-18
+[17:57:10.0167] <jschoi>
+Heads up to the CoC committee: I just posted a bunch of new issues in the pipe-operator repository and asked people to use those issues, while making it clear that we’ve heard a lot of the old feedback before. 
+So we might get a lot more discussion traffic soon, and I fear that we might get some emotional tensions again. Hopefully not, though!
+
+[17:57:29.0293] <jschoi>
+ * Heads up to the CoC committee: I just posted a bunch of new issues in the pipe-operator repository (https://github.com/tc39/proposal-pipeline-operator/issues) and asked people to use those issues, while making it clear that we’ve heard a lot of the old feedback before. 
+So we might get a lot more discussion traffic over the next few days, and I fear that we might get some emotional tensions again. Hopefully not, though!
+
+[17:57:58.0797] <jschoi>
+ * Heads up to the CoC committee: I just posted a bunch of new issues in the pipe-operator repository (https://github.com/tc39/proposal-pipeline-operator/issues), marked a bunch of emotional off-topic comments in other threads off-topic, and asked people to use the new issues, while making it clear that we’ve heard a lot of the old feedback before. 
+So we might get a lot more discussion traffic over the next few days, and I fear that we might get some emotional tensions again. Hopefully not, though!
+
+[17:58:04.0881] <jschoi>
+ * Heads up to the CoC committee: I just posted a bunch of new issues in the pipe-operator repository (https://github.com/tc39/proposal-pipeline-operator/issues), marked a bunch of emotional off-topic comments in other threads off-topic, and asked people to use the new issues. 
+So we might get a lot more discussion traffic over the next few days, and I fear that we might get some emotional tensions again. Hopefully not, though!
+
+[18:35:02.0914] <jschoi>
+* Heads up to the CoC committee: I just posted a bunch of new issues in the pipe-operator repository (https://github.com/tc39/proposal-pipeline-operator/issues), marked a bunch of passionate off-topic comments in other threads off-topic, and asked people to use the new issues. 
+So we might get a lot more discussion traffic over the next few days, and I fear that we might get some emotional tensions again. Hopefully not, though!
+
+[20:14:59.0950] <bakkot>
+my log service now supports search (e.g. https://matrixlogs.bakkot.com/TC39_Delegates/search?q=stage )
+
+[20:16:34.0894] <bakkot>
+I'd like to petition to have it replace the "public logs" link the topic, which is I think substantially worse than my logs
+
+[02:06:14.0136] <littledan>
+(Btw I was talking about historical cases, not this one. Happy to explain more in private if someone in the CoC wants to discuss with me.)
+
+[02:07:19.0498] <littledan>
+(the most critical CoC issues are around the behavior of delegates, not just online commenters, IMO)
+
+
+2021-09-19
+
+2021-09-20
+[13:08:50.0373] <mhofman>
+bakkot: I was wondering if there was any update to the status of https://github.com/tc39/proposal-freeze-prototype. We have a defense in depth use case that could probably use this feature.
+
+[13:18:16.0101] <bakkot>
+mhofman: no updates. the place that i left it was, I have not figured a good way to represent the three states "fully extensible, extensible by new properties but not by setting prototype, not extensible" in a way which plays well with the MOP/proxy traps, like `isExtensible`. I haven't found anything that I liked and there may not be a way to do it.
+
+[13:39:17.0460] <mhofman>
+I'm not fully up to date on the issues. Is there any fundamental problem besides adding new proxy traps?
+
+[15:09:50.0578] <bakkot>
+the problem is that `isExtensible` is an existing proxy trap, which returns a boolean, and which is used for _both_ "can add properties" and "can change prototype". so what should `IsExtensible` mean in a world where those two things are not always identical?
+
+[15:53:27.0033] <rbuckton>
+Huh... We define `ScriptEvaluation` in the spec but don't actually reference it from anywhere in the spec.
+
+[16:16:09.0189] <ljharb>
+> <@bakkot:matrix.org> the problem is that `isExtensible` is an existing proxy trap, which returns a boolean, and which is used for _both_ "can add properties" and "can change prototype". so what should `IsExtensible` mean in a world where those two things are not always identical?
+
+presumably we could just pick one, but i'm guessing the challenge is ensuring that the one we pick matches the intention of people relying on those meanings?
+
+[16:29:00.0443] <bakkot>
+rbuckton: yeah, that's the entry point, which is left to hosts; see https://html.spec.whatwg.org/multipage/webappapis.html#calling-scripts
+
+[16:29:09.0460] <bakkot>
+we should probably call this out though
+
+[16:29:28.0596] <rbuckton>
+> <@bakkot:matrix.org> we should probably call this out though
+
+Yeah, I just found it interesting it wasn't called out as such.
+
+
+2021-09-21
+[17:01:32.0031] <shu>
+yes, it would be good to call out all the entry points
+
+[17:02:08.0117] <shu>
+lack of tighter integration of entry points is what led to our having a "dead" (i.e. no upstream specs were using it) Jobs machinery for so long
+
+[17:38:57.0296] <rbuckton>
+FYI: I'm looking for feedback on a proposed changed to the explicit resource management proposal: https://github.com/tc39/proposal-explicit-resource-management/issues/65. The feedback from that issue will help me prepare for bringing this proposal back to committee at an upcoming meeting. Any input would be appreciated.
+
+[18:13:15.0478] <mhofman>
+> <@ljharb:matrix.org> presumably we could just pick one, but i'm guessing the challenge is ensuring that the one we pick matches the intention of people relying on those meanings?
+
+Since the current meaning is both, why can't we keep `isExtensible` as-is, add new `isMutablePrototype` and `preventPrototypeMutation` traps, and add an invariant that `[[IsMutablePrototype]]` must return `false` if `[[IsExtensible]]` returns false? Then since the proxy exotic functions currently enforces the invariants on the target, the proxy traps would have to respect the invariants. Is there something I'm missing?
+
+[18:37:03.0471] <ljharb>
+that kind of matches what i'd assume we'd do
+
+[23:06:11.0133] <Ashley Claymore>
+> <@rbuckton:matrix.org> FYI: I'm looking for feedback on a proposed changed to the explicit resource management proposal: https://github.com/tc39/proposal-explicit-resource-management/issues/65. The feedback from that issue will help me prepare for bringing this proposal back to committee at an upcoming meeting. Any input would be appreciated.
+
+> there-is-no-try
+Very much enjoyed that 
+
+[23:06:29.0845] <Ashley Claymore>
+* > <@rbuckton:matrix.org> FYI: I'm looking for feedback on a proposed changed to the explicit resource management proposal: https://github.com/tc39/proposal-explicit-resource-management/issues/65. The feedback from that issue will help me prepare for bringing this proposal back to committee at an upcoming meeting. Any input would be appreciated.
+
+> there-is-no-try
+
+Very much enjoyed that 
+
+[23:06:55.0181] <Ashley Claymore>
+* > <@rbuckton:matrix.org> FYI: I'm looking for feedback on a proposed changed to the explicit resource management proposal: https://github.com/tc39/proposal-explicit-resource-management/issues/65. The feedback from that issue will help me prepare for bringing this proposal back to committee at an upcoming meeting. Any input would be appreciated.
+
+
+> there-is-no-try”
+
+Very much enjoyed that 
+
+[23:07:14.0522] <Ashley Claymore>
+* > <@rbuckton:matrix.org> FYI: I'm looking for feedback on a proposed changed to the explicit resource management proposal: https://github.com/tc39/proposal-explicit-resource-management/issues/65. The feedback from that issue will help me prepare for bringing this proposal back to committee at an upcoming meeting. Any input would be appreciated.
+
+Branch name: 
+
+> there-is-no-try
+
+Very much enjoyed that 
+
+[07:36:43.0775] <TabAtkins (OOO Sep18-Sep26)>
+@bakkot return a string for "yes" and the new case, so it's still truthy for the cases that are at least somewhat extensible?
+
+[10:17:01.0725] <Ashley Claymore>
+Reminder: Record & Tuple Monthly today at 18:00 UTC (in 45mins)
+
+[11:03:51.0887] <mhofman>
+> <@aclaymore:matrix.org> Reminder: Record & Tuple Monthly today at 18:00 UTC (in 45mins)
+
+Is the meeting on?
+
+[11:04:55.0000] <nicolo-ribaudo>
+We have some problems with starting the call
+
+[11:05:10.0955] <nicolo-ribaudo>
+Ok it's working
+
+
+2021-09-22
+[13:23:45.0527] <rbuckton>
+Would it make sense to have Matrix channels for most Stage 1 proposals? I'd like to create channels for a few proposals for discussions, but apparently don't have that level of access in the TC39 space.
+
+[13:32:08.0597] <cjtenny>
+As still a relative newcomer, I'd enjoy such channels and think it would make it easier to participate in tc39
+
+[13:33:53.0837] <littledan>
+anyone can create a new room in the matrix.org server; I guess you can ask here for help adding the room to the space afterwards
+
+[14:16:51.0269] <rbuckton>
+Well, I created https://matrix.to/#/#tc39-regular-expressions:matrix.org to discuss RegExp proposals in general. I'll probably create ones for explicit resource management and partial application shortly as well (since there have been discussions about them in other channels and I'd like to redirect them to a specific channel rather than clutter other discussions).
+
+[14:17:18.0185] <rbuckton>
+I'm not sure if there are specific security/membership settings that should be set for that channel though.
+
+
+2021-09-23
+[17:46:54.0406] <TabAtkins (OOO Sep18-Sep26)>
+Yeah we haven't settled on firm guidance yet, but making it a fully public room seems to be the best thing right now
+
+[19:48:31.0873] <ljharb>
+We have settled on all technical discussion in official spaces always being public and logged, without exception
+
+[19:49:00.0788] <ljharb>
+i think creating the channel and then asking chairs to add it to the space (and also have it logged?) seems like a great approach
+
+[07:01:56.0549] <TabAtkins (OOO Sep18-Sep26)>
+We should have that as written guidance with instructions for how to set up a channel correctly, in how-we-work or something
+
+[07:19:04.0480] <littledan>
+yeah, probably in this document https://github.com/tc39/how-we-work/blob/master/matrix-guide.md
+
+[07:23:51.0192] <jschoi>
+Related to this is whether we are going to keep using view.matrix.org or bakkot’s custom logging application (or both).
+
+[07:24:48.0316] <littledan>
+view.matrix.org is already there for everything on the server that's public. We should probably change the topic link to bakkot's logs, though.
+
+[07:51:48.0086] <bakkot>
+also if you would like me to log a channel let me know
+
+[08:22:26.0545] <rbuckton>
+I just added https://matrix.to/#/#tc39-partial-application:matrix.org as well
+
+
+2021-09-24
+[11:46:13.0267] <Jory Burson>
+Hi delegates, per a request last week, I am writing to notify you that the CoC committee has taken a moderation action (temporary ban) against a user on the pipe operator repo. Per our process the individual(s) involved in the report have been informed. 
+
+[12:50:04.0865] <rkirsling>
+thanks for letting us know! (and glad to hear it)
+
+[13:02:57.0420] <rkirsling>
+really glad I started filtering those emails -- it was really affecting my mental state last week so it was nice to not even remember its existence this week. bummer that the toxicity has not ceased
+
+[13:03:24.0053] <rkirsling>
+* really glad I started filtering those emails -- reading them was really affecting my mental state last week so it was nice to not even remember its existence this week. bummer that the toxicity has not ceased
+
+[13:29:39.0381] <Jory Burson>
+It's probably _really_ worthwhile to reinforce this to you all out loud: You are under no obligation to provide your time and attention to community members, especially those who are not engaging with your discussions in good faith. Please use the methods (email filtering, interaction limiting, locking issues, etc) you need to protect your health and bandwidth. Please also consider leveraging your friendly neighborhood CoC persons for coaching and support (if you want!)
+
+
+2021-09-25
+
+2021-09-26
+[20:07:19.0562] <jschoi>
+For future reference, in case anyone else might find it useful, I’ve whipped up a bot that tracks when an issue’s comments are rapidly growing into a centithread. It’ll then automatically locks it to cool down, until a moderator can take a look at it. https://github.com/js-choi/github-comment-floodgate
+
+[20:08:26.0003] <jschoi>
+We’ve added this and another bot that locks stale already-closed issues to our own proposal’s repository, and you might find them useful too if you have a high-traffic proposal of your own.
+
+[20:08:50.0426] <jschoi>
+* For future reference, in case anyone else might find it useful, I’ve whipped up a bot that tracks when an issue’s comments are rapidly growing into a centithread. It’ll then automatically lock it, to cool down until a moderator can take a look at it. https://github.com/js-choi/github-comment-floodgate
+
+[20:09:05.0339] <jschoi>
+* In case anyone else might find it useful, I’ve whipped up a bot that tracks when an issue’s comments are rapidly growing into a centithread. It’ll then automatically lock it, to cool down until a moderator can take a look at it. https://github.com/js-choi/github-comment-floodgate
+
+
+2021-09-27
+[18:31:30.0673] <jschoi>
+FYI: If you were one of the people to whom Okabe sent an email, I’ve forwarded it to the CoC; please don’t reply to Okabe’s email.
+
+[18:31:44.0972] <jschoi>
+ * FYI: If you were one of the people to whom Okabe sent a personal email about their article, I’ve forwarded it to the CoC. Please don’t reply to Okabe’s email.
+
+[18:32:00.0805] <jschoi>
+ * FYI: If you were one of the several people to whom Okabe sent a personal email about their article, I’ve forwarded it to the CoC. Please don’t reply to Okabe’s email.
+
+[18:32:32.0062] <TabAtkins (OOO Sep18-Sep26)>
+Danke, I was making dinner when it came in but I was going to do the same.
+
+[18:43:56.0103] <jschoi>
+* FYI: If you were one of the several people to whom a person (who was temporarily banned from the pipe-operator repository) sent a personal email about their response article: I’ve forwarded the email to the CoC. Please don’t reply to the email.
+
+[18:45:30.0607] <jschoi>
+* FYI: If you were one of the several people to whom a person (who has been temporarily banned from the pipe-operator repository by the CoC committee) sent a personal email about their dev.to article: I’ve forwarded the email to the CoC committee. Please don’t reply to the email.
+
+[18:45:47.0110] <jschoi>
+* FYI: If you were one of the several people to whom a person (who has been temporarily banned from the pipe-operator repository by the CoC committee) has sent a personal email about their dev.to article: I’ve forwarded the email to the CoC committee. Please don’t reply to the email.
+
+[03:55:38.0029] <ryzokuken>
+Is there a good place to discuss the ECMA by-laws and rules? Not sure if this room can be used for that.
+
+[05:30:05.0746] <ryzokuken>
+Since it is a non-technical discussion, I went ahead and created a private room to discuss the by-laws, rules and different terms of the upcoming partnership. Please let me know if you need an invite.
+
+[10:45:06.0430] <mpcsh>
+> <@tabatkins:matrix.org> We should have that as written guidance with instructions for how to set up a channel correctly, in how-we-work or something
+
+I wrote this up [here](https://github.com/tc39/inclusion-group/blob/main/docs/matrix-setup.md) but would be happy to polish it up and move it to how-we-work!
+
+[10:46:05.0313] <TabAtkins (OOO Sep18-Sep26)>
+Since I had no idea that I should be looking in that repo for anything like this, yes, it would be great to have that in how-we-work. ^_^ Looks good at a quick glance.
+
+[10:47:32.0704] <mpcsh>
+yeah, I don't really know why I put it in the inclusion group repo 😅
+
+[10:55:10.0865] <mpcsh>
+https://github.com/tc39/how-we-work/pull/98
+
+
+2021-09-28
+[02:16:41.0164] <freddy>
+👋
+
+
+2021-09-29
+
+2021-09-30
+[18:57:21.0713] <Aki>
+drunk with power
+
+[00:19:37.0698] <nicolo-ribaudo>
+https://github.com/tc39/agendas/blob/master/2021/10.md
+
+Should String.cooked be in the "proposals" section? Jamie Kyle 
+
+[07:39:08.0235] <ljharb>
+Yes, I’ll move it later today
+

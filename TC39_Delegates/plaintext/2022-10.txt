@@ -1,0 +1,177 @@
+2022-10-01
+[14:42:26.0872] <bakkot>
+TabAtkins: you (apparently) signed up to review the Set methods proposal ~ 4 years ago. It's been long enough and gone through enough revisions that it's basically a different proposal at this point, but all the same, do you still want to review? It's up at https://github.com/tc39/proposal-set-methods, also I have slides for the November meeting at https://docs.google.com/presentation/d/1SvBt_0yPuK39Zz7Tg7nBdPGJkZvTlJ2UOYrDuiX60Ks
+
+[14:42:49.0228] <bakkot>
+(no pressure if you're not up for reviewing)
+
+[14:43:01.0610] <TabAtkins>
+Oh jeez, uh, sure, yeah, I'd happily do so
+
+[14:44:53.0822] <bakkot>
+thanks!
+
+[14:45:29.0789] <bakkot>
+I may or may not go for stage 3 at the November meeting but either way am hoping for no further changes to it (except in response to reviews / implementation feedback)
+
+[14:45:41.0619] <bakkot>
+ * I may or may not go for stage 3 at the November meeting but either way am hoping for no further changes to it (except in response to reviews / implementation feedback)
+
+
+2022-10-03
+[09:30:22.0561] <Rob Palmer>
+Please could I get an approval on September notes.
+
+https://github.com/tc39/notes/pull/211
+
+[11:11:38.0833] <ryzokuken>
+> <@robpalme:matrix.org> Please could I get an approval on September notes.
+> 
+> https://github.com/tc39/notes/pull/211
+
+I'd thought of doing it when I first saw the PR but didn't realize it was necessary to merge... 
+
+[11:11:43.0393] <ryzokuken>
+Anywho, done now! 
+
+
+2022-10-05
+[12:57:10.0980] <TabAtkins>
+bakkot: I still feel it's weird for the receiver and argument to use different logic for how to access their values, but if this is a requirement, then the way the proposal is currently accessing the argument's data looks good. (I like in particular that it, incidentally, prevents accidentally passing a plain string and having it interpreted as a Set of letters.)
+
+[12:58:14.0122] <TabAtkins>
+The rest of the details seem fine too. My only complaint is still about the term 'difference' not suggesting directionality quite strongly enough (and `symmetricDifference` being just *so long*), but I expressed that in an issue a few years back and won't block if the champions ended up deciding it's okay.
+
+[13:06:29.0360] <bakkot>
+thanks for the review!
+
+[13:08:17.0744] <bakkot>
+yes, it basically ended up being a requirement that the receiver and argument need to use different logic for accessing their values
+
+[13:08:24.0417] <bakkot>
+and ack on the naming, but I think these names are the best we've got; `symmetricDifference` in particular doesn't come up very often and if you're reaching for it it you probably know it under that name
+
+[13:26:29.0237] <TabAtkins>
+Yeah, my only competing suggestions are to use `.minus()` and `.difference()` for the two of them - "minus" gives a correct directional read with "A minus B" meaning exactly what it sounds like. "difference" is more symmetric in English and can be used to indicate a symmetric difference - "what's the difference between A and B" is often symmetric.
+
+[13:27:01.0529] <TabAtkins>
+(I also consider "symmetry" to exceed the complexity budget for names I want to use in API design all by itself; its spelling isn't quite obvious.)
+
+[13:29:34.0937] <bakkot>
+using "difference" for symmetric difference would be very confusing, I think
+
+[13:30:02.0735] <TabAtkins>
+I think that was the pushback when I suggested it a few years ago, too. I disagree, but oh well.
+
+
+2022-10-06
+[17:14:30.0666] <rkirsling>
+honestly, given that it's an unusual operation that has a standard name, I think the length is justified
+
+
+2022-10-10
+[08:56:12.0014] <shu>
+bakkot: so i finally got around to implementing the removing-await-from-yield* thing, and it showed some performance regressions, which is very strange. that should totally not be the case, right? is there any interaction with promise combinators that we missed?
+
+[09:00:58.0237] <Ashley Claymore>
+Purely curious, were these performance regressions of running “normal” sites/apps. Or synthetic?
+
+[09:02:47.0459] <bakkot>
+shu: no interaction with promise combinators I can think of, no.
+
+[09:03:05.0727] <bakkot>
+I can't see the performance regression page linked on the v8 bug; can you mark it as visible or send me a screenshot or something?
+
+[10:42:08.0040] <Jack Works>
+> <@aclaymore:matrix.org> Purely curious, were these performance regressions of running “normal” sites/apps. Or synthetic?
+
+Are there real world applications using async generator? 
+
+[11:13:11.0720] <shu>
+Ashley Claymore: synthetic afaik
+
+[11:13:27.0888] <shu>
+bakkot: that infra i believe is google only, i'll take a look later in the week
+
+[11:44:34.0793] <jschoi>
+I use async generators all the time to implement async-iterator transforms like mapping, filtering, and grouping. Though I use JavaScript for offline data processing, not for web apps.
+
+[11:44:46.0177] <jschoi>
+> <@jackworks:matrix.org> Are there real world applications using async generator? 
+
+ * I use async generators all the time to implement async-iterator transforms like mapping, filtering, and grouping. Though I use JavaScript for offline data processing, not for web apps.
+
+[11:54:54.0670] <bakkot>
+if you have access to github's new codesearch it is a great way to answer this question
+
+[11:54:57.0294] <bakkot>
+https://cs.github.com/?scopeName=All+repos&scope=&q=language%3Ajs+%22async+function*%22
+
+[11:55:06.0248] <bakkot>
+finds e.g. https://github.com/prettier/prettier/blob/f38111fec6c35b513370832a84bdac8b5663763d/src/cli/expand-patterns.js#L13 https://github.com/PipedreamHQ/pipedream/blob/66ad30207aa5205021c37871008dd5b6d469a0a9/scripts/findDuplicateKeys.js#L20
+
+[11:55:25.0460] <bakkot>
+second one has a yield*, even
+
+
+2022-10-12
+[05:50:47.0998] <eemeli>
+I'm starting to draft spec text for the [Intl.MessageFormat proposal](https://github.com/tc39/proposal-intl-messageformat), and thought I'd check: Is there anything like a style guide available for ECMA-262/ECMA-402, or is that "just" implicit from what the specs currently look like? I recall some vague conversations about such a thing, but now I can't be sure if those were of a thing that actually exists already.
+
+[08:55:23.0822] <ptomato>
+it doesn't exist, but it's something I'd like to work on. there is a PR with the very beginning of one, but it's stalled: https://github.com/tc39/how-we-work/pull/119
+
+[09:00:57.0849] <eemeli>
+Thank you, that's exactly what I recall having come across earlier. Having that guidance be more discoverable would be great.
+
+[09:20:54.0753] <bakkot>
+eemeli: using `--lint-spec` when building with ecmarkup will also check some conventions, and running `npx emu-format spec.html` will run a formatter which will enforce some more
+
+[10:57:28.0272] <Michael Ficarra>
+eemeli: A lot of our conventions are also informally listed here: https://github.com/tc39/ecmarkup/issues/173
+
+[10:57:59.0524] <Michael Ficarra>
+the 262 editors would like to eventually document our editorial conventions more formally on the 262 wiki
+
+[10:58:06.0528] <Michael Ficarra>
+it's just been hard to find time to work on that
+
+[11:04:37.0595] <eemeli>
+Michael Ficarra: That's an excellent resource, thank you!
+
+
+2022-10-13
+[12:02:56.0083] <littledan>
+FYI I've been thinking about a couple process questions, and made Reflector posts with proposals for them, at https://github.com/tc39/Reflector/issues/360#issuecomment-1274637026 and https://github.com/tc39/Reflector/issues/451 . The idea is to discuss at the next TC39 meeting, but any help in advance to refine these in advance would be appreciated.
+
+
+2022-10-18
+[08:28:01.0598] <pzuraq>
+Can someone with access to the calendar cancel one of the Decorators meetings?
+
+[08:28:14.0913] <pzuraq>
+Specifically the one that occurred today at 8am PDT
+
+[08:28:20.0307] <pzuraq>
+ * Specifically the one that occurred today at 8am PDT
+
+[08:28:42.0705] <pzuraq>
+it should repeat once monthly
+
+[08:28:53.0626] <pzuraq>
+we want to cancel that one in favor of the other meeting at 10am PDT
+
+[08:29:08.0712] <pzuraq>
+https://github.com/tc39/Reflector/issues/452 for details
+
+[10:45:26.0670] <ljharb>
+sure
+
+[10:46:51.0795] <ljharb>
+pzuraq: should be all set
+
+
+2022-10-19
+[08:27:17.0911] <pzuraq>
+ljharb: thanks!
+

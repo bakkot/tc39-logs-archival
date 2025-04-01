@@ -1,0 +1,255 @@
+2023-11-01
+[08:45:56.0206] <Kris Kowal>
+Regarding the intermediate design family for transferrable modules, I am warming up to the intermediate position, where a ModuleSource may share private state with the host module loader, not just for CSP, but to determine import hook behavior. I have been mulling the implications for host virtualization and so far conclude that the behavior is trivial to emulate with a side table or private field. For a module loader that is serving as both a host and guest, the module-in-the-middle is sufficiently empowered that it can implement its own emulation of CSP or deny the host behavior. In short, I’m running out of reasons to dislike this framing and I’ll bring this up at the SES meeting today to socialize it.
+
+[08:51:15.0999] <Kris Kowal>
+It’s attractive that neither CSP nor import.meta.url need to be captured on the 262 side and can exist entirely in the HTML integration.
+
+[08:53:27.0556] <nicolo-ribaudo>
+Interesting, I wonder how that interacts with multi-instantiation of modules 
+
+[08:53:42.0924] <nicolo-ribaudo>
+I don't think I can join the SES meeting (this is the "half of the meetings switched timezone, the other half didn't" week), but I'll watch the recording 
+
+[08:55:45.0068] <Kris Kowal>
+Re multi-instantiation, I’m assuming the host module loader shares a module map keyed on url among all the instances it creates, so the host import hook is in a position to inspect the privately held url on the source and decide to reuse another instance.
+
+[08:56:30.0391] <Kris Kowal>
+That implies a return override, gross.
+
+[08:58:46.0883] <Kris Kowal>
+Might also imply that we need to thread return override down to the initializer hook, should we choose to pursue the revealing callback.
+
+[09:23:51.0117] <Kris Kowal>
+Another possible design would allow for a module source to be directly imported, giving the host the option of creating a host-defined instance behavior or reusing an existing instance based on the privately shared origin data. To virtualize that behavior, I imagine the hook would need to be defined on something in the same position as the Evaluators object.
+
+[12:34:27.0628] <Kris Kowal>
+Conclusion from the SES meeting is the Agoric contingent considers Luca’s design family, where host-defined ModuleSource and host-define ModuleInstance behaviors can collude, is worth investigating and not obviously bad.
+
+[12:34:48.0391] <Kris Kowal>
+ * Conclusion from the SES meeting is the Agoric contingent considers Luca’s design family, where host-defined ModuleSource and host-defined ModuleInstance behaviors can collude, is worth investigating and not obviously bad.
+
+[15:08:12.0070] <Kris Kowal>
+Recording from SES meeting last week socializing Module Harmony updates https://youtu.be/XoB3FaAfhTg
+
+[15:11:12.0835] <Kris Kowal>
+> <@nicolo-ribaudo:matrix.org> Interesting, I wonder how that interacts with multi-instantiation of modules
+
+I don’t think the intermediate ModuleSource can replicate multiple instances with the same origin. For that, you def need to go all the way to ModuleInstance transferrability. It would not be tractable for `new Module(source) === new Module(source)` iff the source had a private origin.
+
+[15:23:39.0906] <Kris Kowal>
+Today’s SES meeting re design families for module sharing https://youtu.be/qISoSOiUwwk
+
+
+2023-11-05
+[15:07:46.0488] <guybedford>
+Hi all, it seems the best cross-over time we have for the new meeting is actually looking like Thursday, an hour before the current meeting time. In your timezone here - https://www.timeanddate.com/worldclock/fixedtime.html?msg=TC39+Module+Harmony+Proposed+New+Meeting+Time&iso=20231109T1600.
+
+[15:08:24.0820] <guybedford>
+I'd like to propse we update the meeting time to this slot as of this coming week, and will aim to get the invite updated tomorrow to this effect, unless anyone has any scheduling constraints or queries further.
+
+[15:08:33.0454] <guybedford>
+ * I'd like to propose we update the meeting time to this slot as of this coming week, and will aim to get the invite updated tomorrow to this effect, unless anyone has any scheduling constraints or queries further.
+
+
+2023-11-06
+[02:23:55.0663] <nicolo-ribaudo>
+🙃
+
+[02:24:17.0868] <nicolo-ribaudo>
+It sounds good to me — I'm not sure if I can attend this Thursday (I'll be travelling at that time)
+
+[09:05:51.0202] <guybedford>
+weird, it's working on desktop for me!
+
+[09:27:12.0375] <Luca Casonato>
+SGTM too!
+
+[09:50:20.0807] <Kris Kowal>
+I’ll have to participate out-of-band. The SES meeting will remain a good place to engage with me.
+
+[11:56:00.0942] <guybedford>
+Kris Kowal: sorry the time is difficult there. as we work towards concrete proposals we can aim to bring them into the SES meeting.
+
+[11:56:16.0404] <guybedford>
+I've pinged Chris about getitng the official calendar updated for this week, if anyone else has admin access please let me know
+
+[11:58:39.0951] <guybedford>
+To confirm - we will not be meeting tomorrow, but will be meeting on Thursday this week. I will be there then, hope to see everyone, (managed to make it work between my own travels!).
+
+[13:15:34.0891] <guybedford>
+The calendar meeting is now updated as well. If there's anyone who didn't get the update here we should ping do let me know too.
+
+[13:55:06.0691] <Kris Kowal>
+> <@guybedford:matrix.org> Kris Kowal: sorry the time is difficult there. as we work towards concrete proposals we can aim to bring them into the SES meeting.
+
+It’s less the time but the place-in-life. 🚼👍
+
+
+2023-11-07
+[07:47:07.0677] <Kris Kowal>
+I’ve been thinking about Luca Casonato’s proposal for ModuleSource and Module sharing access to private origin information and nicolo-ribaudo’s thought about how that would impact multiple-instantiation. It seems clear that it would not be possible for the host module hook to create more than one instance per url in this scheme. That would make it equivalent in utility to any HTML system where a Worker can be instantiated with a configured resolution behavior (like transferring the import map) and importing by URL specifier.
+
+[07:47:56.0497] <Kris Kowal>
+And, to emulate the behavior, new Module would need to support return-override if the ModuleSource had an already recognized physical location.
+
+[07:48:29.0286] <Kris Kowal>
+ * And, to emulate the behavior, new Module would need to support return-override if the ModuleSource had an already memoized physical location. I feel that’s an undesirable complication.
+
+[07:49:19.0346] <Kris Kowal>
+It would be good to review yulia’s idea for transferring modules between agents. It seems likely that it would imply fewer complications.
+
+[08:02:24.0674] <yulia>
+I would need to know more about the restrictions in terms of what we are visualizing. I think my idea won't help here (which was sharing the import graph by passing it, otherwise falling back on the behavior that would be implemented by modulesource). I think there are other restrictions that would make that unacceptable. From a browser perspective, we don't allow multi-instantiating within the same loader, and I would need to understand a few concrete usecases for this. On the other hand, i can see a usecase for multi-instantiation with module unloading, one frustration we have is the inability to garbage collect a module after instantiation (after which point it is no longer used). We have an api for that internally. Regarding the shared module map: I can see this as making things more memory efficient and allowing us to just pull the sources that we need, in the configuration that we need, and re-run them. However, passing that between different contexts with dynamic import seems like it could be very complex and open up possibilities I haven't thought about. I think the most restricted case is the safest.  We could also introduce a distinction between the dynamic import links and the static ones, and allow sharing of only static links, meaning that dynamic import links would reconstruct, or would point to a sub-tree that is all static and preloaded. but like i said -- this seems verrrry complex
+
+[08:02:46.0893] <yulia>
+ * I would need to know more about the restrictions in terms of what we are virtualizing. I'm not at all confident in my comment the other day. I think my idea won't help here (which was sharing the import graph by passing it, otherwise falling back on the behavior that would be implemented by modulesource). I think there are other restrictions that would make that unacceptable. From a browser perspective, we don't allow multi-instantiating within the same loader, and I would need to understand a few concrete usecases for this. On the other hand, i can see a usecase for multi-instantiation with module unloading, one frustration we have is the inability to garbage collect a module after instantiation (after which point it is no longer used). We have an api for that internally. Regarding the shared module map: I can see this as making things more memory efficient and allowing us to just pull the sources that we need, in the configuration that we need, and re-run them. However, passing that between different contexts with dynamic import seems like it could be very complex and open up possibilities I haven't thought about. I think the most restricted case is the safest.  We could also introduce a distinction between the dynamic import links and the static ones, and allow sharing of only static links, meaning that dynamic import links would reconstruct, or would point to a sub-tree that is all static and preloaded. but like i said -- this seems verrrry complex
+
+[08:03:28.0997] <yulia>
+ * I would need to know more about the restrictions in terms of what we are virtualizing. I'm not at all confident in my comment the other day. I think my idea won't help here (which was sharing the import graph by passing it, otherwise falling back on the behavior that would be implemented by modulesource). I think there are other restrictions that would make that unacceptable. From a browser perspective, we don't allow multi-instantiating within the same loader. The spec allows it, but all browsers cache (and the spec is being updated to reflect this. I would need to understand a few concrete usecases for this. On the other hand, i can see a usecase for multi-instantiation with module unloading, one frustration we have is the inability to garbage collect a module after instantiation (after which point it is no longer used). We have an api for that internally. Regarding the shared module map: I can see this as making things more memory efficient and allowing us to just pull the sources that we need, in the configuration that we need, and re-run them. However, passing that between different contexts with dynamic import seems like it could be very complex and open up possibilities I haven't thought about. I think the most restricted case is the safest.  We could also introduce a distinction between the dynamic import links and the static ones, and allow sharing of only static links, meaning that dynamic import links would reconstruct, or would point to a sub-tree that is all static and preloaded. but like i said -- this seems verrrry complex
+
+[08:09:15.0062] <Kris Kowal>
+yulia: Caridy’s proposing adding a local map from specifier to module instance on each module instance that is intended to unlock multi-instancing, including hot reload, test scaffolds, mocking, &c. Having module instances also unlocks the ability to assemble a module graph without executing it, which is useful for bundling, building a fully-specified import map, &c.
+
+[08:09:21.0200] <Kris Kowal>
+ * yulia: Caridy’s proposing adding a local map from specifier to module instance on each module instance that is intended to unlock multi-instancing, including hot reload, test scaffolds, mocking, &c. Having module instances also unlocks the ability to assemble a module graph without executing it, which is useful for bundling, building a fully-specified import map, &c. https://tc39.es/proposal-compartments/0-module-and-module-source.html
+
+[08:11:27.0396] <yulia>
+in my mind this is like a distributed network where each node knows its neighbors, is that the right image?
+
+[08:11:35.0967] <yulia>
+ * in my mind this is like a distributed network where each node knows its neighbors but not the whole graph, is that the right image?
+
+[08:12:16.0098] <yulia>
+(with the kid right now so my attention is split)
+
+[08:23:08.0338] <Kris Kowal>
+(same)
+
+
+2023-11-08
+[08:12:35.0732] <yulia>
+Kris Kowal: ok, I think I don't understand why the origin needs to be in EcmaScript. Is this to allow emulation of the html loader? should this be something that is on the html side, where we serialize it, and then when deserializing it we do a check? It may be that I am unfamiliar with the use case. 
+
+[08:13:20.0230] <yulia>
+I think that this is different than the above mentioned module graphnode instance, correct me if i am wrong and these are intrinsically related
+
+[10:09:35.0267] <Kris Kowal>
+Origin does not need to be in ECMAScript.
+
+[10:22:16.0575] <Kris Kowal>
+Much of this conversation about module graph replication is scoping out the shape of the ECMAScript side necessary to ensure HTML integration is coherent. To that end, there’s an internal slot for host data on module records today that we’re proposing will need to get distributed between internal slots of the module source record and module instance record.
+
+[10:22:58.0171] <Kris Kowal>
+Specifically, we anticipate that in all of the proposed design families, the origin information would have to move from the module record to the module source record.
+
+[10:23:16.0615] <Kris Kowal>
+ * Specifically, we anticipate that in all of the proposed design families, for HTML integration the origin information would have to move from the module record to the module source record.
+
+[10:25:41.0830] <Kris Kowal>
+In the second design family, the host-specific data on a module source record would need to go on to include the full URL and that the host-specific import behavior would use that as the key for its module map. Module instances would adopt their local module subgraph wholesale from the existing host-specific URL-to-module-map.
+
+[10:27:12.0009] <Kris Kowal>
+(with the caveat that the keys of the module-instance-map are keyed on import specifier, not fully resolved module specifier, which is the URL in web and node per-realm module-map)
+
+[10:33:53.0305] <Kris Kowal>
+Caridy’s proposal is consistent with all of the design families and HTML integrations as a baseline.
+
+[10:40:25.0516] <Kris Kowal>
+However, Luca Casonato’s proposed design may create a complication for the behavior of `new ModuleInstance(moduleSource)` if you’re trying to emulate HTML integration in user code. An HTML host would be able to look at moduleSource.[[HostData]].[[URL]] and observe that it already had an instance with that URL in its realm-scope module-map. My understanding is that the desired behavior in that case is that the `new ModuleInstance(moduleSource)` would evaluate to the existing `ModuleInstance` from the module-map, discarding the `this`, much like return override. To do that in user code would require a hook that Caridy’s proposal does not currently have.
+
+[10:44:55.0240] <Kris Kowal>
+Consider this case concretely: https://gist.github.com/kriskowal/53444bf8578338c366e300a6858870f5
+
+[10:47:20.0085] <Kris Kowal>
+I believe Luca’s proposal will allow the host (for HTML integration) to ensure that there is only one instance of `2-job.js` in the `1-worker.js` realm.
+
+[10:48:18.0742] <Kris Kowal>
+An alternate interpretation is that there would in fact be two `2-job.js` instances because of the separate `new ModuleInstance(moduleSource)` calls and otherwise, all their dependencies will be lifted out of the host’s realm module-map.
+
+[10:50:12.0326] <Kris Kowal>
+Updated the gist to reflect that conundrum. Luca Casonato is it your intention in your vision of the intermediate design family that the above program logs 'dep' and 'job' once or twice?
+
+[10:52:12.0385] <Kris Kowal>
+If the intended behavior is:
+```
+dep
+job
+job
+```
+Then Caridy’s proposal requires no modification. HTML integration can work like this and all the facilities are in place for HTML integration to be emulated with user code on say, a toaster oven.
+
+[11:06:31.0535] <Luca Casonato>
+I intend for that to log dep, job, job
+
+[11:07:02.0143] <Kris Kowal>
+Ah, well. That’s fine then. No complications.
+
+[11:07:12.0126] <Luca Casonato>
+The url exists in the source only to enable relative resolution, not do dedupe
+
+[11:07:26.0207] <Luca Casonato>
+And it would be URL + import map
+
+[11:31:32.0689] <Kris Kowal>
+Luca Casonato: Updated the Gist to reflect our shared interpretation since it’s not controversial between us. https://gist.github.com/kriskowal/53444bf8578338c366e300a6858870f5
+
+[11:36:00.0721] <Kris Kowal>
+I am now on board with Luca’s original intuition and merging the two design families described as  “ModuleSource is the unit of transfer” since this distinction implies no complications for emulating HTML behavior in user code.
+
+
+2023-11-09
+[07:52:14.0234] <nicolo-ribaudo>
+But by reading the messages, I'm  happy with the direction 
+
+[07:52:14.0949] <nicolo-ribaudo>
+I'll check the notes to see the discussed topics :)
+
+[07:52:15.0258] <nicolo-ribaudo>
+I'm travelling and I have a terrible connection, I don't think I will be able to join 
+
+[07:53:44.0300] <nicolo-ribaudo>
+Actually it's less terrible now, maybe I can at least listen 
+
+[07:56:12.0498] <nicolo-ribaudo>
+Also, with the current direction I would also be ok with `import(aSource)` working and being equivalent to `import(new Module(aSource))`, that I opposed in the past
+
+[10:14:08.0498] <Kris Kowal>
+As of this morning, is the current favored direction “in HTML integration module sources are transferrable over message channels and carry both origin and resolution context such that any ModuleInstance constructed with the source and the HTML host import hook will use the resolution context for purposes of linking its dependencies?”
+
+
+2023-11-16
+[09:16:29.0196] <nicolo-ribaudo>
+> <@kriskowal:matrix.org> As of this morning, is the current favored direction “in HTML integration module sources are transferrable over message channels and carry both origin and resolution context such that any ModuleInstance constructed with the source and the HTML host import hook will use the resolution context for purposes of linking its dependencies?”
+
+(sorry it took until today to reply)
+Yes, that's it!
+
+[10:23:03.0053] <Kris Kowal>
+Great, we have alignment among us on this.
+
+
+2023-11-21
+[13:47:33.0635] <ljharb>
+should i delete the meeting scheduled for US thanksgiving?
+
+
+2023-11-22
+[00:24:33.0042] <nicolo-ribaudo>
+Most of the attendees are not US-based anyway 
+
+
+2023-11-23
+[19:09:41.0880] <ljharb>
+alrighty
+
+
+2023-11-26
+[12:53:48.0466] <ljharb>
+any reason not to cancel the meeting that's during plenary week?
+
+
+2023-11-27
+[02:00:45.0987] <Luca Casonato>
+Sure lets cancel
+

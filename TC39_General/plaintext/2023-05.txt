@@ -1,0 +1,180 @@
+2023-05-03
+[05:35:40.0560] <annevk>
+littledan: I think https://github.com/whatwg/html/issues/9042 might be of interest to you
+
+[10:01:09.0230] <ptomato>
+is there an existing idiom in ECMA-262 spec language for removing duplicates from a List?
+
+[10:01:48.0659] <bakkot>
+don't think so
+
+[10:01:58.0423] <bakkot>
+for Sets etc we just avoid putting duplicates in the list in the first place
+
+[10:02:53.0304] <bakkot>
+the usual idiom for which is like "If `list` does not contain `item`, add `item` to `list`"
+
+[10:03:34.0080] <bakkot>
+(Set.prototype.add is written in a slightly different style for... reasons)
+
+[10:04:29.0312] <ptomato>
+thanks!
+
+[10:05:02.0071] <shu>
+if possible, doing deduplication up front is better yeah
+
+[10:05:13.0354] <shu>
+i think it's probably fine to say "remove duplicates from `list`" if you need to do it after the fact, but we'd need to add a bit in the identity section about that language using "is" for comparison
+
+[15:49:36.0220] <ptomato>
+we don't have an existing idiom for break/continue in spec language loops either, right?
+
+[16:06:09.0930] <ljharb>
+not that i know of
+
+[16:06:18.0327] <ljharb>
+usually that would be in an AO that early-returns
+
+[16:06:22.0086] <ljharb>
+ * usually that might be in an AO that early-returns
+
+
+2023-05-04
+[10:42:22.0647] <TabAtkins>
+We have the idiom in Infra, but not in ES-ese.
+
+[11:16:54.0650] <Michael Ficarra>
+ptomato: try to avoid it if you can
+
+
+2023-05-10
+[11:12:39.0194] <bakkot>
+```
+function f(){}
+let sym = Symbol();
+f[Symbol.toPrimitive] = () => sym;
+let o = { [sym]: 0 };
+console.log(o[f]) // 0
+```
+... hm
+
+[11:13:08.0679] <bakkot>
+keying objects by functions
+
+[11:13:09.0878] <bakkot>
+kinda fun
+
+[11:13:20.0443] <shu>
+cursed
+
+[11:27:20.0748] <bakkot>
+```
+let functorMapSymbol = Symbol('Functor.map');
+let Functor = {};
+Functor.map = function(rec, ...args){ return rec[functorMapSymbol](...args); };
+Functor.map[Symbol.toPrimitive] = () => functorMapSymbol;
+
+let o = {
+  [Functor.map](arg) {
+    console.log(arg);
+  },
+};
+
+// usage:
+o[Functor.map]('hi');
+
+// alternative usage:
+Functor.map(o, 'hi');
+```
+
+[11:29:10.0130] <Francisco Tolmasky>
+I actually do something similar to that all the time. Also use it to "carry" information in properties, something like { [property `my-prop` ({ enumerable: false })]: 10 }
+
+[11:29:38.0463] <Francisco Tolmasky>
+ * I actually do something similar to that all the time. Also use it to "carry" information in properties, something like `{ [property \`my-prop\` ({ enumerable: false })]: 10 }`
+
+[11:29:51.0241] <Francisco Tolmasky>
+ * I actually do something similar to that all the time. Also use it to "carry" information in properties, something like `{ [property 'my-prop' ({ enumerable: false })\]: 10 }\`
+
+[11:30:44.0792] <Francisco Tolmasky>
+dont know how to nest backticks, but you get the idea, you can have a function that creates metadata, then creates a custom symbol on the fly, associates the metadata to the custom symbol in a weakmap, then returns the custom symbol, then on the other end you can use it to retrieve the metadata
+
+[11:32:15.0246] <Francisco Tolmasky>
+for example like `Schema({ [property 'whatever'.readonly]: 10 })` (Schema then knows how to retrieve the metadata and construct the property descriptor from it to create the property on itself
+
+
+2023-05-17
+[11:22:42.0051] <Michael Ficarra>
+is anybody interested in maintaining the queue tool that we use (TCQ)? https://github.com/bterlson/tcq
+
+[11:22:53.0805] <Michael Ficarra>
+it's a pretty simple, self-contained Vue app
+
+[11:23:07.0293] <shu>
+is brian stepping away?
+
+[11:23:16.0637] <Michael Ficarra>
+the committee is *highly* dependent on it
+
+[11:23:45.0053] <Michael Ficarra>
+shu: Brian hasn't always been available to maintain it
+
+[11:23:49.0334] <Michael Ficarra>
+Yulia took it up for a while
+
+[11:24:18.0048] <Michael Ficarra>
+but there's a decent list of issues and feature requests that I'd love to see some progress on: https://github.com/bterlson/tcq/issues?q=is%3Aissue+is%3Aopen+sort%3Aupdated-desc
+
+[11:24:49.0067] <Michael Ficarra>
+if someone from the community is looking for a way that they could contribute, tackling some of these would be very much appreciated
+
+[11:27:31.0332] <Luca Casonato>
+I tried contributing to it a few months back, and got stuck on a bunch of Azure dependencies
+
+[11:28:41.0811] <Michael Ficarra>
+well, having it support other cloud environments would be a great contribution then 🙂
+
+[11:29:17.0164] <Luca Casonato>
+I’ll give it another shot
+
+[11:32:59.0744] <Michael Ficarra>
+anything to make it easier to maintain or contribute to, including documentation, would be a great force multiplier
+
+[11:33:18.0567] <Chris de Almeida>
+I also tried to fiddle with it some time back -- even something that explains how to run it would be helpful
+
+[11:33:41.0760] <Chris de Almeida>
+ * I also tried to fiddle with it some time back -- even something that explains how to run it (dev env) would be helpful
+
+[11:36:56.0419] <Luca Casonato>
+I was thinking whether “just” switching the backend to some SQLite db and plopping it onto a VPS somewhere might make it all a bit less complex
+
+
+2023-05-19
+[20:25:40.0197] <sideshowbarker>
+https://tc39.es/proposal-array-grouping/#sec-array.prototype.group and https://tc39.es/proposal-array-grouping/#sec-array.prototype.grouptomap seem to have been removed from the Array Grouping proposal?
+
+[20:26:49.0200] <ljharb>
+> <@sideshowbarker:matrix.org> https://tc39.es/proposal-array-grouping/#sec-array.prototype.group and https://tc39.es/proposal-array-grouping/#sec-array.prototype.grouptomap seem to have been removed from the Array Grouping proposal?
+
+yes, now they’re Object.groupBy and Map.groupBy
+
+[20:27:08.0217] <ljharb>
+also it’d stage 2 now. Hoping to go back to stage 3 next meeting.
+
+[20:27:16.0230] <ljharb>
+* also it’s stage 2 now. Hoping to go back to stage 3 next meeting.
+
+[20:27:30.0093] <sideshowbarker>
+> <@ljharb:matrix.org> yes, now they’re Object.groupBy and Map.groupBy
+
+Thanks — I’ll update the URLs in MDN
+
+[03:38:16.0076] <littledan>
+> <@sideshowbarker:matrix.org> Thanks — I’ll update the URLs in MDN
+
+It might make sense for MDN to wait on including these docs until it’s at stage 3 and/or some browser ships it
+
+[10:13:08.0688] <shu>
+i would wait at least until stage 3
+

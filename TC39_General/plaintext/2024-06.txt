@@ -1,0 +1,712 @@
+2024-06-01
+[17:02:03.0584] <jmdyck>
+In general, the parser should, at any point, know the set of terminal symbols (input elements) that could validly occur next, given everything to the left. On the basis of that set, it can tell the lexer which InputElementFoo nonterminal to use as the start symbol for the next input element.
+
+[18:24:05.0343] <sirisian>
+Thanks for all that information. That helps clarify things for me.
+
+[04:50:56.0070] <jmdyck>
+A different formulation would have the parser, at each point, tell the lexer all the terminal symbols that it's expecting, and ask for one of those. That would eliminate the InputElementFoo nonterminals and the rules about when each is appropriate, and a few other nonterminals like CommonToken. So simpler in some sense. But the current formulation minimizes the information that goes from the parser to the lexer, so simpler in a different sense.
+
+
+2024-06-05
+[15:55:17.0220] <whosy>
+I wonder if there's any want for a `Promise.sleep( duration )`. I find myself writing one-liners for this in many a project.
+e.g.
+`const sleep = durationMs => new Promise( resolve => setTimeout( resolve, durationMs ) );`
+
+[15:58:52.0861] <James M Snell>
+> <@whosy:matrix.org> I wonder if there's any want for a `Promise.sleep( duration )`. I find myself writing one-liners for this in many a project.
+> e.g.
+> `const sleep = durationMs => new Promise( resolve => setTimeout( resolve, durationMs ) );`
+
+There are already solutions for this. scheduler.wait is mostly this. Node.js has timers/promises, etc. Given that timers tend to be implementation specific, it's likely best left as a web platform API 
+
+[16:02:47.0786] <whosy>
+Might I ask what `schedular.wait` is?
+ 
+And I really did mean as a simple shorthand for wrapping whatever native implementation of setTimeout is in a promise.
+
+Though I guess that does leave a big question mark about what value is returned (if any). I am very green when it comes to actual implementations and the specification side of the language, by the way.
+
+[16:04:55.0785] <James M Snell>
+`scheduler.wait(...)` is defined https://github.com/WICG/scheduling-apis ... there's more to it but it essentially allows you to do `await scheduler.wait(duration)` 
+
+[16:07:38.0109] <whosy>
+Ah, I see. I couldn't find any reference to this when I tried a quick search for npm/JavaScript or the proposals listings.
+
+It's an interesting read, and would definitely encompass this use-case.
+
+[16:09:04.0518] <Chris de Almeida>
+> <@whosy:matrix.org> I wonder if there's any want for a `Promise.sleep( duration )`. I find myself writing one-liners for this in many a project.
+> e.g.
+> `const sleep = durationMs => new Promise( resolve => setTimeout( resolve, durationMs ) );`
+
+`setTimeout` is not part of JS
+
+[16:12:06.0675] <Chris de Almeida>
+the longer answer is that in order to get some flavor of `sleep()`, you would have to add various other things in the language first in order to support it
+
+[16:12:32.0675] <whosy>
+> <@softwarechris:matrix.org> `setTimeout` is not part of JS
+
+Yes..that's something I only considered and realised after thinking about the differing return types across implementations. As I said in the thread now, I am very much not clued in on the language spec. I've mostly just used the language without considering its development until very recently.
+
+But the lack of a spec-defined timing mechanism, I'm guessing is why the aforementioned Scheduler API is being developed?
+
+[16:13:51.0441] <snek>
+even if the core js language had timers, the web would still need a more complex scheduling api. you can read the details about that in the scheduling api readme
+
+[16:15:43.0452] <Chris de Almeida>
+I can't speak to the motivation of the folks that advanced Scheduler, but if you already have an environment where you have production-ready foundational components available, like timing, eventing, and cancellation, and that environment is the same one in which you want to have `sleep()`, then that seems like a faster path to that goal
+
+[16:17:56.0442] <Chris de Almeida>
+that doesn't mean it can't be pursued in the language, or that it's not still useful to add to the language
+
+[16:20:50.0448] <bakkot>
+I very much hope `scheduler.wait` does not become the way to do this, but it seems pretty likely unfortunately 
+
+[16:21:25.0676] <bakkot>
+we generally try to avoid duplicating things on the web platform, so if that ships it will not be in the language probably
+
+[16:23:41.0732] <whosy>
+> <@bakkot:matrix.org> we generally try to avoid duplicating things on the web platform, so if that ships it will not be in the language probably
+
+That was my immediate concern as well. At this point the only way to avoid duplication is to adopt part of the spec into the language, or to try and rush through a proposal to the same effect faster than Scheduler.wait it can be adopted into major browsers.
+Both of which have their own challenges and pitfalls..
+
+[16:24:32.0596] <whosy>
+Or I guess option 3, create a stage-0 proposal and just ask them very nicely to drop parts of their work which..I also don't see happening.
+
+[16:29:12.0236] <whosy>
+I am quite possibly the least qualified person to speak of what should or shouldn't be done here though, so I actually would love to hear the opinions of veterans on the matter.
+
+[16:37:50.0855] <kriskowal>
+> <@softwarechris:matrix.org> `setTimeout` is not part of JS
+
+Me too, though I called it delay in Q, and the ocap folks (like me) would insist it go on a different namespace that the otherwise I/O free Promise since we prefer to be able to pass Promise into a compartment instead of an attenuated constructor
+
+[16:43:10.0304] <bakkot>
+personally I would just put it at the top level namespace, named `wait` or something
+
+[16:43:16.0275] <bakkot>
+`await wait(500)` etc
+
+[16:50:53.0854] <sirisian>
+Maybe I'm blanking since I forget proposals. Has anyone suggested an operator like f??.() that is equivalent to `typeof f === 'function' ? f() : f` ?
+
+[16:56:55.0622] <sirisian>
+bakkot: `await wait(Temporal.Duration.from({ milliseconds: 500 }))` heh
+
+[16:57:29.0814] <bakkot>
+> <@sirisian:matrix.org> Maybe I'm blanking since I forget proposals. Has anyone suggested an operator like f??.() that is equivalent to `typeof f === 'function' ? f() : f` ?
+
+nnnnno I don't think so. that seems kind of niche
+
+
+2024-06-06
+[17:01:30.0797] <sirisian>
+I only have 3 of them in my codebase. Very niche.
+
+[17:02:43.0748] <whosy>
+Speaking of niche.. I haven't come across a use-case for that specifically, but I have on occasion wished there was something like a `Symbol.self` for use when accessing an object's properties.
+e.g. `x[Symbol.self] === x`
+
+It's weird that my need for this has occurred more than a few times in the past year. (Easy to get around, but still)
+
+[17:04:12.0041] <bakkot>
+Also seems pretty niche? and since the only way for that to work would be to put it on Object.prototype I think we would not want that
+
+[17:04:45.0076] <bakkot>
+both because new things on Object.prototype are scary in several ways, and because it wouldn't work everywhere and it would be very annoying for `x[Symbol.self]` to just not work when `x` happens to have a null prototype
+
+[22:13:44.0183] <littledan>
+@bakkot My previous assumption was that we in TC39 would be uncomfortable adding wait because we don’t have a concept of an event loop. Also we would need host integration for stuff like banning it in worklets. But I guess at this point we have other features that get at each of those things (eg Atomics.waitAsync)
+
+[22:15:49.0161] <littledan>
+But at the same time I don’t see a huge disadvantage to using the scheduler namespace (that’s all it amounts to; it’s not like the scheduler object has state) given that we are trying to share APIs across web and non-web environments, WinterCG-style
+
+[22:15:49.0784] <littledan>
+Are there particular design mistakes we might make with scheduler?
+
+[22:18:50.0440] <bakkot>
+I have not thought about scheduler at all and trust the people working on it to do it reasonably well
+
+[22:19:27.0799] <bakkot>
+but "I want to wait for a period of time" is a much more primitive operation than the rest of that API so it seems a shame to require people to think about the much more complex thing in order to get access to the simple thing
+
+[22:33:07.0811] <littledan>
+So I am curious how you feel about the situation with getting random bytes with crypto, which seems like an analogous situation. In both cases, there is just a funny lowercase namespace, no state in the object, and it is possible to implement just that method on the object without the rest of the API if you are subsetting the web platform.
+
+[23:03:34.0768] <bakkot>
+it may be the security person in me but `crypto` feels like a very reasonable place to be reaching for a large quantity of random bytes
+
+[23:04:36.0782] <bakkot>
+my problem with `scheduler` is not that it's a namespace per se, just that the namespace is kind of a powertool which is likely to be confusing to people who don't need it, whereas `crypto` it's pretty obvious what it does and what it's for 
+
+[05:39:42.0791] <littledan>
+I'm not aware of any big arguments for why it must be in scheduler, maybe it just feels right to people working on it. In any case, if we want this in TC39, someone should bring a proposal to committee; I'm not sure how much active work there is on scheduler.wait, if any (not that it needs much work).
+
+[06:21:23.0512] <Michael Ficarra>
+does anyone know why `Math.sqrt` is implementation-approximated in JS?
+
+[06:22:14.0508] <Michael Ficarra>
+Dan Gohman (@sunfishcode) says that wasm has it fully-defined and implementations are actually compatible because they defer to a single hardware instruction on all of their supported architectures
+
+[06:22:26.0813] <Michael Ficarra>
+so why would we allow approximation?
+
+[06:22:27.0938] <littledan>
+that's just what we do for all of those functions, like sin/cos too. My understanding was that it's always been that way, or something.
+
+[06:23:13.0304] <littledan>
+A proposal to make these things more fully-defined sounds like a great idea to me, if implementations are up for it (historically V8 wanted to take shortcuts, not sure how they feel right now)
+
+[06:26:25.0384] <Michael Ficarra>
+well V8 is already doing fully determined sqrt in wasm
+
+[06:26:40.0632] <littledan>
+right I'm optimistic
+
+[06:27:02.0314] <Michael Ficarra>
+I haven't looked recently at whether implementations disagree on some results of sqrt, but I believe they used to
+
+[06:27:03.0809] <littledan>
+I think historical goals around not regressing Octane by making things more accurate have fallen away
+
+[06:27:45.0211] <Michael Ficarra>
+also maybe the hardware support just wasn't there 10 years ago
+
+[08:51:50.0271] <Michael Ficarra>
+I opened a needs-consensus PR: https://github.com/tc39/ecma262/pull/3345
+
+[08:53:05.0623] <Michael Ficarra>
+it'd be great if someone did the investigation to confirm that modern implementations do indeed already agree on all sqrt input/output pairs
+
+[09:03:14.0830] <bakkot>
+you'd need to ensure this was the case on all the hardware they each support also
+
+[10:02:49.0538] <leftmostcat (UTC-7)>
+It looks like the process for adding a time constraint to the agenda is just to commit directly and push it; is that the case, or should I PR it?
+
+[10:03:35.0243] <Chris de Almeida>
+please always PR
+
+[10:03:48.0718] <Chris de Almeida>
+even if you immediately merge it without review/approval
+
+[10:05:18.0213] <leftmostcat (UTC-7)>
+Alright, thanks. I just saw a couple that looked to have been added without PRs, hence the question.
+
+[10:17:09.0546] <Chris de Almeida>
+yes, people do that, and it's acceptable, but not ideal 🙂
+
+[11:09:19.0417] <shu>
+what's the difference?
+
+[11:21:19.0035] <Michael Ficarra>
+@shuyuguo:matrix.org whether people watching the repo get pinged about it or not
+
+[11:33:44.0025] <Michael Ficarra>
+Dan Gohman brings up another good point: should we put some kind of lower bound on what we mean by "implementation-approximated"? Should a `Math.cos` that only returns `1` or `-1` be considered compliant?
+
+[12:09:23.0031] <ljharb>
+we definitely should, and we’ve talked about that in plenary multiple times - generally speaking everyone seemed positive on it, but nobody was confident about having the expertise required to do so correctly
+
+[12:13:04.0754] <bakkot>
+I frankly don't think it's worth spending time on
+
+[12:13:09.0169] <bakkot>
+it's not like we offer a certification
+
+[12:21:27.0774] <shu>
+oh man what a great idea
+
+[12:21:35.0483] <shu>
+i want one of those holographic gold stickers
+
+[12:22:30.0488] <Chris de Almeida>
+> We are pleased to announce that our JavaScript engine has been officially certified as compliant with the ECMAScript (ECMA-262) specification. This certification was achieved through rigorous testing using the comprehensive Test262 suite, the official conformance test suite for the ECMAScript Language Specification maintained by TC39, the technical committee responsible for the standardization of ECMAScript.
+
+[12:27:39.0799] <Michael Ficarra>
+apparently there was real web compat issues in the past when Chrome made significant compromises to their trig functions in the name of speed
+
+[12:27:54.0730] <Michael Ficarra>
+so there's probably *something* that should be said about accuracy
+
+[12:29:07.0671] <ljharb>
+i agree
+
+[12:29:17.0092] <ljharb>
+ * i agree (and remember those compat issues viscerally)
+
+[12:29:38.0252] <Michael Ficarra>
+@ljharb:matrix.org you got any links to issues?
+
+[12:29:47.0069] <Michael Ficarra>
+we should collect them in an ecma262 issue
+
+[12:30:47.0075] <ljharb>
+https://github.com/compat-table/compat-table/issues/392#issuecomment-70381406 i think?
+
+[12:30:58.0133] <ljharb>
+https://github.com/es-shims/es6-shim/commit/90c803f68390dd13fd5297b1e2d54d44f8dac94b is where i patched it in es6-shim
+
+[12:37:54.0127] <Michael Ficarra>
+started an issue: https://github.com/tc39/ecma262/issues/3347
+
+[16:00:12.0581] <littledan>
+> <@michaelficarra:matrix.org> apparently there was real web compat issues in the past when Chrome made significant compromises to their trig functions in the name of speed
+
+The web had to adapt to the reality and learn to avoid those functions… this stuff often goes in multiple directions. If we can nail something down, I think it’s often helpful. Approximate rules are *sometimes* helpful if designed to achieve a particular goal; not sure what we would be going for in a case like this.
+
+[16:06:49.0358] <Michael Ficarra>
+littledan: what we'd be going for is guidance for how to build a web-compatible JavaScript engine. I think we can list certain constraints on many of the trigonometric functions such as symmetry, monotonicity, and bounds. We would only describe constraints that hold across engines today and that a reasonable person may expect to hold.
+
+
+2024-06-07
+[09:47:42.0521] <Chris de Almeida>
+plenary: gentle reminder to please add any and all schedule constraints as soon as possible
+
+
+2024-06-15
+[19:36:20.0598] <jmdyck>
+Anthony Bullard: The GNU project's coding standard for C recommends a space before the open-paren in a function call: https://www.gnu.org/prep/standards/standards.html#index-spaces-before-open_002dparen
+
+[19:37:00.0641] <Anthony Bullard>
+> <@jmdyck:matrix.org> Anthony Bullard: The GNU project's coding standard for C recommends a space before the open-paren in a function call: https://www.gnu.org/prep/standards/standards.html#index-spaces-before-open_002dparen
+
+Yeah, GNU is Allman from what I remember or heavily influenced by it
+
+[19:42:01.0223] <jmdyck>
+My impression is that Allman style deals with indentation and brace-placement, not space-before-left-paren: https://en.wikipedia.org/wiki/Indentation_style#Allman_style
+
+[08:21:16.0400] <Timo Tijhof>
+It seems various ES specs have problems with their table of contents (there's an uncaught JS error in the console). At least ES8.0 and ES7.0 both don't seem to be able to expand sections in the TOC, and can't search either. https://262.ecma-international.org/8.0/
+
+[08:21:59.0588] <Timo Tijhof>
+Are these generated by something under TC39 on GitHub?
+
+[08:22:20.0722] <Timo Tijhof>
+ * It seems various ES specs have problems with their table of contents (there's an uncaught JS error in the console, using latest Firefox). At least ES8.0 and ES7.0 both don't seem to be able to expand sections in the TOC, and can't search either. https://262.ecma-international.org/8.0/
+
+[10:56:11.0973] <bakkot>
+Timo Tijhof: Looks like some of the asset links got broken. Those ones are handled by ECMA, not github; the ones on github are fine: https://tc39.es/ecma262/2016/
+
+[10:57:19.0143] <bakkot>
+cc littledan ljharb I don't know what the best way to report issues to ecma's webmaster is, but the stylesheets and scripts in https://262.ecma-international.org/8.0/ currently have the wrong sources
+
+[10:57:51.0548] <bakkot>
+ * Timo Tijhof: Looks like some of the asset links got broken. Those ones are handled by ECMA, not github; the ones on github are fine: https://tc39.es/ecma262/2017/
+
+[11:01:09.0962] <ljharb>
+i think I’ve reported that one before :-/ i usually just email Patrick and cc samina. Feel free to do so and cc me, or else i can do it later today 
+
+[13:15:55.0092] <littledan>
+Aki: ?
+
+[13:24:47.0605] <Aki>
+Y’all report like you normally world and I’ll look into it on my end. (I have zero access to all that but maybe I could)
+
+
+2024-06-16
+[16:07:21.0336] <littledan>
+> <@akirose:matrix.org> Y’all report like you normally world and I’ll look into it on my end. (I have zero access to all that but maybe I could)
+
+Sounds like it wouldn’t hurt to cc you in that email then
+
+
+2024-06-17
+[21:38:59.0164] <ljharb>
+ * i think I’ve reported that one before :-/ i usually just email Patrick and cc samina. Feel free to do so and cc me, or else i can do it later today (or this weekend, or monday)
+
+[14:33:59.0384] <Chris de Almeida>
+anyone know where I can find the full changelog for Chrome 126 ?  the blog style changelog doesn't account for a regression I'm seeing 
+
+[14:34:08.0701] <Chris de Almeida>
+ * anyone know where I can find the full changelog for Chrome 126 ?  the blog-style changelog doesn't account for a regression I'm seeing 
+
+[14:36:24.0178] <shu>
+you want the list of commits?
+
+[14:37:05.0009] <Chris de Almeida>
+I'll take whatever I can get 🙂
+
+[14:39:41.0359] <shu>
+probably easier to say what your regression is
+
+[14:42:13.0837] <shu>
+otherwise this is the branch head for 126, good luck: https://chromium.googlesource.com/chromium/src.git/+log/refs/branch-heads/6478
+
+[14:45:09.0972] <Chris de Almeida>
+iframe load event not firing on bound listener
+
+[14:49:42.0673] <Chris de Almeida>
+our code has been stable for...  5 years at least?  and it's only started failing in Chrome 126, passes in FF.  we do a simple bind to `load` for an iframe, then set `src` and that load event tells us the page is loaded.  that has just started to fail intermittently, but consistently
+
+[14:50:17.0990] <Chris de Almeida>
+ * our code has been stable for...  5 years at least?  and it's only started failing in Chrome 126, passes in FF and in Chrome <126.  we do a simple bind to `load` for an iframe, then set `src` and that load event tells us the page is loaded.  that has just started to fail intermittently, but consistently
+
+[14:51:38.0410] <Chris de Almeida>
+ * our code has been stable for...  5 years at least?  and it's only started failing in Chrome 126, passes in FF and in Chrome \<126.  we do a simple bind to `load` for an iframe, then set `src` and that load event tells us the page/iframe is loaded.  that has just started to fail intermittently, but consistently
+
+[14:52:05.0104] <Chris de Almeida>
+the page _is_ loaded.  I can see it.. but the `load` event doesn't fire
+
+[14:52:18.0046] <shu>
+file an issue?
+
+[14:52:30.0027] <shu>
+someone hopefully triages and tries to repro, and if they can, then try to bisect
+
+[14:52:46.0430] <Chris de Almeida>
+sure.. I was hoping to track down any noticeable changes in the release first.  prefer not to throw stuff over the wall right away
+
+[14:53:10.0031] <Chris de Almeida>
+ * sure.. I was hoping to track down any noticeable (related) changes in the release first.  prefer not to throw stuff over the wall right away
+
+[14:53:25.0051] <shu>
+https://chromestatus.com/roadmap if it's at feature granularity and the feature owner remembers to update
+
+
+2024-06-18
+[07:19:04.0845] <Chris de Almeida>
+W3C colleagues:  please consider supporting the creation of the nascent Security Web Application Guidelines (SWAG) CG by clicking the button towards the bottom of this page:  https://w3.org/community/groups/proposed/#swag
+
+[12:52:49.0292] <Chris de Almeida>
+update: the group has been formed: To join the group, please use:
+ http://www.w3.org/community/swag/join
+
+
+2024-06-21
+[01:47:55.0265] <Domenic>
+No action needed for some time, but here are some musings on how to specify `ErrorEvent`'s `filename`, `lineno`, `colno`, and cross-origin muting behavior better in the future: https://github.com/whatwg/html/issues/958#issuecomment-2182299223
+
+Summary: every throw completion should store the active ScriptOrModule + relevant ParseNode. (Either directly in the JS spec, or via a host hook.) And we'd need some way of translating ParseNode into lineno + colno, which I don't think there's any spec machinery for right now.
+
+[01:48:38.0642] <littledan>
+> <@domenicdenicola:matrix.org> No action needed for some time, but here are some musings on how to specify `ErrorEvent`'s `filename`, `lineno`, `colno`, and cross-origin muting behavior better in the future: https://github.com/whatwg/html/issues/958#issuecomment-2182299223
+> 
+> Summary: every throw completion should store the active ScriptOrModule + relevant ParseNode. (Either directly in the JS spec, or via a host hook.) And we'd need some way of translating ParseNode into lineno + colno, which I don't think there's any spec machinery for right now.
+
+Any chance we could, in the future, store the current AsyncContext.Snapshot at this point?
+
+[01:50:17.0124] <Domenic>
+If that'd be useful by whatever's consuming the end result, for sure. Do you have thoughts on exposing that on `ErrorEvent`?
+
+[01:52:39.0156] <littledan>
+Right, either that or just automatically running the event within that snapshot (initially leaning towards the latter, now considering the former)
+
+[01:53:10.0120] <littledan>
+https://github.com/tc39/proposal-async-context/issues/90
+
+[01:53:34.0143] <littledan>
+and the same for unhandled rejections
+
+[01:53:43.0376] <Domenic>
+Nice, that might be motivation for doing some of this work sooner rather than later, then.
+
+[01:54:01.0984] <Domenic>
+Or at least provide a path to follow if we ever do get around to cleaning up the `ErrorEvent` spec to the degree I'm talking about.
+
+[01:55:21.0934] <littledan>
+is there some cross-browser difference in when these properties are assigned? (allocation vs throw time)
+
+[01:56:06.0521] <littledan>
+also re muting: now that we're standardizing ignoreList in TC39-TG4 (source maps), we might want to say something about how that relates to other parts of black boxing
+
+[01:56:39.0036] <littledan>
+for example we might want ignoreList2 which does full black boxing (apparently Mozilla initially implemented it this way, probably because we didn't have specs for anything)
+
+[01:57:34.0892] <Domenic>
+There are definitely differences in muting. There are also reportedly differences in pre- vs. post-redirect URLs for `filename`. Not sure about allocation vs. throw time but I kind of remember that also being different, hmm.
+
+[01:57:58.0653] <littledan>
+sounds like fun, I'm glad you're working on that!
+
+[01:58:24.0055] <Domenic>
+Ehhhh am I though...
+
+[01:59:06.0549] <littledan>
+if you're not, then maybe we can recruit others here to try to help
+
+[01:59:36.0091] <littledan>
+(e.g., from the source map or AsyncContext groups)
+
+[02:01:47.0567] <Domenic>
+A coworker (Jeremy) is doing some spec cleanup work as part of a rotation, and I got sniped into spending Friday evening musing about this stuff, so I dropped some ideas into the thread for the future :). Any help would definitely be appreciated.
+
+
+2024-06-22
+[14:01:09.0960] <nicolo-ribaudo>
+Seeing these results in the recently published state of JS makes me happy that we are doing Temporal
+
+[16:31:10.0388] <Michael Ficarra>
+should we be exploring a built-in zod/yup then?
+
+
+2024-06-23
+[21:24:11.0647] <ljharb>
+what forms in 262 would we be validating?
+
+[01:56:22.0793] <nicolo-ribaudo>
+> <@michaelficarra:matrix.org> should we be exploring a built-in zod/yup then?
+
+That would be probably be great, but one of the big values of zod/yup is their TS part
+
+[06:42:22.0362] <nicolo-ribaudo>
+* That would be probably be great, but a big part of zod/yup's value is their TS part
+
+[08:41:39.0540] <shaylew>
+I wonder how far just pattern matching gets you in that domain. (might be asking a lot from the type inference)
+
+
+2024-06-25
+[22:33:36.0893] <Meghan Denny>
+is there a google calendar with all the meeting times?
+
+[08:51:47.0001] <TabAtkins>
+there is a calendar entry, yes - it's in the TC39 Events calendar
+
+[09:31:21.0782] <ljharb>
+(also i'm happy to add individual delegates' emails to the event, if you want it to automatically populate in your calendar - i always put mine on there)
+
+[12:56:25.0338] <Nano Miratus>
+hello...this might be a weird question but here we go:
+was there ever a proposal for a "conditional equality operator"? what i mean is an operator for this pattern:
+
+```js
+const fn = (value) => {
+  return value === "foo" ? "foo" : "bar";
+}
+```
+
+which could also be written like this:
+
+```js
+const fn = (value) => {
+  return value === "foo" ? value : "bar";
+}
+```
+
+but my theoretical operator should achieve the same logic while avoiding repetition of either `value` or `"foo"`, so something like this: `value ==? "foo" : "bar"`
+
+i also couldn't find any example of such an operator in any other programming language, which really surprised me, but maybe  i'm stupid and an operator like this doesn't work or doesn't make any sense
+
+really curious if anybody here might have a take on this
+
+[13:02:23.0573] <bakkot>
+I don't think I've seen a proposal for this. I think it's simply too specialized to be worth having special syntax for.
+
+[13:03:48.0854] <Nano Miratus>
+this theoretical operator can be compared to nullish coalescing, it's very similar but just with a custom value instead of null
+
+nullish coalescing is defined as:
+
+a ?? b
+if  a !== null then return a, else return b
+
+my operator
+
+a ==? c : b
+if  a !== c then return a, else return b
+
+[13:05:41.0802] <Nano Miratus>
+> <@bakkot:matrix.org> I don't think I've seen a proposal for this. I think it's simply too specialized to be worth having special syntax for.
+
+hm, okay...i'm still surprised that i couldn't find something like this in any other language though...i get that it might be too specific and that it might seem not worth it, but something like this could simplify code "foo" from above isn't just "foo" but some long/dynamic thing
+
+[13:06:02.0158] <Nano Miratus>
+> <@bakkot:matrix.org> I don't think I've seen a proposal for this. I think it's simply too specialized to be worth having special syntax for.
+
+ * hm, okay...i'm still surprised that i couldn't find something like this in any other language though...i get that it might be too specific and that it might seem not worth it, but something like this could simplify code where the "foo" from above isn't just "foo" but some long/dynamic thing
+
+[13:06:30.0435] <bakkot>
+There are many many patterns that are somewhat similar to this; once you start adding syntax for things at this level of "already easy to write" + "not all that common" there's no obvious limit to how many such bits of syntax you'd add
+
+[13:07:21.0049] <bakkot>
+`null` is special because it is so often used to represent a missing value, and nullish coalescing therefore represents the act of providing a default for a missing value, which is (I would guess) at least an order of magnitude more common than this pattern
+
+[13:08:07.0453] <bakkot>
+all language design involves considering these tradeoffs, of examining how common is / how hard it is to currently write, and picking a threshold; some languages set the threshold lower, but they all have to set it somewhere
+
+[13:08:32.0184] <bakkot>
+though some languages do allow you to define your own syntax; it would not surprise me to find that someone has made such an operator in userland in, say, Scala
+
+
+2024-06-26
+[01:31:55.0035] <littledan>
+Ecma International has approved the 2024 editions of ECMA-262 and ECMA-402
+
+[10:05:06.0069] <ljharb>
+https://github.com/tc39/ecma262/releases/tag/es2024
+
+[12:22:20.0559] <akaster>
+Is anyone aware of a place where public WebAssembly spec test results are posted for each engine? Similar to test262.fyi, ideally. If none exists, I'll probably just bug canadahonk to add something as a subdomain there 😄.
+
+[12:27:13.0952] <canadahonk>
+> <@akaster:serenityos.org> Is anyone aware of a place where public WebAssembly spec test results are posted for each engine? Similar to test262.fyi, ideally. If none exists, I'll probably just bug canadahonk to add something as a subdomain there 😄.
+
+👀
+
+[13:47:55.0308] <Meghan Denny>
+webassembly.fyi is available :)
+
+[14:49:51.0455] <Meghan Denny>
+262 is missing from <https://ecma-international.org/technical-committees/tc39/?tab=published-standards>
+
+[14:50:10.0119] <Meghan Denny>
+2023 (and now 2024) are missing from https://ecma-international.org/publications-and-standards/standards/ecma-262/
+
+[14:52:53.0883] <Chris de Almeida>
+> <@meghanbun:matrix.org> 2023 (and now 2024) are missing from https://ecma-international.org/publications-and-standards/standards/ecma-262/
+
+2023 is there
+
+[14:57:31.0366] <Meghan Denny>
+ah ty, didnt realize it was the top link when i was reading just now since there was no link to https://262.ecma-international.org/14.0/ in the first list
+
+[15:00:25.0099] <Chris de Almeida>
+the Ecma website can be wonky.  ours is `tc39.es` FWIW
+
+
+2024-06-27
+[07:08:37.0596] <Vladyslav Dalechyn>
+Hi folks! Great seeing TC39 being an open and collaborative space!
+I joined here to express the problems and possible solutions over JSON serialization when it comes to `BigInt` type.
+
+I originally come from Web3 where we are dealing with `uint256` – 32byte unsigned integer values and folks from Web3 space used to align on third party libraries to support numbers that big (https://github.com/GoogleChromeLabs/jsbi) until the official support for `BigInt`s came live in 2020!
+There have been many editions of ECMA-262 published since 1999, and to my belief it needs an upgrade to handle `BigInt` types.
+
+I will be honest I did not spend that much time to research the efforts of handling such but I've seen many discussions evolving around somehow "smartly" detecting wether a number value should be parsed as a `BigInt` or `Number`. I don't believe that those are correct nor backwards compatible.
+
+What if JSON as a whole could retrieve an upgrade to support BigInt literals ending with "n", as it does now in JS?
+
+```json
+{
+  "value": 1337n
+}
+```
+
+I'd like to hear your thoughts wether you think if this possible and if so, what kind of backwards incompatibility issues this might have!
+Regarding the latter I don't think this will introduce any issues as this addition doesn't change the serialization behavior of fields of other types – but instead introduces a new one.
+I understand that making an addition like this is gonna introduce chain of changes of parsing JSON in different programming languages, but I believe this needs a review.
+
+
+
+[07:11:35.0610] <Michael Ficarra>
+> <@dalechyn:matrix.org> Hi folks! Great seeing TC39 being an open and collaborative space!
+> I joined here to express the problems and possible solutions over JSON serialization when it comes to `BigInt` type.
+> 
+> I originally come from Web3 where we are dealing with `uint256` – 32byte unsigned integer values and folks from Web3 space used to align on third party libraries to support numbers that big (https://github.com/GoogleChromeLabs/jsbi) until the official support for `BigInt`s came live in 2020!
+> There have been many editions of ECMA-262 published since 1999, and to my belief it needs an upgrade to handle `BigInt` types.
+> 
+> I will be honest I did not spend that much time to research the efforts of handling such but I've seen many discussions evolving around somehow "smartly" detecting wether a number value should be parsed as a `BigInt` or `Number`. I don't believe that those are correct nor backwards compatible.
+> 
+> What if JSON as a whole could retrieve an upgrade to support BigInt literals ending with "n", as it does now in JS?
+> 
+> ```json
+> {
+>   "value": 1337n
+> }
+> ```
+> 
+> I'd like to hear your thoughts wether you think if this possible and if so, what kind of backwards incompatibility issues this might have!
+> Regarding the latter I don't think this will introduce any issues as this addition doesn't change the serialization behavior of fields of other types – but instead introduces a new one.
+> I understand that making an addition like this is gonna introduce chain of changes of parsing JSON in different programming languages, but I believe this needs a review.
+> 
+> 
+
+https://github.com/tc39/faq#can-we-change-json
+
+[07:27:32.0853] <Vladyslav Dalechyn>
+> <@michaelficarra:matrix.org> https://github.com/tc39/faq#can-we-change-json
+
+Hi! Thank you for referencing this FAQ.
+
+Can you please explain how adding a fully backwards-compatible feature that adds a new JSON field type can break computing environments?
+Can other environments just follow up and add support for BigInts (or similar) too?
+I can feel this can become a "temporary" blocker for some environments. – consider C++ environment exchanging JSONs with Rust environment where one supports bigints and the other doesn't. However if the other one controls the process of building such JSONs, it most likely won't send unsupported bigint fields.
+
+[07:38:37.0179] <littledan>
+Honestly we should expand on this FAQ a bit. It reads a bit flippant right now. And I hear this is coming up in an IETF RFC.
+
+[07:47:24.0274] <Chris de Almeida>
+> <@dalechyn:matrix.org> Hi! Thank you for referencing this FAQ.
+> 
+> Can you please explain how adding a fully backwards-compatible feature that adds a new JSON field type can break computing environments?
+> Can other environments just follow up and add support for BigInts (or similar) too?
+> I can feel this can become a "temporary" blocker for some environments. – consider C++ environment exchanging JSONs with Rust environment where one supports bigints and the other doesn't. However if the other one controls the process of building such JSONs, it most likely won't send unsupported bigint fields.
+
+what you described is not backward compatible
+
+[08:23:24.0909] <Aapo Alasuutari>
+You'd need to know what JSON version your "opponent" supports, and to know that you'd either need to control both sides or you'd need a version decision negotiation.
+
+[08:26:44.0319] <bakkot>
+differences between different JSON implementations cause enough pain in the world already, and that's just with only a single nominal version of JSON https://seriot.ch/projects/parsing_json.html
+
+[08:27:14.0738] <bakkot>
+introducing new features only supported by some implementations would make that 100 times worse
+
+[08:27:50.0806] <bakkot>
+the only reasonable route here is to make a different thing, and not call it JSON, and give it whatever new features you want
+
+[08:32:03.0084] <Aapo Alasuutari>
+littledan: That IETF RTC sounds very interesting. Got any link or more info in general?
+
+[09:14:00.0886] <Aapo Alasuutari>
+Hmm, maybe this: https://datatracker.ietf.org/doc/html/rfc8785#name-dealing-with-big-numbers ?
+
+[09:49:52.0174] <Vladyslav Dalechyn>
+it just doesn't seem to be a huge change at all from the lexical standpoint.
+
+Aapo Alasuutari, I totally get the concern of version decision negotiation dillema.
+
+At the same time, the way BigInt's are handled now is via specific serializers other than native JSON (`superjson` i.e.).
+
+Saying if you have a backend and you provide API services to your clients, supporting an "updated" JSON would most likely be served via different endpoint.
+
+I agree with the clause that updating JSON is not the best choice to do.
+
+[09:51:19.0685] <Vladyslav Dalechyn>
+How we can make this better?
+what do you think of introducing JSON/2 with support of bigints and other "major" differences?
+
+HTTP went over it with HTTP/2 HTTP/3, I believe there is a solution for the future of JSONs too.
+
+[12:06:27.0538] <Meghan Denny>
+> <@dalechyn:matrix.org> Hi folks! Great seeing TC39 being an open and collaborative space!
+> I joined here to express the problems and possible solutions over JSON serialization when it comes to `BigInt` type.
+> 
+> I originally come from Web3 where we are dealing with `uint256` – 32byte unsigned integer values and folks from Web3 space used to align on third party libraries to support numbers that big (https://github.com/GoogleChromeLabs/jsbi) until the official support for `BigInt`s came live in 2020!
+> There have been many editions of ECMA-262 published since 1999, and to my belief it needs an upgrade to handle `BigInt` types.
+> 
+> I will be honest I did not spend that much time to research the efforts of handling such but I've seen many discussions evolving around somehow "smartly" detecting wether a number value should be parsed as a `BigInt` or `Number`. I don't believe that those are correct nor backwards compatible.
+> 
+> What if JSON as a whole could retrieve an upgrade to support BigInt literals ending with "n", as it does now in JS?
+> 
+> ```json
+> {
+>   "value": 1337n
+> }
+> ```
+> 
+> I'd like to hear your thoughts wether you think if this possible and if so, what kind of backwards incompatibility issues this might have!
+> Regarding the latter I don't think this will introduce any issues as this addition doesn't change the serialization behavior of fields of other types – but instead introduces a new one.
+> I understand that making an addition like this is gonna introduce chain of changes of parsing JSON in different programming languages, but I believe this needs a review.
+
+JSON would not need to change as a format to support BigInt; the root issue is that numbers in JSON.parse always parses numbers as Number (ie IEEE 754 doubles). perhaps u could work on this by passing a reviver function
+
+[12:06:43.0978] <Meghan Denny>
+*around this
+
+[12:15:24.0009] <Meghan Denny>
+i do this behavior in a json parsing library of my own where i give the user the string value back (while knowing its meant to be interpreted as a number and letting them pick which type to parse as
+
+[12:15:37.0344] <bakkot>
+you can't currently because the reviver is only passed the parsed value, which already loses precision, but you could with https://github.com/tc39/proposal-json-parse-with-source
+
+[12:15:38.0328] <Meghan Denny>
+ref: https://github.com/nektro/zig-json/blob/2958707/json.zig#L586-L609
+

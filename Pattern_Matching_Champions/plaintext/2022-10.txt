@@ -1,0 +1,349 @@
+2022-10-02
+[19:23:23.0517] <Jack Works>
+> <@tabatkins:matrix.org> I'm fine with this, tho do we want to have it as part of the main proposal, or layered as a "next step"?
+
+I want to gradually change the current spec into "next step"
+
+[19:23:41.0409] <Jack Works>
+rewriting this whole spec from the ground up is a little pain
+
+[19:24:27.0695] <Jack Works>
+so if everyone like `expr is pattern` expression, I can merge that
+
+
+2022-10-05
+[12:47:44.0722] <TabAtkins>
+Yeah, I think lgtm from me. We can discuss exactly what subset we want to present for the Stage 2 request later.
+
+[12:47:53.0567] <TabAtkins>
+It's straightforward and useful
+
+
+2022-10-06
+[10:44:22.0522] <ljharb>
+sure, that's a fair point
+
+
+2022-10-21
+[07:15:42.0035] <Jack Works>
+so what's next? change `{ a }` from direct match to `{ a: let a }`? is this valid? `{ a: let {x, y} }`?
+
+[09:46:18.0898] <ljharb>
+i'm still not comfortable with that direction, especially including let and/or const (and/or var)
+
+[09:46:21.0972] <ljharb>
+ * i'm still not comfortable with that direction, especially including let and/or const (and/or var)
+
+[12:09:30.0337] <rbuckton>
+I'm open to other ideas, though I'm not in favor of completely divorcing declarations from pattern matching. 
+
+[12:10:19.0072] <rbuckton>
+While I prefer the explicit `let`, I'm also partial to Rust-like `@` bindings (i.e., `when { a: Number, b: c @ String }: c`)
+
+[12:12:22.0821] <rbuckton>
+ * While I prefer the explicit `let`, I'm also partial to Rust-like `@` bindings (i.e., `when { a: Number, b: c @ String }: c`)
+
+[12:15:31.0495] <rbuckton>
+I know `::` was under discussion at some point, but I found the examples confusing. I'm also concerned about using `::` when there have been multiple proposals considering it for call-like behavior that could potentially apply to Extractors as well (i.e., `when { a: foo::Message(b) }` could potentially be a thing)
+
+[13:31:30.0821] <TabAtkins>
+(I also could never actually quite decipher the `::` examples that were produced, at least not in a consistent way.)
+
+[13:32:26.0389] <TabAtkins>
+But yeah I don't have a strong opinion on how the irrefutable pattern is spelled.
+
+[13:33:06.0140] <TabAtkins>
+The Rust `@` pattern requires you to still specify a pattern, right? You can't just say "bind to this name, no further checks"?
+
+[14:02:49.0331] <rbuckton>
+Rust binds by default unless you specify a pattern or identifier that already exists, in which case it treats it as a pattern.
+
+[14:03:26.0964] <rbuckton>
+that kind of ambiguity wouldn't work well in JS though.
+
+[14:06:39.0559] <rbuckton>
+If we did use `@`, it would probably need to be necessary for all bindings. So `when { x: y }` would _always_ treat `y` as a pattern, meaning you'd need to write `when { x: y @ }` to introduce a binding. 
+
+[14:08:03.0040] <rbuckton>
+That syntax seems a little awkward, which is why I still prefer `when { x: let y }` to introduce a binding and `when { x: let y & pattern }` to bind *and* match. The `let` syntax is not as terse, but its much less ambiguous.
+
+[14:11:16.0898] <rbuckton>
+Plus, `let` is more flexible. with `let` you can create multiple bindings for the same value, or a mutable and immutable binding, i.e.:
+```js
+when { x: let a & let b }: [++a, --b],
+when { y: const originalY & let changedY }: originalY === (changedY %= 10) ? changedY : originalY,
+```
+You can't really do that with `@`
+
+[14:14:42.0983] <rbuckton>
+I'm a bit wary of mixing pattern matching and destructuring, so I'm weakly against `when { a: let { x, y } }`. I could potentially see `when { a: { let x, let y } }` as a shorthand for `when { a: { x: let x, y: let y } }`, as well as `when { let a: Number }` as a shorthand for `when { a: let a & Number }` though.
+
+[14:14:53.0871] <rbuckton>
+ * I'm a bit wary of mixing pattern matching and destructuring, so I'm weakly against `when { a: let { x, y } }`. I could potentially see `when { a: { let x, let y } }` as a shorthand for `when { a: { x: let x, y: let y } }`, as well as `when { let a: Number }` as a shorthand for `when { a: let a & Number }` though.
+
+[14:19:17.0244] <rbuckton>
+ * Plus, `let` is more flexible. with `let` you can create multiple bindings for the same value, or a mutable and immutable binding, i.e.:
+
+```js
+when { x: let a and let b }: [++a, --b],
+when { y: const originalY and let changedY }: originalY === (changedY %= 10) ? changedY : originalY,
+```
+
+You can't really do that with `@`
+
+[14:19:24.0099] <rbuckton>
+ * That syntax seems a little awkward, which is why I still prefer `when { x: let y }` to introduce a binding and `when { x: let y and pattern }` to bind _and_ match. The `let` syntax is not as terse, but its much less ambiguous.
+
+[14:19:36.0726] <rbuckton>
+ * I'm a bit wary of mixing pattern matching and destructuring, so I'm weakly against `when { a: let { x, y } }`. I could potentially see `when { a: { let x, let y } }` as a shorthand for `when { a: { x: let x, y: let y } }`, as well as `when { let a: Number }` as a shorthand for `when { a: let a and Number }` though.
+
+[14:22:58.0221] <rbuckton>
+`let` also gives you a convenient place to attach an initializer:
+
+```js
+match (x) {
+  when { kind: "a" }: ...,
+  when { kind: "b" }: ...,
+  when { kind: let kind = "<missing>" }: print(`unknown kind: ${kind}`),
+  when let other = "<missing>": print(`unknown input: ${other}`)
+}
+```
+
+[14:23:06.0950] <rbuckton>
+ * `let` also gives you a convenient place to attach an initializer:
+
+```js
+match (x) {
+  when { kind: "a" }: ...,
+  when { kind: "b" }: ...,
+  when { kind: let kind = "<missing>" }: print(`unknown kind: ${kind}`),
+  when let other = "<missing>": print(`unknown input: ${other}`)
+}
+```
+
+[14:36:56.0651] <ljharb>
+i mean, regardless, imo the pattern must come first
+
+[14:37:11.0129] <ljharb>
+since the bindings are not bound unless the pattern matches, it wouldn't make sense to have the bindings come before the pattern
+
+[14:37:56.0684] <ljharb>
+using `let` would be fine if we only had one way to make vars, but we have 3, and it's very weird and confusing and inconsistent if we have 1 but not all 3 - and regardless, it forces the linting community to come up with a convention, or adapt existing linting rules, and creates another source of style arguments for no benefit i can see
+
+[14:38:52.0566] <ljharb>
+i'm perfectly comfortable with a syntactic marker for bindings, it's just that the language has no precedent for that besides let/const/var, or "nothing/everything", a la destructuring (where there's a marker outside the pattern but not inline on individual bindings)
+
+[15:01:37.0077] <rbuckton>
+When I talk about adding `let` bindings, I am also including `const`. I don't have a preference on `var`.
+
+[15:04:06.0314] <rbuckton>
+With `let` bindings, the `let x` _is_ a pattern (an irrefutable one that always matches), so order doesn't matter. `when { a: let x and Number }` and `when { a: Number and let x }` are pretty much the same. With Rust's `@` syntax, the binding comes first, i.e. `when { x: Binding @ Pattern }`.
+
+[15:04:11.0399] <rbuckton>
+> <@ljharb:matrix.org> since the bindings are not bound unless the pattern matches, it wouldn't make sense to have the bindings come before the pattern
+
+ * With `let` bindings, the `let x` _is_ a pattern (an irrefutable one that always matches), so order doesn't matter. when { a: let x and Number }`and`when { a: Number and let x }` are pretty much the same. With Rust's`@`syntax, the binding comes first, i.e.`when { x: Binding @ Pattern }\`.
+
+[15:04:32.0621] <rbuckton>
+ * With `let` bindings, the `let x` _is_ a pattern (an irrefutable one that always matches), so order doesn't matter. when `{ a: let x and Number }` and `when { a: Number and let x }` are pretty much the same. With Rust's`@` syntax, the binding comes first, i.e. `when { x: Binding @ Pattern }`.
+
+[15:04:38.0579] <rbuckton>
+ * With `let` bindings, the `let x` _is_ a pattern (an irrefutable one that always matches), so order doesn't matter. when `{ a: let x and Number }` and `when { a: Number and let x }` are pretty much the same. With Rust's `@` syntax, the binding comes first, i.e. `when { x: Binding @ Pattern }`.
+
+[15:04:57.0003] <rbuckton>
+ * With `let` bindings, the `let x` _is_ a pattern (an irrefutable one that always matches), so order doesn't matter. `when { a: let x and Number }` and `when { a: Number and let x }` are pretty much the same. With Rust's `@` syntax, the binding comes first, i.e. `when { x: Binding @ Pattern }`.
+
+[15:05:15.0399] <ljharb>
+for an inline `let` i think that's probably fine
+
+[15:05:31.0575] <ljharb>
+my ordering reaction is more to the `when let` suggestions, where there's a "binding space" and a "pattern space"
+
+[15:06:07.0148] <ljharb>
+but including var is problematic because of scoping, and including const/let would be "fine" but weird to omit var and also would create those style debates that would be best avoided
+
+[15:06:46.0934] <rbuckton>
+The `when let` example above is still a pattern, i.e.: `when (Number and (let x = init)):`, etc.
+
+[15:07:33.0295] <rbuckton>
+I don't think its too terrible to omit `var` in this case, but even if we left it in scoping for `var` wouldn't change.
+
+[15:07:48.0174] <rbuckton>
+(i.e., it would hoist and be overwritten if the pattern matches)
+
+[15:08:18.0342] <rbuckton>
+pattern matching will have more than its own share of style debates, so that's a lost cause, IMO.
+
+[15:16:32.0060] <TabAtkins>
+The bindings dont' ahve to come before the name. they don't today, where the "binding" is a pattern itself - you can equally write `a and [...]` or `[...] and a`.
+
+[15:17:01.0249] <TabAtkins>
+And that would continue to be true since `let x` or whatever is just our new spelling for irrefutable matchers
+
+[15:17:42.0979] <TabAtkins>
+I still think going with `as X` for the spelling is best, akin to imports.
+
+[15:18:12.0105] <TabAtkins>
+I suspect that if we ever do unify destructuring with import syntax, it'll be done precisely by adding the `as X` syntax to destructuring
+
+[15:19:37.0069] <TabAtkins>
+(And yeah, I feel like `{x: y@}` looks a little weird; I'd prefer to stick with the model that it's just an irrefutable matcher if we can, as then it works automatically with everything without us having to add any more cases to the grammar.)
+
+[15:20:33.0593] <rbuckton>
+`as X` doesn't let you specify mutability though, or let us open the door to other variable types like `using` (not sure I would allow `using` in there, but there could be others).
+
+[15:21:00.0037] <ljharb>
+why bother with reassignable variables at all tho (assignment !== mutability :-p )
+
+[15:21:10.0631] <ljharb>
+you can do `let x = y;` in the RHS if you really need that
+
+[15:21:21.0400] <TabAtkins>
+yeah just make them all const bindings imo
+
+[15:21:36.0873] <rbuckton>
+(binding mutability, i.e. Rust's `let` is a constant binding, but `let mut` is a mutable binding).
+
+[15:21:59.0588] <rbuckton>
+> <@ljharb:matrix.org> you can do `let x = y;` in the RHS if you really need that
+
+But only once we get `do` expressions.
+
+[15:22:10.0115] <TabAtkins>
+which we will!
+
+[15:22:25.0211] <TabAtkins>
+or, annoyingly, with an iiafe
+
+[15:22:29.0955] <rbuckton>
+(still wants `throw` expressions)
+
+[15:22:39.0439] <ljharb>
+right, pattern matching is an expression solely because we're assuming do expressions advance
+
+[15:25:11.0159] <rbuckton>
+still not a huge fan of `as`, but its better than `@` and has the same meaning. `when { x: as y }` isn't much different than `when { x: let y }`, but it definitely means TypeScript won't be able to use `as` as a cast in a pattern (which is potentially a thing we'd need with custom matchers).
+
+[15:25:44.0189] <rbuckton>
+We definitely don't want to use `<T>x` as a cast, since I hope we one day have relational patterns even if it's not in the MVP.
+
+[15:25:59.0430] <TabAtkins>
+ugh, yeah TS overlap is annoying.
+
+[15:26:35.0497] <rbuckton>
+It's not so bad for `import`/`export`, but if you want to extend `as` to destructuring we could have serious issues.
+
+[15:26:49.0114] <rbuckton>
+we=TypeScript
+
+[15:28:30.0230] <rbuckton>
+Since we allow casts of simple assignment targets:
+
+````ts
+let x: any;
+(x as number) = 1;
+[x as number] = [1];
+({ x: x as number } = { x: 1 });
+````
+
+[15:28:34.0219] <rbuckton>
+ * Since we allow casts of simple assignment targets:
+
+````ts
+let x: any;
+(x as number) = 1;
+[x as number] = [1];
+({ x: x as number } = { x: 1 });
+````
+
+[15:29:09.0016] <TabAtkins>
+oh, funky, ok
+
+[15:29:25.0191] <TabAtkins>
+python does that by just having you mention the variable beforehand
+
+[15:30:30.0018] <rbuckton>
+It's a thing for reasons (mostly for working with incorrect or outdated 3rd party types)
+
+[15:31:49.0529] <rbuckton>
+also in initializers:
+```js
+({ x = y as number } = { });
+```
+
+[15:32:42.0448] <TabAtkins>
+ah yeah, no arglist destructuring in python (since py3 killed tuple destructuring there) so that makes sense
+
+
+2022-10-23
+[23:02:31.0256] <Jack Works>
+> <@ljharb:matrix.org> but including var is problematic because of scoping, and including const/let would be "fine" but weird to omit var and also would create those style debates that would be best avoided
+
+I think that's acceptable. `if (cond) var x` is valid and `if (cond) let x` is syntax error. we already have `var`/`let,const` split in the language
+
+[23:05:59.0764] <Jack Works>
+`let { a: b } = expr;` No, `let { a as b } = expr;` Yes!
+
+[23:06:15.0943] <Jack Works>
+> <@tabatkins:matrix.org> I suspect that if we ever do unify destructuring with import syntax, it'll be done precisely by adding the `as X` syntax to destructuring
+
+ * `let { a: b } = expr` No, `let { a as b } = expr` Yes!
+
+[23:06:23.0606] <Jack Works>
+ * `let { a: b } = expr;` No, `let { a as b } = expr;` Yes!
+
+
+2022-10-25
+[13:38:44.0594] <TabAtkins>
+Right, I think that's what'd happen, with `let {a as b: {c}} = expr;` for further destucturing *alongside* the naming. (In this case, storing expr.a as b, and expr.a.c as c.)
+
+[13:39:25.0223] <TabAtkins>
+But pattern matching needs to have `as b` in the value space as a matcher, so it's usable in other types of patterns as well.
+
+[15:06:58.0695] <rbuckton>
+> <@tabatkins:matrix.org> Right, I think that's what'd happen, with `let {a as b: {c}} = expr;` for further destucturing *alongside* the naming. (In this case, storing expr.a as b, and expr.a.c as c.)
+
+Trying to parse that in my head is making my brain hurt
+
+[15:07:31.0507] <rbuckton>
+Though, I guess we can't avoid that with pattern matching in general. Some things just won't make sense 
+
+[15:11:47.0116] <TabAtkins>
+Well that's just destructing not pattern matching
+
+[15:12:28.0687] <TabAtkins>
+As a pattern it would be `{a: as b and {c}}`
+
+[15:21:30.0690] <rbuckton>
+Those two syntaxes are very much at odds with each other.
+
+[15:22:12.0443] <rbuckton>
+You have on as `{ a as b: c }` and the other as `{ a: as b and c }`. Shifting the placement of the `:` is very confusing.
+
+[15:23:34.0838] <rbuckton>
+And if you're going to use `as b`, I'd rather find something clearer in the way that `let b` is clearer. `as` is an infix keyword, not a prefix keyword, so its usage here is not clear.
+
+[15:25:06.0851] <rbuckton>
+Rust uses `@` because bare identifiers always bind, i.e. the pattern `{ a }` binds a, while `{ a: C }` matches a to C, and `{ a: b @ C }` matches a to C and binds a to b.
+
+[15:27:17.0087] <rbuckton>
+ * You have one as `{ a as b: c }` and the other as `{ a: as b and c }`. Shifting the placement of the `:` is very confusing.
+
+[15:28:33.0968] <rbuckton>
+If you're going to propose `as id` as a drop-in replacement for `let b`, I might be amenable, but given that example I would be wholly against introducing `as` in a completely different place in destructuring. 
+
+[15:57:49.0024] <TabAtkins>
+Yeah, import syntax forged a new variant as well, so destructuring will be in the cross-hairs of two slightly clashing syntaxes :/
+
+[15:58:14.0792] <TabAtkins>
+We could match destructuring and patterns, but then it woudln't match imports
+
+[15:58:50.0160] <TabAtkins>
+And arguably that would be more acceptable, since the destructuring syntax is closer to pattern matching in general; import syntax is pretty limited in several ways.
+
+[16:07:12.0169] <rbuckton>
+I'm less concerned about matching imports, there's less overlap. Import bindings are weird compared to binding patterns anyways, since they're live bindings. 
+
+[16:07:24.0573] <TabAtkins>
+hm, fair
+

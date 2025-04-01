@@ -1,0 +1,290 @@
+2024-02-15
+[14:31:12.0591] <shu>
+Mathieu Hofman: so i don't see how SABs are normative optional
+
+[14:31:18.0551] <shu>
+mark made that claim earlier today in the call
+
+[14:31:50.0664] <shu>
+there's the line "Whenever a host does not provide concurrent access to SharedArrayBuffers it may omit the "SharedArrayBuffer" property of the global object."
+
+[14:32:01.0410] <shu>
+but that's slightly different by normative optional
+
+[14:32:08.0022] <shu>
+i guess mark just meant it's optional in the layman sense?
+
+[14:32:26.0803] <Mathieu Hofman>
+How is it different?
+
+[14:32:40.0120] <Mathieu Hofman>
+Richard opened https://github.com/tc39/ecma262/issues/3280 today
+
+[14:32:43.0845] <ljharb>
+it's normative optional because it doesn't have to be present for the environment to be spec-compliant
+
+[14:32:53.0041] <ljharb>
+anything that's omittable is normative optional
+
+[14:33:09.0027] <shu>
+so the SAB section is not normative optional
+
+[14:33:14.0386] <Mathieu Hofman>
+I believe the normative optional annotation didn't exist back then
+
+[14:33:19.0075] <shu>
+the thing that's omittable is the `SharedArrayBuffer` property on the global
+
+[14:33:25.0139] <ljharb>
+right, the constructor is, exactly
+
+[14:33:34.0794] <ljharb>
+and it's not accessible to JS code otherwise, right?
+
+[14:33:36.0243] <shu>
+even on a host that does not provide concurrent access to SABs, you can get it by making a Wasm linear memory that's shared
+
+[14:33:44.0587] <shu>
+and that still has all the right prototypes and methods
+
+[14:33:47.0564] <ljharb>
+ahhh right, ok, gotcha
+
+[14:33:58.0575] <ljharb>
+ok well that's fair. but hosts don't have to have wasm either
+
+[14:34:03.0342] <Mathieu Hofman>
+Right, only the constructor is normative optional
+
+[14:34:03.0562] <ljharb>
+ * ok well that's fair. but non-web hosts don't have to have wasm either.
+
+[14:34:03.0738] <shu>
+correct
+
+[14:34:12.0747] <shu>
+it's still optional in the layman sense
+
+[14:34:24.0855] <ljharb>
+so in browsers, it's just the constructor property. but anywhere else, it's effectively the entire thing as long as wasm is not provided, right?
+
+[14:34:37.0883] <shu>
+right, if there's no other host-provided special way to get one of those things
+
+[14:35:59.0183] <Mathieu Hofman>
+I suppose the question is, if there was a GetIntrinsic, would %SharedArrayBuffer% appear in there or not
+
+[14:36:13.0034] <shu>
+agree, if GetIntrinsic exists then it's a bigger distinction
+
+[14:36:15.0958] <ljharb>
+no
+
+[14:36:22.0730] <ljharb>
+well, hm
+
+[14:36:38.0586] <shu>
+well the point of GetIntrinsic is to give access to non-reachable-via-chain-of-property-accesses intrinsics
+
+[14:36:46.0090] <shu>
+so it's not clear to me it's an obvious "no"
+
+[14:37:06.0979] <ljharb>
+given that it's a top-level intrinsic, yes. but, i assume we'd alter the wording a bit somewhere to say that the intrinsic must exist if there's any way to access those objects, but must not exist otherwise?
+
+[14:37:20.0706] <shu>
+🤷
+
+[14:37:33.0798] <shu>
+whatever font element uses for emojis is garbage yo
+
+[14:37:37.0766] <shu>
+i can hardly tell that person is shrugging
+
+[14:37:49.0819] <ljharb>
+iow, it'd still be deniable in places where the constructor property was omitted, even if by wrapping getIntrinsic, but it'd be required to exist if there's any way to get at a SAB
+
+[14:40:10.0239] <Mathieu Hofman>
+to rephrase Shu's observation, is it spec compliant to omit %SharedArrayBuffer% from getIntrinsic, even if there is no other way to reach it
+
+[14:40:23.0106] <Mathieu Hofman>
+ * to rephrase Shu's observation, would it be spec compliant to omit %SharedArrayBuffer% from getIntrinsic, even if there is no other way to reach it
+
+[14:40:38.0941] <shu>
+...is it? 
+
+[14:40:56.0940] <shu>
+oh sorry you are asking a question
+
+[14:41:03.0564] <Mathieu Hofman>
+If it was normative optional, it would be. But with the current working, I'm actually not sure
+
+[14:41:10.0580] <shu>
+my gut says "it's spec compliant to omit iff there is no other way to reach it in the host"
+
+[14:41:10.0846] <Mathieu Hofman>
+ * to rephrase Shu's observation, would it be spec compliant to omit %SharedArrayBuffer% from getIntrinsic, even if there is no other way to reach it?
+
+[14:41:30.0628] <shu>
+otherwise because it's not the case that the entire constructor and prototype and all the methods are in a Normative Optional block, it seems not compliant to omit it
+
+[14:41:32.0854] <ljharb>
+i think that's exactly the semantic GetIntrinsic must have, however it's worded
+
+[14:42:35.0149] <Mathieu Hofman>
+Anyway, I suppose the question stand, and should SAB be normative optional, and maybe Atomics too ?
+Afaik, Atomics.waitAsync is causing some problems in some worklet environments
+
+[14:42:45.0720] <shu>
+haha i saw that
+
+[14:43:25.0142] <shu>
+i don't think either SAB and Atomics can be truly normative optional
+
+[14:43:54.0434] <shu>
+especially not Atomics because they _do_ work on ABs, just doesn't do anything interesting
+
+[14:43:55.0499] <Mathieu Hofman>
+why not?
+
+[14:43:59.0722] <shu>
+(except wait)
+
+[14:44:04.0729] <shu>
+because they work on ABs
+
+[14:44:41.0654] <Mathieu Hofman>
+ok but the question is whether a spec compliant implementation must offer them to the program
+
+[14:44:50.0456] <shu>
+there was a use case from the wasm side iirc that wanted to not share different binaries depending on whether SABs are actually available
+
+[14:45:12.0358] <shu>
+so, when they are not, they will use ABs, use no multithreading, but still ship the same Atomics calls
+
+[14:45:18.0905] <shu>
+"graceful degration" or whatever
+
+[14:45:27.0053] <shu>
+ * "graceful degradation" or whatever
+
+[14:45:43.0876] <ljharb>
+then in that case Atomics probably can't be optional, but would be entirely useless in an env without SABs. any reason why they work with ABs in the first place?
+
+[14:45:54.0274] <shu>
+that says to me that Atomics ought to always be offered as part of a spec compliant implementation
+
+[14:46:09.0003] <shu>
+> <@ljharb:matrix.org> then in that case Atomics probably can't be optional, but would be entirely useless in an env without SABs. any reason why they work with ABs in the first place?
+
+for the reason i just said above about not wanting to ship different binaries
+
+[14:46:16.0573] <shu>
+ * there was a use case from the wasm side iirc that wanted to not ship different binaries depending on whether SABs are actually available
+
+[14:46:20.0297] <ljharb>
+ahhh k
+
+[14:46:52.0549] <ljharb>
+i mean it'd basically just be a conditional `delete Atomics` call before allowing any user code to run, right? not sure why it'd require a new binary
+
+[14:47:05.0222] <shu>
+i'm confused
+
+[14:47:53.0703] <ljharb>
+so like, i would expect one binary. if it makes SABs available, there's a global property and also Atomics. if it doesn't, there's no global property and also no Atomics
+
+[14:48:10.0243] <ljharb>
+ * so like, i would expect one binary. if it makes SABs available, there's a global property and also Atomics. if it doesn't, there's no global property and also no Atomics. both of which are deleteable with a line or two of JS that can be invoked before running user code
+
+[14:48:25.0239] <ljharb>
+ * so like, i would expect one binary. if it makes SABs available, there's a global property and also Atomics. if it doesn't, there's no global property and also no Atomics. both of which are deleteable with a line or two of JS that can be invoked inside a realm before running user code (like how node has "realm bootstrap" JS that runs)
+
+[14:48:40.0132] <shu>
+the use case is like, you have a bunch of carefully written lockfree mumbo jumbo that uses SABs and `Atomics`. you don't want to write a whole different version, and you're also not too bothered about running it single-threaded when SABs are not available, even if Atomics are more expensive. in that case, you can check if SABs are available, you construct a SAB and TAs that view that. if you SABs are not available, you construct an AB and TAs that view that. the library code that does Atomics operations on the TAs is agnostic to whether the underlying buffer is an SAB or AB
+
+[14:48:43.0909] <ljharb>
+ * so like, i would expect one binary. if it makes SABs available, there's a global property and also Atomics. if it doesn't, there's no global property and also no Atomics. both of which are deleteable with a line or two of JS that can be invoked inside a realm before running user code (like how node has "realm bootstrap" JS that runs)
+
+entirely possible i'm missing something
+
+[14:48:54.0770] <shu>
+the one wrinkle is that `wait` never works if the underlying buffer is an AB
+
+[14:49:00.0795] <shu>
+but other than wait, all the other Atomics operations work
+
+[14:49:01.0478] <Mathieu Hofman>
+ok I buy the use case for Atomics being present. I think SAB being normative optional is still an option. And it's solve the `waitAsync` issue, since that throws on non SAB backed views
+
+[14:49:06.0406] <ljharb>
+ok but that's the library - so it could easily have a branch
+
+[14:49:16.0244] <shu>
+that constitutes writing 2 libraries
+
+[14:49:16.0376] <ljharb>
+ * ok but that's the library - so it could easily have a branch, and not be agnostic
+
+[14:49:36.0029] <ljharb>
+i count one library that branches based on whether SAB was present initially or not
+
+[14:49:56.0476] <ljharb>
+ * i count one library that branches based on whether SAB was present initially or not. obv the machinery to handle SABs/Atomics would have to be present regardless
+
+[14:50:01.0387] <shu>
+one that uses, like `a[i] + 42` and one that uses `Atomics.add(a, i, 42)`
+
+[14:50:11.0530] <shu>
+the use case, the library author says, i don't want to write two different versions
+
+[14:51:10.0207] <ljharb>
+ok, i mean i get that, but that's a minor convenience issue for something that only really makes sense to call on a SAB. (no need to debate it, ship's sailed, i was just confused)
+
+[14:51:22.0768] <shu>
+it's not a convenience issue, it's a maintenance issue
+
+[14:53:05.0805] <ljharb>
+i have to write multiple code paths in libraries all the time, it's just the way it is - i don't see it as a real obstable to do `isSAB(a) ? Atomics.add(a, i, 42) : a[i] + 42`
+
+[14:53:12.0034] <ljharb>
+ * i have to write multiple code paths in libraries all the time, it's just the way it is - i don't see it as a real obstacle to do `isSAB(a) ? Atomics.add(a, i, 42) : a[i] + 42`
+
+[14:53:32.0318] <ljharb>
+ * i have to write multiple code paths in libraries all the time, it's just the way it is - i don't see it as a real obstacle to do `isSAB(a) ? Atomics.add(a, i, 42) : a[i] + 42`, and i'd personally find that better since that way it's much clearer - and thus more maintainable - to a reader when something's shared or not
+
+[14:53:42.0203] <ljharb>
+ * i have to write multiple code paths in libraries all the time, it's just the way it is - i don't see it as a real obstacle to do `isSAB(a) ? Atomics.add(a, i, 42) : a[i] + 42`, and i'd personally find that better since that way it's much clearer - and thus more maintainable - to a reader when something's shared or not. obv it's subjective.
+
+
+2024-02-16
+[16:15:00.0854] <shu>
+all, i sent out an invite for another working call on Feb 29
+
+[16:35:30.0297] <Mathieu Hofman>
+I'll be on a plane to SF that day (I'm really sad I missed the plenary by a couple weeks)
+
+[19:44:34.0346] <shu>
+Mathieu Hofman: would another day work for you?
+
+[19:51:25.0580] <Mathieu Hofman>
+Potentially the next day, or the following week
+
+[19:53:41.0307] <Mathieu Hofman>
+Oh the 22nd works too
+
+[11:47:50.0950] <shu>
+22nd is too soon imo. the friday doesn't work for me unfortunately
+
+[11:48:09.0693] <shu>
+maybe Monday March 4?
+
+[11:48:37.0469] <Mathieu Hofman>
+Should work for me will check with Mark
+
+[13:07:08.0898] <Mathieu Hofman>
+Good for Mark as well
+
+[13:11:36.0618] <shu>
+okay i will move to monday same time
+

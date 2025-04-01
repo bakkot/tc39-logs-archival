@@ -1,0 +1,3370 @@
+2023-09-06
+[13:43:26.0749] <rbuckton>
+shu: Are the origin trial shared structs not allowed to have fields that are stringified integers?
+
+[14:25:56.0386] <shu>
+rbuckton: it should, that looks like a bug
+
+[14:26:01.0355] <shu>
+i'll investigate soon, thanks for raising it
+
+[15:32:40.0914] <rbuckton>
+The more I tinker with this, trying to shoehorn it into the compiler, the more I want some mechanism to attach behavior.
+I also had to implement a custom `Map`-like mechanism using shared structs to share some keyed data efficiently. 
+
+[15:33:20.0290] <rbuckton>
+I have made some progress on parallel parsing, however. 
+
+[15:44:56.0565] <shu>
+i am working on the behavior thing
+
+[15:45:10.0955] <shu>
+more specifically, the thread-local storage thing
+
+[15:45:46.0842] <shu>
+our current GC scheme makes inter-heap cycles uncollectable, and i'm trying to fix that, which is taking a bit due to GC being finnicky
+
+
+2023-09-08
+[16:48:21.0705] <rbuckton>
+shu: are you aware of any issues debugging workers when - - harmony-structs or the Shared string table flag are enabled? I'm running issues debugging in VS Code and wanted to check if there were any known issues before I file an issue with VS Code. 
+
+[16:50:12.0414] <rbuckton>
+I'm not sure if it's Code, the chrome debug protocol, NodeJS, or V8 causing the issue, but the first breakpoint I hit after starting a worker and passing it a shared struct results in the debugger locking up. 
+
+[16:57:14.0828] <rbuckton>
+I finally reached a point where I can successfully parse a large project (xstate) using parallel parsing and the results aren't very promising yet. On a single thread, parse takes about 1.2s on my machine, and about 3.5s when running in parallel. However this is still very early and I'm having to copy the entire AST of each file from the struct representation into a normal JS object so it can be used by our existing checker and emitter. The limitations of structs mean we can't just use them as-is without a significant rewrite. 
+
+
+2023-09-09
+[17:06:01.0751] <shu>
+rbuckton: re: VSCode debugging, i don't know but i wouldn't be surprised if devtools just doesn't work because nobody has looked at it. printf debugging is what we do unfortunately, devtools investment is unlikely to materialize without something like getting to stage 3 first
+
+[17:06:17.0834] <shu>
+yeah, copying into normal objects sounds like it would kill performance indeed
+
+[17:06:31.0900] <shu>
+what are the limitations? attaching behavior and that ownProperty bug?
+
+[17:06:52.0555] <shu>
+(please file issues for the limitations getting in your way in addition to the attaching behaviors thing)
+
+[17:27:38.0514] <rbuckton>
+> <@shuyuguo:matrix.org> what are the limitations? attaching behavior and that ownProperty bug?
+
+If I limit this to just the command line compiler, the biggest issue is that I can't emulate our internal `NodeArray` with a `SharedArray`. A `NodeArray` is just an `Array` with a few extra properties attached, but that causes several issues:
+- Can't define extra fields on `SharedArray`
+- Alternatively, can't define numeric indexed properties on a regular struct.
+- SharedArray is not iterable and you can't make a regular struct iterable, so I have to rewrite every `for..of` and array method call to work around. 
+
+[17:27:53.0931] <rbuckton>
+* In reply to @shuyuguo:matrix.org
+what are the limitations? attaching behavior and that ownProperty bug?
+
+
+If I limit this to just the command line compiler, the biggest issue is that I can't emulate our internal NodeArray with a SharedArray. A NodeArray is just an Array with a few extra properties attached, but that causes several issues:
+
+Can't define extra fields on SharedArray
+
+Alternatively, can't define numeric indexed properties on a regular struct.
+
+SharedArray is not iterable and you can't make a regular struct iterable, so I have to rewrite every for..of and array method call to work around.
+
+
+[17:28:20.0192] <rbuckton>
+* In reply to shu
+what are the limitations? attaching behavior and that ownProperty bug?
+
+
+In reply to @shuyuguo:matrix.org
+what are the limitations? attaching behavior and that ownProperty bug?
+
+If I limit this to just the command line compiler, the biggest issue is that I can't emulate our internal NodeArray with a SharedArray. A NodeArray is just an Array with a few extra properties attached, but that causes several issues:
+- Can't define extra fields on SharedArray
+
+- Alternatively, can't define numeric indexed properties on a regular struct.
+
+- SharedArray is not iterable and you can't make a regular struct iterable, so I have to rewrite every for..of and array method call to work around.
+
+
+[17:28:32.0877] <rbuckton>
+* In reply to shu
+what are the limitations? attaching behavior and that ownProperty bug?
+
+
+In reply to shu
+what are the limitations? attaching behavior and that ownProperty bug?
+
+In reply to @shuyuguo:matrix.org
+what are the limitations? attaching behavior and that ownProperty bug?
+If I limit this to just the command line compiler, the biggest issue is that I can't emulate our internal NodeArray with a SharedArray. A NodeArray is just an Array with a few extra properties attached, but that causes several issues:
+
+Can't define extra fields on SharedArray
+
+Alternatively, can't define numeric indexed properties on a regular struct.
+
+SharedArray is not iterable and you can't make a regular struct iterable, so I have to rewrite every for..of and array method call to work around.
+
+
+[17:30:00.0937] <rbuckton>
+We also use data structures like `Map` that we can't emulate due to the inability to attach behavior, so there's a lot of copying in and out of data structures we can use. 
+
+[17:33:14.0207] <rbuckton>
+If I wanted to extend these structs to the language service, we're in the realm of needing behavior and the ability to freeze or lock down specific properties. Our AST is mostly treated as immutable, but if we were to vend struct based nodes from our API they would become unsafe to use if a consumer could make changes to properties outside of a lock. 
+
+[17:37:52.0976] <rbuckton>
+For now I've worked around a few other issues. I add a `__tag__` field to structs I create when type identity is important, as well as a field containing a pseudo- identity hash so I can use some structs as keys in a shared hashmap implementation I wrote (in place of Map where needed). 
+
+[17:40:39.0203] <rbuckton>
+I'm using classes and decorators to fake syntax to better work with the type system, like in the example above. The decorators just collect field names and create a SharedStructType attached to the class, behavior is just defined as static methods. 
+
+[17:43:41.0680] <rbuckton>
+I'm also experimenting with a `Mutex` wrapper that let's me write code like this:
+
+```ts
+{
+  using lck = new UniqueLock(mutex);
+  ...
+}
+```
+
+Though the mutex wrapper is slower than `Atomics.Mutex`.
+
+[18:11:10.0329] <rbuckton>
+> <@rbuckton:matrix.org> In reply to shu
+> what are the limitations? attaching behavior and that ownProperty bug?
+> 
+> 
+> In reply to shu
+> what are the limitations? attaching behavior and that ownProperty bug?
+> 
+> In reply to @shuyuguo:matrix.org
+> what are the limitations? attaching behavior and that ownProperty bug?
+> If I limit this to just the command line compiler, the biggest issue is that I can't emulate our internal NodeArray with a SharedArray. A NodeArray is just an Array with a few extra properties attached, but that causes several issues:
+> 
+> Can't define extra fields on SharedArray
+> 
+> Alternatively, can't define numeric indexed properties on a regular struct.
+> 
+> SharedArray is not iterable and you can't make a regular struct iterable, so I have to rewrite every for..of and array method call to work around.
+
+This ended up horribly formatted due to trying to edit the message on my phone :/
+
+[18:11:26.0750] <rbuckton>
+> <@shuyuguo:matrix.org> what are the limitations? attaching behavior and that ownProperty bug?
+
+ * If I limit this to just the command line compiler, the biggest issue is that I can't emulate our internal NodeArray with a SharedArray. A NodeArray is just an Array with a few extra properties attached, but that causes several issues:
+
+- Can't define extra fields on SharedArray
+
+- Alternatively, can't define numeric indexed properties on a regular struct.
+
+- SharedArray is not iterable and you can't make a regular struct iterable, so I have to rewrite every for..of and array method call to work around.
+
+
+2023-09-11
+[13:54:53.0035] <shu>
+rbuckton: we should figure out how to get builds of node with tip-of-tree V8. your indexed property woes seems to have been long fixed, but the V8 version that your version of node uses hasn't picked it up
+
+[13:55:16.0170] <shu>
+```
+~/v8/v8 $ out/x64.debug/d8 --harmony-struct ./test-shared-struct-elements-own-prop.js 
+V8 is running with experimental features enabled. Stability and security will suffer.
+0,1
+{"writable":true,"enumerable":true,"configurable":false}
+
+~/v8/v8 $ cat ./test-shared-struct-elements-own-prop.js 
+var t = new SharedStructType(["0", "1"]);
+var s = new t();
+print(Object.keys(s));
+print(JSON.stringify(Object.getOwnPropertyDescriptor(s, "0")));
+```
+
+[16:32:36.0304] <rbuckton>
+I'll have to take some time next week to spin up a NodeJS build environment
+
+
+2023-09-12
+[09:13:28.0069] <Mathieu Hofman>
+I've used https://nodejs.org/download/v8-canary/ successfully before
+
+[09:14:35.0250] <Mathieu Hofman>
+Built from https://github.com/nodejs/node-v8
+
+[13:29:19.0844] <rbuckton>
+> <@mhofman:matrix.org> Built from https://github.com/nodejs/node-v8
+
+Thanks! This works perfectly
+
+[13:32:42.0538] <rbuckton>
+`instanceof` for Mutex/Condition/SharedArray is great. I see that it works for instances of instances of `SharedStructType` as well, though there's still no fast way to see if a value is *any* shared struct (i.e., without access to its specific constructor)
+
+[13:33:47.0149] <shu>
+rbuckton: there is, i also added `SharedStructType.isSharedStruct` iirc
+
+[13:35:52.0909] <rbuckton>
+Ah, great
+
+[13:41:14.0625] <rbuckton>
+Hmm. I was hoping I could use `SharedStructType` to emulate `SharedArray` when I also need extra fields, but its significantly slower so that's a no-go.
+
+[13:44:18.0721] <shu>
+yes -- that's a possible optimization that's not implemented due to complexity/effort
+
+[13:44:37.0995] <shu>
+if you use indexed fields in SharedStructTypes, those are _always_ backed by "dictionary elements", i.e. a hash table
+
+[13:44:41.0700] <shu>
+SharedArrays are contiguous arrays
+
+[13:45:09.0605] <shu>
+we can optimize SharedStructTypes to use fast elements when those indexes are all packed, or something
+
+[13:45:22.0754] <shu>
+i could put it on the queue if it's a blocker
+
+[13:47:08.0594] <Ashley Claymore>
+> <@rbuckton:matrix.org> Hmm. I was hoping I could use `SharedStructType` to emulate `SharedArray` when I also need extra fields, but its significantly slower so that's a no-go.
+
+Could the N extra fields be hidden at the start of the sharedarray? Their names map to fixed indexes 0,1,2 etc, and all array looping logic knows to start index at N? Or too big a refactor?
+
+[13:48:54.0852] <rbuckton>
+Thats just as much of a refactor as what I was doing, which was stashing a SharedArray in an `items` field in another struct. The biggest issue with that approach is that every function that expected a `NodeArray` with indexable elements has to check if it's instead a `SharedNodeArray` to use its `items` field.
+
+[13:49:22.0691] <shu>
+rbuckton: what's the full list of field names you'd like to be fast?
+
+[13:49:29.0585] <shu>
+might not be too bad, i'll see if i have time next week
+
+[13:55:33.0222] <rbuckton>
+I'm not sure how to answer that. What's "slow" is that I'm trying to emulate a `SharedArray` with fields named `"length"`, `"0"`, `"1"`, etc. as well as attach a few extra fields that we normally stash on a `NodeArray`, which looks something like this:
+
+```ts
+interface NodeArray<T extends Node> extends Array<T> {
+  pos: number;
+  end: number;
+  hasTrailingComma: boolean;
+  transformFlags: TransformFlags; // number
+}
+```
+If you're asking about other fields, the most frequently hit fields on our AST are `pos`, `end`, `kind`, `id`, `transformFlags`, and `parent`:
+
+```ts
+interface Node {
+  pos: number;
+  end: number;
+  kind: SyntaxKind; // number
+  transformFlags: TransformFlags; // number
+  id: number | undefined;
+  parent: Node | undefined;
+}
+```
+
+[13:59:06.0786] <shu>
+ah i see
+
+[13:59:29.0420] <shu>
+is the length of these nodes known AOT per Node?
+
+[13:59:42.0062] <shu>
+(and are contiguous?)
+
+[14:07:39.0068] <rbuckton>
+Can you clarify what you mean by contiguous?
+
+[14:09:41.0068] <rbuckton>
+I've essentially mirrored our AST structure into shared struct definitions, so I could tell you exactly how many fields are attached to a given node, though I'd need a bit if you want something like the average field count.
+
+[14:13:42.0627] <shu>
+by contiguous i mean if a node type's length is N, then the node always has indexed properties 0 to N-1, inclusive, with no holes
+
+[14:13:52.0378] <shu>
+hole in the usual JS sense
+
+[14:14:26.0808] <shu>
+and no, not looking for an average field count
+
+[14:14:42.0845] <shu>
+by AOT i mean is the length fixed per node _type_ instead of per node _instance_
+
+[14:14:52.0565] <shu>
+since all shared arrays are fixed length
+
+[14:14:59.0053] <rbuckton>
+A `Node`? No. A `NodeArray`, yes. There are no holes in `NodeArray`s, though they could be filled with different kinds of `Node` subtypes.
+
+[14:15:45.0316] <shu>
+oh, my bad, i think i misread
+
+[14:15:54.0561] <shu>
+you're not saying you want Nodes to have some elements in addition to some properties
+
+[14:16:17.0820] <shu>
+you're saying you're trying to convert NodeArrays, which are arrays + some string-named properties that you listed above
+
+[14:16:50.0246] <shu>
+that points to another direction, which is...
+
+[14:17:44.0991] <shu>
+perhaps the dev trial should unify the notions of SharedStructType and SharedArray and just let SharedStructTypes specify "i want N indexed properties"
+
+[14:17:54.0769] <shu>
+but even then a SharedArray constructor is probably helpful
+
+[14:18:06.0952] <shu>
+in any case i hear the feedback now and i'll push it on the queue
+
+[14:21:18.0770] <rbuckton>
+Yes. I have two choices for a shared struct implementation of a `NodeArray`:
+
+1. I use a Shared Struct with a small set of string-named fields (like `pos`/`end`), as well a `length` and a number of indexed fields with no holes. This would emulate `NodeArray` except for functionality from array prototype as I can just use `length` and indices instead. This provides enough overlap between `NodeArray` and `SharedNodeArray` that I don't need to special case every single function that works with `NodeArray`.
+
+2. I use a Shared Struct with the same set of string-named fields as well as an `items` field that holds a `SharedArray`. In this case, I need to add branching cases in every function that works with `NodeArray`.
+
+[14:23:03.0624] <shu>
+i try to allow (1) to be more easily expressed and be faster
+
+[14:23:10.0251] <rbuckton>
+Another option would be the ability to add extra fields to a `SharedArray`, such that integer indexed properties go through the current fast path for `SharedArray` and other string properties go the slow path.
+
+[14:23:10.0888] <shu>
+ * i'll try to allow (1) to be more easily expressed and be faster
+
+[14:23:40.0379] <rbuckton>
+Though I assume that could be handled by unification as you suggested above.
+
+[14:23:57.0693] <shu>
+something like `SharedStructType(fields, { alsoGiveMeElementsUpTo: N })` or whatever
+
+[14:25:32.0934] <rbuckton>
+Yeah, or the `SharedStructType` constructor could just test `fields` for interger-indexed field names that start from `0` and go to `N` with no holes, and optimize those (unless you need to optimize `length` as well.
+
+[14:25:42.0727] <rbuckton>
+ * Yeah, or the `SharedStructType` constructor could just test `fields` for interger-indexed field names that start from `0` and go to `N` with no holes, and optimize those (unless you need to optimize `length` as well).
+
+[14:26:23.0812] <rbuckton>
+For the purposes of the trial, I don't necessarily need convenience, I just need capability. I can work around inconveniences if the capabilities are there.
+
+[14:48:24.0575] <rbuckton>
+Quick update on the parallel parsing front, after tinkering with how I batch source files to send to background threads, I went from parse time being 6x slower than single threaded, to only 1.5x slower.
+
+[14:49:02.0433] <shu>
+ah interesting, would love to dig in at some point, should be faster after all :)
+
+[14:56:17.0112] <rbuckton>
+TypeScript normally does a depth-first parse of source files: for each root file, we parse the file, collect its imports and `/// <reference>` directives, and then parse those files. The order in which we parse files affects signature overload resolution when we merge types for global scope and module augmentations. Depth first isn't very efficient for parallelization though, so I'm having to rewrite it to be breadth-first instead, which will (of course) affect overload resolution. I was trying a batching approach to minimize that affect, but it wasn't successful. In the end I'm probably just going to "fix it in post" and reorder the file list based on what we *would* have generated prior to batching.
+
+[15:04:52.0147] <Ashley Claymore>
+Curious, Is some of the remaining slowdown coming from under utilization, threads waiting for work to do, or are they fully saturated but there is additional overhead with the sharing? (Very excited by all this, we've also been looking at running TS in parallel and the parsing was showing as a bottleneck due to cache misses. A cross thread cache could be a big win)
+
+[15:06:23.0701] <rbuckton>
+I don't have enough information on that to say, yet. I think some of the inefficiencies are due to workarounds and needing to convert the struct representation to a normal `Node` representation.
+
+[15:07:30.0820] <rbuckton>
+I'm currently working on abstracting away the differences between a `Node` and a `SharedNode` so that I can just use shared structs end to end in the command line compiler, which would at least do away with the conversion step.
+
+[15:09:14.0175] <rbuckton>
+Once that works, I can look into whether its feasible to bind in parallel and possibly even emit in parallel. Unfortunately our emitter often queries information from the checker, which we probably won't be able to parallelize currently.
+
+[15:10:19.0206] <rbuckton>
+And I'm not sure how efficient synchronizing on the checker and calling into it from other threads will be.
+
+[15:14:28.0427] <rbuckton>
+> <@shuyuguo:matrix.org> if you use indexed fields in SharedStructTypes, those are _always_ backed by "dictionary elements", i.e. a hash table
+
+Are you saying all property access against a shared struct (not a shared array) in the origin trial uses hash table lookup/slow mode?
+
+[15:15:49.0413] <shu>
+> <@rbuckton:matrix.org> Are you saying all property access against a shared struct (not a shared array) in the origin trial uses hash table lookup/slow mode?
+
+No, just the integer-indexed properties on shared structs
+
+[15:15:53.0364] <shu>
+string-named properties are fast
+
+[15:15:56.0920] <rbuckton>
+Ah, ok
+
+[15:16:06.0642] <shu>
+it's a pecularity of how elements (indexed properties) are stored on JSObjects
+
+
+2023-09-17
+[10:06:04.0059] <rbuckton>
+I'm still tinkering with my parallel parse prototype, and I'm planning to try it on a few large scale projects. I'm not currently seeing the perf-gains I would hope, but its too early to say if its an issue with the shared structs functionality, the size of the projects I've been using for testing, or something about how I've had to hack around parts of the compiler to get something functional.
+I wrote a rudimentary work-stealing thread pooling mechanism, but I'm finding that adding more threads slows down parse rather than speeding it up for the monorepo I've been using as a test case. CPU profiling shows a lot of the threads aren't processing work efficiently, and are either spinning around trying to steal work or are waiting to be notified of work. Spinning isn't very efficient because there's no spin-wait mechanism nor the ability to write an efficient one (I can sort-of approximate one using `Condition.wait` with a short timeout to emulate `sleep`, but I can't efficiently yield). I also can't write efficient lock-free algorithms with shared structs alone, since I can't do CAS, so the fastest "lock-free"-ish updates I can perform are inside of a `Mutex.tryLock` unless I want to fall back to also sending a `SharedArrayBuffer` to the worker just so I can use `Atomics.compareExchange`.
+
+Here's a rough approximation of the thread pool I'm using right now, if anyone has suggestions or feedback: https://gist.github.com/rbuckton/3648f878595ed4e2ff3d52a15baaf6b9
+
+[10:08:56.0043] <rbuckton>
+Ah, wait. I just noticed I can do compareExchange with `SharedArray`. That's good.
+
+[10:09:58.0980] <rbuckton>
+ * Ah, wait. I just noticed I can do `compareExchange` with `SharedArray` and shared structs. That's wonderful!
+
+[11:03:44.0827] <rbuckton>
+I've updated my gist slightly to perform atomic updates on the task counter, probably a few more updates later.
+
+[16:05:52.0086] <shu>
+>  I also can't write efficient lock-free algorithms with shared structs alone, since I can't do CAS, so the fastest "lock-free"-ish updates I can perform are inside of a Mutex.tryLock unless I want to fall back to also sending a SharedArrayBuffer to the worker just so I can use Atomics.compareExchange.
+
+why can't you CAS shared structs?
+
+[16:05:58.0600] <shu>
+`Atomics.compareExchange` works with shared struct fields!
+
+[16:06:08.0058] <shu>
+oh, i should've kept reading, you noticed it
+
+
+2023-09-18
+[03:49:48.0663] <Ashley Claymore>
+> <@rbuckton:matrix.org> I'm still tinkering with my parallel parse prototype, and I'm planning to try it on a few large scale projects. I'm not currently seeing the perf-gains I would hope, but its too early to say if its an issue with the shared structs functionality, the size of the projects I've been using for testing, or something about how I've had to hack around parts of the compiler to get something functional.
+> I wrote a rudimentary work-stealing thread pooling mechanism, but I'm finding that adding more threads slows down parse rather than speeding it up for the monorepo I've been using as a test case. CPU profiling shows a lot of the threads aren't processing work efficiently, and are either spinning around trying to steal work or are waiting to be notified of work. Spinning isn't very efficient because there's no spin-wait mechanism nor the ability to write an efficient one (I can sort-of approximate one using `Condition.wait` with a short timeout to emulate `sleep`, but I can't efficiently yield). I also can't write efficient lock-free algorithms with shared structs alone, since I can't do CAS, so the fastest "lock-free"-ish updates I can perform are inside of a `Mutex.tryLock` unless I want to fall back to also sending a `SharedArrayBuffer` to the worker just so I can use `Atomics.compareExchange`.
+> 
+> Here's a rough approximation of the thread pool I'm using right now, if anyone has suggestions or feedback: https://gist.github.com/rbuckton/3648f878595ed4e2ff3d52a15baaf6b9
+
+Looks good to me. Have you experimented with batch sizes? Each task being N files, rather than 1:1 task file ratio?
+
+[03:50:56.0958] <Ashley Claymore>
+Also wondering how much the tasks are known up front (one main glob) vs discovered as imports are found. I.e how well the queue can stay pumped?
+
+[03:56:26.0704] <rbuckton>
+Tasks are 1:1 per file. With work stealing, batching would be less efficient since you could have threads sitting idle. 
+
+[03:58:48.0425] <rbuckton>
+How much is known upfront depends on the tsconfig `files`, `include`, and `exclude` options, though I'm using a striping approach to try to collect all imports/references for each pass around the file list. 
+
+[03:59:59.0871] <rbuckton>
+I need to experiment with a few more projects of different sizes though, it's still fairly early yet. 
+
+[04:02:33.0531] <rbuckton>
+The current approach is still very waterfall like in the main thread. I would need to do a lot more work to have the child threads scan for imports/references so they don't have to constantly wait for the main thread to hand out more work. 
+
+[04:04:06.0959] <rbuckton>
+Unfortunately, program.ts is very callback heavy and dependent on caches that would *also* need to be shared. 
+
+[04:05:02.0798] <rbuckton>
+There's a lot of idle time waiting for main right now
+
+[04:08:04.0489] <rbuckton>
+I currently have a synchronized, shareable `Map`-like data structure I can use for that, but I may want to see if I can build a lock-free, concurrent Map first so there's less blocking involved
+
+[05:26:52.0862] <Ashley Claymore>
+> <@rbuckton:matrix.org> Tasks are 1:1 per file. With work stealing, batching would be less efficient since you could have threads sitting idle.
+
+true tho that assumes the queuing system is zero-cost (no padding around tasks). So might work out that some batching, while theoretically less efficient at packing, leads to better results.
+Just an idea :) 
+
+[05:28:16.0925] <Ashley Claymore>
+In an ideal world parsing the largest files first would also be ideal for work stealing, though finding the largest files may be more costly than that saves too
+
+[06:09:07.0471] <Jack Works>
+is there slides of update?
+
+[06:09:41.0521] <Jack Works>
+I'm excited about the progress you've made and want to know more details! I can't wait!
+
+[07:43:35.0324] <shu>
+Jack Works: there are in fact no slides yet :(
+
+[07:43:39.0239] <shu>
+got so much to do this week
+
+[07:44:18.0193] <shu>
+rbuckton: i wonder if also web workers sucking somehow is getting in the way of your performance? this is node though so who knows, might be unrelated to web workers even if its worker implementation were less than ideal
+
+[09:03:27.0413] <rbuckton>
+> <@aclaymore:matrix.org> true tho that assumes the queuing system is zero-cost (no padding around tasks). So might work out that some batching, while theoretically less efficient at packing, leads to better results.
+> Just an idea :)
+
+You are possibly correct, though that is a level of fine tuning I'm not anywhere near investigating yet.
+
+[09:04:49.0981] <rbuckton>
+> <@shuyuguo:matrix.org> rbuckton: i wonder if also web workers sucking somehow is getting in the way of your performance? this is node though so who knows, might be unrelated to web workers even if its worker implementation were less than ideal
+
+Are you imagining there is overhead to reading/writing from shared structs or using mutex/condition caused by the worker? Or are you talking about overhead due as a result of setup, postMessage, etc.?
+
+[10:08:35.0457] <rbuckton>
+I've updated the thread pool example to use a lock free Chase-Lev deque, though it still uses a Mutex/Condition to put the thread to sleep when there's no work to do.
+
+[10:26:00.0758] <rbuckton>
+It's still somewhat inefficient if a thread ends up sleeping and a task is added to a queue for a different thread that is still active.
+
+[12:16:05.0145] <Mathieu Hofman>
+Reading all this, I am still curious to understand how Shared Struct help compared to a synchronization mechanism (to implement a thread pool) coupled with an efficient message passing. How much actual shared mutable state is necessary?
+
+[12:51:48.0726] <rbuckton>
+What would you consider to be "efficient message passing"? 
+
+[12:53:13.0519] <rbuckton>
+The lion's share of what TypeScript would send back and forth for parallel parse is essentially immutable, but a lot of the smaller data structures I need just to do coordination require shared mutable state.
+
+[12:55:07.0476] <rbuckton>
+If I wanted to write my own `malloc`/`free` over a growable `SharedArrayBuffer` as a heap, I could mostly do the same things as what we can do with Shared Structs, albeit *far* slower due to the need for wrappers and indirection, plus I would have to handle string encoding/decoding on my own and could never shrink the size heap. Shared structs are far more efficient in this regard.
+
+[12:58:30.0453] <rbuckton>
+And when I say "could mostly do the same things", I mean "have done something very similar" with https://esfx.js.org/esfx/api/struct-type.html, with the downside that it requires fixed sized types for fields and everything is laid out flat within a `SharedArrayBuffer`.
+
+[12:59:05.0587] <rbuckton>
+(and it doesn't support arbitrary string values)
+
+[13:29:17.0123] <shu>
+> <@rbuckton:matrix.org> Are you imagining there is overhead to reading/writing from shared structs or using mutex/condition caused by the worker? Or are you talking about overhead due as a result of setup, postMessage, etc.?
+
+i was thinking the latter, and scheduling
+
+[13:30:42.0491] <shu>
+> <@mhofman:matrix.org> Reading all this, I am still curious to understand how Shared Struct help compared to a synchronization mechanism (to implement a thread pool) coupled with an efficient message passing. How much actual shared mutable state is necessary?
+
+my thinking has always been single-writer XOR multiple-reader kind of data sharing will get you pretty far
+
+[13:30:52.0224] <Mathieu Hofman>
+I guess I'm wondering how these small data structures for synchronization are used, how much they need to do, and if there's any way to abstract them into higher level concepts. The immutable data could be passed as messages, and does not need to be based on shared struct from what I gather. I am basically still worried we're designing a blunt tool that will be abused when alternatives would be more aligned with the JS ecosystem.
+
+[13:31:08.0391] <shu>
+but if your application wants mutable shared state there is no alternative
+
+[13:32:16.0992] <shu>
+i continue to strongly disagree with this handwringing about abuse
+
+[13:43:59.0607] <shu>
+but i think we remain agreed that shared mutable state is a bad thing to entice people into reaching for from the get go
+
+[14:00:37.0075] <rbuckton>
+> <@shuyuguo:matrix.org> i was thinking the latter, and scheduling
+
+For TypeScript, I'm not using postMessage at all except for the built-in one NodeJS does to pass the initial value of `workerData`, so that wouldn't be the cause. 
+
+[14:04:47.0007] <rbuckton>
+> <@mhofman:matrix.org> I guess I'm wondering how these small data structures for synchronization are used, how much they need to do, and if there's any way to abstract them into higher level concepts. The immutable data could be passed as messages, and does not need to be based on shared struct from what I gather. I am basically still worried we're designing a blunt tool that will be abused when alternatives would be more aligned with the JS ecosystem.
+
+The problem is that concurrency and coordination often requires far more complex coordination primitives than we are likely to ship in the standard library. With the implementation in the origin trial, I can easily build these more complex coordination capabilities out of the primitives we have through the use of mutable shared state. If we are limited to only a few built-in mutable and shareable data structures and everything else is immutable, then it is possible this proposal won't meet the needs of the applications that need this capability the most.
+
+[14:05:56.0119] <rbuckton>
+That's not saying we shouldn't *also* have immutable data structures, or at least the ability to freeze all or part of a shared struct, as I'd like those too.
+
+[14:06:20.0693] <shu>
+rbuckton: yeah that all tracks exactly with my intuition
+
+[14:06:51.0107] <rbuckton>
+Even though I would consider most of the TypeScript AST to be immutable, that's not exactly true. It's immutable to our consumers, but we need to be able to attach additional shared data ourselves.
+
+[14:08:05.0886] <rbuckton>
+for example, I may build a `SourceFile` and its AST in parallel parse, but this file hasn't been bound and had its symbols and exports recorded yet. Once parse is complete, we hand the entire program off to the binder which could also do its work in parallel.
+
+[14:08:56.0380] <shu>
+in the back of my mind i'm still thinking about the viability of dynamic "ownership" tracking, for lack of a better word. by "ownership" i mean single writer XOR multiple readers
+
+[14:09:38.0717] <rbuckton>
+And while our emitter uses tree transformations that produce a new AST for changed subtrees, we still reuse unchanged subtrees as much as possible, and need to attach additional information about how those original nodes should be handled during emit as well. 
+
+[14:10:47.0816] <rbuckton>
+Weak Maps and thread-local state don't help there as I may want to parallelize emit and transformation for subtrees as well, which means handing parts of the tree off to other threads.
+
+[14:12:38.0988] <rbuckton>
+> <@shuyuguo:matrix.org> in the back of my mind i'm still thinking about the viability of dynamic "ownership" tracking, for lack of a better word. by "ownership" i mean single writer XOR multiple readers
+
+On a per-instance level, or something less fine grained? In my TypeScript experiment I wrote a `SharedMutex` that supports single writer (exclusive) locks and multiple reader (shared) locks on top of the ones you provide on `Atomic`.
+
+[14:12:49.0162] <rbuckton>
+> <@shuyuguo:matrix.org> in the back of my mind i'm still thinking about the viability of dynamic "ownership" tracking, for lack of a better word. by "ownership" i mean single writer XOR multiple readers
+
+ * On a per-instance level, or something less fine grained? In my TypeScript experiment I wrote a `SharedMutex` that supports single writer (exclusive) locks and multiple reader (shared) locks on top of the ones you provide on `Atomics`.
+
+[14:14:25.0811] <shu>
+rbuckton: on a per-instance level
+
+[14:14:57.0728] <rbuckton>
+That sounds potentially expensive?
+
+[14:14:59.0948] <shu>
+not to provide ordering, or blocking until reading is available, but to e.g. throw, or provide query APIs for whether it's currently safe to read
+
+[14:15:04.0084] <shu>
+indeed, that's why i've punted on it
+
+[14:15:44.0707] <shu>
+there is a 2-bit lock-free scheme, but that still means an additional load and branch on every access, and then an additional CAS on state changes
+
+[14:16:16.0413] <shu>
+2 bits are needed to transition the state between "unused", "being read", and "being written to"
+
+[14:16:32.0088] <rbuckton>
+My intuition is that if you're writing JS code that really needs multiple threads of execution, then you want things to be as lean as possible with explicit opt-ins to anything slower or more complex.
+
+[14:16:50.0607] <shu>
+that is my intuition as well for shared structs
+
+[14:17:20.0918] <shu>
+to be clear i'm thinking of these in the context of additions after the building blocks are there, to encourage a happy path that is a little less performant but a little more safe
+
+[14:17:38.0263] <shu>
+but this is probably still too fine-grained to make the safety tradeoff worth it
+
+[14:18:42.0690] <rbuckton>
+Was this related to the idea of snapshotting an object for mutation, and then applying the update atomically?
+
+[14:19:53.0860] <rbuckton>
+the RCU approach?
+
+[14:20:05.0942] <shu>
+yep, in that vicinity for sure
+
+[14:22:59.0161] <rbuckton>
+A few years ago there was discussion about the "monocle-mustache" operator, and I wondered if it could be used for this, i.e.:
+
+```
+let copy = obj.{ x, y };
+copy.x++;
+copy.y--;
+obj.{ x, y } = copy;
+```
+
+
+[14:23:49.0283] <shu>
+oh interesting
+
+[14:23:59.0634] <shu>
+and you're thinking of things between the { } as comprising a transaction?
+
+[14:24:59.0815] <rbuckton>
+i.e., normal JS objects could use it as a pick-operator for read, and like `Object.assign` for write, but shared structs could return a mutable snapshot that provides an atomic read of the requested values, and could perform an atomic write at the bottom.
+
+[14:25:40.0211] <shu>
+cool idea though a little magical feeling
+
+[14:25:48.0820] <shu>
+rbuckton: oh btw i wanted to poll your opinion before i made slides for the next meeting...
+
+[14:26:15.0350] <rbuckton>
+`.{` isn't new to most of the committee though, it's been discussed on and off for almost 9 years now, iirc.
+
+[14:26:25.0355] <rbuckton>
+just never formally presented.
+
+[14:26:27.0044] <shu>
+since the current prototyping effort is to do agent-local/realm-local (i'd like to discuss the granularity during the meeting) fields, how do you think that should look in syntax?
+
+[14:26:39.0485] <shu>
+we have precedent in auto accessors as having modifiers to fields
+
+[14:26:53.0508] <shu>
+i was thinking like `agentlocal fieldName;` or something
+
+[14:28:08.0330] <rbuckton>
+https://github.com/rtm/js-pick-notation for the pick notation, and I think there was some discussion in https://github.com/rbuckton/proposal-shorthand-improvements as well
+
+[14:30:37.0915] <rbuckton>
+> <@shuyuguo:matrix.org> i was thinking like `agentlocal fieldName;` or something
+
+It's not terrible, I suppose? In other contexts/languages I might call it `threadlocal`, but another option might be `nonshared`? Especially if the struct syntax is something like `struct Foo {}` and `shared struct Bar {}`, declaring something as `nonshared` seems semantically consistent without needing to bring in terms like "agent"
+
+[14:31:15.0063] <shu>
+yes, i don't love the name agent
+
+[14:31:51.0633] <shu>
+i kinda like `nonshared`, though i wonder if it glosses over the per-thread/per-realm view aspect of the semantics
+
+[14:32:29.0767] <shu>
+actually, the bigger possibility for confusion is that the modifier applies values, not the field itself
+
+[14:32:34.0040] <shu>
+kind of like the `const` confusion
+
+[14:32:47.0665] <rbuckton>
+We don't say "agent" in any of the Atomics APIs, despite those APIs having to do with memory ordering to support atomic writes across agents, so I don't think its that bad to avoid the terminology.
+
+[14:32:58.0454] <shu>
+OTOH we already have that confusion, and the use of `nonshared` is consistent with how `const` modifies the binding
+
+[14:33:19.0621] <shu>
+or maybe just `local`
+
+[14:33:23.0357] <shu>
+though that's pretty vague
+
+[14:33:50.0655] <rbuckton>
+```
+shared struct Data {
+  x;
+  y;
+  nonshared foo;
+
+  // would methods need this keyword too, or automatically be considered nonshared?
+  method() { }
+
+  nonshared method2() {}
+}
+```
+
+[14:34:19.0244] <rbuckton>
+`local` feels vague and has a different context in some other languages
+
+[14:34:46.0564] <rbuckton>
+i.e., in some languages, `local` refers to how you access shadowed variable bindings
+
+[14:35:25.0993] <shu>
+method declarations are currently just disallowed
+
+[14:35:47.0996] <shu>
+i don't know what it means to have that in a shared struct, without bringing in ideas we've talked about in the past like packaging it up as a module block that gets re-evaluated
+
+[14:36:31.0991] <rbuckton>
+> <@shuyuguo:matrix.org> method declarations are currently just disallowed
+
+Yes, but I'm imagining syntax based on what I hope we can get in the end, including an easy Developer experience for the prototype handshake for attaching behavior, as in the Gist I shared several weeks ago.
+
+[14:37:13.0326] <rbuckton>
+I'm referring to this: ```
+shared struct Point
+
+[14:37:33.0049] <rbuckton>
+ * I'm referring to this: https://gist.github.com/rbuckton/08d020fc80da308ad3a1991384d4ff62
+
+[14:37:50.0505] <shu>
+> <@rbuckton:matrix.org> Yes, but I'm imagining syntax based on what I hope we can get in the end, including an easy Developer experience for the prototype handshake for attaching behavior, as in the Gist I shared several weeks ago.
+
+then in that future i favor requiring `nonshared method() {}` and making `method() {}` a parse error, to make the semantics explicit
+
+[14:38:21.0135] <shu>
+also, just in case by divine inspiration we manage to actually share functions in the future, somehow
+
+[14:39:58.0911] <rbuckton>
+essentially, the syntax covers multiple things:
+- Declaring the fields that are shared (with a convenient place to hang type annotations off of)
+- Declaring the fields that are not shared (specific to the current thread/agent/whatnot)
+- Declaring the construction logic that is not shared (specific to the current thread/etc.)
+- Declaring the instance methods that are not shared (specific to the current thread/etc.)
+- Declaring the static methods on the non-shared constructor.
+
+[14:40:47.0695] <shu>
+i plan to reference that doc in the update sildes
+
+[14:40:52.0969] <shu>
+ * i plan to reference that doc in the update slides
+
+[14:41:14.0084] <rbuckton>
+so, would you be suggesting it be this:
+
+```
+shared struct Foo {
+  x;
+  y;
+  
+  nonshared constructor(x, y) {
+    this.x = x;
+    this.y = y;
+  }
+
+  nonshared toString() {
+    return `${this.x},${this.y}`;
+  }
+}
+```
+
+
+[14:41:39.0758] <shu>
+yes
+
+[14:41:54.0626] <rbuckton>
+It seems somewhat redundant, IMO, unless you expect we would ever have the concept of a "shared constructor" or a "shared method"
+
+[14:41:59.0383] <shu>
+(but to be clear i plan to leave out any mention of inline method declarations at all)
+
+[14:42:11.0858] <shu>
+in this update stage
+
+[14:43:47.0067] <rbuckton>
+btw, in the origin trial this has been pretty convenient in both JS and TS:
+
+```js
+class Foo extends SharedStructType(["x", "y"]) {
+  constructor(x, y) {
+    super();
+    this.x = x;
+    this.y = y;
+  }
+}
+
+[14:44:07.0383] <shu>
+> <@rbuckton:matrix.org> It seems somewhat redundant, IMO, unless you expect we would ever have the concept of a "shared constructor" or a "shared method"
+
+i don't at this time, but things could change? but that's not the main reason for my preference. the main reason is i want the syntax to be explicitly reflect the semantics
+
+[14:44:30.0203] <shu>
+my personal design sense is i hate implicit stuff
+
+[14:44:30.0368] <rbuckton>
+ * btw, in the origin trial this has been pretty convenient in both JS and TS:
+
+```ts
+// js
+class Foo extends SharedStructType(["x", "y"]) {
+  constructor(x, y) {
+    super();
+    this.x = x;
+    this.y = y;
+  }
+}
+
+// ts
+class Foo extends SharedStructType(["x", "y"]) {
+  declare x: number;
+  declare y: number;
+  constructor(x: number, y: number) {
+    super();
+    this.x = x;
+    this.y = y;
+  }
+}
+```
+
+[14:46:17.0762] <rbuckton>
+As someone who has had chronic wrist pain due to a pretty severe break around 20 years ago, my opinion is the less redundancy and repetition when typing, the better.
+
+[14:46:48.0285] <rbuckton>
+though I agree with explicitness when necessary.
+
+[14:48:46.0847] <shu>
+> <@rbuckton:matrix.org> As someone who has had chronic wrist pain due to a pretty severe break around 20 years ago, my opinion is the less redundancy and repetition when typing, the better.
+
+that's good feedback
+
+[14:48:59.0796] <rbuckton>
+If you think we will ever come to a place were we can actually share code across threads or allow threads to coexeist with main thread application memory like they do in many other languages, then I would agree that we need the keyword to avoid painting ourselves into a corner.
+
+[14:50:01.0574] <rbuckton>
+I always advocate for "less ceremony is better" when it comes to syntax, though not so much that I agree with using keywords like `pub`, `fn`, `def`.
+
+[14:51:51.0044] <rbuckton>
+`const`-aside
+
+[14:58:51.0982] <Mathieu Hofman>
+One question with the syntax as proposed above is how do you attach nonshared properties / methods to a struct definition you received from another thread 
+
+[15:09:55.0680] <rbuckton>
+That's explained in the gist I linked above.
+
+[15:13:37.0016] <rbuckton>
+The gist proposes a simple handshaking mechanism through the use of a string-keyed map. At the most fundamental level, you declare "this name is associated with this exemplar" on one thread, and "this name is associated with this prototype" on the other thread. 
+
+Since you want to be able to produce new struct instances on both sides, you could declare these things bidirectionally, i.e. "this name is associated with this exemplar and prototype" on one thread, and "this name is associated with this exemplar and prototype" on another thread:
+
+```js
+// main.js
+const worker = new Worker(file, {
+  preload: "preload.js",
+  structs: {
+    Foo: { exemplar: FOO_EXEMPLAR, prototype: FOO_PROTOTYPE }
+  }
+});
+
+// preload.js
+prepareWorker({
+  structs: {
+    Foo: { exemplar: FOO_EXEMPLAR, prototype: FOO_PROTOTYPE }
+  }
+});
+```
+
+[15:15:28.0694] <rbuckton>
+The preload script could run at the startup of the worker thread. It would establish the relationship on the worker's side, but wouldn't be allowed to send or receive messages on the worker. That would allow you to establish the relationship all at once and avoids a mutable registry.
+
+[15:16:50.0247] <rbuckton>
+This can then be expanded to introduce something like a built-in symbol-named method that the handshaking process could look at first, before looking for `{ exemplar, prototype }`, and a `shared struct` declaration would implement that as a static method, returning a suitable exemplar and prototype for the handshake without needing to run the constructor
+
+[15:17:36.0385] <Mathieu Hofman>
+only allowing init time registration somewhat concerns me, and I have to think more about this per connection registry.
+
+[15:18:12.0004] <rbuckton>
+Thus the handshake can be simplified with `shared struct` declarations like this:
+
+```js
+// foo.js
+export shared struct Foo { 
+  ...
+}
+
+// main.js
+import { Foo } from "foo.js";
+const worker = new Worker("worker.js", {
+  preload: "preload.js",
+  structs: { Foo }
+});
+
+// preload.js
+import { Foo } from "foo.js";
+prepareWorker({ structs: { Foo } });
+
+```
+
+[15:18:43.0950] <rbuckton>
+The reason I proposed init-time registration was due to concerns you raised about data exfiltration with a mutable registry.
+
+[15:19:44.0413] <Mathieu Hofman>
+also this mechanism means there is technically 2 different point definitions, but since they share a prototype the type discontinuity is not observable?
+
+[15:20:19.0460] <rbuckton>
+This approach also avoids giving shared structs an identity based on path, and instead is a user-defined identity declared when the `Worker` is created. Its no different then just passing an array of workers without the need to ensure you properly marry up element order on both sides, and `Foo` is easier to remember and debug than an integer value.
+
+[15:21:01.0613] <Mathieu Hofman>
+yes non-init time registration does raise the problem of "land-rush", ability to extract information through the registry
+
+[15:21:07.0809] <rbuckton>
+> <@mhofman:matrix.org> also this mechanism means there is technically 2 different point definitions, but since they share a prototype the type discontinuity is not observable?
+
+I thought that was the rationale we were moving towards anyways? To attach behavior to a shared struct in two threads, you must have two different definitions of the behavior, one in each thread.
+
+[15:21:19.0530] <Mathieu Hofman>
+I just wish we didn't have to make the trade-off somehow
+
+[15:22:22.0655] <Mathieu Hofman>
+> <@rbuckton:matrix.org> I thought that was the rationale we were moving towards anyways? To attach behavior to a shared struct in two threads, you must have two different definitions of the behavior, one in each thread.
+
+yes just wanted to make sure that's actually what's happening, and that it should be fine
+
+[15:22:49.0078] <rbuckton>
+I think the preload mechanism is at the very least a palatable way to address it, and its the same approach used by runtimes like electron to provide privileged access when creating sandboxed environments
+
+[15:23:03.0326] <Mathieu Hofman>
+a possible 1-to-many relationship from behavior to type definition
+
+[15:23:45.0911] <rbuckton>
+This approach presupposes that you know ahead of time all of the possible types you wish to flow through all threads that can talk to each other in your application.
+
+[15:25:17.0622] <rbuckton>
+And by "know ahead of time", you can still support types added by libraries if they export a registry of their types in the form of a regular JS object, i.e.:
+
+```js
+import { structs as fooStructs } from "foo-package";
+
+new Worker("worker.js", { ..., structs: { ...fooStructs, Bar, Baz } });
+```
+
+[15:30:56.0901] <rbuckton>
+The main issue I see with this approach is when you have 3+ threads, where two or more child threads need to communicate without having established a handshake between themselves:
+
+1. main thread M has struct `Foo` with type identity 0
+2. child thread A has a struct `Foo` with type identity 1
+3. child thread B has a struct `Foo` with type identity 2
+4. M performs handshake with A establishing that `Foo-0` on A uses A's `Foo` prototype, and `Foo-1` on M uses M's `Foo` prototype.
+5. M performs handshake with B establishing that `Foo-0` on B uses B's `Foo` prototype, and `Foo-2` on M uses M's `Foo` prototype.
+6. M creates a `MessagePort` and hands `port1` to thread A, and `port2` to thread B
+7. A creates a `Foo-1` and sends it to B over the message port.
+8. What does a `Foo-1` look like in B? 
+
+[15:31:21.0293] <Mathieu Hofman>
+right, just wondering if we could still end up with something like
+```
+import { Point } from "./point.js";
+import { attachBehavior, parentPort } from "worker_threads";
+parentPort.on("message", data => {
+    if (data.type === 'registerPoint') {
+        attachBehavior(data.examplar, Point.prototype);
+    }
+});
+
+```
+
+[15:31:54.0612] <rbuckton>
+the goal with the API design in the doc is to abstract away as much of that scaffolding as possible.
+
+[15:33:08.0332] <rbuckton>
+i.e., assume that the presence of a `structs: {}` property in the worker constructor will transmit a `'registerPoint'` message for you, and that a `prepareWorker({ structs: {} })` will automatically handle the `on("message")` event for you.
+
+[15:33:20.0519] <rbuckton>
+There's no reason to have users write all of that out themselves.
+
+[15:34:25.0157] <rbuckton>
+I also don't always want to have to depend on postMessage when I intend for most of the processing in the child thread to happen synchronously through the use of `Mutex` and other synchronization primitives.
+
+[15:35:59.0541] <rbuckton>
+One possibility is that an Agent keeps track of the type identity mappings for all of the types on all of the workers, and shares those identities with other agents.
+
+[15:37:03.0405] <rbuckton>
+So if A sends a `Foo-1` to B, B's Agent can first check if it has an explicit mapping of `Foo-1` to something else, then walk back to the Agent that spawned the thread for such a mapping, and so on.
+
+[15:37:34.0734] <rbuckton>
+Thus B's Agent would walk back to M to see that a `Foo-1` is associated with a `Foo-0`, and thus we can associate it with a `Foo-2` in B.
+
+[15:38:55.0908] <rbuckton>
+Whatever we would do would need to work without `postMessage` after the initial setup, because I can run into the same scenario when just sharing a shared struct between two worker threads
+
+[15:39:12.0014] <rbuckton>
+in which case I can't wait for an asynchronous `postMessage` to establish the relationship for me.
+
+[15:39:34.0803] <Mathieu Hofman>
+I agree we can provide sugar like you propose, but I believe having an explicit `attachBehavior` or similar allows to solve the late registration case without fully opening the can of worms of a mutable sting keyed registry
+
+[15:40:32.0601] <Mathieu Hofman>
+ * I agree we can provide sugar like you propose, but I believe having an explicit `attachBehavior` or similar allows to solve the late registration case without fully opening the can of worms of a mutable string keyed registry
+
+[15:41:08.0546] <rbuckton>
+i.e.,:
+1. M hands a shared struct with `{ mutex, condition, value }` to both A and B.
+1. B locks `mutex` and waits on `condition` (unlocking the mutex)
+1. A locks `mutex`, writes a `Foo-1` to `value`, and and wakes B via `condition`
+1. B reads `value` and gets a `Foo-1`
+
+[15:41:58.0326] <rbuckton>
+`attachBehavior` is pretty much what `prepareWorker` does, though `prepareWorker` doesn't have to do things one at a time.
+
+[15:42:24.0832] <rbuckton>
+And `attachBehavior` doesn't solve the late registration case I just posted.
+
+[15:43:04.0875] <rbuckton>
+Unless you are suggesting that `on("message")` gets called synchronously the moment `B` reads from `value`
+
+[15:44:40.0339] <rbuckton>
+To support the synchronous case I proposed above, you really have to establish the relationships *before* any work is done.
+
+[15:45:49.0750] <rbuckton>
+Maybe that means registration isn't just `struct: { ... }`. Maybe that means you have to create an instance of a `StructRegistry` object you pass to each worker you create, so that you explicitly establish the relationship between all of the workers.
+
+[15:46:09.0826] <Mathieu Hofman>
+I'm saying that in you example, between step 6 and 7, A could send a message to B with an examplar, and B could send a message to A with its examplar, and both could attach their behavior
+
+[15:46:17.0287] <Mathieu Hofman>
+ * I'm saying that in your example, between step 6 and 7, A could send a message to B with an examplar, and B could send a message to A with its examplar, and both could attach their behavior
+
+[15:46:34.0634] <rbuckton>
+Something like: 
+```js
+const structs = new StructsRegistry({ Foo, Bar });
+const worker1 = new Worker("worker.js", { structs });
+const worker2 = new Worker("worker.js", { structs });
+```
+
+
+[15:47:10.0121] <rbuckton>
+That's the asynchronous case using `MessagePort`. I'm saying that doesn't work with the synchronous case using `mutex`/`condition`
+
+[15:47:22.0724] <rbuckton>
+> <@rbuckton:matrix.org> i.e.,:
+> 1. M hands a shared struct with `{ mutex, condition, value }` to both A and B.
+> 1. B locks `mutex` and waits on `condition` (unlocking the mutex)
+> 1. A locks `mutex`, writes a `Foo-1` to `value`, and and wakes B via `condition`
+> 1. B reads `value` and gets a `Foo-1`
+
+this is the synchronous case
+
+[15:47:24.0921] <Mathieu Hofman>
+but yes it would be nice to abstract that away to avoid this manual protocol
+
+[15:48:08.0169] <Mathieu Hofman>
+oh I see, yeah I don't know how you solve that one
+
+[15:49:27.0413] <rbuckton>
+I currently see two mechanisms: either the agents communicate with each other to find a suitable mapping just using the provided `structs: {}` maps, or you explicitly hand a registry off to each worker that essentially records the per-agent mappings for each struct type in the registry.
+
+[15:49:32.0351] <Mathieu Hofman>
+you'd have to pass the behavior definition along, possibly as a module instance that can be synchronously evaluated when creating the realm, not just the local constructor / prototype
+
+[15:49:53.0304] <rbuckton>
+> <@mhofman:matrix.org> you'd have to pass the behavior definition along, possibly as a module instance that can be synchronously evaluated when creating the realm, not just the local constructor / prototype
+
+Why? The point of this is that you _don't_ pass the behavior definition along.
+
+[15:50:03.0395] <rbuckton>
+Each thread maintains its own copy of the behavior
+
+[15:50:35.0599] <rbuckton>
+This is desirable since you can have a build tool perform static analysis and tree shaking to reduce overall code size that you have to load into a thread.
+
+[15:51:27.0114] <rbuckton>
+I'm not opposed to sharing behavior, but that does mean a lot of additional complexity with respect to module resolution, and makes things harder when it comes to checking reference identities.
+
+[15:52:09.0066] <rbuckton>
+Plus I may have per-thread setup I perform in the constructor of a shared struct that is side-effecting that can't be reached via a shared definition.
+
+[15:53:14.0146] <Mathieu Hofman>
+ok so the struct registry would itself be a shared thing. each string keyed entry would basically have a list of examplars, and the local prototype behavior to use
+
+[15:53:33.0708] <rbuckton>
+IMO, passing along shared behavior in a module record is a completely different direction than passing exemplars to attach behavior. They have different issues and solve the problem in different ways.
+
+[15:54:12.0301] <Mathieu Hofman>
+during prepare you basically add your examplar to the list, and other threads somehow lookup the examplar to find the right behavior to use
+
+[15:54:40.0439] <Mathieu Hofman>
+ * during prepare you basically add your examplar to the list, and other threads somehow lookup the examplar / type to find the right behavior to use
+
+[15:55:09.0624] <rbuckton>
+> <@mhofman:matrix.org> ok so the struct registry would itself be a shared thing. each string keyed entry would basically have a list of examplars, and the local prototype behavior to use
+
+Maybe somewhat? `StructRegistry` is more like a built-in. It says "here's what M things a `Foo` is". In A, I use `prepareWorker` to say "Here's what A thinks a `Foo` is", and the same in B. Both B and A's agents will have access to the registry provided by M, and thus when B and A communicate, they can refer to the same registry.
+
+[15:56:08.0974] <rbuckton>
+The registry isn't "mutable" per-se as each Agent only cares about what was provided as a key in that agent, but the registry itself knows what each key maps to in each Agent.
+
+[15:56:22.0028] <Mathieu Hofman>
+yeah I'm still wondering if it can be explained in terms of `attachBehavior`
+
+[15:57:20.0997] <Mathieu Hofman>
+I think the registry is mutable in the sense that each thread needs to register its type definition to an existing entry
+
+[15:57:52.0452] <rbuckton>
+I could possibly model this in terms of `attachBehavior` and abstract it away, assuming some other information is available. I can't emulate the thread-localness I'm describing in quite the same way, but could emulate it with a lock-free data structure
+
+[15:58:07.0103] <rbuckton>
+Yes, but each thread can't change the entries of other threads.
+
+[15:58:20.0063] <rbuckton>
+They can only line up with same-named keys.
+
+[15:58:44.0418] <Mathieu Hofman>
+right
+
+[15:58:52.0020] <rbuckton>
+And we could throw runtime errors if your exemplars don't have a matching field layout.
+
+[15:59:35.0057] <rbuckton>
+And you can't arbitrarily add new keys to a registry in a given thread, only during initial setup.
+
+[15:59:43.0392] <rbuckton>
+I need to break for dinner.
+
+[16:41:54.0423] <shu>
+oops i had meetings and now there's a lot of backlog
+
+
+2023-09-19
+[17:25:26.0717] <rbuckton>
+> <@rbuckton:matrix.org> I could possibly model this in terms of `attachBehavior` and abstract it away, assuming some other information is available. I can't emulate the thread-localness I'm describing in quite the same way, but could emulate it with a lock-free data structure
+
+I threw together a bunch of pseudocode for this to get an idea of what's needed. You couldn't support the synchronous case without some kind of synchronous notification occurring when an Agent encounters a shared struct with a previously unseen type identity, but that callback would be something like:
+
+```js
+    setFindMissingPrototypeCallback((exemplar, agentId) => {
+        const agentRegistry = agentId === 0 ? registry.root : ConcurrentList.find(registry.children, registry => registry.agentId === agentId);
+        if (!agentRegistry) {
+            return false;
+        }
+
+        const exemplarTypeIdentity = getTypeIdentity(exemplar);
+        const agentEntry = Array.prototype.find.call(agentRegistry.entries, entry => getTypeIdentity(entry.exemplar) === exemplarTypeIdentity);
+        if (!agentEntry) {
+            return false;
+        }
+
+        const thisAgentEntry = Array.prototype.find.call(perAgentRegistry.entries, entry => entry.key === agentEntry.key);
+        if (!thisAgentEntry || !thisAgentEntry.prototype) {
+            return false;
+        }
+
+        attachBehavior(exemplar, thisAgentEntry.prototype);
+        return true;
+    });
+
+```
+
+And something similar would be wired up on the main thread when constructing the `Worker`
+
+[17:27:44.0587] <rbuckton>
+Without the synchronous case, you could achieve this via `postMessage` if the worker/port checked each shared struct being sent out to see if it had already seen its type identity, and then posting a handshake message before posting the actual message.
+
+[17:28:14.0506] <Mathieu Hofman>
+right there has to be something that triggers when another agent register an examplar
+
+[17:28:52.0477] <rbuckton>
+But this is much simpler if we do all this work on the user's behalf.
+
+[17:29:01.0137] <Mathieu Hofman>
+for the async case you don't really need to check every shared struct being sent, I'll send some code later
+
+[17:29:54.0843] <rbuckton>
+An async-only case doesn't really exist though, since any thread could set data on a shared struct visible by any other thread.
+
+[17:31:40.0706] <rbuckton>
+And this `setFindMissingPrototypeCallback` only needs to be invoked lazily when performing `[[GetPrototype]]`
+
+[17:32:43.0043] <rbuckton>
+You could theoretically shim *all* of this with the current shared structs trial if you want to use `Proxy` and patch a bunch of globals and imports.
+
+[17:32:52.0414] <rbuckton>
+but it would be abysmally slow.
+
+[17:46:02.0982] <rbuckton>
+> <@rbuckton:matrix.org> And this `setFindMissingPrototypeCallback` only needs to be invoked lazily when performing `[[GetPrototype]]`
+
+And this lazy operation doesn't necessarily require blocking. By the time thread A and B can communicate, they would both have already filled out their side of the shared registry.
+
+[18:06:14.0004] <Mathieu Hofman>
+I'm really not good at multi-threaded coded, but I was thinking of something along the lines of:
+```
+shared struct StructRegistryEntry {
+    name;
+    examplar;
+    next;
+}
+
+shared struct StructRegistry {
+  head;
+  names;
+
+  nonshared lastAttached;
+  nonshared prototypes;
+
+  nonshared constructor(structs = {}) {
+    const names = Object.keys(structs);
+    this.names = new SharedFixedArray(names.length);
+    for (const [i, name] of names.entries()) {
+      this.names[i] = name;
+    }
+    this.prepare(structs);
+  }
+
+  nonshared prepare(structs) {
+    const prototypes = new Map([...this.names].map(name => [name, null]));
+
+    const entries = [];
+
+    for (const [name, constructor] of Object.entries(structs)) {
+      if (!prototypes.has(name)) {
+        throw new Error(`Undeclared struct name ${name}`);
+      }
+
+      prototypes.set(name, constructor.prototype)
+      entries.push([name, new constructor()]);
+    }
+
+    this.prototypes = prototypes;
+
+    for (const [name, examplar] of entries) {
+      this.register(name, examplar);
+    }
+  }
+  
+  nonshared register(name, examplar) {
+    if (!this.prototypes.has(name)) {
+      throw new Error(`Undeclared struct name ${name}`);
+    }
+    const entry = new StructRegistryEntry()
+    entry.name = name;
+    entry.examplar = examplar;
+    entry.next = this.head;
+
+    while (true) {
+      const oldHead = Atomics.compareExchange(this, 'head', entry.next, entry)
+      if (oldHead === entry.next) {
+        break;
+      } else {
+        entry.next = oldHead;
+      }
+    }
+
+    updateRegistrations(this)
+  }
+}
+
+function updateRegistrations(structRegistry) {
+  const head = structRegistry.head;
+  let entry = head;
+  while (entry !== structRegistry.lastAttached) {
+    const behavior = structRegistry.prototypes.get(entry.name);
+    if (behavior) {
+      attachBehavior(entry.examplar, behavior);
+    }
+    entry = entry.next;
+  }
+  structRegistry.lastAttached = head;
+}
+```
+
+[18:07:29.0306] <Mathieu Hofman>
+`updateRegistrations` would have to be triggered anytime there is some unattached struct, or eagerly for every message received. I'm not sure how you trigger it in the sync case
+
+[18:08:15.0399] <Mathieu Hofman>
+anyway I need to head out, hopefully that pseudo code conveys how I thought of the StructRegistry that Ron suggested
+
+[06:40:53.0339] <Mathieu Hofman>
+Thinking more about it, one way to have all threads process the types of any other thread is to
+- block completion of registering a new thread's examplar until all other existing threads connected to the registry have signaled they have attached behaviors to the new examplar
+- somehow be able to have existing threads process new examplars while they're currently executing
+
+There doesn't seem to be a good way to explain in terms of initialization and messaging the kind of preemption required by introducing a new thread's types to other connected threads that are potentially in busy loops. Maybe it demonstrates that "attach behavior" is not sufficient, and it likely means the registration mechanism has to be language specified instead, which kinda saddens me.
+
+[07:18:03.0665] <Mathieu Hofman>
+ * Thinking more about it, one way to have all threads process the types of any other thread is to
+
+- block completion of registering a new thread's examplar until all other existing threads connected to the registry have signaled they have attached behaviors to the new examplar
+- somehow be able to have existing threads process new examplars while they're currently executing
+
+There doesn't seem to be a good way to explain in terms of initialization and messaging the kind of preemption required by introducing a new thread's types to other connected threads that are potentially in busy loops. Maybe it demonstrates that "attach behavior" is not sufficient, and it likely means the registry mechanism has to be language specified instead, which kinda saddens me.
+
+[07:44:24.0185] <rbuckton>
+What if we only support wiring up exemplars between A and B that *only* have a matching key in M? The shared registry would just track the type identities of each registered exemplar in one place during preload, so you wouldn't need to process new exemplars:
+
+```js
+//
+// main.js
+//
+import { Foo, Bar, Baz } from "./structs.js";
+const structs = new StructRegistry({ Foo, Bar, Baz });
+const data = new (new SharedStructType(["mut", "cond", "ready", "value"]))();
+data.mut = new Atomics.Mutex();
+data.cond = new Atomics.Condition();
+data.ready = false;
+const A = new Worker("A.js", { preload: "preloadA.js", structs, workerData: data });
+const B = new Worker("B.js", { preload: "preloadB.js", structs, workerData: data });
+
+//
+// preloadA.js
+//
+import { Foo, Bar, Quxx } from "./structs.js";
+import { prepareWorker } from "worker_threads";
+prepareWorker({ structs: { Foo, Bar, Quxx } });
+
+//
+// preloadB.js
+//
+import { Foo, Baz, Quxx } from "./structs.js";
+import { prepareWorker } from "worker_threads";
+prepareWorker({ structs: { Foo, Baz, Quxx } });
+
+//
+// A.js
+//
+import { Foo, Bar, Baz, Quxx } from "./structs.js";
+import { workerData } from "worker_threads";
+
+Atomics.Mutex.lock(workerData.mut, () => {
+  function waitForB() {
+    while (!workerData.ready) Atomics.Condition.wait(workerData.cond, workerData.mut);
+  }
+
+  function sendToB(value) {
+    workerData.value = value;
+    workerData.ready = false;
+    Atomics.Condition.notify(workerData.cond);
+    waitForB();
+  }
+
+  function receiveFromB() {
+    waitForB();
+    return workerData.value;
+  }
+
+  waitForB();
+
+  // send our `Foo`
+  sendToB(new Foo());
+
+  // Check whether the `Foo` sent by B shares the same prototype as our `Foo`.
+  // This works because both A and B have registered a `Foo` entry that maps to `Foo` in the main thread.
+  console.log(receiveFromB() instanceof Foo); // prints: true
+
+  // send our `Bar`
+  sendToB(new Bar());
+
+  // Check whether the `Bar` sent by B shares the same prototype as our `Bar`.
+  // This does not work because preloadB.js did not register `Bar`.
+  console.log(receiveFromB() instanceof Bar); // prints: false
+
+  // send our `Baz`
+  sendToB(new Baz());
+
+  // Check whether the `Baz` sent by B shares the same prototype as our `Baz`.
+  // This does not work because preloadA.js did not register `Baz`.
+  console.log(receiveFromB() instanceof Baz); // prints: false
+
+  // send our `Quxx`
+  sendToB(new Quxx());
+
+  // Check whether the `Quxx` sent by B shares the same prototype as our `Quxx`.
+  // This does not work because main.js did not register `Quxx`.
+  console.log(receiveFromB() instanceof Quxx); // prints: false
+});
+
+// B.js
+import { Foo, Bar, Baz, Quxx } from "./structs.js";
+import { workerData } from "worker_threads";
+
+Atomics.Mutex.lock(workerData.mut, () => {
+  function waitForA() {
+    while (workerData.ready) Atomics.Condition.wait(workerData.cond, workerData.mut);
+  }
+
+  function sendToA(value) {
+    workerData.value = value;
+    workerData.ready = true;
+    Atomics.Condition.notify(workerData.cond);
+    waitForA();
+  }
+
+  function receiveFromA() {
+    waitForA();
+    return workerData.value;
+  }
+
+  // signal to A that we're ready
+  sendToA(undefined);
+
+  // Check whether the `Foo` sent by A shares the same prototype as our `Foo`.
+  // This works because both A and B have registered a `Foo` entry that maps to `Foo` in the main thread.
+  console.log(receiveFromA() instanceof Foo); // prints: true
+
+  // send our `Foo`
+  sendToA(new Foo());
+
+  // Check whether the `Bar` sent by A shares the same prototype as our `Bar`.
+  // This does not work because preloadB.js did not register `Bar`.
+  console.log(receiveFromA() instanceof Bar); // prints: false
+  
+  // send our `Bar`
+  sendToA(new Bar());
+
+  // Check whether the `Baz` sent by A shares the same prototype as our `Baz`.
+  // This does not work because preloadA.js did not register `Baz`.
+  console.log(receiveFromA() instanceof Baz); // prints: false
+
+  // send our `Baz`
+  sendToA(new Baz());
+
+  // Check whether the `Quxx` sent by B shares the same prototype as our `Quxx`.
+  // This does not work because main.js did not register `Quxx`.
+  console.log(receiveFromA() instanceof Quxx); // prints: false
+
+  // send our `Quxx`
+  sendToA(new Quxx());
+});
+```
+
+[07:45:59.0529] <rbuckton>
+When A and B receive something they don't share a mapping for, you just get data and no behavior.
+
+[07:46:36.0524] <rbuckton>
+In that way its still useful for read/write and for sending it along to another thread that might be able to interpret it.
+
+[07:53:23.0266] <rbuckton>
+In the same vein, if `main.js` starts two workers that don't share the same registry, they can't wire up behavior at all.
+
+[09:03:27.0877] <Mathieu Hofman>
+I was assuming only matching keys in the registry in the first place, but I don't think that solves the problem. For example:
+- M creates the registry
+- M creates A with the shared registry. A can block during prepare until it has attached behaviors for M's examplars, and M can block until A has shared its examplars, and M has attached behavior
+- M shares a container struct with A
+- M subsequently creates B with the same shared registry. B can block during prepare until it has attached behaviors for both M and A's examplars, and M can block until B has shared its examplars, and M has attached behavior
+- M shares the previously created container with B (possibly in the init params of the worker)
+- B adds some shared structs it creates to the container
+- A attempts to read from the container
+
+How do we make sure that A has had the opportunity to process B's examplars to attach behavior to B's types before A encounters the B struct types in the shared container. A may be doing a busy loop we cannot preempt. I can probably imagine patching all atomics operations to interleave the attachment check, but that feels gross.
+
+Or maybe there's something simply I'm overlooking
+
+[10:52:59.0543] <rbuckton>
+I don't think we need to block until behavior is attached to exemplars until we do `[[GetPrototypeOf]]`, at which time we can look up the matching exemplars from the registry. By the time A communicates with B, or either communicates with M, their registries would already be connected.
+
+[10:56:23.0176] <Mathieu Hofman>
+Right, that's what I mean, it requires the concept of the registry to be known to the spec so that `[[GetPrototypeOf]]` can do necessary lookup. I was still trying to explain the registry in terms of simpler attach behavior semantics, but that doesn't seem to be possible
+
+[10:57:53.0108] <rbuckton>
+Even for attachBehavior to work there has to be some behind-the-scenes work in the spec to generate a prototype based on the type identity of a shared struct type.
+
+[12:09:22.0291] <rbuckton>
+shu: yesterday we were discussing marking methods as `nonshared`, are you anticipating these methods would be attached to the instance as `nonshared` fields, or to an agent-local `[[Prototype]]`? 
+
+[13:26:52.0591] <Mathieu Hofman>
+> <@rbuckton:matrix.org> Even for attachBehavior to work there has to be some behind-the-scenes work in the spec to generate a prototype based on the type identity of a shared struct type.
+
+sure, but while that's also technically an internal registry, it's from an internal and non-forgeable type identity to a local behavior object. Your proposed registry is mapping from a string, which to prevent introducing a realm / agent wide communication channel has to be connection specific, or the registry state cannot be observable by the program in any way, neither of which I am convinced about being the case yet.
+
+[13:28:40.0931] <rbuckton>
+Even the `on("message", ...)` + `attachBehavior` mechanism uses a string key, it's just that the string key you used was `"registerPoint"`.
+
+[13:29:44.0697] <rbuckton>
+An in earlier discussions with shu he'd suggested something like "you send an array of exemplars", in which case the key you use is an integer. What the key is doesn't matter.
+
+[13:30:28.0391] <rbuckton>
+Everything I'm suggesting is basically just a layer of abstraction above the same capabilities you're proposing.
+
+[13:32:05.0583] <rbuckton>
+The initiating thread needs to pass a message containing one or more exemplars to a child thread, keyed in some way as to be interpreted as a way to identify which exemplar is an example of which known thing we want to associate it with.
+
+[13:32:09.0403] <shu>
+rbuckton: the former, though there's nothing precluding an agent-local [[Prototype]] either
+
+[13:32:25.0120] <shu>
+it is slightly more difficult to implement the latter so that's not what the dev trial does
+
+[13:32:47.0516] <shu>
+you should probably be able to express it both ways
+
+[13:33:03.0510] <rbuckton>
+Does this process even work if I have to attach agent local values for every method every time I receive a new instance of an existing struct type?
+
+[13:33:19.0511] <shu>
+sorry i think i misread
+
+[13:34:06.0040] <shu>
+the two choices are:
+
+1. a shared struct instance's [[Prototype]] is a shared field and holds a shared struct, with `nonshared` fields, into which you assign methods
+2. a shared struct instance's [[Prototype]] is a `nonshared` field and points to a per-agent local struct
+
+[13:34:42.0244] <shu>
+i think you want `nonshared` fields regardless
+
+[13:34:58.0624] <shu>
+and maybe (2) as well
+
+[13:35:03.0425] <shu>
+but that one's less clear to me
+
+[13:35:08.0496] <shu>
+i am prototyping (1) in the dev trial
+
+[13:35:29.0032] <shu>
+in either case you don't have to attach methods for every new instance
+
+[13:36:49.0217] <Mathieu Hofman>
+> <@rbuckton:matrix.org> Everything I'm suggesting is basically just a layer of abstraction above the same capabilities you're proposing.
+
+Right but that is clearly and explicitly scoped to the connection. I'm struggling to think of a way to specify the registry that remains fully connection oriented.
+
+[13:37:21.0799] <rbuckton>
+(1) works, I suppose. What's important is that for a given struct type, I only need to establish the `[[Prototype]]` relationship once in a given thread, not once every time a new instance is observed.
+
+[13:38:01.0463] <shu>
+(1) has some advantages, like, `instanceof` just works with the usual semantics
+
+[13:38:10.0389] <shu>
+since all instances have the same prototype object
+
+[13:38:54.0254] <rbuckton>
+What I suggested *is* connection oriented. The main thread doesn't have a global registry shared across all workers. It has a _specific_ registry you hand to individual workers on creation. The child thread associated with that worker will always be able to refer to its parent, thus the registry will always be reachable.
+
+[13:42:17.0420] <rbuckton>
+Proxies are extremely frustrating, by the way. its very difficult to actually build a membrane with them due to some of the invariants.
+
+[13:42:56.0261] <rbuckton>
+I'm trying to model some of what we've been discussing using the current origin trial + some proxies and shims
+
+[14:03:07.0261] <rbuckton>
+shu: Do you expect the `nonshared` fields to be fixed per-instance as well/
+
+[14:03:08.0965] <rbuckton>
+ * shu: Do you expect the `nonshared` fields to be fixed per-instance as well?
+
+[14:03:35.0024] <rbuckton>
+as in, predefined with `{ configurable: false }` like shared fields are
+
+[14:12:44.0962] <shu>
+rbuckton: the fields themselves, yes
+
+[14:13:04.0204] <shu>
+the fixed layout constraint applies to all fields
+
+[16:25:23.0731] <Mathieu Hofman>
+> <@rbuckton:matrix.org> What I suggested *is* connection oriented. The main thread doesn't have a global registry shared across all workers. It has a _specific_ registry you hand to individual workers on creation. The child thread associated with that worker will always be able to refer to its parent, thus the registry will always be reachable.
+
+What I'm wondering about is the relation between types and registries. A thread / agent is able to create registries and pass/associate them to workers it creates. That means there is really a many-to-many relationship between agents and registries. When a type is received from a postMessage, it's logical to lookup in the registry associated to that connection for a behavior mapping. However when a type is read from a value of another shared struct, how is the agent deciding where to look up for an associated behavior? Do each types keep an association to which connection they originated from, so that further types encountered through them resolve using the same registry? What happens if a type associated to one registry is shared over a connection using another registry? Or for that matter, to what registry is a type locally defined associated to?
+
+[16:35:48.0480] <Mathieu Hofman>
+To put it in another term, what happens in the following case:
+- M defines Point and Rect structs
+- M creates registry RA, used with worker A
+- M creates registry RB, used with worker B
+- Both A and B define their own Point and Rect, and prepare the registry they received from M with those definitions
+- M creates rect1 and shares it with A and B
+- A sets rect1.topLeft to a Point it creates
+- B sets rect1.bottomRight to a Point it creates
+
+Questions:
+- M should be able to find a behavior for both rect1.topLeft and rect1.bottomRight, but what spec logic should it follow that accomplishes that?
+- Should B be able to find a behavior for rect1.topLeft? (corollary, should A be able to find a behavior for rect1.bottomRight ?)
+
+
+
+2023-09-20
+[18:01:08.0855] <rbuckton>
+- When A handshakes with M:
+  - M is able to establish that a PointA should have a PointM prototype and it will apply to every PointA it receives, from anywhere, within the scope of M's Agent.
+  - A is able to establish that a PointM should have a PointA prototype and it will apply to every PointM it receives, from anywhere, within the scope of A's Agent.
+- When B handshakes with M:
+  - M is able to establish that a PointB should have a PointM prototype and it will apply to every PointB it receives, from anywhere, within the scope of M's Agent.
+  - B is able to establish that a PointM should have a PointB prototype and it will apply to every PointM it receives, from anywhere, within the scope of B's Agent.
+
+As such:
+- M will be able to find behavior for both rect1.topLeft and rect1.topRight, because the handshake between M-A and M-B established that.
+- B will not be able to find a behavior for rect1.topLeft because registries RA and RB are independent.
+- A will not be able to find a behavior for rect1.bottomRight because registries RA and RB are independent.
+
+[18:03:11.0500] <rbuckton>
+However, if you use the same registry RAB with A and B:
+- B is able to establish that a PointA should have a PointB prototype because the registry correlates both PointA and PointB with PointM.
+- A is able to establish that a PointB should have a PointA prototype because the registry correlates both PointA and PointB with PointM.
+
+[18:06:29.0576] <rbuckton>
+If such a prototype is initialized lazily in `[[GetPrototypeOf]]`, by the time B can receive a PointA, or that A can receive a PointB, both agents will have completed their handshake with M, so all information is known. This is another reason why my proposal uses a preload script. The preload script performs the worker side of the handshake before any other data can be shared between the worker and M, so you cannot have a stray PointA sent to B, or PointB sent to A, prior to a completed handshake on both sides.
+
+[18:13:19.0398] <rbuckton>
+Now, we could theoretically have a global registry instead, with the `structs: {}` map only used to correlate PointM and PointA when A is established. Workers will always be part of a tree that points back to some root agent, so there's always a way to collect these things. If the handshake establishes the relationship without the ability to pass messages, would that be sufficient to address concerns about a global registry?
+
+[18:16:52.0891] <rbuckton>
+Especially if the worker can't actually observe the exemplar during handshake, since the handshake process is handled by the runtime. We wouldn't even need communicate the actual exemplars through the handshake process, just the type identities of the exemplars. 
+
+[18:21:15.0759] <rbuckton>
+Though there is the caveat that M could try to pass off a PointA as an exemplar to B's Rect, but we could probably just make that an error, i.e. the exemplars you send during the handshake must have been created by a type created in M's Agent.
+
+[18:21:33.0339] <rbuckton>
+ * Though there is the caveat that M could try to pass off a PointA as an exemplar to B's Rect, but we could probably just make that an error, i.e. the exemplars M sends during the handshake must have been created by a type created in M's Agent.
+
+[18:21:47.0742] <rbuckton>
+ * Though there is the caveat that M could try to pass off a PointA as an exemplar to B's Rect, but we could probably just make that an error, i.e. the exemplars M sends during the handshake must have been created by a type created in M's Agent
+
+[18:22:54.0815] <rbuckton>
+and the same thing goes for A (or B) spinning up a Worker (A2) during handshake and passing off one A2's exemplar as one of its own.
+
+[18:23:03.0400] <rbuckton>
+ * and the same thing goes for A (or B) spinning up a Worker (A2) during handshake and passing off one A2's exemplars as one of its own.
+
+[20:05:31.0028] <Mathieu Hofman>
+Right I think an agent based registry can only work if:
+- the internal agent wide registry is an association from type to local behavior definition
+- there is a unique connection registry between 2 agents, and preparing a connection registry mapping (as creator or as a worker setting up), associates a connection specific string to a locally defined type only
+- you can only populate the agent wide registry through connection registries.
+
+that means a worker A connected to a worker B through M but not sharing the same connection registry will not be able share behavior throughout. I'm still wondering about the special parent - child relationship these connection based registries seem to have, and how you can only have one connection registry between 2 agents or things fall apart. I can't explain why exactly right now, but this all feels awkward.
+
+[05:38:13.0361] <rbuckton>
+I'm wondering if we even need a connection-based registry if we can devise a global registry strategy that addresses Agoric's concerns about security. You'd discussed how a mutable global registry is a possible side channel for data exfiltration? I'm curious how serious the concern is and if you have a link to a paper or something else that could provide additional context? Is the concern related to how a Worker could abuse such a global registry, or how a script or module in the same Agent could abuse such a registry?
+
+[09:32:43.0898] <shu>
+> <@shuyuguo:matrix.org> the two choices are:
+> 
+> 1. a shared struct instance's [[Prototype]] is a shared field and holds a shared struct, with `nonshared` fields, into which you assign methods
+> 2. a shared struct instance's [[Prototype]] is a `nonshared` field and points to a per-agent local struct
+
+rbuckton: after chatting with some other V8 engineers i'm coming back to the idea that perhaps (2) is better
+
+[09:53:32.0186] <Mathieu Hofman>
+> <@rbuckton:matrix.org> I'm wondering if we even need a connection-based registry if we can devise a global registry strategy that addresses Agoric's concerns about security. You'd discussed how a mutable global registry is a possible side channel for data exfiltration? I'm curious how serious the concern is and if you have a link to a paper or something else that could provide additional context? Is the concern related to how a Worker could abuse such a global registry, or how a script or module in the same Agent could abuse such a registry?
+
+The concern has usually manifested itself in the form of Realm-wide or Agent-wide state, but it's conceivable that the same concern could manifest for Agent cluster-wide state. The problem is that such global mutable state allows 2 parties that do not share any references besides the primordials objects to communicate. In JavaScript today, you can freeze all the intrinsics, and it's not possible for 2 pieces of code to communicate unless they're explicitly provided a reference to each other, or to a shared mutable object.
+
+[09:55:33.0136] <rbuckton>
+> <@shuyuguo:matrix.org> rbuckton: after chatting with some other V8 engineers i'm coming back to the idea that perhaps (2) is better
+
+Would this affect subclassing or no? I imagine in a subclassing case, we would just collect all of the shared fields up front and put them on the instance, much like we do for private fields today, so I don't imagine it would.
+
+[09:57:31.0402] <shu>
+rbuckton: that's not clear to me yet. one challenge here is how to express the thread-localness of a superclass
+
+[09:58:51.0232] <shu>
+we want the fixed layout invariant to hold, so do you say like "shared struct A extends per-agent B", but what is B? it could be itself a shared struct but its layout gets copied into a thread-local version of the struct the first time [[Prototype]] is accessed in a thread
+
+[09:58:59.0250] <shu>
+should it be a non-shared struct declaration?
+
+[09:59:05.0060] <shu>
+(but it gets that layout copy behavior)
+
+[10:26:57.0411] <rbuckton>
+> <@mhofman:matrix.org> The concern has usually manifested itself in the form of Realm-wide or Agent-wide state, but it's conceivable that the same concern could manifest for Agent cluster-wide state. The problem is that such global mutable state allows 2 parties that do not share any references besides the primordials objects to communicate. In JavaScript today, you can freeze all the intrinsics, and it's not possible for 2 pieces of code to communicate unless they're explicitly provided a reference to each other, or to a shared mutable object.
+
+Do you imagine such communication is possible in this case? 
+
+[10:30:10.0975] <rbuckton>
+Lets assume you can't use the exemplar values themselves to communicate, i.e., the actual exemplars aren't exposed to user code on the other Agent.
+
+[10:32:16.0501] <rbuckton>
+The child thread can't send or receive structs to the parent thread during handshake, and by the time handshake has completed all correlation between the parent and child is frozen.
+
+[10:34:44.0868] <rbuckton>
+By the time A can observe a struct from B, the correlation between M, A, and B has already occurred and is frozen. You cannot dynamically attach new behavior, but we do lazily resolve the prototype based on correlation.
+
+[10:40:22.0205] <rbuckton>
+Maybe there's a small possibility of a timing related exploit if I can somehow spin up multiple additional workers on M and send an existing corelated struct to A to indicate `0` and new correlated struct to A indicating `1` and somehow measure the timing? That might be mitigated if correlation happens before normal communication can occur and prototype lookup always follows the same path, but you could potentially use structs who have narrow and wide correlation sets and measure timing that way, or update an agent-local correlation registry when two agent's communicate for the first time so that you pay that cost once. 
+
+[10:43:10.0393] <rbuckton>
+There are possibly other ways to mitigate that as well.
+
+[10:46:27.0824] <rbuckton>
+Within a single Agent, when worker's aren't involved, you wouldn't be able to use this registry for communication because it would be inaccessible. You can also use CSP to lock down Worker to specific scripts, or disable it entirely.
+
+[10:49:21.0856] <rbuckton>
+If `Worker` is locked down via CSP, the only way you could leverage these for a timing attack would to be handed a reference to a shared struct, which I would argue qualifies for being provided a reference to a shared mutable object.
+
+[10:55:26.0727] <rbuckton>
+ * If `Worker` is locked down via CSP, the only way you could leverage these for a timing attack would be to be handed a reference to a shared struct, which I would argue qualifies for being provided a reference to a shared mutable object.
+
+[11:00:39.0908] <rbuckton>
+If you have two isolated pieces of code in the same Agent that both have access to an unrestricted `Worker`, its possible they could already communicate with each other via resource starvation and timing attacks. 
+
+[12:06:52.0909] <Mathieu Hofman>
+For same realm/agent, if the registry is string keyed, Alice can register "foo". If Bob can somehow figure out that "foo" is already registered, this is a one bit communication channel. There are likely multiple ways Bob could sense whether "foo" is registered.
+
+[12:20:53.0936] <rbuckton>
+With the global registry concept, all registration within a single Agent would happen via `new SharedStructType` (or via `shared struct Foo {}`). No errors would be reported except for running out of heap space (and crashing). When setting up a `Worker`, there is a correlation step to correlate the registrations within both Agents, but this only occurs at the time of the Worker handshake and should only be observable by interacting with that Worker or a shared struct provided to the worker.
+
+[12:22:38.0122] <rbuckton>
+As far as I can tell, there's no way to observe that within a single Agent/realm. You can't check if something is "registered" because all "registration" happens before the thing you would test exists.
+
+[12:24:00.0255] <rbuckton>
+The only way to observe correlation would be to use a Worker and a shared reference, which still only observes correlation between those two Agents.
+
+[12:25:18.0716] <rbuckton>
+There should be no way to get at the registry itself, and the only way to establish correlation is to already have a reference to the shared struct type. 
+
+[12:26:02.0406] <rbuckton>
+You could observe whether A and B share correlation with M, but only if you already have access to shared data from A and B
+
+[12:27:40.0153] <rbuckton>
+There would be no error upon registration, because there is no addressable identity to forge, nor a way to forge it. Every shared struct type would have its own type identity, defined at the time of creation.
+
+[12:56:19.0091] <Mathieu Hofman>
+I think it depends on how the global registry works, how it handles collisions? Any mechanism that uses a forgeable value as key is likely observable, whether it errors, or first / last win. In the latter case, as you mention starting a worker and asking it to send you that type, and seeing what behavior you get, yours or the other one registered in the same realm. I really cannot imagine any way where a registry with forgeable keys can be made unobservable.
+You do mention "no way to get at the registry itself", which instead sounds like design we were talking about yesterday, not an agent wide string keyed registry, but instead a connection based string-keyed mapper. I agree that it may be possible to make that work, but I think it requires the "correlation registry" between 2 agents to be unique and immutable after start.
+
+[12:57:33.0255] <shu>
+rbuckton: actually how _do_ you think we can syntactically express the shape of a shared struct's prototype, if that prototype is to be fixed layout but per-thread?
+
+[12:57:46.0088] <shu>
+there's not a good precedent to fall back on in `class` syntax
+
+[13:01:05.0463] <rbuckton>
+> <@shuyuguo:matrix.org> rbuckton: actually how _do_ you think we can syntactically express the shape of a shared struct's prototype, if that prototype is to be fixed layout but per-thread?
+
+How important is it that the prototype be fixed shape, especially if we're not actually sharing the prototype around anywhere?
+
+[13:01:36.0883] <shu>
+it's not _as_ important but i feel it is still important
+
+[13:03:02.0404] <shu>
+part of my mental model of structs (shared or not) over ordinary objects is "the shape doesn't change", and that transitively applies via the prototype chain
+
+[13:03:13.0963] <rbuckton>
+> <@mhofman:matrix.org> I think it depends on how the global registry works, how it handles collisions? Any mechanism that uses a forgeable value as key is likely observable, whether it errors, or first / last win. In the latter case, as you mention starting a worker and asking it to send you that type, and seeing what behavior you get, yours or the other one registered in the same realm. I really cannot imagine any way where a registry with forgeable keys can be made unobservable.
+> You do mention "no way to get at the registry itself", which instead sounds like design we were talking about yesterday, not an agent wide string keyed registry, but instead a connection based string-keyed mapper. I agree that it may be possible to make that work, but I think it requires the "correlation registry" between 2 agents to be unique and immutable after start.
+
+What collisions? What is forgeable? The only thing user-provided is the correlation token used to explain what prototype to choose for a foreign struct within an Agent, and that only affects that Agent's view of the struct, not any other agent.
+
+[13:04:29.0313] <rbuckton>
+> <@shuyuguo:matrix.org> part of my mental model of structs (shared or not) over ordinary objects is "the shape doesn't change", and that transitively applies via the prototype chain
+
+Way back when I'd thought to have structs act as value objects, my intuition was that the prototype would be looked up during ToObject just like we do for `Number`, `String`, etc. so it had no bearing on the shape of struct's runtime representation.
+
+[13:04:55.0883] <shu>
+yes, that is a competing model
+
+[13:05:11.0552] <rbuckton>
+That's not the case now, but I still don't find see the necessity for a fixed shape for the prototype.
+
+[13:05:22.0482] <shu>
+and i am open to be convinced of that competing model
+
+[13:05:40.0764] <shu>
+it has some attractive properties, like, the dynamism feels more at home with the rest of the language
+
+[13:05:49.0063] <shu>
+it has an exact parallel to primitive prototype wrapping, as you've pointed out
+
+[13:06:10.0852] <rbuckton>
+The caveat is that it doesn't translate well to multiple realms in the same Agent
+
+[13:06:34.0116] <rbuckton>
+Unless you need to somehow define behavior independently per realm.
+
+[13:07:08.0224] <rbuckton>
+Which would be another spanner to throw into the behavior assignment discussion :)
+
+[13:07:37.0748] <shu>
+the downside to the primitive-like wrapping model is i had harbored some hopes "fixed layout" would translate to "easy" static analyzability of static property access on struct instances
+
+[13:08:06.0670] <shu>
+but if for knowing the location `s.p` requires giving up if `p` is from the prototype, that's too bad
+
+[13:08:11.0194] <shu>
+it's not the end of the world or anything
+
+[13:09:11.0360] <shu>
+> <@rbuckton:matrix.org> The caveat is that it doesn't translate well to multiple realms in the same Agent
+
+eh, i don't think it's a big stretch to choose per-realm instead of per-agent. in the p95 case i imagine apps have 1 realm per agent
+
+[13:09:47.0518] <shu>
+i'm pretty neutral on whether to choose per-realm or per-agent. agent is not a notion we expose right now, but realms are, so that's more natural
+
+[13:10:15.0169] <shu>
+you end up with weird DX papercuts if you _do_ work with multiple realms in the same agent, but i guess any app that works with multiple realms already must deal with identity discontinuity to some extent
+
+[13:11:21.0390] <shu>
+okay, let's continue the thought experiment down the path of relaxing the fixed layout constraint to not apply to nonshared prototypes
+
+[13:11:25.0387] <shu>
+how would you express that in syntax?
+
+[13:12:03.0836] <shu>
+and how would we take care to not preclude a future with actual shareable functions
+
+[13:12:29.0280] <Mathieu Hofman>
+> <@rbuckton:matrix.org> What collisions? What is forgeable? The only thing user-provided is the correlation token used to explain what prototype to choose for a foreign struct within an Agent, and that only affects that Agent's view of the struct, not any other agent.
+
+Ok so we're in the case of the agent pair having a string keyed correlation registry at initialization of the connection, which I agreed seems fine at first sight, but I still feel weird about, and need to think more about it.
+
+[13:13:20.0681] <Mathieu Hofman>
+> <@rbuckton:matrix.org> Which would be another spanner to throw into the behavior assignment discussion :)
+
+Yeah I've been pondering that one myself, but avoided bringing it up
+
+[13:13:44.0732] <shu>
+Mathieu Hofman: i take it you'd prefer per-realm over per-agent?
+
+[13:15:28.0079] <rbuckton>
+I'm not sure any handshake mechanism will work per-realm unless you have to establish the handshake when the realm is created, and you can't do that in the browser on the main thread with frames.
+
+[13:15:55.0476] <shu>
+ah i hadn't thought that far, that's what you meant by spanner
+
+[13:16:47.0008] <Mathieu Hofman>
+Well let's say I don't want this to enable a realm to discover the object graph of another realm, if they were previously isolated. I think that's my constraint
+
+[13:17:17.0871] <shu>
+to answer my own syntax question earlier, this could work:
+
+```
+shared struct class S {
+  static nonshared prototype;
+}
+```
+
+[13:17:27.0655] <shu>
+since currently, having `static prototype` is an early error
+
+[13:18:21.0927] <rbuckton>
+That's a bit strange, and it doesnt seem like it would work well with method declarations.
+
+[13:19:15.0480] <shu>
+why wouldn't it work well with method declarations?
+
+[13:19:41.0184] <rbuckton>
+It looks a bit like a field declaration.
+
+[13:20:04.0277] <shu>
+(and to clarify, are you thinking of method declarations in the possible future where they are specially-packaged-and-cloned, or the possible future where we have some exotic new callable that's truly shared)
+
+[13:20:48.0668] <rbuckton>
+I'm considering both
+
+[13:21:17.0135] <shu>
+> <@rbuckton:matrix.org> It looks a bit like a field declaration.
+
+indeed. my thought it's "modifying" the field
+
+[13:21:22.0309] <shu>
+well, the internal slot
+
+[13:22:00.0072] <rbuckton>
+I need to think on that a bit.
+
+[13:22:44.0755] <shu>
+it's by all means just an incantation
+
+[13:22:47.0930] <shu>
+not a composable bit of syntax
+
+[13:22:58.0713] <shu>
+ideas welcome, certainly, most things i've thought of are even uglier
+
+[13:25:05.0659] <rbuckton>
+You want a syntax that:
+- allows you to opt in or out of sharing for `struct` (for non-shared structs)
+- allows you to opt in or out of sharing for instance fields (for shared structs)
+- allows you to opt in or out of sharing for prototype methods (for shared structs in a future where code sharing exists)
+- allows you to opt in or out of fixed layout for the prototype (for shared and non-shared structs)
+- allows you to opt in or out of sharing for the prototype (for shared structs)
+- allows you to opt in or out of sharing for the constructor (for shared structs in a future where code sharing exists) 
+- maybe even allows you to opt in or out of sharing for static methods and static fields (for shared structs in a future where code sharing exists)
+Does that cover everything?
+
+[13:25:21.0380] <rbuckton>
+ * You want a syntax that:
+
+- allows you to opt in or out of sharing for `struct` (for non-shared structs)
+- allows you to opt in or out of sharing for instance fields (for shared structs)
+- allows you to opt in or out of sharing for prototype methods (for shared structs in a future where code sharing exists)
+- allows you to opt in or out of fixed layout for the prototype (for shared and non-shared structs)
+- allows you to opt in or out of sharing for the prototype (for shared structs)
+- allows you to opt in or out of sharing for the constructor (for shared structs in a future where code sharing exists)
+- maybe even allows you to opt in or out of sharing for static methods and static fields (for shared structs in a future where code sharing exists)
+
+Does that cover everything?
+
+[13:25:44.0344] <rbuckton>
+ * You want a syntax that:
+
+- allows you to opt in or out of sharing for `struct` (for non-shared structs)
+- allows you to opt in or out of sharing for instance fields (for shared structs)
+- allows you to opt in or out of sharing for prototype methods (for shared structs in a future where code sharing exists)
+- allows you to opt in or out of fixed layout for the prototype (for shared and non-shared structs)
+- allows you to opt in or out of sharing for the prototype (for shared structs)
+- maybe allows you to opt in or out of sharing for the constructor (for shared structs in a future where code sharing exists)
+- maybe even allows you to opt in or out of sharing for static methods and static fields (for shared structs in a future where code sharing exists)
+
+Does that cover everything?
+
+[13:28:16.0082] <shu>
+that seems comprehensive
+
+- for the MVP, i think "allows you to opt in or out of sharing for instance fields (for shared structs)" can be scrapped if we go with opting in or out of making prototype itself nonshared. if you need to express agent-localness manually, you can use a WeakMap
+- i think "allows you to opt in or out of fixed layout for the prototype (for shared and non-shared structs)" shouldn't be a toggle but a choice we make. either we decide the fixed layout invariant extends transitively up the proto chain, or it's limited to instance layout only
+
+
+
+[13:29:01.0659] <rbuckton>
+If possible I'd like to *not* have to go indirectly through a WeakMap.
+
+[13:29:16.0357] <shu>
+for arbitrary fields?
+
+[13:29:43.0690] <rbuckton>
+I'd also like to find a way to allow private fields, even if that privacy is only agent-local.
+
+[13:29:52.0394] <rbuckton>
+ * I'd also like to find a way to allow _shared_ private fields, even if that privacy is only agent-local.
+
+[13:30:54.0463] <shu>
+let's punt on private fields for now :)
+
+[13:30:56.0857] <rbuckton>
+I'm not sure if its feasible, but I'd like to find a way to consider it.
+
+[13:31:58.0742] <shu>
+a big part of the reason i've moved back to thinking thread-local prototype being the superior solution is the performance footgun aspect of heavy thread-local field usage
+
+[13:32:04.0452] <rbuckton>
+I'm writing *a lot* of shared structs using TypeScript's soft `private` currently.
+
+[13:32:09.0596] <shu>
+the performance will be so extremely different, yet looks the same
+
+[13:32:45.0727] <shu>
+if we bottleneck that thread-local lookup to be just on [[Prototype]], then we ease the performance footgun concerns
+
+[13:33:03.0583] <shu>
+the expressivity still exists with WeakMaps
+
+[13:34:23.0148] <shu>
+private names should just work, with the big exception of the lexical scoping of `#`-names
+
+[13:34:46.0481] <shu>
+so the per-agent privacy "just works" but that feels weird
+
+[13:36:19.0754] <shu>
+well no, "just works" is too strong. there will need to syntax changes to allow `#`-names to be scoped in such a way that allows it to even be expressed with struct declarations
+
+[13:37:20.0920] <rbuckton>
+The issue with private names is whether `#foo` is accessible inside of a nonshared method in two different threads.
+
+[13:37:39.0761] <shu>
+right
+
+[13:38:02.0587] <rbuckton>
+for it to be useful, it has to be. But that weakens privacy.
+
+[13:39:44.0078] <rbuckton>
+So you either need to:
+- disallow privacy
+- disallow access to private names from one thread in another thread
+- weak privacy for shared structs
+- provide a friendship mechanism that you can somehow share in a trusted manner when handshaking with a child thread.
+
+[13:40:12.0585] <rbuckton>
+ * So you either need to:
+
+1. disallow privacy
+2. disallow access to private names from one thread in another thread
+3. weak privacy for shared structs
+4. provide a friendship mechanism that you can somehow share in a trusted manner when handshaking with a child thread.
+
+[13:41:26.0698] <rbuckton>
+I think (2) is unusable, I'm sure someone won't be happy with (3), and I don't have a solution for (4) yet.
+
+[13:41:51.0705] <rbuckton>
+nonshared private fields are definitely doable.
+
+[13:42:31.0715] <rbuckton>
+> <@shuyuguo:matrix.org> the performance will be so extremely different, yet looks the same
+
+I'd still rather have them, even if we need a different or additional scary-sounding keyword in the field declaration.
+
+[13:43:45.0071] <shu>
+yeah perhaps
+
+[13:43:50.0763] <shu>
+i agree (2) will be unusable
+
+[13:44:33.0677] <rbuckton>
+For private names, we could make you explicitly annotate them as `shared` to get the point across that their privacy is weaker.
+
+[13:44:34.0372] <shu>
+the only solution that composes i can think of is some kind of new exotic callable that's threadsafe
+
+[13:44:48.0354] <shu>
+and that this new exotic callable can close over `#` names
+
+[13:45:07.0904] <shu>
+but it can't close over normal bindings
+
+[13:45:18.0489] <shu>
+nobody liked the exotic callable idea the first time i brought it up though
+
+[13:45:29.0037] <rbuckton>
+why would we need that?
+
+[13:45:53.0773] <rbuckton>
+And I'm not even sure how you'd use that
+
+[13:46:47.0759] <shu>
+the private names thing can fall out of that, what i had in mind:
+
+```
+shared struct class S {
+  #x;
+  shared getX() { return this.#x; } // <- new exotic callable, can't close normal bindings, [[Realm]]-less, etc
+}
+```
+
+[13:47:15.0004] <rbuckton>
+In the "weaker privacy" model I was thinking about, private names are part of the type identity associated with a shared struct, and the handshake process that provides correlation between an exemplar and a prototype could be smart enough to correlate the private name as well.
+
+[13:48:02.0930] <shu>
+in the evaluation of `S` above, `#x` gets evaluated once and is closed over by this new shareable exotic callable, and you use those methods on instances and things just work
+
+[13:48:16.0278] <shu>
+we can't do this with normal functions obvoiusly because they're not shared things
+
+[13:49:18.0213] <rbuckton>
+So you do:
+```
+// structs.js
+export shared struct S {
+  shared #x; // weak shared private name
+  
+  nonshared getX() {
+    return this.#x; // private name access is correlated for foreign struct types.
+  }
+}
+
+// preload.js
+import { S } from "./structs.js";
+prepareWorker({ structs: { S } });
+```
+
+
+[13:49:41.0668] <rbuckton>
+You just have the private name itself be correlated.
+
+[13:50:09.0557] <shu>
+not sure i grasp on the correlation works
+
+[13:50:16.0123] <shu>
+ * not sure i grasp how the correlation works
+
+[13:50:40.0620] <rbuckton>
+though that is a step towards always using `shared struct` declarations for handshaking rather than just an exemplar and a prototype.
+
+[13:50:59.0102] <rbuckton>
+I'll see if I can summarize?
+
+[13:56:17.0004] <shu>
+i have a harebarined worse-is-better idea
+
+[13:56:23.0835] <shu>
+ * i have a harebrained worse-is-better idea
+
+[14:00:06.0328] <rbuckton>
+- Each agent maintains an independent registry of the shared struct types created within the agent.
+- Each registry is linked bi-directionally to the agent that spawned the thread/agent.
+- When spinning up a new `Worker`, you provide a set of shared struct types to correlate with the worker. In previous discussions these were exemplar structs, but we only really need the type identity of the shared struct type.
+- When the worker starts up, it has a "preload" phase where it can handle its side of the handshake, and provide a set of shared struct types to correlate with the parent thread.
+- During preload, the child thread cannot otherwise communicate with the parent thread via the worker/message port (any `postMessage`/`onmessage` ends up queued until the handshake has finished).
+- In the agent registry, or in a global registry, you use this correlation information to establish how to treat any given shared struct in a foreign Agent.
+- When you look up the prototype of a non-local shared struct, you interrogate the registry for an agent-local prototype to use based on this correlation information.
+- By the time you can actually invoke `[[GetPrototypeOf]]`, all information you would need to correlate and resolve the prototype of a given shared struct should be known to the system.
+
+[14:02:01.0843] <shu>
+i'm not clear on the second-to-last bullet point
+
+[14:02:31.0097] <shu>
+how does "look up the prototype of a non-local shared struct" differ from `[[GetPrototypeOf]]`?
+
+[14:04:38.0054] <rbuckton>
+The last two bullet points are mostly part of the same thing.
+
+[14:05:02.0310] <shu>
+are you saying every `[[GetPrototypeOf]]` of an instance has a pre-hook that does correlation in the registry?
+
+[14:05:24.0413] <shu>
+i was hoping you'd set up the correlation once per type and not incur a check on every `[[GetPrototypeOf]]`
+
+[14:05:44.0586] <rbuckton>
+There are two options. One is "when we create the thread local prototype Object for the foreign shared struct type we just received, we can correlate it in the registry"
+
+[14:08:06.0034] <rbuckton>
+The other is lazily on `[[GetPrototypeOf]]`, but we don't need the laziness if the runtime can do all of this work for you.
+
+[14:10:20.0732] <shu>
+so here's my harebrained worse-is-better idea:
+
+_what if_ `shared struct S { }` declarations evaluated to something that has a special `packageForClone()`, which returns some object that can be reevaluated (like direct eval, but i guess safer?)
+
+```
+shared struct S {
+  static nonshared prototype;
+
+  // The static block gets packaged _as source text_.
+  static {
+    // Set up thread-local prototype
+    this.prototype.method = function() { whatever; }
+  }
+}
+
+let thing = S.packageForClone();
+thing.evaluate(); // Get a constructor back that can create instances of the same layout. The VM knows it's correlated with `S`-instances. Re-evaluates the static block _from source text_ at the point of evaluation.
+```
+
+[14:12:19.0186] <shu>
+the return value of `packageForClone()` would be special cased in the structured clone algorithm to be cloneable
+
+[14:15:38.0585] <rbuckton>
+I still don't think this works because it makes assumptions about what is reachable in the child thread.
+
+[14:16:05.0130] <shu>
+how so?
+
+[14:16:29.0868] <rbuckton>
+The child thread might be running from a bundle that doesn't include some module names, because the methods that use them were removed from the child thread bundle due to tree shaking.
+
+[14:17:16.0579] <shu>
+it's like re-evaling a function's `toString()`, no assumptions are made per se, but if things get DCE'd because the tool wasn't aware it's implicitly being used somehow, then the tool needs those exceptions annotated, yeah
+
+[14:17:48.0752] <rbuckton>
+And its likely that the child thread already has a copy of all of the necessary behavior in memory, so now we're taking up even more memory in the worker thread for duplicate code.
+
+[14:18:36.0143] <shu>
+how did it get the necessary behavior in memory, import? this idea means you never import the right structs, you gotta always postMessage them
+
+[14:18:44.0672] <shu>
+but agreed that doesn't feel great
+
+[14:19:30.0794] <rbuckton>
+I'm not a fan of that design, tbh. Its too easy for code to become entangled.
+
+[14:19:48.0905] <rbuckton>
+I'll be back in a bit, in a meeting for the next hour.
+
+[14:19:51.0103] <shu>
+the minimal version of this idea is that shared struct constructors ought to be made structured cloneable in such a way that the VM can keep the type identity correlation across agents
+
+[14:20:11.0523] <shu>
+they can be safely cloned because these constructors don't call user code
+
+[14:21:02.0534] <shu>
+i guess that minimal version can be combined with your registry handshake. it makes the correlation of type identities automatic
+
+[15:06:26.0147] <rbuckton>
+I'm not sure I agree with that approach? I might need my shared struct constructor to access some per-thread configured object that may not be trivially serializable, such as accessing `threadId` in `import { threadId } from "node:worker_threads"` or, read from an environment variable via `sys.getEnvironmentVariable(name)`, where `sys` must be correctly initialized for within that thread. 
+
+[15:06:42.0545] <rbuckton>
+And both of these cases are present in the work I'm doing right now.
+
+[15:07:43.0451] <rbuckton>
+and I definitely want to be able to run user code so that I can appropriately set up shared struct instances, including providing suitable defaults to match the types I'
+
+[15:07:48.0563] <rbuckton>
+ * and I definitely want to be able to run user code so that I can appropriately set up shared struct instances, including providing suitable defaults to match the types I've defined.
+
+[15:08:05.0143] <shu>
+i think we're talking about 2 constructors
+
+[15:08:27.0869] <rbuckton>
+Yes and no.
+
+[15:08:29.0576] <shu>
+shared structs don't have user code constructors
+
+(i now also see that the README.md is incorrect)
+
+[15:08:38.0891] <rbuckton>
+They don't currently, correct.
+
+[15:09:00.0267] <shu>
+they just have a way to objects of the correct layout, let's call this constructor the "minter"
+
+[15:09:17.0766] <shu>
+you can wrap this in a per-thread constructor that does thread-local things
+
+[15:09:32.0261] <rbuckton>
+Sure, but you're talking about packing in the prototype members along with that, which we don't do anywhere else in JS.
+
+[15:09:45.0676] <shu>
+sorry i switched gears
+
+[15:09:50.0203] <shu>
+scratch the prototype members idea
+
+[15:10:13.0045] <shu>
+the minimal version is: the minter, and the minter alone, with no transitive properties, is a cloneable function that can be cloned across worker boundaries
+
+[15:10:19.0205] <rbuckton>
+Ok, but then I don't see why serializing the constructor is useful.
+
+[15:10:58.0003] <shu>
+ah, because the VM can keep tabs under the hood that it's correlated with shared structs of a particular type
+
+[15:11:20.0979] <shu>
+but i guess this doesn't work for your approach because you want to be able to
+
+1. import { S } from some place
+2. _then_ correlate them
+
+[15:11:35.0435] <shu>
+instead of
+
+1. receive { S } via message from some coordination thread
+2. set up S.prototype
+
+[15:11:58.0832] <rbuckton>
+Those are the same thing to me
+
+[15:12:08.0388] <rbuckton>
+Just different levels of abstraction
+
+[15:12:27.0213] <shu>
+they aren't to me, because "import { S } from some place" already evaluates and binds an S that we'd need to correlate after-the-fact
+
+[15:12:40.0675] <shu>
+where as "receive S via message" gets the right S beforehand with no addition coordination needed
+
+[15:13:13.0057] <shu>
+it's the difference between 2 copies that are correlated and 1 copy
+
+[15:13:18.0975] <rbuckton>
+Ok, fair. Then the issue I have with the 2nd approach is one of timing. 
+
+[15:13:43.0924] <shu>
+right, there is a conceptual startup barrier for all workers
+
+[15:14:17.0487] <rbuckton>
+And some workers might want to be able to create instances of a shared struct type ahead of the handshake process or message or whatever
+
+[15:14:39.0724] <rbuckton>
+Because sometimes I need to set up singleton values or run code against objects that also happen to be shared.
+
+[15:14:52.0992] <shu>
+yeah, that style is explicitly unsupported, or at least will always need to be reordered after the handshake barrier
+
+[15:15:13.0440] <rbuckton>
+With the approach I've been suggesting, it doesn't.
+
+[15:15:32.0495] <rbuckton>
+I'm already doing that, sans behavior, currently.
+
+[15:15:33.0128] <shu>
+i still don't understand how the correlation works
+
+[15:15:44.0093] <shu>
+are you free? maybe we can hop on a 30 minute call and talk it through
+
+[15:15:51.0168] <rbuckton>
+Sure
+
+[15:15:55.0619] <shu>
+i'll DM
+
+
+2023-09-21
+[18:06:48.0162] <shu>
+rbuckton: wrote up https://github.com/tc39/proposal-structs/blob/main/ATTACHING-BEHAVIOR.md, PTAL
+
+[18:23:52.0016] <rbuckton>
+A quick point regarding syntax, just as I mentioned before about wanting to avoid excess ceremony, I'm hoping we can go with something far shorter than `shared struct class Foo {}`. I imagine `struct Foo {}` and `shared struct Foo {}` would be sufficient to avoid ambiguity without needing the `class` keyword, and their behavior is different enough to justify the different syntax.
+
+[18:27:48.0370] <rbuckton>
+I'm also still not to keen on using class name as a global registry key, its far too easy to have collisions (so many things would be called `Node`, for example). I'd prefer the keying mechanism be divorced from the name of the struct somehow. In earlier discussions I'd recommended using UUIDs and decorators, i.e.:
+
+```
+@RegisteredStruct("92057993-84c2-4015-9a4e-f1d3810db4a2") shared struct Foo { }
+```
+
+
+[19:06:11.0795] <Ashley Claymore>
+`shared struct com.bloomberg.ashleys.Node {}`
+
+[19:11:33.0031] <Ashley Claymore>
+> <@shuyuguo:matrix.org> shared structs don't have user code constructors
+> 
+> (i now also see that the README.md is incorrect)
+
+It could be nice if fields could still have initialisers of literal values `field = 0`
+
+[19:23:14.0470] <shu>
+Ashley Claymore: noted, good idea
+
+[19:23:50.0523] <shu>
+> <@rbuckton:matrix.org> A quick point regarding syntax, just as I mentioned before about wanting to avoid excess ceremony, I'm hoping we can go with something far shorter than `shared struct class Foo {}`. I imagine `struct Foo {}` and `shared struct Foo {}` would be sufficient to avoid ambiguity without needing the `class` keyword, and their behavior is different enough to justify the different syntax.
+
+also agreed, consider the syntax a strawperson. i don't love the keyword soup
+
+[19:24:53.0297] <shu>
+> <@rbuckton:matrix.org> I'm also still not to keen on using class name as a global registry key, its far too easy to have collisions (so many things would be called `Node`, for example). I'd prefer the keying mechanism be divorced from the name of the struct somehow. In earlier discussions I'd recommended using UUIDs and decorators, i.e.:
+> 
+> ```
+> @RegisteredStruct("92057993-84c2-4015-9a4e-f1d3810db4a2") shared struct Foo { }
+> ```
+
+i considered that, or a programmatic API to register shared structs. the issue is i'd prefer the registration to happen _during_ evaluation instead of _after_ for implementation complexity reasons. if it happens _after_, like with a @Register or a programmatic API, that means swapping out the guts of the constructor function, which i'd like to avoid
+
+[19:25:13.0017] <shu>
+that's not a dealbreaker, just a preference
+
+[19:26:13.0817] <shu>
+but do the broad strokes look good to you?
+
+[19:37:59.0239] <shu>
+i... suppose the @RegisteredStruct decorator _could_ be implemented as applying during evaluation if it's some special built-in decorator that's not implementable by user code
+
+[19:38:24.0004] <shu>
+nothing in the decorator proposal precludes built-in native code decorators AFAIK
+
+[19:49:53.0766] <rbuckton>
+I've long believed there's room for built-in decorators with privileged capabilities that a runtime might be able to optimize ahead of time. For example, built in `@enumerable(true|false)`, `@writable(true|false)`, `@configurable(true|false)` decorators that can affect property descriptors since the Stage 3 proposal no longer has this capability.
+
+[19:50:43.0182] <rbuckton>
+Assuming they are trivially analyzable. 
+
+[19:53:35.0070] <rbuckton>
+But an `@RegisterStruct` decorator has the opportunity to perform constructor replacement even without native code support, but I suppose in this case you're talking about it somehow patching the constructor to produce a `this` consistent with the registry during construction.
+
+[20:29:08.0805] <Mathieu Hofman>
+> When evaluated, if the class name does not exist in the registry, insert a new entry whose key is the class name, and whose value is a description of the layout (i.e. order and names of instance fields, and whether the prototype is agent-local).
+> When evaluated, if the class name already exists in the registry, check if the layout exactly matches the current evaluation's layout. If not, throw.
+
+1) that doesn't explain what happens if the name exists and the layout matches (I guess the default is do nothing, aka first one wins)
+2) as I explained, any kind of simple agent wide registry keyed on string is a no go as it's effectively global mutable state that can be observed by the program (e.g. try to evaluate a shared struct definition with a new shape, see if it throws or not)
+
+[20:31:15.0713] <Mathieu Hofman>
+Ok I hadn't seen the registry freezing thing. It feels weird to not be able to create new registered shared structs, as that would completely nerf the point of the registry
+
+[20:32:15.0518] <Mathieu Hofman>
+That also makes a program potentially become invalid after freezing of the registry
+
+[20:39:21.0002] <Mathieu Hofman>
+Also because the registry is agent local, what would be the behavior in case of the same declaration in 2 realms, especially if one of those is a ShadowRealm? That "surprise" is more than that, it's a blatant violation of the callable boundary.
+
+[20:43:20.0726] <Mathieu Hofman>
+Regarding the agent-local fields, it feels weird to have `static nonshared prototype` automatically be created as an object instead of `undefined` like what a field would be. It also entices authors to go back to the pre-es5 way of populating the prototype, with assignment, which is a typical trigger of the override mistake. Which raised the question, what is the __proto__ of that automatically created prototype object? If non-null, it's definitely going to cause override mistake issues in frozen intrinsics environments.
+
+[20:43:32.0576] <Mathieu Hofman>
+ * Regarding the agent-local fields, it feels weird to have `static nonshared prototype` automatically be created as an object instead of `undefined` like what a field would be. It also entices authors to go back to the pre-es5 way of populating the prototype, with assignment, which is a typical trigger of the override mistake. Which raised the question, what is the _proto_ of that automatically created prototype object? If non-null, it's definitely going to cause override mistake issues in frozen intrinsics environments.
+
+[20:43:46.0157] <Mathieu Hofman>
+ * Regarding the agent-local fields, it feels weird to have `static nonshared prototype` automatically be created as an object instead of `undefined` like what a field would be. It also entices authors to go back to the pre-es5 way of populating the prototype, with assignment, which is a typical trigger of the override mistake. Which raised the question, what is the __ proto __ of that automatically created prototype object? If non-null, it's definitely going to cause override mistake issues in frozen intrinsics environments.
+
+[21:08:09.0242] <shu>
+> <@mhofman:matrix.org> That also makes a program potentially become invalid after freezing of the registry
+
+the pointer of the registry is to be a communication channel. if you want to plug that channel, you'll have to coordinate shared struct types yourself without the registry, so yes, it does defeat the point of the registry
+
+[21:08:26.0139] <shu>
+just like deleting capabilities defeat the point of those capabilities. isn't that the point of deniability?
+
+[21:10:27.0928] <shu>
+> <@mhofman:matrix.org> Also because the registry is agent local, what would be the behavior in case of the same declaration in 2 realms, especially if one of those is a ShadowRealm? That "surprise" is more than that, it's a blatant violation of the callable boundary.
+
+yes, this would need to be censored in the callable boundary if it's agent-local instead of realm-local
+
+[21:10:56.0724] <shu>
+> <@mhofman:matrix.org> Regarding the agent-local fields, it feels weird to have `static nonshared prototype` automatically be created as an object instead of `undefined` like what a field would be. It also entices authors to go back to the pre-es5 way of populating the prototype, with assignment, which is a typical trigger of the override mistake. Which raised the question, what is the __ proto __ of that automatically created prototype object? If non-null, it's definitely going to cause override mistake issues in frozen intrinsics environments.
+
+i'm fine with undefined, and manually assigning it
+
+[21:11:00.0034] <Mathieu Hofman>
+Except here that registry is syntactic.
+
+[21:11:34.0020] <shu>
+> <@mhofman:matrix.org> Except here that registry is syntactic.
+
+see ron's built-in decorator idea. i'm not wedding to syntax or even a programmatic API, though i have implementation reasons to prefer not programmatic, it is not instrumental
+
+[21:11:40.0310] <shu>
+> <@mhofman:matrix.org> Except here that registry is syntactic.
+
+ * see ron's built-in decorator idea. i'm not wedded to syntax or even a programmatic API, though i have implementation reasons to prefer not programmatic, it is not instrumental
+
+[21:11:56.0059] <Mathieu Hofman>
+Decorators are still syntax 
+
+[21:12:07.0800] <shu>
+`delete O.p` is still syntax...
+
+[21:12:14.0626] <shu>
+what line are you drawing?
+
+[21:13:16.0475] <Mathieu Hofman>
+But even if it was programmatic, that makes a program potentially become invalid. There is almost no existing capability exposing state built into the language today
+
+[21:13:45.0388] <shu>
+there is no precedent for this, agreed
+
+[21:13:49.0274] <shu>
+it is a new capability
+
+[21:13:53.0598] <Mathieu Hofman>
+I'm drawing the line at no built-in exposing some global state
+
+[21:14:09.0978] <Mathieu Hofman>
+* I'm drawing the line at no new built-in exposing some global state
+
+[21:14:33.0959] <shu>
+this global state can be disabled for programs that don't use it
+
+[21:14:50.0531] <shu>
+if your program uses it and depends on the communication channel to get around a pretty bad DX issue, then... you opt into it
+
+[21:14:53.0804] <Mathieu Hofman>
+Or at least, it has to be entirely deniable, not just partially.
+
+[21:15:16.0643] <shu>
+in what sense is freezing the registry at program start not entirely deniable?
+
+[21:15:40.0994] <shu>
+in that case, you can't ever use registered shared structs, you must pass them around
+
+[21:16:16.0419] <Mathieu Hofman>
+Because creating a shared struct that would use that registry is disconnected, and is undeniable syntax.
+
+[21:16:37.0315] <shu>
+okay, then let's say the API is programmatic
+
+[21:16:47.0525] <Mathieu Hofman>
+It changes the behavior of other code
+
+[21:16:50.0016] <shu>
+and you can also delete the function that does the registering
+
+[21:17:03.0051] <shu>
+so deleting any existing function-based capability can change behavior of other code
+
+[21:17:06.0841] <shu>
+i don't see some bright line here
+
+[21:20:38.0459] <shu>
+even simpler, let's say the registry API is just its own global, which is configurable. registration is completely deniable
+
+[21:21:07.0217] <shu>
+for people who prefer a decorator-based approach, easy enough to write a class decorator that calls that API
+
+[21:22:08.0790] <Mathieu Hofman>
+It's  late for me to articulate it, but I feel extremely uncomfortable with such a global state being added to the language, and the mitigation to deny that feature. Maybe if it was normative optional it'd be acceptable?
+
+[21:22:29.0974] <shu>
+sure, if normative optional makes you more comfortable
+
+[21:22:37.0282] <shu>
+we've done similarly for WeakRefs and finalizers
+
+[21:22:53.0663] <shu>
+yes let's pick this up tomorrow in the working session call
+
+[08:51:24.0192] <rbuckton>
+shu: I have some thoughts on the `struct` syntax, which I've posted here: https://gist.github.com/rbuckton/e1e8947da16f936edec1d269f00e2c53
+
+[08:52:38.0548] <rbuckton>
+Given that `static shared prototype;` looks too much like a field definition, I opted to use `with shared prototype;` instead.
+
+[08:58:34.0095] <rbuckton>
+Also, given this back and forth on the registry, I still think the correlation based registry is still worth considering. Its more akin to `Symbol.for()`, since you cannot observe whether something is registered and it doesn't require API deniability.
+
+[08:59:50.0174] <shu>
+let's discuss the registry in depth at the working session call today
+
+[09:00:00.0884] <shu>
+which, PSA, is **pushed back 30 minutes** 
+
+[09:00:10.0141] <shu>
+i had a last minute conflict, packed meeting today, sorry
+
+[09:00:54.0211] <rbuckton>
+ah, that's a problem. I have a hard stop at 2PM EDT/11AM PDT as I am hosting a meeting at that time.
+
+[09:01:05.0394] <shu>
+> <@rbuckton:matrix.org> Also, given this back and forth on the registry, I still think the correlation based registry is still worth considering. Its more akin to `Symbol.for()`, since you cannot observe whether something is registered and it doesn't require API deniability.
+
+i was thinking about a programmatic registry as well that you'd need to first postMessage back and forth
+
+[09:01:19.0478] <shu>
+> <@rbuckton:matrix.org> ah, that's a problem. I have a hard stop at 2PM EDT/11AM PDT as I am hosting a meeting at that time.
+
+then let's try to get as much as we can in 30 minutes, i suppose
+
+[09:02:15.0862] <rbuckton>
+If I have to asynchronously wait for an `onmessage` in the main thread before I can start sending data to the worker, that won't work for my use cases.
+
+[09:03:24.0080] <rbuckton>
+If the Worker has to do all the work before it *sees* the first message I post, that's fine.
+
+[09:30:11.0135] <rbuckton>
+Hmm. SharedArray only allows a max of 16382 (`(2**14)-2`) elements? 
+
+[11:31:21.0714] <lpardosixtosms>
+> <@rbuckton:matrix.org> Hmm. SharedArray only allows a max of 16382 (`(2**14)-2`) elements?
+
+Back when I implemented it there was a limit on the size of the objects that could be allocated in the engine's shared heap. I think that it is not the case anymore.
+
+[13:19:58.0662] <shu>
+rbuckton: thinking about your static declarative syntax idea
+
+[13:21:55.0682] <shu>
+what you can have is, like a layout declaration that is completely static and deduplicated, decoupled from shared struct declarations. shared struct declarations would then take a layout, and produce constructor functions in the executing Realm per-evaluation, much like `class`es, but since they are given a layout, they can be hooked up under the hood
+
+[13:23:56.0613] <rbuckton>
+can you provide an example of what this might look like, roughly? 
+
+[13:25:05.0168] <shu>
+strawperson syntax:
+```
+// Special new declarative syntax
+// Can't anything that actually evaluates, so no method decls, no static initializers, etc
+layout SharedThingLayout {
+  x; y;
+  with nonshared prototype;
+}
+
+// Declaration that's actually evaluated and produces a constructor function
+shared struct SharedThing layout SharedThingLayout {
+  // allowed because SharedThingLayout has thread-local prototype, so there's a place to install m()
+  m() { ... }
+  // allowed because x exists in the layout
+  x = 42;
+  // disallowed because z doesn't exist in the layout
+  z = "foo";
+}
+```
+
+[13:25:36.0553] <shu>
+there's no communication channel there AFAIK
+
+[13:25:55.0706] <shu>
+layouts will be transparently keyed by, like, source location
+
+[13:25:58.0934] <shu>
+or Parse Node in specese
+
+[13:26:13.0776] <shu>
+actually maybe Parse Node isn't sufficient, we might need a new concept
+
+[13:26:24.0030] <shu>
+since you reparse modules multiple times
+
+[13:26:35.0518] <shu>
+but that seems like a mechanical problem to describe...
+
+[13:26:43.0895] <shu>
+maybe a host hook
+
+[13:26:44.0468] <rbuckton>
+What happens if I do this:
+```
+shared struct SharedThing1 layout SharedThingLayout {...}
+shared struct SharedThing2 layout SharedThingLayout {...}
+```
+
+
+[13:27:30.0690] <shu>
+easier for me to describe concretely in V8 implementation terms: you get 2 different constructor functions in your current Realm, both backed by the same `map`
+
+[13:27:39.0838] <rbuckton>
+Transparently keying by source location is fine as a fallback, but still doesn't work with bundlers.
+
+[13:28:01.0983] <shu>
+why not, they duplicate?
+
+[13:28:14.0572] <shu>
+why would a bundler make multiple copies of the same code
+
+[13:28:32.0550] <rbuckton>
+I fail to see how that resolves the correlation issue? 
+
+[13:28:56.0970] <shu>
+think of `map` as the type
+
+[13:29:08.0395] <rbuckton>
+But how do I say that a `SharedThingLayout` in two threads are the same thing?
+
+[13:29:26.0191] <shu>
+that resolves the correlation issue because `SharedThing1` instances have the same type in the engine as `SharedThing2` instances
+
+[13:29:51.0485] <rbuckton>
+No, I think we're talking past each other
+
+[13:30:00.0568] <shu>
+oh, because i assume what you're doing is `import { SharedThing } from 'structs.js'`, and 'structs.js' has the `layout` declaration
+
+[13:30:09.0114] <shu>
+so when multiple threads import it, they get the same deduplicated layout
+
+[13:30:18.0262] <rbuckton>
+forget thing1 and thing2. I'm talking about main thread `SharedThingLayout` and child thread `SharedThingLayout`
+
+[13:30:29.0813] <rbuckton>
+That's the problem.
+
+[13:30:32.0721] <shu>
+i understand, i'm saying there's one layout
+
+[13:30:40.0727] <shu>
+that layout is keyed off source location, in `structs.js:NNN`
+
+[13:30:40.0801] <rbuckton>
+> <@shuyuguo:matrix.org> oh, because i assume what you're doing is `import { SharedThing } from 'structs.js'`, and 'structs.js' has the `layout` declaration
+
+that's the problem
+
+[13:30:50.0549] <shu>
+why is that a problem?
+
+[13:31:32.0710] <rbuckton>
+Main thread loads `main.js`, which is a bundle that includes `layout SharedThing`. Child thread loads `worker.js` which is a bundle that includes `layout SharedThing` in a different path and source location.
+
+[13:31:56.0126] <shu>
+so that comes back to my original question: do bundlers duplicate?
+
+[13:32:00.0901] <shu>
+you're telling me bundlers duplicate?
+
+[13:32:04.0519] <rbuckton>
+What deduplication?
+
+[13:32:13.0567] <shu>
+no _de_duplicate, _duplicate_
+
+[13:32:21.0073] <rbuckton>
+yes.
+
+[13:32:32.0264] <shu>
+ * not \_de\_duplicate, _duplicate_
+
+[13:32:47.0053] <shu>
+main.js and worker.js in your example includes two, different inline copies of the `layout` source text
+
+[13:32:48.0395] <shu>
+is that right?
+
+[13:33:04.0646] <rbuckton>
+It depends on the bundler. Some bundlers and bundle configurations will just pack everything into a single file per entrypoint. Some bundlers/configurations will use shared entry points.
+
+[13:33:07.0311] <shu>
+like... just don't do that?
+
+[13:33:16.0041] <shu>
+bundlers can split out a 'layouts.js'
+
+[13:33:21.0835] <shu>
+because layouts will be specced to have this behavior
+
+[13:33:28.0787] <shu>
+if you duplicate it, that's not a semantics-preserving transformation
+
+[13:33:29.0919] <shu>
+so don't do that
+
+[13:34:40.0509] <rbuckton>
+Except for tree shaking
+
+[13:34:55.0404] <shu>
+tree shaking will be nonobvious in light of multithreading
+
+[13:35:30.0854] <shu>
+i do not see this as a problem that needs to be designed around
+
+[13:35:56.0666] <rbuckton>
+Tree shaking would mean the bundler can't elide any `layout` it sees, or any other code in the same file, lest the source positions change
+
+[13:36:32.0304] <shu>
+we're fundamentally talking about sharing across all worker threads
+
+[13:36:47.0434] <shu>
+_sharing_ layouts requires a whole-world assumption
+
+[13:37:10.0908] <shu>
+you can't tree shake individual worker threads' code for shared layouts. the bundler instead needs to generate the set of shared layouts
+
+[13:37:13.0579] <rbuckton>
+You might as well define your layouts in a non-JS file, since you can't really put anything else with them for fear it can't be tree shaken to reduce bundle size.
+
+[13:37:15.0866] <shu>
+because the point is that they are ... shared
+
+[13:37:39.0495] <shu>
+i seriously doubt people want to express this out-of-band
+
+[13:38:19.0380] <rbuckton>
+you also have evaluation order issues. Unless we don't allow computed property names in layouts (i.e., no built-in symbols).
+
+[13:38:39.0073] <shu>
+there are no evaluation order issues because these are not evaluated, these are declarative
+
+[13:38:46.0308] <shu>
+so you are absolutely right, there are no computed property names
+
+[13:39:52.0062] <rbuckton>
+Do you need to define all instance fields in a layout?
+
+[13:40:02.0968] <shu>
+vs...?
+
+[13:40:08.0940] <rbuckton>
+If so, then you wouldn't be able to define symbol-named fields
+
+[13:40:19.0232] <shu>
+how do you not define all instance fields in a layout? these things are constructed sealed
+
+[13:40:49.0454] <rbuckton>
+I'm saying that if you must define them all ahead of time, and you can't use computed property names, you can't use symbols.
+
+[13:40:54.0761] <rbuckton>
+even for nonshared fields.
+
+[13:41:11.0447] <shu>
+and i'm saying that sounds good to me
+
+[13:41:22.0670] <shu>
+nonshared fields refer to field storage, not field names
+
+[13:41:26.0382] <shu>
+the field names are still shared
+
+[13:41:30.0566] <shu>
+strings are obviously shared
+
+[13:41:32.0687] <rbuckton>
+I disagree.
+
+[13:41:34.0916] <shu>
+i don't think symbols are so easy to use shared
+
+[13:42:25.0360] <rbuckton>
+Maybe not, but a lot of projects use user-defined symbols on classes currently, including NodeJS. That becomes another stumbling block to migrating to structs.
+
+[13:42:47.0105] <shu>
+how do you pass those user symbols around?
+
+[13:42:51.0662] <shu>
+since symbols have identity
+
+[13:43:00.0967] <shu>
+ * how do you pass those user symbols around among threads?
+
+[13:43:33.0437] <rbuckton>
+At the very least, you might be able to require they use symbols from `Symbol.for()` somehow so that they have the same identity, or you have to somehow correlate those as well somehow.
+
+[13:43:50.0782] <shu>
+there is literally 0 reason to use Symbol.for over strings
+
+[13:43:56.0005] <shu>
+they are just worse strings
+
+[13:45:31.0411] <rbuckton>
+Its very frustrating that threads can't just share the same code, like almost any other language with multithreading.
+
+[13:45:47.0319] <shu>
+the original sin is we made code have identity and first-class values
+
+[13:45:51.0344] <shu>
+hard to walk that back
+
+[13:46:09.0182] <shu>
+it's also very frustrating classes have identity and are first-class values
+
+[13:46:32.0966] <shu>
+i'm happy to try to carve out a space where some things don't have identity, like layouts
+
+[13:46:37.0699] <Mathieu Hofman>
+> <@rbuckton:matrix.org> Its very frustrating that threads can't just share the same code, like almost any other language with multithreading.
+
+Moddable does it with frozen realms
+
+[13:47:00.0794] <rbuckton>
+I don't think that's so much a problem. It's a problem for sharing, sure, but would that apply to a threading model where you *don't* have to spin up a whole new copy of your application code.
+
+[13:47:14.0193] <rbuckton>
+ * I don't think that's [functions having identity] so much a problem. It's a problem for sharing, sure, but would that apply to a threading model where you _don't_ have to spin up a whole new copy of your application code.
+
+[13:47:23.0286] <Mathieu Hofman>
+https://github.com/Moddable-OpenSource/moddable/blob/public/documentation/xs/XS%20Marshalling.md#full-marshalling
+
+[13:47:23.0632] <shu>
+i think it is very much a problem
+
+[13:47:34.0512] <shu>
+everything having identity and being first-class values means by default they are not threadsafe
+
+[13:48:18.0431] <rbuckton>
+Sure, its not threadsafe. How is that bad?
+
+[13:48:55.0439] <shu>
+so... you can't just spin up a new thread without also loading a whole new copy of the world?
+
+[13:49:20.0161] <rbuckton>
+Why do you need a whole new copy of the world?
+
+[13:49:51.0894] <shu>
+i don't know what we're talkign about anymore, i was responding to your "it's frustrating" comment with my own reasons for why i find it frustrating
+
+[13:49:59.0807] <shu>
+we can drop this subthread, not a productive one
+
+[13:51:09.0836] <shu>
+back to the declarative layout idea at hand, yes, symbol-keyed names being precluded is a DX con
+
+[13:52:35.0240] <rbuckton>
+My point is more that, if we actually baked multithreading into the language, such that you don't have to spin up a copy of your application and could just use existing references, then we wouldn't have the correlation issue. We'd have other issues instead, but they are the pretty much the same issues as any other language with multithreading.
+
+[13:53:29.0734] <Mathieu Hofman>
+They are definitely the issues I don't want to see in JS
+
+[13:54:02.0698] <shu>
+> <@rbuckton:matrix.org> My point is more that, if we actually baked multithreading into the language, such that you don't have to spin up a copy of your application and could just use existing references, then we wouldn't have the correlation issue. We'd have other issues instead, but they are the pretty much the same issues as any other language with multithreading.
+
+actually agree, but that requires like a parallel SharedFunction prototype chain or whatever, and that bifurcates the world in a weird way that was a non-starter last time i tried
+
+[13:54:14.0023] <Mathieu Hofman>
+I've spent some time in golang lately, and for a language that's supposed to make threads easier to deal with, I'm sorry but it was not
+
+[13:54:34.0981] <rbuckton>
+but as you say, back to the layout idea. Would this be so bad, though:
+
+```
+shared struct S {
+  with identity "46e6d6a9-7e62-46d9-9dfc-6288740eed8c"; // <- correlation at declaration level
+  x;
+  y;
+}
+```
+
+[13:54:40.0676] <shu>
+anyway, i can live with something like:
+
+- we have `layout`s, which are declarative and static, and are pretty restrictive. but they are deduplicated up front and the correlation thing "just works". bundlers will need to learn they can't be tree-shaken as normal
+- shared struct declarations don't _have_ to use a declared layout. if they don't, then they can have computed property names. you can have a correlation thing built in userland if you go that route
+
+[13:55:17.0769] <shu>
+> <@rbuckton:matrix.org> but as you say, back to the layout idea. Would this be so bad, though:
+> 
+> ```
+> shared struct S {
+>   with identity "46e6d6a9-7e62-46d9-9dfc-6288740eed8c"; // <- correlation at declaration level
+>   x;
+>   y;
+> }
+> ```
+
+yeah i can live with it, so long as source location fallback exists
+
+[13:55:35.0813] <rbuckton>
+Sure. If that's the case, do we need the `layout` thing?
+
+[13:55:52.0901] <shu>
+why yes, because the 85% use case won't need computed property names
+
+[13:55:59.0907] <rbuckton>
+I think it adds far too much complexity.
+
+[13:56:10.0399] <shu>
+and the correlation API doesn't??
+
+[13:56:12.0597] <shu>
+i am so confused
+
+[13:56:25.0119] <shu>
+this seems vastly simpler to use as a developer than manually coordinating
+
+[13:57:29.0466] <rbuckton>
+I'm talking about the idea I suggested in the meeting:
+- no correlation api
+- no struct reevaluation (always the same instance in a given thread)
+- declarations correlated by either explicit token (i.e., `with identity "foo"`), or by source location
+
+[13:57:50.0964] <Mathieu Hofman>
+if the layouts are shareable, is it unacceptable from a DX point of view to have factories for the shared struct, so that you create the shared struct after having received the layout ?
+
+[13:58:24.0578] <shu>
+rbuckton: i'm hung up on the second bullet-point without the introduction of a static, declarative concept like `layout`
+
+[13:58:30.0303] <shu>
+i don't know what "no struct reevaluation" means
+
+[13:58:35.0668] <rbuckton>
+the struct *is* the layout
+
+[13:58:43.0606] <shu>
+but the struct isn't a static thing
+
+[13:58:46.0720] <shu>
+it can include static initializers, etc
+
+[13:58:56.0808] <shu>
+and computed property names, as we've been debating
+
+[13:59:30.0008] <rbuckton>
+My suggestion was that we *make* struct a static thing, per-thread at least.
+
+[13:59:39.0623] <shu>
+it's like a `static` variable in C/C++ or something? the first evaluation caches it to something, subsequent uses never evaluate it again? that's... really weird, given closures?
+
+[14:00:06.0832] <rbuckton>
+Yes, something like that. Yes its weird.
+
+[14:00:20.0489] <shu>
+> <@mhofman:matrix.org> if the layouts are shareable, is it unacceptable from a DX point of view to have factories for the shared struct, so that you create the shared struct after having received the layout ?
+
+no qualms from me?
+
+[14:01:06.0258] <shu>
+rbuckton: okay i guess it's possible, i just find those semantics really weird and less sensible than having a separate declarative, static concept
+
+[14:01:11.0911] <shu>
+what you're saying isn't static, it's cache-on-first-eval
+
+[14:01:20.0879] <shu>
+rather, singleton
+
+[14:01:34.0332] <shu>
+i'd prefer static semantics, you're saying singleton suffices
+
+[14:02:14.0608] <shu>
+why is singleton semantics needed if you deduplicate with an identity?
+
+[14:02:24.0428] <rbuckton>
+> <@shuyuguo:matrix.org> no qualms from me?
+
+I don't think this works. that's back to the thing1/thing2 issue. If I can write:
+
+```
+layout L { ... }
+shared struct S1 layout L { ... }
+shared struct S2 layout L { ... }
+```
+then I have _two_ or more potential prototypes to contend with in a given thread.
+
+[14:02:43.0144] <shu>
+no you have _one_ prototype
+
+[14:02:55.0828] <shu>
+L says "I have a per-thread [[Prototype]] slot"
+
+[14:03:00.0342] <shu>
+S1 and S2 refer to the same slot 
+
+[14:03:18.0233] <rbuckton>
+But S1 and S2 could define conflicting methods.
+
+[14:03:29.0214] <rbuckton>
+ * But S1 and S2 could define conflicting methods with the same names.
+
+[14:03:35.0684] <shu>
+that sounds like they have different layouts!
+
+[14:03:53.0902] <rbuckton>
+No, that sounds like a very easy to run into user error.
+
+[14:04:15.0426] <shu>
+i really do not understand what you're getting at
+
+[14:04:28.0316] <shu>
+maybe `layout` was a poor choice of words here
+
+[14:04:47.0945] <shu>
+let's just call it `nominal_shape` to be unambiguous
+
+[14:04:58.0224] <rbuckton>
+I'm having a hard time understanding what it's intending to solve.
+
+[14:05:09.0184] <shu>
+the correlation problem!
+
+[14:05:34.0582] <rbuckton>
+It sounds like it solves the "v8 internal map" problem, not the correlation problem?
+
+[14:06:18.0603] <shu>
+`S1 layout L` and `S2 layout L` is intended to behave like, _statically_, `Registry.register(L, S1)` and `Registry.register(L, S2)`, where `L` is the registry key
+
+[14:06:28.0541] <rbuckton>
+Ok.
+
+[14:06:35.0809] <shu>
+> <@rbuckton:matrix.org> It sounds like it solves the "v8 internal map" problem, not the correlation problem?
+
+those are the same problem to me
+
+[14:06:45.0610] <rbuckton>
+So I do both of those in the same thread, what happens?
+
+[14:08:42.0859] <shu>
+assuming `L` has a per-thread prototype declared, you have:
+
+- `S1` is its own constructor function
+- `S2` is its own constructor function
+- instances of S1 are indistinguishable from instances of S2
+- `S1.prototype` is the _same slot_ as `S2.prototype`, so `S1.prototype = foo` is also reflected as `S2.prototype === foo`
+
+[14:08:58.0376] <shu>
+the same semantics as if `S1` and `S2` were in different threads
+
+[14:09:36.0317] <rbuckton>
+What belongs to a `shared struct S1 layout L {}` then? the implementation?
+
+[14:09:56.0352] <shu>
+could you clarify what you mean by "belong"?
+
+[14:10:25.0363] <rbuckton>
+What is the point of `shared struct` in this model? What does it bring to the table aside from a constructor function?
+
+[14:11:09.0532] <rbuckton>
+In your first example, you showed initializers and methods.
+
+[14:11:11.0527] <shu>
+that's one part: `shared struct` declarations have evaluation semantics, and actually creates the constructor function, because those things are unshareable functions
+
+[14:11:20.0472] <rbuckton>
+Ok.
+
+[14:11:45.0255] <shu>
+the other part is, because it has evaluation semantics, it _could_ have static initializers and method declarations that install those things onto the per-thread prototype
+
+[14:12:05.0186] <rbuckton>
+Now I do this:
+
+```
+shared struct S1 layout L {
+  foo() { print("foo"); }
+}
+shared struct S2 layout L {
+  foo() { print("bar"); }
+}
+new S1().foo();
+```
+What should I expect?
+
+[14:12:25.0162] <shu>
+if that's the textual order, "bar", as S2's evaluation will overwrite S1's
+
+[14:12:30.0406] <rbuckton>
+Does S2 overwrite `foo`?
+
+[14:12:53.0795] <shu>
+backing up, i think the missing context is i consider `S1 layout L` and `S2 layout L` to be code that you shuoldn't write
+
+[14:13:06.0836] <shu>
+the point of `layout` isn't to refactor common layouts (really poor choice of words)
+
+[14:13:11.0949] <rbuckton>
+Yes, you _shouldn't_ write it, but you _can_ write it.
+
+[14:13:13.0320] <shu>
+it's to separate static parts from runtime evaluation parts
+
+[14:13:23.0873] <shu>
+yes, and i'm explaining that it'll just have overwriting semantics
+
+[14:13:30.0350] <rbuckton>
+And if `layout` and `shared struct` must be tied together 1:1, there's no reason they should be separate.
+
+[14:13:51.0940] <shu>
+okay, i see our tastes differ substantially here
+
+[14:14:35.0951] <shu>
+your view seems to be, it is more important to syntactically bundle them, even if it means the semantics we get are singleton semantics instead of more static-y semantics
+
+[14:14:45.0035] <shu>
+my view is, it is less important to syntactically bundle them than to get static-y sematnics
+
+[14:14:50.0221] <shu>
+ * my view is, it is less important to syntactically bundle them than to get static-y semantics
+
+[14:15:24.0777] <shu>
+why do it static-like if we don't go all the way?
+
+[14:15:53.0060] <rbuckton>
+I'm saying that, whatever restrictions we would have on the declaration of `layout L {}`, we could just have on `shared struct S {}` and not need the extra confusing separation of syntax.
+
+[14:15:59.0064] <shu>
+oh
+
+[14:16:59.0384] <shu>
+```
+shared struct {
+  // the following 3 lines have static semantics
+  with nonshared prototype;
+  x;
+  y;
+  // this has evaluation semantics
+  m() { }
+}
+```
+
+?
+
+[14:17:22.0523] <rbuckton>
+Maybe that means `shared struct` isn't bundleable, and you need to stripe your bundle to ensure shared structs are always imported from the same place.
+
+[14:17:36.0986] <shu>
+that still requires some things you didn't like, like restriction around computed property names
+
+[14:17:48.0064] <rbuckton>
+Yes, that's precisely the syntax I proposed in https://gist.github.com/rbuckton/e1e8947da16f936edec1d269f00e2c53
+
+[14:19:03.0150] <rbuckton>
+Why do computed property names have to be restricted? I'd like to be able to use `[Symbol.iterator]`, among others, or I can't migrate to shared structs for some objects. And arguably, you'd want to be able to define `[Symbol.dispose]` as well.
+
+[14:19:38.0354] <rbuckton>
+Or `[util.inspect.custom]`
+
+[14:19:42.0649] <shu>
+if the layout portion of a `shared struct` declaration have static semantics instead of singleton semantics, how do you allow symbols?
+
+[14:19:57.0772] <shu>
+symbols do not exist at static time
+
+[14:20:21.0643] <shu>
+i have to go to a meeting but something is still very muddled for me here, i don't understand the semantics you have in mind
+
+[14:20:30.0230] <shu>
+i don't personally design things syntax first
+
+[14:20:50.0859] <rbuckton>
+IMO, if this solution doesn't allow for even the use of built-in symbols, it's not viable.
+
+[14:21:21.0274] <rbuckton>
+This isn't even all about syntax, its about what capabilities you are exposing or restricting. I would have the same concern if this was all API based with the same restrictions.
+
+[14:21:31.0351] <shu>
+okay, then i think the only viable thing we can both live with is singleton semantics, or a programmatic registry
+
+[14:21:48.0609] <shu>
+a static-first approach must have the computed property name restriction
+
+[14:22:26.0812] <rbuckton>
+If that's the case, so be it. I don't think I could support a mechanism that doesn't allow them.
+
+[14:22:45.0380] <shu>
+yeah that's fine
+
+[14:23:35.0259] <shu>
+i think we can make singleton semantics much less confusing by adopting the other restriction you raised during the call, like only allowing these at top-level
+
+[14:24:41.0878] <shu>
+can you elaborate on what you had in mind for the singleton semantics? is it keyed off source location? is it only singleton semantics if a `with identity 'UUID'` modifier is present?
+
+[16:02:02.0550] <shu>
+rbuckton: will you be in tokyo btw?
+
+[16:24:32.0404] <shu>
+wait a second, isn't there a pretty simple solution to the communication channel problem? if the key to the shared global registry is the _combination_ of source location + `with identity 'UUID'`
+
+[16:24:52.0426] <shu>
+if it's the combination, you can't try to evaluate another definition to test for a collision
+
+[16:25:01.0902] <shu>
+it's specced to be a different key and will never collide
+
+[16:25:11.0885] <shu>
+Mathieu Hofman: am i missing something? ^
+
+
+2023-09-22
+[17:23:47.0938] <rbuckton>
+> <@shuyuguo:matrix.org> rbuckton: will you be in tokyo btw?
+
+No, I will be attending remotely
+
+[17:24:43.0496] <rbuckton>
+> <@shuyuguo:matrix.org> wait a second, isn't there a pretty simple solution to the communication channel problem? if the key to the shared global registry is the _combination_ of source location + `with identity 'UUID'`
+
+If you already have the source location, why would you need the UUID?
+
+[17:25:17.0179] <rbuckton>
+Or are you just talking about the path to the file, not position within the source text.
+
+[17:25:19.0210] <rbuckton>
+ * Or are you just talking about the path to the file, not position within the source text?
+
+[17:29:16.0762] <rbuckton>
+> <@shuyuguo:matrix.org> can you elaborate on what you had in mind for the singleton semantics? is it keyed off source location? is it only singleton semantics if a `with identity 'UUID'` modifier is present?
+
+I have to think more on that. When I raised the suggestion it was to key purely off of source location (path + line/character). This makes them non-bundleable however. the point of `with identity` was to allow a bundler with whole program knowledge and a list of entrypoints to be able to perform tree shaking, concatenation, module hoisting, and all of the other various tricks they do, and have two optimally minimized bundle files be able to identify the same shared struct using something _other_ than source location. The point of the user-defined identity is to override that step.
+
+[17:29:32.0516] <rbuckton>
+> <@shuyuguo:matrix.org> can you elaborate on what you had in mind for the singleton semantics? is it keyed off source location? is it only singleton semantics if a `with identity 'UUID'` modifier is present?
+
+ * I have to think more on that. When I raised the suggestion it was to key purely off of source location (path + line/character). This makes them non-bundleable however. the point of `with identity` was to allow a bundler with whole program knowledge and a list of entrypoints to be able to perform tree shaking, concatenation, module hoisting, and all of the other various tricks they do, and have two optimally minimized bundle files be able to identify the same shared struct using something _other_ than source location.
+
+[17:29:41.0501] <rbuckton>
+ * I have to think more on that. When I raised the suggestion it was to key purely off of source location (path + line/character). This makes them non-bundleable however. The point of `with identity` was to allow a bundler with whole program knowledge and a list of entrypoints to be able to perform tree shaking, concatenation, module hoisting, and all of the other various tricks they do, and have two optimally minimized bundle files be able to identify the same shared struct using something _other_ than source location.
+
+[17:34:49.0762] <shu>
+> <@rbuckton:matrix.org> Or are you just talking about the path to the file, not position within the source text?
+
+yeah i guess that's right. so... why is it a communication channel at all if we have a global registry where the key is source location? you can't observe it then
+
+[17:35:20.0013] <shu>
+like just change the semantics of the `registered` modifier or `with registered` or whatever we choose to key off of location, add the caveat about bundling, done
+
+[17:36:46.0358] <shu>
+seems totally reasonable to me to have the bundling guidance to be "source location is meaningful for these things, like template strings"
+
+[17:37:53.0300] <rbuckton>
+If the key is the source location and the module itself cannot be reevaluated (NodeJS does some shenanigans here in CJS), then it would be unforgeable. `with identity` is difficult to forge if you don't allow it to be used in `eval`, since it has to be encoded as source text.
+
+[17:38:44.0563] <rbuckton>
+> <@shuyuguo:matrix.org> like just change the semantics of the `registered` modifier or `with registered` or whatever we choose to key off of location, add the caveat about bundling, done
+
+I think this would heavily depend on feedback from bundler developers.
+
+[17:38:58.0388] <shu>
+how do they deal with template strings?
+
+[17:39:05.0183] <rbuckton>
+brb
+
+[17:40:26.0761] <shu>
+anyway i remain steadfast of the opinion this is not a design blocker
+
+[17:41:19.0438] <shu>
+> <@rbuckton:matrix.org> If the key is the source location and the module itself cannot be reevaluated (NodeJS does some shenanigans here in CJS), then it would be unforgeable. `with identity` is difficult to forge if you don't allow it to be used in `eval`, since it has to be encoded as source text.
+
+seems in practice unforgeable. like, this attacker can trigger re-evaluation of scripts it doesn't own? if it can do that, seems like the threat model has bigger things to worry about than leaking bits via this registry
+
+[17:42:02.0586] <rbuckton>
+> <@shuyuguo:matrix.org> how do they deal with template strings?
+
+Which part? 
+
+[17:42:57.0484] <shu>
+rbuckton: the part where they are keyed off of their location: https://tc39.es/ecma262/#sec-gettemplateobject
+
+[17:44:31.0253] <shu>
+so if you, like, inline the contents of a function that uses a template object into two different call sites, now you have different semantics
+
+[17:44:42.0165] <shu>
+i'm just pointing it out as an example of a thing we have already that is keyed off of location, that bundlers need to be aware of
+
+[17:44:47.0791] <shu>
+this will be another thing, but it's not new-in-kind
+
+[17:45:26.0113] <rbuckton>
+Not sure? It's a bit of an esoteric thing to depend on, other than it not being reevaluated each time. It's be surprised if it's that common to address it
+
+[17:46:11.0271] <shu>
+well, okay. i feel pretty good about providing bundling guidance instead of treating it as a hard design constraint
+
+[17:46:56.0730] <shu>
+that is, i feel pretty good now about the overall package of an unforgeable-in-practice (unless you trigger reevaluations) registry that uses locations to auto-correlate + bundling guidance as the leading solution
+
+[17:47:17.0906] <shu>
+okay gotta sign off, been working since 7am, be back tomorrow
+
+[17:47:33.0503] <rbuckton>
+An incorrect reference identity for a template strings array doesn't come up anywhere near as often as i imagine use of methods on shared structs will.
+
+[17:48:23.0095] <shu>
+yeah, bundlers need to lift all those definitions to a different file, and tree shake the ones that are only ever used in a single thread and thus never need correlation
+
+[17:48:43.0824] <shu>
+i do not hear a counterargument that that is somehow a dealbreaker
+
+[22:56:56.0746] <Ashley Claymore>
+> <@rbuckton:matrix.org> My point is more that, if we actually baked multithreading into the language, such that you don't have to spin up a copy of your application and could just use existing references, then we wouldn't have the correlation issue. We'd have other issues instead, but they are the pretty much the same issues as any other language with multithreading.
+
+While clearly a challenge; I like that JS starts from isolated memory and builds message passing and shared memory on top as opt-in and scoped.
+compared to languages that instead share everything from the start.
+
+[22:59:20.0098] <Ashley Claymore>
+If `Object` (and basically everything) itself wasn't mutable would maybe have made things like sharing closures more tenable, but that bridge has closed
+
+[05:23:19.0157] <Mathieu Hofman>
+Has it? Moddable's XS shows some behavior sharing is possible with their marshalling.
+
+[05:25:12.0695] <Mathieu Hofman>
+* Has it? Moddable's XS shows some behavior sharing is possible with their full marshalling between frozen realms
+
+[06:25:46.0290] <Ashley Claymore>
+I mean for the most common places. Things definitely get a bit simpler if everything can be frozen!
+
+[06:26:25.0741] <Ashley Claymore>
+Lots of XS is in ROM, that's the easiest thing to share ;)
+
+[06:34:17.0842] <Mathieu Hofman>
+What I'm wondering is if the use cases for shared struct with behavior are compatible with frozen realms. Setup your realm and shared behaviors, freeze, then fork
+
+[08:21:50.0956] <shu>
+frozen realms is a not a mass adoptable strategy, but i see no reason why shared structs cannot compose with frozen realms
+
+[08:27:53.0232] <Mathieu Hofman>
+I don't exactly want shared memory concurrency to be mass adopted either...
+
+[08:30:42.0039] <shu>
+it... won't be?
+
+[08:31:08.0927] <shu>
+this is advanced capability opt-in not just on the API level but on the server config level
+
+[08:31:18.0744] <shu>
+cross-origin isolation and all that
+
+[08:31:43.0482] <shu>
+the stance of the web platform is you cannot, by default, do anything with shared memory unless you jump through _many_ opt-in hoops
+
+[08:32:31.0274] <shu>
+and note i did not i say "i don't _want_ frozen realms to be mass adopted"
+
+[08:32:41.0326] <shu>
+i said it's not mass adoptable
+
+[08:34:37.0716] <shu>
+i've also laid out in the past how you can use shared struct's underlying shared memory-ness without cross-origin isolation if you give up mutability
+
+[08:34:47.0752] <shu>
+i just don't think that goes far enough for the advanced apps that actually need mutability
+
+[08:34:58.0901] <shu>
+but immutable shared memory is certainly possible to be mass adopted
+
+[09:15:08.0159] <Mathieu Hofman>
+I think I probably didn't express myself correctly. I'm wondering if a frozen realm is too much of a hoop to jump through for the kind of applications that want shared structs with behavior, since those already need to jump through hoops. If it were an acceptable hoop, maybe it could be the basis of a solution for behavior sharing.
+
+[09:59:34.0594] <shu>
+yes, a frozen realm is too much of a hoop to jump through for the advanced product app partners i am developing this in conjunction with
+
+
+2023-09-23
+[11:01:25.0060] <rbuckton>
+I'm trying to determine whether it makes sense to publish a package that utilizes the origin trial structs implementation, whose purpose is to facilitate using the origin trial implementation. Like the thread pool I posted earlier. 
+
+[11:18:04.0766] <rbuckton>
+shu: do you know if V8 has plans to support `using` in the near term? I'm considering contributing `unique_lock` and `scoped_lock`-like  classes to `Atomics` for the origin trial, if there's interest, but they would need to leverage `Symbol.dispose` to be used even with transpilers
+
+[15:25:20.0095] <shu>
+rbuckton: yep, on Q4 roadmap to implement 
+
+[15:26:01.0636] <shu>
+sync first, then async. i'm leaning towards shipping both together rather than piecemeal
+
+[15:26:08.0538] <shu>
+so that might delay overall shipping a bit
+
+
+2023-09-24
+[20:47:25.0121] <rbuckton>
+I've been tinkering with that idea I had about using `.{` as an RCU mechanism, trying to explore what `.{` could do, and I'm beginning to wish the JS "spread" operator was `foo...` and not `...foo` (as in "id on the right collects, id on the left produces").
+
+[22:21:22.0953] <rbuckton>
+Here's a rough outline for `.{`: https://gist.github.com/rbuckton/0a8b6eedfdf5ae669a6abc37ce23d158
+

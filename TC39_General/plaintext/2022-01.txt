@@ -1,0 +1,1284 @@
+2022-01-01
+[10:58:29.0767] <ljharb>
+Symbols aren’t cross-realm
+
+[10:58:44.0918] <ljharb>
+well-known symbols are, and registry symbols are, but normal symbols aren’t
+
+
+2022-01-03
+[11:25:52.0401] <sideshowbarker>
+looking at https://github.com/mdn/content/pull/11683
+
+[11:26:40.0267] <sideshowbarker>
+The existing statement _“Function expressions in JavaScript are not hoisted”_ in MDN is correct, right?
+
+[11:46:23.0535] <Ashley Claymore>
+correct.
+
+```
+console.log(foo) // ReferenceError
+void function foo() {}
+```
+
+[11:48:20.0572] <nicolo-ribaudo>
+Functions expressions do not need to be hosted because their binding is only visible inside their body, and no code can run before that binding initialization.
+
+[11:48:57.0948] <nicolo-ribaudo>
+I dislike @[Ashley Claymore]'s example, because swapping the two statements doesn't remove the error
+
+[11:50:11.0612] <bakkot>
+yeah it's more precise to say that 'hoisting' is not a thing which applies to expressions
+
+[11:50:13.0512] <Ashley Claymore>
+fair 🙂 I was going for a minimal way to write a function expression 
+
+[11:51:08.0132] <Ashley Claymore>
+💯 agree that showing that there is no external binding at all is the more important core
+
+[11:51:18.0208] <Ashley Claymore>
+* 💯 agree that showing that there is no external binding at all is the more important core
+
+[11:53:01.0202] <nicolo-ribaudo>
+> <@sideshowbarker:mozilla.org> looking at https://github.com/mdn/content/pull/11683
+
+Looking at this PR, it looks like the contributor confuses the function expression with the variable declaration. It's not that function expressions are hosited like var declarations: it's just the variable which is hoisted.
+
+[11:54:53.0328] <Ashley Claymore>
+Yeah, maybe it’s not clear to them that only the RHS is considered the function expression. Maybe an ast-explorer link would help 
+
+[12:07:50.0120] <sideshowbarker>
+nicolo-ribaudo: Ashley Claymore Thanks — I added a comment at https://github.com/mdn/content/pull/11683#issuecomment-1004327053 that goes into a bit more detail.
+
+[12:08:23.0909] <sideshowbarker>
+I cited https://stackoverflow.com/questions/3887408/javascript-function-declaration-and-evaluation-order/3887590#3887590 — which seems like a really good explanation in detail of what actually happens.
+
+[12:12:29.0234] <sideshowbarker>
+Thanks bakkot as well
+
+
+2022-01-04
+[17:03:48.0736] <sideshowbarker>
+FYI/help-wanted https://github.com/mdn/content/issues/11665
+
+[17:17:03.0290] <sideshowbarker>
+in general, for anybody wanting to help out with the MDN JS docs, and looking for some low-hanging fruit, we have 4 issues labeled as needing 30 minutes or less to resolve https://github.com/mdn/content/issues?q=is%3Aissue+is%3Aopen+sort%3Aupdated-desc+label%3A%22help+wanted%22+label%3AContent%3AJS+label%3A%22time%3A+-30mins%22+
+
+[17:18:42.0278] <sideshowbarker>
+…and overall we have just 34 issues for the JS docs that are labeled as “help wanted” https://github.com/mdn/content/issues?q=is%3Aissue+is%3Aopen+sort%3Aupdated-desc+label%3A%22help+wanted%22+label%3AContent%3AJS (out of 620 open MDN issues overall)
+
+[05:02:35.0939] <Ashley Claymore>
+> <@sideshowbarker:mozilla.org> FYI/help-wanted https://github.com/mdn/content/issues/11665
+
+I can’t find an official source. But I thought one of the reasons for not offering iteration of Weak{Map,Set} was also to allow a variety of implementation approaches. e.g. storing the values on the object keys themselves.
+
+[05:15:09.0886] <Ashley Claymore>
+Did JSC implement them this way maybe?
+
+[05:16:54.0709] <Ashley Claymore>
+https://bugs.webkit.org/show_bug.cgi?id=142408#c4
+
+[05:17:37.0772] <Ashley Claymore>
+https://bugs.webkit.org/show_bug.cgi?id=179929#c0
+
+[08:06:31.0306] <devsnek>
+lack of enumeration also allowed weakmap/weakset to be polyfilled by storing the value on the key instead of in the map
+
+[10:17:12.0848] <sideshowbarker>
+Ashley Claymore: devsnek Thanks (and thanks bakkot for https://github.com/mdn/content/issues/11665#issuecomment-1004486740). If nobody else creates a PR for that in the meantime, I think I’ll end up creating a PR that just adds the content of bakkot ’s comment (about avoiding to expose GC details) to that part of the article.
+
+[10:20:19.0164] <sideshowbarker>
+meanwhile, I’m confused by a sentence at https://tc39.es/ecma262/multipage/indexed-collections.html#sec-array.prototype.lastindexof in the spec:
+
+> The optional second argument _fromIndex_ defaults to the array's length minus one (i.e. the whole array is searched). If it is greater than or equal to the length of the array, the whole array will be searched. If it is less than +0𝔽, it is used as the offset from the end of the array to compute _fromIndex_. If the computed index is less than +0𝔽, -1𝔽 is returned.
+
+[10:20:51.0831] <sideshowbarker>
+ * meanwhile, I’m confused by a sentence at https://tc39.es/ecma262/multipage/indexed-collections.html#sec-array.prototype.lastindexof in the spec:
+
+> The optional second argument _fromIndex_ defaults to the array's length minus one (i.e. the whole array is searched). If it is greater than or equal to the length of the array, the whole array will be searched. If it is less than +0𝔽, it is used as the offset from the end of the array to compute _fromIndex_. If the computed index is less than +0𝔽, -1𝔽 is returned.
+
+[10:21:33.0122] <sideshowbarker>
+The sentence I’m confused by is “If it is less than +0𝔽, it is used as the offset from the end of the array to compute _fromIndex_”
+
+[10:23:39.0134] <sideshowbarker>
+What confuses me is that _fromIndex_ is an explicitly-specified value — specified as the second argument to `Array.prototype.lastIndexOf()` — so why does the spec then change to talking about it being computed?
+
+[10:24:24.0400] <bakkot>
+"to compute fromIndex" is a weird way of saying it
+
+[10:24:27.0811] <sideshowbarker>
+or in other words, what’s *“it”* in that sentence — if not _fromIndex_?
+
+[10:24:33.0492] <bakkot>
+it should be "to compute the position from which to start searching"
+
+[10:24:39.0584] <sideshowbarker>
+aha
+
+[10:24:47.0414] <sideshowbarker>
+OK yeah, then that makes sense, yeah
+
+[10:26:36.0760] <bakkot>
+Also it's not actually "from the end of the array" in the case of `lastIndexOf`
+
+[10:27:39.0325] <bakkot>
+actually, no, I guess it is
+
+[10:28:28.0533] <bakkot>
+anyway yeah these notes are bad
+
+[10:28:31.0929] <bakkot>
+`indexOf` has the same problem
+
+[10:34:37.0809] <sideshowbarker>
+yeah the corresponding MDN articles also have similar problems… Trying now to figure out how to re-word them
+
+[10:38:03.0549] <bakkot>
+should probably be more like (for `lastIndexOf`)
+
+"The optional second argument fromIndex specifies the offset from which to begin the search. If it is non-negative, it is an offset from the beginning of the array; if negative, an offset from the end. If the resulting offset is greater than or equal to the length of the array, the whole array will be searched. If it is less than 0, -1 is returned, i.e. the array is not searched."
+
+[10:41:01.0599] <bakkot>
+ * should probably be more like (for `lastIndexOf`)
+
+"The optional second argument fromIndex specifies the offset from which to begin the search. If it is non-negative, it is an offset from the beginning of the array; if negative, an offset from the end. If the resulting offset is greater than or equal to the length of the array, the whole array will be searched. If it is less than 0, -1 is returned, i.e. the array is not searched. If it is not provided, it defaults to the last index of the array."
+
+[10:41:10.0276] <bakkot>
+ * should probably be more like (for `lastIndexOf`)
+
+"The optional second argument fromIndex specifies the offset from which to begin the search. If it is non-negative, it is an offset from the beginning of the array; if negative, an offset from the end. If the resulting offset is greater than or equal to the length of the array, the whole array will be searched. If it is less than 0, -1 is returned, i.e. the array is not searched. If fromIndex is not provided, it defaults to the last index of the array."
+
+[12:04:14.0036] <sideshowbarker>
+bakkot: if you’re still around and you have a few minutes to review a related, PR: https://github.com/mdn/content/pull/11731
+
+[12:05:18.0644] <sideshowbarker>
+https://pr11731.content.dev.mdn.mozit.cloud/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/lastIndexOf#_flaws has the preview of the rendered article with the PR changes incorporated
+
+[12:05:44.0316] <sideshowbarker>
+(and/or if anybody else is around and has time to review that)
+
+
+2022-01-05
+[18:49:14.0640] <sideshowbarker>
+now I’m confused by the statement *“you can think of a `WeakSet` as a special case of `WeakMap` where all the values are booleans”* in https://v8.dev/features/weak-references
+
+[18:49:34.0442] <sideshowbarker>
+Mathieu Hofman: ⬆️
+
+[18:51:25.0108] <sideshowbarker>
+I see nothing in the spec for `WeakSet` at https://tc39.es/ecma262/multipage/keyed-collections.html#sec-weakset-objects about the values being restricted to being booleans
+
+[18:58:24.0893] <sideshowbarker>
+or is that _“you can think of a WeakSet as a special case of WeakMap where all the values are booleans”_ statement just an odd way of saying you can think of a set as a map that only has keys without values?
+
+[18:58:38.0797] <sideshowbarker>
+ * or is that _“you can think of a WeakSet as a special case of WeakMap where all the values are booleans”_ statement just an odd way of saying you can think of a set as a map that only has keys without values?
+
+[19:04:51.0478] <sideshowbarker>
+…and so, further in https://v8.dev/features/weak-references, I’m confused by the statement *“adding an object as a key to a `WeakMap` or `WeakSet` doesn’t prevent it from being garbage-collected”* — which makes sense for a `WeakMap` but does not seem to make sense for a `WeakSet`, since a `WeakSet` doesn’t have keys
+
+[19:07:49.0656] <sideshowbarker>
+And then there’s *A JavaScript `WeakMap` is not really weak: it actually refers strongly to its contents as long as the key is alive* — which also makes sense just fine but would not seem to make sense for a `WeakSet`
+
+[19:08:34.0637] <Mathieu Hofman>
+It's like if WeakSet only had keys, no values
+
+[19:09:11.0361] <sideshowbarker>
+ok
+
+[19:11:18.0553] <sideshowbarker>
+I guess I’ll try writing up a concrete patch myself for the MDN `WeakMap` and `WeakSet` docs to make them accurate — and then to add the clarification about why they are not enumerated
+
+[19:22:56.0962] <Mathieu Hofman>
+I think the important part is that `WeakMap` and `WeakRef` provide orthogonal features.
+
+WeakMap allows associating data to objects in a way that doesn't prevent the object keys from being collected, even if the values in the weak map reference the keys. However, WeakMap doesn't allow observing the liveness of the keys, which is why it doesn't allow enumeration.
+
+WeakRef, being a real weak reference, allows to directly observe the liveness of an object. However you cannot build a `WeakMap` from `WeakRef` and `Map`, as that would prevent collection of cycles.
+
+You could combine WeakRef and WeakMap to build an IterableWeakMap which allows enumeration. See https://github.com/tc39/proposal-weakrefs/#iterable-weakmaps
+
+[12:31:54.0112] <devsnek>
+bakkot: have you seen deepgram api? i have no idea how good it is but it looks like its very intentionally designed for the kind of thing your note taking bot does
+
+[12:36:45.0400] <bakkot>
+I have not, but that does look good
+
+[12:36:59.0249] <bakkot>
+I'll try it out if I find myself with a free evening one of these days
+
+[12:37:33.0078] <bakkot>
+Claims lower latency than google's STT, which would be very nice
+
+[13:24:06.0781] <devsnek>
+whelp i couldn't get it to work with my discord transcription bot, with either the raw ws or the sdk. it seems like the websocket never gets to the open state. i'm probably doing something wrong though.
+
+
+2022-01-06
+[16:40:33.0421] <sachag>
+hi everybody! I hope this is the right place, but I have a small request for help
+
+[16:40:48.0103] <sachag>
+I run the yearly State of JavaScript surveys (latest edition: https://2020.stateofjs.com/)
+
+[16:41:55.0269] <sachag>
+I am currently working on the questions for the next edition, and I would love to involve TC39 more. For example, maybe there are questions the survey could ask that would help provide useful data for TC39 members?
+
+[16:42:09.0011] <sachag>
+there's an open GitHub thread here: https://github.com/StateOfJS/Monorepo/issues/56
+
+[16:42:17.0221] <sachag>
+or you can just DM me with your feedback/questions
+
+[22:51:51.0569] <Ashley Claymore>
+> <@sachag:matrix.org> hi everybody! I hope this is the right place, but I have a small request for help
+
+Welcome! 👋🏻
+
+[22:52:18.0658] <Ashley Claymore>
+* > <@sachag:matrix.org> hi everybody! I hope this is the right place, but I have a small request for help
+
+Welcome! 👋🏻
+
+[23:08:54.0533] <ryzokuken>
+Hi sachag, this is awesome!
+
+[23:11:01.0886] <ryzokuken>
+I think the best people for this would be the folks involved in the monthly research calls we have. I see the next one is on the 27th.
+
+[23:11:49.0382] <ryzokuken>
+yulia: do you think it'd be a good idea to include this on the agenda for the next one?
+
+[00:44:57.0903] <yulia>
+sachag ryzokuken yes this sounds like a good idea -- it may also be great to have you stop by in our research call
+
+[01:35:54.0016] <sachag>
+> <@usharma:igalia.com> I think the best people for this would be the folks involved in the monthly research calls we have. I see the next one is on the 27th.
+
+that'd be great! the survey will most likely go out before then (it's supposed to be the 2021 survey so it's already late as it is…) but the feedback can be useful for the next edition
+
+[01:36:09.0367] <sachag>
+I'd also be happy to give you access to early results if that's helpful
+
+[05:29:07.0331] <yulia>
+sachag: likely you already did all the work for this years survey, but we can get together and have a special call also with felienne
+
+[05:29:24.0687] <yulia>
+and prepare for next year regarding what questions would be interesting
+
+
+2022-01-10
+[18:59:30.0269] <bakkot>
+emscripten is pretty good now it turns out
+
+[19:01:21.0931] <bakkot>
+spent the weekend hacking together wasm/typescript bindings for z3 (the smt solver) and once I figured out how to deal with threads properly it all just worked
+
+[19:02:32.0893] <bakkot>
+js could definitely do with better multithreading primitives though
+
+[19:12:19.0094] <Jack Works>
+Like the shared structs proposal? 
+
+[19:16:23.0921] <bakkot>
+yeah, and module blocks or whatever that proposal evolved into
+
+[19:16:48.0247] <bakkot>
+there is just not a good way to say "go do this work in another thread" right now
+
+[10:33:30.0474] <Luca Casonato>
+Do folks here have thoughts on JS's string split behaviour? It differs from essentially all other languages in that a string split with limited split count splits N+1 times, but returns N items, whereas most language standard libraries split N times and also return N items. This causes essentially all languages other than JS to return an N size array from an N size split, where the last item is the remainder string. In JS the last item is not the remainder, but the N'th item: everything after the N'th item is discarded.
+
+[10:33:40.0680] <Luca Casonato>
+This image illustrates the difference:
+
+[11:09:05.0548] <shu>
+seems like something we can't change at this point?
+
+[11:09:30.0776] <shu>
+if you have a new method, it has to contend with that the thing that people expect to behave the same as other languages is still named `split`
+
+[11:10:26.0565] <Luca Casonato>
+That is valid. Although the function that does what I expect is called `SplitN` in Go and `splitn` in Rust. So there is precedent for that behaviour having this name. 
+
+[11:13:51.0520] <Justin Ridgewell>
+I actually think the JS behavior is better...
+
+[11:14:26.0247] <Justin Ridgewell>
+Eg, for `'1.0.0'.split('.', 1)` to "parse" the major version
+
+[11:14:53.0098] <Justin Ridgewell>
+ * Eg, for `'1.0.0'.split('.', 1)` to "parse" the major version
+
+[11:15:07.0630] <Luca Casonato>
+The reason I like the non JS behaviour better, is that `v.split(s, n).join(s)` works always. And it makes stripping of prefixes really easy.
+
+[11:16:20.0479] <Luca Casonato>
+Proposal of how it could be fixed in a backwards compatible way (by either adding a new method, or an options bag to `String.prototype.split`: https://github.com/lucacasonato/proposal-proper-string-split
+
+[11:17:23.0031] <Luca Casonato>
+> <@jridgewell:matrix.org> Eg, for `'1.0.0'.split('.', 1)` to "parse" the major version
+
+You could still do that with the other behaviour, by doing `'1.0.0'.splitn('.', 2)[0]`
+
+
+2022-01-12
+[20:41:44.0902] <bakkot>
+this is I think a good overview of security and kinds of security bugs in modern browsers, if anyone feels like getting in to that: https://arxiv.org/pdf/2112.15561.pdf
+
+[21:29:36.0928] <sachag>
+I just opened this year's survey to respondents: https://stateofjs.com/
+
+[21:30:15.0472] <sachag>
+I'm not going to change it too much now that it's open to avoid messing up the data, but if you see any big mistake do let me know
+
+[21:30:24.0708] <sachag>
+and hopefully we can chat about it soon!
+
+[15:08:22.0923] <jschoi>
+> <@sachag:matrix.org> I'm not going to change it too much now that it's open to avoid messing up the data, but if you see any big mistake do let me know
+
+The survey looks nice! FYI, Intl is technically a part of the JavaScript language, not a web browser API. 
+
+[15:17:00.0971] <sachag>
+oh, do you think I should move it to the Language section then?
+
+[15:43:41.0092] <shu>
+maybe "web browser" is somewhat incorrect. i'm of the opinion it's not really valuable to be super pedantic about what's technically part of JS due to the standards body org chart
+
+[15:45:37.0485] <shu>
+programmers probably mostly have the mental model of "language" meaning "core syntax and builtins" vs "supplemental APIs". some supplemental APIs are here in tc39, some are in w3c and whatwg
+
+[15:46:51.0935] <shu>
+ * programmers probably mostly have the mental model of "language" meaning "core syntax and builtins" vs "supplemental APIs". some supplemental APIs are here in tc39, some are in w3c and whatwg
+
+
+2022-01-13
+[18:29:23.0543] <sachag>
+yeah it's not easy to know what's what…
+
+[10:05:02.0884] <ljharb>
+Intl is sort of in the middle, but it's in browsers and node, so it feels more language than web to me
+
+[10:05:30.0018] <ljharb>
+and i do actually think most devs end up with a mental model of "browser stuff", "node stuff", and "universal/isomorphic stuff", and are pretty aware of the difference
+
+[10:05:42.0956] <ljharb>
+ * and i do actually think most devs end up with a mental model of "browser stuff", "node stuff", and "universal/isomorphic stuff", and are pretty aware of the difference
+
+[10:05:59.0879] <ljharb>
+things like setTimeout, that are universal but not in the language spec, muddy the waters a bit, ofc
+
+[10:08:32.0719] <bakkot>
+and URL
+
+[10:08:34.0442] <bakkot>
+someday, fetch
+
+[10:09:36.0826] <bakkot>
+I think the distinction is mostly relevant for IO things
+
+[10:09:48.0634] <bakkot>
+like, `fs` is node-only, the DOM is browser-only
+
+[10:10:24.0903] <bakkot>
+that doesn't map that cleanly to "tc39 spec vs whatwg spec"
+
+[10:11:08.0719] <ljharb>
+URL true. fetch never, because a compliant fetch isn't possible outside a browser (i'd love a universal abstraction for "make an http request and get a promise", but fetch sadly isn't eligible to be it)
+
+[10:11:22.0716] <ljharb>
+very true tho, it's not a clean mental model around spec boundaries
+
+[10:11:26.0692] <ljharb>
+but it's pretty close
+
+[10:11:54.0629] <ljharb>
+ * URL true. fetch never, because a compliant fetch isn't possible outside a browser (i'd love a universal abstraction for "make an http request and get a promise", but fetch sadly isn't eligible to be it)
+
+[10:13:11.0229] <bakkot>
+aw I thought they were gonna do that
+
+[10:13:17.0558] <bakkot>
+what makes it not possible outside a browser?
+
+[10:55:37.0323] <ptomato>
+> <@ljharb:matrix.org> things like setTimeout, that are universal but not in the language spec, muddy the waters a bit, ofc
+
+I don't know if it's TC39's place to provide this but it'd be great to have a signal about what things are "universal" - we don't have setTimeout in GNOME's JS environment, for example, because GNOME's platform libraries already provide equivalent functionality. but we are nonetheless planning to add it soon, just because more beginners are familiar with it. we've had a bunch of discussion about which WHATWG facilities are in scope and which only make sense in browsers
+
+[10:56:41.0629] <ljharb>
+bakkot: node doesn't have cookies, or a "current URL", and a bunch of other stuff
+
+[10:56:53.0489] <ljharb>
+node could ship a partial fetch but it's either 100% fetch or it's not fetch ¯\\\_(ツ)_/¯ 
+
+[10:56:57.0776] <ljharb>
+ * node could ship a partial fetch but it's either 100% fetch or it's not fetch
+
+[10:57:01.0010] <ljharb>
+ * node could ship a partial fetch but it's either 100% fetch or it's not fetch ¯\\\_(ツ)_/¯ 
+
+[10:58:09.0369] <TabAtkins>
+Just default "current URL" to "https://example.com", done
+
+[11:05:54.0702] <ljharb>
+then iirc node would have to factor in same-origin restrictions, CORS, local cookies, etc, none of which apply to node
+
+[11:06:16.0588] <ljharb>
+it's just a category error to try to use `fetch` outside a browser; it (like most web things) just wasn't designed for non-web use
+
+[11:08:57.0857] <TabAtkins>
+(My suggestion was shitposting.)
+
+[11:10:13.0827] <bakkot>
+ehhhhhhhhhh this sounds like one of those distinctions which is unlikely to matter to users in practice
+
+[11:10:51.0664] <bakkot>
+if node has a global named `fetch` that I can use the way I would use `fetch` I do not care if the lack of cookies means that in fact they do not "have fetch"
+
+[11:18:31.0798] <Luca Casonato>
+> <@bakkot:matrix.org> what makes it not possible outside a browser?
+
+It is very possible. Both Cloudflare and Deno have demonstrated it is very possible to create a rather spec compliant server side `fetch` implementation. Deno only really leaves out two main specification features: cookie jars and CORS.
+
+[11:42:49.0168] <ljharb>
+something that you can use in the ways you would use `fetch`, but not in *all* the ways you would use `fetch`, will cause more harm than good. i'm aware of deno's implementation.
+
+[11:43:23.0607] <ljharb>
+it's the same harm caused by a noncompliant polyfill. if you want less than 100% compliance, then it's better to use something that isn't purporting to match a spec.
+
+[11:43:39.0470] <Luca Casonato>
+Let's chat about it some time. I don't think this is the right venue though :-)
+
+[11:44:06.0040] <ljharb>
+fair enough :-)
+
+[12:24:53.0294] <bakkot>
+if the conversation happens in public, ping me?
+
+
+2022-01-15
+[19:04:50.0114] <devsnek>
+fwiw its sort of "planned" to have fetch in node, there's just a lot of stuff to do and not a lot of people willing to do it. (jasnell's work on streams, for example)
+
+[19:50:27.0736] <sideshowbarker>
+Can somebody please step in on https://github.com/mdn/content/issues/11743 with a comment to confirm what the argument order is for the replacer function for `String.prototype.replace()`?
+
+[19:51:14.0392] <sideshowbarker>
+Is it `(match, offset, string)` or is it instead `(match, string, offset)`?
+
+[19:52:09.0209] <sideshowbarker>
+see comments at https://github.com/mdn/content/issues/11743#issuecomment-1012831082 and https://github.com/mdn/content/pull/11770#pullrequestreview-845997341
+
+[19:52:36.0276] <sideshowbarker>
+ * Is it `(match, offset, string)` or is it instead `(match, string, offset)`?
+
+[19:56:42.0215] <jmdyck>
+looks like neither
+
+[19:57:16.0564] <sideshowbarker>
+oh…
+
+[19:57:21.0496] <jmdyck>
+replacer is called with only 2 arguments: « O, replaceValue »
+
+[19:57:31.0596] <sideshowbarker>
+aha
+
+[19:57:57.0884] <sideshowbarker>
+then I wonder why it doesn’t throw when called when called with 3 arguments…
+
+[19:58:16.0625] <jmdyck>
+extra args are always allowed and ignored.
+
+[19:59:19.0040] <jmdyck>
+no wait, you mean "why doesn't it throw when the actual replacer takes 3 args", right?
+
+[19:59:31.0932] <sideshowbarker>
+yeah
+
+[19:59:35.0381] <sideshowbarker>
+that
+
+[19:59:48.0748] <jmdyck>
+in that case, the 3rd arg should always be *undefined*
+
+[19:59:54.0897] <sideshowbarker>
+also, at https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/replace#specifying_a_function_as_a_parameter we have it documented as taking as many as 5 arguments
+
+[20:00:02.0312] <jmdyck>
+(unless the implementation is doing something special)
+
+[20:00:59.0392] <sideshowbarker>
+ * also, at https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/replace#specifying_a_function_as_a_parameter we have it documented as taking even more than just 3 arguments
+
+[20:02:21.0910] <jmdyck>
+ah, i think misunderstanding re "replacer function"
+
+[20:03:52.0173] <sideshowbarker>
+yeah looking at the spec, I see
+
+> 12. If functionalReplace is true, then
+>a. Let replacement be ? ToString(? Call(replaceValue, undefined, « searchString, 𝔽(position), string »)).
+
+[20:04:57.0713] <jmdyck>
+`_replacer_` is the alias that the spec uses for the @@replace method extracted from the *first* arg to S.p.replace() 
+
+[20:05:13.0139] <jmdyck>
+but you're talking about the *second* arg
+
+[20:08:50.0542] <jmdyck>
+If the second arg is a function, it's called with args « searchString, 𝔽(position), string », which is roughly (needle, offset, haystack)
+
+[20:13:39.0829] <jmdyck>
+The MDN page's description of the second parameter looks non-standard to me.
+
+[20:14:19.0766] <jmdyck>
+(Though maybe all engines support it?)
+
+[20:22:42.0276] <sideshowbarker>
+> <@jmdyck:matrix.org> If the second arg is a function, it's called with args « searchString, 𝔽(position), string », which is roughly (needle, offset, haystack)
+
+OK, will go with that
+
+[20:23:12.0424] <sideshowbarker>
+> <@jmdyck:matrix.org> The MDN page's description of the second parameter looks non-standard to me.
+
+yeah, now I’m wondering where it came from to begin with
+
+[20:57:09.0518] <sideshowbarker>
+which part of the spec defines operator precedence?
+
+[20:57:30.0479] <sideshowbarker>
+looking for a reference to cite in https://github.com/mdn/content/issues/11926
+
+[20:58:48.0139] <jmdyck>
+Operator precedence is implicit in the grammar.
+
+[21:00:47.0635] <sideshowbarker>
+OK, but the statement _“Precedence of 'Postfix Increment/Decrement' is higher than 'Function Call'”_ is not correct, right?
+
+[21:07:21.0386] <jmdyck>
+right (given reasonable definitions)
+
+[21:14:15.0279] <jmdyck>
+It's unclear why the submitter thinks that the observed behavior implies "Precedence of 'Postfix Increment/Decrement' is higher than 'Function Call'"
+
+[21:20:04.0471] <jmdyck>
+for a postfix op to have a higher precedence than operator OP, you expect `X OP Y ++` to mean `X OP (Y++)` rather than `(X OP Y)++`, but the first option doesn't really make sense when OP is function-call.
+
+[03:54:28.0638] <Ashley Claymore>
+> <@sideshowbarker:mozilla.org> looking for a reference to cite in https://github.com/mdn/content/issues/11926
+
+I think the confusion originated in this discussion: https://es.discourse.group/t/map-weakmap-etc-prototype-getref-key/884/8
+
+[04:01:03.0171] <Ashley Claymore>
+`(f())++` would be a ReferenceError, but `((0, f())++` is a SyntaxError
+
+
+2022-01-17
+[17:21:26.0772] <sideshowbarker>
+looking at https://github.com/mdn/content/issues/12062, does the spec anywhere define negative zero?
+
+[17:21:54.0960] <sideshowbarker>
+maybe somewhere by reference to IEEE 754?
+
+[17:23:21.0439] <bakkot>
+sideshowbarker: https://tc39.es/ecma262/multipage/ecmascript-data-types-and-values.html#sec-ecmascript-language-types-number-type
+
+[17:24:06.0792] <bakkot>
+it does mention negative zero, but the actual definition is just by reference to IEEE, yes
+
+[17:24:09.0478] <sideshowbarker>
+OK, so it just follows from that
+
+[17:24:14.0272] <sideshowbarker>
+OK yeah
+
+[17:24:50.0214] <bakkot>
+seems like a reasonable place to ref https://en.wikipedia.org/wiki/Signed_zero
+
+[17:25:04.0784] <bakkot>
+(on mdn, I mean, not the spec)
+
+[17:29:01.0141] <jmdyck>
+I just noticed that pos zero and neg zero don't satisfy the definition of normalized or denormalized.
+
+[17:29:48.0347] <sideshowbarker>
+> <@bakkot:matrix.org> seems like a reasonable place to ref https://en.wikipedia.org/wiki/Signed_zero
+
+yup, that’s exactly what I’m doing right now :) (patch in progress)
+
+[17:46:32.0697] <jmdyck>
+Ah, only the finite *non-zero* values are normalized or denormalized.
+
+
+2022-01-19
+[07:56:50.0791] <jasnell>
+Hello all... hope you're all well. I'd like to see about getting a new proposal on the agenda (possibly march?) It's an alternative take on the existing base64 proposal that covers hex, base64, and base32 encoding -- https://github.com/jasnell/tc39-proposal-hex-base64    (the existing base64 proposal is here: https://github.com/tc39/proposal-arraybuffer-base64)
+
+[08:10:12.0380] <bakkot>
+jasnell: I think it probably makes more sense to open this as issues on https://github.com/tc39/proposal-arraybuffer-base64? It doesn't seem like it's a fundamentally different proposal, just differs on some details
+
+[08:10:51.0778] <bakkot>
+In particular, it is likely to run into the same concerns about support for streaming, as in https://github.com/tc39/proposal-arraybuffer-base64/issues/13, which is where the existing proposal is currently hung
+
+[08:11:39.0317] <bakkot>
+(Also I intended to also support hex; see https://github.com/tc39/proposal-arraybuffer-base64/issues/8. if you'd like to make a case for base32 as well, feel free to open an issue there, though see existing discussion in https://github.com/tc39/proposal-arraybuffer-base64/issues/7#issuecomment-872536851)
+
+[08:12:04.0220] <bakkot>
+ * (Also I intended to also support hex; see https://github.com/tc39/proposal-arraybuffer-base64/issues/8. if you'd like to make a case for base32 as well, feel free to open an issue there, though see existing discussion in https://github.com/tc39/proposal-arraybuffer-base64/issues/7#issuecomment-872536851)
+
+[08:13:13.0818] <Luca Casonato>
+I should comment on that issue. Maybe we can move the TC39 proposal forward without streaming, and then Ill switch my WHATWG proposal into a WHATWG stream based streaming proposal.
+
+[08:14:55.0739] <jasnell>
+Will open an issue in that repo and move the discussion there :-) thanks all
+
+[08:15:09.0741] <bakkot>
+phoddie is mainly concerned about the embedded use case, so a solution involving whatwg streams is unlikely to work for him, but please feel free to suggest it
+
+[08:15:34.0231] <bakkot>
+(that also seems to me like a good option, if we can get buy-in)
+
+[14:43:44.0124] <leobalter>
+> <@aclaymore:matrix.org> `(f())++` would be a ReferenceError, but `((0, f())++` is a SyntaxError
+
+wat
+
+[15:05:50.0633] <jmdyck>
+Well, `((0, f())++` is a Syntax Error because it has an extra left paren, but assuming that `(0, f())++` was meant, I think they're *both* early Syntax Errors.
+
+[15:07:06.0779] <jmdyck>
+Though I think they would have both been early Reference Errors at one point.
+
+[15:55:15.0273] <Ashley Claymore>
+in Chrome 97 at least
+
+
+2022-01-20
+[16:00:03.0302] <Justin Ridgewell>
+There’s a special Annex B compact rule for assignment to a call expression.
+
+[16:00:25.0398] <Justin Ridgewell>
+Has to do with some legacy IE behavior
+
+[16:01:02.0016] <Justin Ridgewell>
+Both of those examples are SyntaxErrors in the proper grammar.
+
+[16:02:45.0803] <Ashley Claymore>
+ah! Thanks Justin Ridgewell 
+
+[16:03:23.0982] <Justin Ridgewell>
+* Both of those examples are SyntaxErrors in the proper grammar.
+
+[16:05:45.0771] <bakkot>
+there is not such a legacy rule even though there should be
+
+[16:06:44.0712] <bakkot>
+open issue: https://github.com/tc39/ecma262/issues/257 and PR: https://github.com/tc39/ecma262/pull/2193
+
+[16:08:19.0429] <Ashley Claymore>
+the rabbit hole gets ever deeper
+
+[17:47:39.0877] <Justin Ridgewell>
+Whoops, I'm misremembering then.
+
+
+2022-01-23
+[11:31:32.0651] <0x3vh8vy2l75lo4v>
+if i can do this in JS
+
+
+if x
+else y
+
+
+without using Blocks
+
+why is it not possible in try catch?
+
+try y
+catch x
+
+[11:47:59.0402] <jmdyck>
+both examples are parse errors.
+
+
+2022-01-24
+[18:45:43.0227] <ljharb>
+0x3vh8vy2l75lo4v: because we were more fortunate with try/catch than we were with if/else.
+
+[10:20:14.0224] <TabAtkins>
+Yeah, "if() without braces" is just a legacy mistake we inherited from C. It's a major footgun that most linters complain about, and which we never want to repeat in any new syntax.
+
+[10:24:52.0669] <ljharb>
+it also caused the gotofail SSL bug :-p
+
+[10:25:31.0347] <Ben Newman (Apollo, @benjamn on GH)>
+… and if braces were required, we could perhaps do without the parens, a la Rust
+
+[10:27:51.0553] <Ben Newman (Apollo, @benjamn on GH)>
+(far too late to change, to be clear)
+
+[10:28:53.0668] <Robin Ricard>
+should we restart notes?
+
+[10:29:50.0806] <bakkot>
+Robin Ricard: i'll kick it off again but we probably don't actually need this part captured in detail
+
+[10:34:18.0553] <Luca Casonato>
+> <@benjamn:matrix.org> … and if braces were required, we could perhaps do without the parens, a la Rust
+
+A colleague of mine brought this up recently actually. I wonder if it would be possible to allow skipping paren _only if_ you specify braces. Seems like a significant parser complexification for relatively little gain though. (although I do like that syntax in rust)
+
+[10:35:05.0504] <bakkot>
+definitely possible but almost certainly not worth retrofitting
+
+[10:41:18.0968] <shu>
+Automatic Parenthesis Insertion would be a good milestone to retire to
+
+[10:42:42.0980] <Rob Palmer>
+> <@shuyuguo:matrix.org> Automatic Parenthesis Insertion would be a good milestone to retire to
+
+TypeScript already has [this](https://github.com/microsoft/TypeScript/issues/34876) 🙃
+
+[10:43:23.0307] <shu>
+...
+
+[10:43:36.0294] <bakkot>
+oh no
+
+[10:43:59.0459] <TabAtkins>
+lol that's not the same thing
+
+[10:44:23.0300] <TabAtkins>
+that's just "unclosed constructs at EOF are allowed and implicitly closed"
+
+[10:45:25.0559] <TabAtkins>
+(fwiw CSS does this as well - `@media screen { .foo { background-image: url(http://example.com` is a valid stylesheet and doesn't technically need the `);}}` at the end
+
+[10:45:27.0523] <TabAtkins>
+)
+
+[10:45:50.0125] <bakkot>
+oh man, gotta update my minifier
+
+[10:48:39.0811] <shu>
+you do not have to take the cursed knowledge to heart
+
+[10:48:58.0327] <bakkot>
+code golf is all about cursed knowledge
+
+[10:49:17.0294] <TabAtkins>
+unlike html it at least doesn't have "closing brace auto-closes until it finds the right matching opening brace" behavor
+
+[10:49:48.0098] <TabAtkins>
+aka `.foo { background-image: url(foo }` is invalid
+
+
+2022-01-25
+[21:28:17.0471] <sachag>
+I thought I'd share some preliminary results
+
+[21:28:43.0186] <sachag>
+you can ignore the round 1/2/3 thing and just consider the aggregate total for each row if that makes more sense
+
+[21:29:27.0333] <sachag>
+"manging dependencies" was defined as "Managing dependencies, package versions and bundle sizes" btw
+
+[00:01:21.0163] <bakkot>
+sweet, python now compiles to wasm
+
+[00:01:22.0190] <bakkot>
+https://repl.ethanhs.me/
+
+[00:01:32.0906] <bakkot>
+time to deprecate JavaScript
+
+[00:12:41.0881] <bakkot>
+ruby also compiles to wasm as of six days ago, looks like - https://github.com/ruby/ruby/pull/5407
+
+[00:13:02.0159] <bakkot>
+(python issue is https://bugs.python.org/issue40280 )
+
+[08:38:28.0395] <Rob Palmer>
+> <@sachag:matrix.org> I thought I'd share some preliminary results
+
+I'm not a statistical person, but doesn't the fact that the 3-stage binary hot-or-not feature selection mean that there will be natural even-ish weighting to the top-2 results?  As opposed to last year when you just picked your favourite(s) from a linear list?
+
+
+2022-01-26
+[19:32:25.0008] <sachag>
+hmm I'm also not a statistical person so I don't know…
+
+[19:33:11.0607] <sachag>
+what makes you think that would be the case?
+
+[22:11:06.0562] <yulia>
+sachag: i wrote you an IM -- would you be free next week on thursay for the research call?
+
+[14:11:42.0157] <ljharb>
+are some of the KAIST folks in here? if so i'd love to explore a way to use the mechanized spec to generate polyfill implementations using https://npmjs.com/es-abstract
+
+
+2022-01-27
+[18:07:43.0889] <sideshowbarker>
+I’m overhauling the MDN `Array` article at https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array and one big change I’m making is to reduce the **Description** section down to just a bulleted list of the essential core characteristics of JavaScript arrays.
+
+[18:08:35.0534] <sideshowbarker>
+Here’s what I have so far:
+> In JavaScript, arrays are not [primitives](https://chat.mozilla.org/en-US/docs/Glossary/Primitive) but are instead represented with `Array` objects, which have the following core characteristics:
+> - **JavaScript arrays are not fixed-length and not restricted to containing a single data type** but can have a mix of data types. (When those characteristics are undesirable, use [typed arrays](https://chat.mozilla.org/en-US/docs/Web/JavaScript/Typed_arrays) instead.)
+> 
+> - **JavaScript arrays are zero-indexed**: the first element of a JavaScript array is at index `0`, and the last element is at the value of the array's {{jsxref("Array.length", "length")}} property minus `1`. See the  [access an array item by its index](https://chat.mozilla.org/#access_an_array_item_by_its_index) example. Using an invalid or out-range index number returns `undefined`.
+> 
+> - **JavaScript array-copy operations create shallow copies** — (just as
+> 
+> **copy operations with any JavaScript objects create shallow copies**): assigning an existing array to a new variable does not create a copy. Instead the new variable contains a _reference_ to the original array. If you change a value in the original array, it will be reflected in the new array. See the [copy an array](https://chat.mozilla.org/#copy_an_array) examples.
+
+[18:09:05.0063] <sideshowbarker>
+ * Here’s what I have so far:
+> In JavaScript, arrays are not [primitives](https://chat.mozilla.org/en-US/docs/Glossary/Primitive) but are instead represented with `Array` objects, which have the following core characteristics:
+> - **JavaScript arrays are not fixed-length and not restricted to containing a single data type** but can have a mix of data types. (When those characteristics are undesirable, use 
+[typed arrays](https://chat.mozilla.org/en-US/docs/Web/JavaScript/Typed_arrays) instead.)
+> 
+> - **JavaScript arrays are zero-indexed**: the first element of a JavaScript array is at index 
+`0`, and the last element is at the value of the array's {{jsxref("Array.length", "length")}} property minus 
+`1`. See the 
+[access an array item by its index](https://chat.mozilla.org/#access_an_array_item_by_its_index) example. Using an invalid or out-range index number returns 
+`undefined`.
+>
+> - **JavaScript array-copy operations create shallow copies** — (just as 
+**copy operations with any JavaScript objects create shallow copies**): assigning an existing array to a new variable does not create a copy. Instead the new variable contains a 
+_reference_ to the original array. If you change a value in the original array, it will be reflected in the new array. See the 
+[copy an array](https://chat.mozilla.org/#copy_an_array) examples.
+
+[18:10:00.0124] <Jessidhia>
+probably also important to mention sparse arrays; just because length > 0 it doesn’t mean there are actually length items in it
+
+[18:10:07.0237] <sideshowbarker>
+ * Here’s what I have so far:
+> In JavaScript, arrays are not [primitives](https://chat.mozilla.org/en-US/docs/Glossary/Primitive) but are instead represented with `Array` objects, which have the following core characteristics:
+> - **JavaScript arrays are not fixed-length and not restricted to containing a single data type** but can have a mix of data types. (When those characteristics are undesirable, use [typed arrays](https://chat.mozilla.org/en-US/docs/Web/JavaScript/Typed_arrays) instead.)
+> 
+> - **JavaScript arrays are zero-indexed**: the first element of a JavaScript array is at index `0`, and the last element is at the value of the array's {{jsxref("Array.length", "length")}} property minus `1`. See the  [access an array item by its index](https://chat.mozilla.org/#access_an_array_item_by_its_index) example. Using an invalid or out-range index number returns `undefined`.
+> 
+> - **JavaScript array-copy operations create shallow copies** — (just as
+> 
+> **copy operations with any JavaScript objects create shallow copies**): assigning an existing array to a new variable does not create a copy. Instead the new variable contains a _reference_ to the original array. If you change a value in the original array, it will be reflected in the new array. See the [copy an array](https://chat.mozilla.org/#copy_an_array) examples.
+
+[18:10:32.0645] <sideshowbarker>
+> <@jessidhia:matrix.org> probably also important to mention sparse arrays; just because length > 0 it doesn’t mean there are actually length items in it
+
+Thanks yeah, I have that further on in a Notes section
+
+[18:11:41.0132] <sideshowbarker>
+ * Here’s what I have so far:
+> In JavaScript, arrays are not [primitives](https://chat.mozilla.org/en-US/docs/Glossary/Primitive) but are instead represented with `Array` objects, which have the following core characteristics:
+> - **JavaScript arrays are not fixed-length and not restricted to containing a single data type** but can have a mix of data types. (When those characteristics are undesirable, use 
+> [typed arrays](https://chat.mozilla.org/en-US/docs/Web/JavaScript/Typed_arrays) instead.)
+> 
+> - **JavaScript arrays are zero-indexed**: the first element of a JavaScript array is at index 
+> `0`, and the last element is at the value of the array's {{jsxref("Array.length", "length")}} property minus 
+> `1`. See the  
+> [access an array item by its index](https://chat.mozilla.org/#access_an_array_item_by_its_index) example. Using an invalid or out-range index number returns 
+> `undefined`.
+> 
+> - **JavaScript array-copy operations create shallow copies** — (just as **copy operations with any JavaScript objects create shallow copies**): assigning an existing array to a new variable does not create a copy. Instead the new variable contains a _reference_ to the original array. If you change a value in the original array, it will be reflected in the new array. See the [copy an array](https://chat.mozilla.org/#copy_an_array) examples.
+
+[18:11:56.0578] <sideshowbarker>
+ * Here’s what I have so far:
+> In JavaScript, arrays are not [primitives](https://chat.mozilla.org/en-US/docs/Glossary/Primitive) but are instead represented with `Array` objects, which have the following core characteristics:
+> - **JavaScript arrays are not fixed-length and not restricted to containing a single data type** but can have a mix of data types. (When those characteristics are undesirable, use [typed arrays](https://chat.mozilla.org/en-US/docs/Web/JavaScript/Typed_arrays) instead.)
+> 
+> - **JavaScript arrays are zero-indexed**: the first element of a JavaScript array is at index
+> 
+> `0`, and the last element is at the value of the array's {{jsxref("Array.length", "length")}} property minus
+> 
+> `1`. See the
+> 
+> [access an array item by its index](https://chat.mozilla.org/#access_an_array_item_by_its_index) example. Using an invalid or out-range index number returns
+> 
+> `undefined`.
+> 
+> - **JavaScript array-copy operations create shallow copies** — (just as 
+> **copy operations with any JavaScript objects create shallow copies**): assigning an existing array to a new variable does not create a copy. Instead the new variable contains a 
+> _reference_ to the original array. If you change a value in the original array, it will be reflected in the new array. See the 
+> [copy an array](https://chat.mozilla.org/#copy_an_array) examples.
+> 
+
+[18:12:30.0354] <sideshowbarker>
+ * Here’s what I have so far:
+> In JavaScript, arrays are not [primitives](https://chat.mozilla.org/en-US/docs/Glossary/Primitive) but are instead represented with `Array` objects, which have the following core characteristics:
+> - **JavaScript arrays are not fixed-length and not restricted to containing a single data type** but can have a mix of data types. (When those characteristics are undesirable, use 
+> [typed arrays](https://chat.mozilla.org/en-US/docs/Web/JavaScript/Typed_arrays) instead.)
+> 
+> - **JavaScript arrays are zero-indexed**: the first element of a JavaScript array is at index
+> 
+> 
+> `0`, and the last element is at the value of the array's {{jsxref("Array.length", "length")}} property minus
+> 
+> `1`. See the [access an array item by its index](https://chat.mozilla.org/#access_an_array_item_by_its_index) example. Using an invalid or out-range index number returns `undefined`.
+> - **JavaScript array-copy operations create shallow copies** — (just as **copy operations with any JavaScript objects create shallow copies**): assigning an existing array to a new variable does not create a copy. Instead the new variable contains a _reference_ to the original array. If you change a value in the original array, it will be reflected in the new array. See the [copy an array](https://chat.mozilla.org/#copy_an_array) examples.
+
+[18:12:45.0463] <bterlson>
+For clarity I might remove the negations in the first bullet - say what the arrays are rather than what they aren't?
+
+[18:13:06.0054] <sideshowbarker>
+ * Here’s what I have so far:
+> In JavaScript, arrays are not [primitives](https://chat.mozilla.org/en-US/docs/Glossary/Primitive) but are instead represented with `Array` objects, which have the following core characteristics:
+>
+> - **JavaScript arrays are not fixed-length and not restricted to containing a single data type** but can have a mix of data types. (When those characteristics are undesirable, use [typed arrays](https://chat.mozilla.org/en-US/docs/Web/JavaScript/Typed_arrays) instead.)
+> 
+> - **JavaScript arrays are zero-indexed**: the first element of a JavaScript array is at index`0`, and the last element is at the value of the array's {{jsxref("Array.length", "length")}} property minus`1`. See the [access an array item by its index](https://chat.mozilla.org/#access_an_array_item_by_its_index) example. Using an invalid or out-range index number returns `undefined`.
+>
+> - **JavaScript array-copy operations create shallow copies** — (just as**copy operations with any JavaScript objects create shallow copies**): assigning an existing array to a new variable does not create a copy. Instead the new variable contains a_reference_ to the original array. If you change a value in the original array, it will be reflected in the new array. See the[copy an array](https://chat.mozilla.org/#copy_an_array) examples.
+
+[18:13:56.0682] <sideshowbarker>
+ * Here’s what I have so far:
+> In JavaScript, arrays are not [primitives](https://chat.mozilla.org/en-US/docs/Glossary/Primitive) but are instead represented with `Array` objects, which have the following core characteristics:
+> - **JavaScript arrays are not fixed-length and not restricted to containing a single data type** but can have a mix of data types. (When those characteristics are undesirable, use 
+> [typed arrays](https://chat.mozilla.org/en-US/docs/Web/JavaScript/Typed_arrays) instead.)
+> 
+> - **JavaScript arrays are zero-indexed**: the first element of a JavaScript array is at index
+> `0`, and the last element is at the value of the array's {{jsxref("Array.length", "length")}} property minus
+> `1`. See the 
+> [access an array item by its index](https://chat.mozilla.org/#access_an_array_item_by_its_index) example. Using an invalid or out-range index number returns 
+> `undefined`.
+> 
+> - **JavaScript array-copy operations create shallow copies** — (just as **copy operations with _any_ JavaScript objects create shallow copies**): assigning an existing array to a new variable does not create a copy. Instead the new variable contains a_reference_ to the original array. If you change a value in the original array, it will be reflected in the new array. See the [copy an array](https://chat.mozilla.org/#copy_an_array) examples.
+> 
+
+[18:14:39.0750] <sideshowbarker>
+ * Here’s what I have so far:
+>
+> In JavaScript, arrays are not [primitives](https://chat.mozilla.org/en-US/docs/Glossary/Primitive) but are instead represented with `Array` objects, which have the following core characteristics:
+> - **JavaScript arrays are not fixed-length and not restricted to containing a single data type** but can have a mix of data types. (When those characteristics are undesirable, use [typed arrays](https://chat.mozilla.org/en-US/docs/Web/JavaScript/Typed_arrays) instead.)
+> 
+> - **JavaScript arrays are zero-indexed**: the first element of a JavaScript array is at index `0`, and the last element is at the value of the array's {{jsxref("Array.length", "length")}} property minus`1`. See the [access an array item by its index](https://chat.mozilla.org/#access_an_array_item_by_its_index) example. Using an invalid or out-range index number returns `undefined`.
+> 
+> - **JavaScript array-copy operations create shallow copies** — (just as **copy operations with any JavaScript objects create shallow copies**): assigning an existing array to a new variable does not create a copy. Instead the new variable contains a_reference_ to the original array. If you change a value in the original array, it will be reflected in the new array. See the [copy an array](https://chat.mozilla.org/#copy_an_array) examples.
+
+[18:15:37.0814] <sideshowbarker>
+> <@bterlson:matrix.org> For clarity I might remove the negations in the first bullet - say what the arrays are rather than what they aren't?
+
+OK, will give it a try that way
+
+[18:16:17.0953] <jmdyck>
+Maybe mention that array elements are object properties, and that an array can have other properties as well. Or maybe that's not 'core'.
+
+[18:21:51.0672] <sideshowbarker>
+> <@jmdyck:matrix.org> Maybe mention that array elements are object properties, and that an array can have other properties as well. Or maybe that's not 'core'.
+
+will add that in the Notes section
+
+[18:27:40.0795] <sideshowbarker>
+Should it mention that JavaScript arrays are multidimensional?
+
+[18:28:16.0251] <sideshowbarker>
+hmm I guess not
+
+[18:28:18.0485] <Jessidhia>
+they are not, though
+
+[18:28:26.0589] <sideshowbarker>
+oh
+
+[18:28:38.0256] <Jessidhia>
+you can nest arrays but that’s not what a multidimensional array is
+
+[18:28:45.0094] <sideshowbarker>
+ah yeah OK
+
+[18:29:42.0901] <Jessidhia>
+I think C# is the only language where I remember having seen multidimensional arrays 🤔
+
+[18:29:48.0330] <sideshowbarker>
+yeah I meant in the sense that you can have an array of arrays — but I guess that’s true of pretty much any other language too
+
+[18:29:55.0833] <sideshowbarker>
+OK
+
+[18:30:14.0715] <Jessidhia>
+https://docs.microsoft.com/en-us/dotnet/csharp/programming-guide/arrays/multidimensional-arrays
+
+[18:31:00.0802] <Jessidhia>
+nested arrays in C# conversely are https://docs.microsoft.com/en-us/dotnet/csharp/programming-guide/arrays/jagged-arrays
+
+[18:31:34.0896] <Jessidhia>
+they have different memory layouts and algorithmic complexity
+
+[01:10:11.0886] <yulia>
+As a concept, rather than an implementation, Multidimensional arrays are arrays with multiple dimensions. That can be represented as an array of arrays as in c, python, javascript etc, or as a dedicated constructor/layout as in c#. Everything that can be represented in C# as a multidimensional array can be represented as an array of arrays where each sub array is of the same length. 
+
+This difference is of implementation rather than of concept. C# is a bit of an outlier, as it has first class support and optimization for multidimensional arrays. Jagged arrays are a unique distinction in that language compared to others, as in most languages those two are used interchangeably due to sharing an implementation. For documentation purposes, multidimensional arrays are more useful -- they describe what they are. "jagged" is less useful without first defining multidimensional, as it describes (in short hand, relative to the other datastructure) how it is different from a classic multidimensional array. 
+
+[01:11:29.0954] <yulia>
+ * As a concept, rather than an implementation, Multidimensional arrays are arrays with multiple dimensions. That can be represented as an array of arrays as in c, python, javascript etc, or as a dedicated constructor/layout as in c#. Everything that can be represented in C# as a multidimensional array can be represented as an array of arrays where each sub array is of the same length. 
+
+This difference is of implementation rather than of concept. C# is a bit of an outlier, as it has first class support and optimization for multidimensional arrays. Jagged arrays are a unique distinction in that language compared to others, as in most languages those two are used interchangeably due to sharing an implementation. For documentation purposes, multidimensional arrays are more useful -- they describe what they are. "jagged" is less useful without first defining multidimensional, as it describes (in short hand, relative to the other datastructure) how it is different from a classic multidimensional array. 
+
+[01:20:16.0630] <yulia>
+I am not super familiar with c#, but what they may have been trying to get across really was first class support for a matrix ++. A matrix is a well defined concept with associated algebraic transformations. You can represent one as a multidimensional array, but making it efficient would need certain adjustments that don't make sense for a simple array (which is the common case for most languages). This is a more tightly defined concept in my opinion than multidimensional array.
+
+[01:22:46.0435] <yulia>
+ * I am not super familiar with c#, but what they may have been trying to get across really was first class support for a matrix ++. A matrix is a well defined concept with associated algebraic transformations. You can represent one as a multidimensional array, but making it efficient would need certain adjustments that don't make sense for a simple array (which is the common case for most languages). This is a more tightly defined concept in my opinion than multidimensional array.
+
+[01:25:03.0746] <yulia>
+ * As a concept, rather than an implementation, Multidimensional arrays are arrays with multiple dimensions. That can be represented as an array of arrays as in c, python, javascript etc, or as a dedicated constructor/layout as in c#. Everything that can be represented in C# as a multidimensional array can be represented as an array of arrays where each sub array is of the same length. 
+
+This difference is of implementation rather than of concept. C# has first class support and optimization for multidimensional arrays. Jagged arrays are a unique distinction in that language compared to others, as in most languages those two are used interchangeably due to sharing an implementation. For documentation purposes, multidimensional arrays are more useful -- they describe what they are. "jagged" is less useful without first defining multidimensional, as it describes (in short hand, relative to the other datastructure) how it is different from a classic multidimensional array. 
+
+[01:25:44.0132] <yulia>
+ * As a concept, rather than an implementation, Multidimensional arrays are arrays with multiple dimensions. That can be represented as an array of arrays as in c, python, javascript etc, or as a dedicated constructor/layout as in c#. Everything that can be represented in C# as a multidimensional array can be represented as an array of arrays where each sub array is of the same length. 
+
+This difference is of implementation rather than of concept. C# has first class support and optimization for multidimensional arrays. Jagged arrays are a unique distinction in that language compared to others, as in most languages those two are used interchangeably due to sharing an implementation. For documentation purposes, i we need to say that javascript can, for example, represent a matrix, then the term multidimensional arrays is more useful -- it is descriptive. "jagged" is less useful without first defining multidimensional, as it describes (in short hand, relative to the other datastructure) how it is different from a classic multidimensional array. 
+
+[01:29:45.0202] <yulia>
+ * As a concept, rather than an implementation, Multidimensional arrays are arrays with multiple dimensions. That can be represented as an array of arrays as in c, python, javascript etc, or as a dedicated constructor/layout as in c#. Everything that can be represented in C# as a multidimensional array can be represented as an array of arrays where each sub array is of the same length. 
+
+This difference is of implementation rather than of concept. C# has first class support and optimization for multidimensional arrays. Jagged arrays are a unique distinction in that language compared to others, as in most languages those two are used interchangeably due to sharing an implementation. For documentation purposes, if we need to say that javascript can, for example, represent a matrix, then the term multidimensional arrays is more useful as it is descriptive. "jagged" is less useful without first defining multidimensional, as it describes (in short hand, relative to the other datastructure) how it is different from a classic multidimensional array. 
+
+[01:33:42.0809] <yulia>
+ * As a concept, rather than an implementation, Multidimensional arrays are arrays with multiple dimensions. That can be represented as an array of arrays as in c, python, javascript etc, or as a dedicated constructor/layout as in c#. Everything that can be represented in C# as a multidimensional array can be represented as an array of arrays where each sub array is of the same length. 
+
+This difference is of implementation rather than of concept. A good discussion of different representations of this concept can be found here: https://eli.thegreenplace.net/2015/memory-layout-of-multi-dimensional-arrays/ -- a single implementation isn't the right one for all cases.  C# has first class support and optimization for multidimensional arrays. Jagged arrays are a unique distinction in that language compared to others, as in most languages those two are used interchangeably due to sharing an implementation. For documentation purposes, if we need to say that javascript can, for example, represent a matrix, then the term multidimensional arrays is more useful as it is descriptive. "jagged" is less useful without first defining multidimensional, as it describes (in short hand, relative to the other datastructure) how it is different from a classic multidimensional array. 
+
+[01:37:11.0088] <yulia>
+ * As a concept, rather than an implementation, Multidimensional arrays are arrays with multiple dimensions. That can be represented as an array of arrays as in c, python, javascript etc, or as a dedicated constructor/layout as in c#. Everything that can be represented in C# as a multidimensional array can be represented as an array of arrays where each sub array is of the same length. 
+
+This difference is of implementation rather than of concept. A good discussion of different representations of this concept can be found here: https://eli.thegreenplace.net/2015/memory-layout-of-multi-dimensional-arrays/ -- a single implementation isn't the right one for all cases.  With regards to terminology, Jagged arrays are a unique distinction in C# that is not commonly used in other languages, especially where there is no implementation distinction. For documentation purposes, if we need to say that javascript can, for example, represent a matrix, then the term multidimensional arrays is more useful as it is descriptive. "jagged" is less useful without first defining multidimensional, as it describes (in short hand, relative to the other datastructure) how it is different from a classic multidimensional array. 
+
+[01:43:35.0584] <Ashley Claymore>
+> <@sideshowbarker:mozilla.org> Here’s what I have so far:
+> >
+> > In JavaScript, arrays are not [primitives](https://chat.mozilla.org/en-US/docs/Glossary/Primitive) but are instead represented with `Array` objects, which have the following core characteristics:
+> > - **JavaScript arrays are not fixed-length and not restricted to containing a single data type** but can have a mix of data types. (When those characteristics are undesirable, use [typed arrays](https://chat.mozilla.org/en-US/docs/Web/JavaScript/Typed_arrays) instead.)
+> > 
+> > - **JavaScript arrays are zero-indexed**: the first element of a JavaScript array is at index `0`, and the last element is at the value of the array's {{jsxref("Array.length", "length")}} property minus`1`. See the [access an array item by its index](https://chat.mozilla.org/#access_an_array_item_by_its_index) example. Using an invalid or out-range index number returns `undefined`.
+> > 
+> > - **JavaScript array-copy operations create shallow copies** — (just as **copy operations with any JavaScript objects create shallow copies**): assigning an existing array to a new variable does not create a copy. Instead the new variable contains a_reference_ to the original array. If you change a value in the original array, it will be reflected in the new array. See the [copy an array](https://chat.mozilla.org/#copy_an_array) examples.
+
+> "In JavaScript, arrays are not primitives but are instead represented with Array objects"
+
+This reminds me of when I was first learning to program, in JS. And it was a while before I realized that arrays and regexes are '_just_ objects', in my mind because they had a literal version that meant they were a primitive
+
+[01:43:59.0972] <Ashley Claymore>
+I like to hold onto these memories
+
+[01:45:28.0458] <yulia>
+objects being the operative word 😬
+
+[01:46:58.0409] <yulia>
+I guess, i would also link what an object is there. It may be useful to have a page on javascript types and the weirdness that is 'everything is an object'
+
+[01:52:11.0044] <yulia>
+I think that, if you don't want to explicitly call out matrices (which i don't think is a good idea, we don't give any real support for it, you have to do it yourself), then this line covers it
+> JavaScript arrays are not fixed-length and not restricted to containing a single data type but can have a mix of data types.
+
+It could something to the effect that '... and can hold any javascript value, including primitives, objects, functions, and other arrays'. If someone is learning about arrays for the first time, multidimensional sounds complicated. The flexibility should be explicit.
+
+[01:52:39.0589] <yulia>
+ * I think that, if you don't want to explicitly call out matrices (which i don't think is a good idea, we don't give any real support for it, you have to do it yourself), then this line covers it
+> JavaScript arrays are not fixed-length and not restricted to containing a single data type but can have a mix of data types.
+
+It could something to the effect that '... and can hold any javascript value, including primitives, objects, functions, and other arrays'. If someone is learning about arrays for the first time, multidimensional sounds complicated. The flexibility should be explicit.
+
+[01:53:13.0265] <yulia>
+ * I think that, if you don't want to explicitly call out matrices (which i don't think is a good idea, we don't give any real support for it, you have to do it yourself), then this line covers it
+> JavaScript arrays are not fixed-length and not restricted to containing a single data type but can have a mix of data types.
+
+It could something to the effect that '... and can hold any mix of javascript values, including primitives, objects, functions, and other arrays'. If someone is learning about arrays for the first time, multidimensional sounds complicated. The flexibility should be explicit.
+
+[02:31:30.0277] <yulia>
+ * I guess it really depends on what you want to communicate. Arrays in JS are objects with numbered indicies as an implementation, but we wouldn't say that JavaScript doesn't have Arrays. As a concept, rather than an implementation, Multidimensional arrays are arrays with multiple dimensions. That can be represented as an array of arrays as in c, python, javascript etc, or as a dedicated constructor/layout as in c#. Everything that can be represented in C# as a multidimensional array can be represented as an array of arrays where each sub array is of the same length. 
+
+This difference is of implementation rather than of concept. A good discussion of different representations of this concept can be found here: https://eli.thegreenplace.net/2015/memory-layout-of-multi-dimensional-arrays/ -- a single implementation isn't the right one for all cases.  With regards to terminology, Jagged arrays are a unique distinction in C# that is not commonly used in other languages, especially where there is no implementation distinction. For documentation purposes, if we need to say that javascript can, for example, represent a matrix, then the term multidimensional arrays is more useful as it is descriptive. "jagged" is less useful without first defining multidimensional, as it describes (in short hand, relative to the other datastructure) how it is different from a classic multidimensional array. 
+
+[02:31:39.0189] <yulia>
+ * I guess it really depends on what you want to communicate. Arrays in JS are objects with numbered fields as an implementation, but we wouldn't say that JavaScript doesn't have Arrays. As a concept, rather than an implementation, Multidimensional arrays are arrays with multiple dimensions. That can be represented as an array of arrays as in c, python, javascript etc, or as a dedicated constructor/layout as in c#. Everything that can be represented in C# as a multidimensional array can be represented as an array of arrays where each sub array is of the same length. 
+
+This difference is of implementation rather than of concept. A good discussion of different representations of this concept can be found here: https://eli.thegreenplace.net/2015/memory-layout-of-multi-dimensional-arrays/ -- a single implementation isn't the right one for all cases.  With regards to terminology, Jagged arrays are a unique distinction in C# that is not commonly used in other languages, especially where there is no implementation distinction. For documentation purposes, if we need to say that javascript can, for example, represent a matrix, then the term multidimensional arrays is more useful as it is descriptive. "jagged" is less useful without first defining multidimensional, as it describes (in short hand, relative to the other datastructure) how it is different from a classic multidimensional array. 
+
+[02:32:31.0399] <yulia>
+ * I think that, if you don't want to explicitly call out arrays-in-arrays, then this line covers it
+> JavaScript arrays are not fixed-length and not restricted to containing a single data type but can have a mix of data types.
+
+It could something to the effect that '... and can hold any mix of javascript values, including primitives, objects, functions, and other arrays'. If someone is learning about arrays for the first time, multidimensional sounds complicated. The flexibility should be explicit.
+
+[02:33:30.0013] <yulia>
+ * I think that, if you don't want to explicitly call out arrays-in-arrays and the things that can represent, then this line covers it
+> JavaScript arrays are not fixed-length and not restricted to containing a single data type but can have a mix of data types.
+
+It could something to the effect that '... and can hold any mix of javascript values, including primitives, objects, functions, and other arrays'. If someone is learning about arrays for the first time, multidimensional sounds complicated. The flexibility should be explicit.
+
+[02:58:35.0580] <yulia>
+ * I guess it really depends on what you want to communicate. Arrays in JS are objects with numbered fields as an implementation, but we wouldn't say that JavaScript doesn't have Arrays. As a concept, rather than an implementation, Multidimensional arrays are arrays with multiple dimensions. That can be represented as an array of arrays as in c or as a dedicated constructor/layout as in c#. Everything that can be represented in C# as a multidimensional array can be represented as an array of arrays where each sub array is of the same length. 
+
+This difference is of implementation rather than of concept. A good discussion of different representations of this concept can be found here: https://eli.thegreenplace.net/2015/memory-layout-of-multi-dimensional-arrays/ -- a single implementation isn't the right one for all cases.  With regards to terminology, Jagged arrays are a unique distinction in C# that is not commonly used in other languages, especially where there is no implementation distinction. For documentation purposes, if we need to say that javascript can, for example, represent a matrix, then the term multidimensional arrays is more useful as it is descriptive. "jagged" is less useful without first defining multidimensional, as it describes (in short hand, relative to the other datastructure) how it is different from a classic multidimensional array. 
+
+[03:00:41.0699] <yulia>
+ * I guess it really depends on what you want to communicate. Arrays in JS are objects with numbered fields as an implementation, but we wouldn't say that JavaScript doesn't have Arrays. As a concept, rather than an implementation, Multidimensional arrays are arrays with multiple dimensions. That can be represented as an array of arrays as in c or as a dedicated named constructor as in c#. Everything that can be represented in C# as a multidimensional array can be represented as an array of arrays where each sub array is of the same length. 
+
+This difference is of implementation rather than of concept. A good discussion of different representations of this concept can be found here: https://eli.thegreenplace.net/2015/memory-layout-of-multi-dimensional-arrays/ -- a single implementation isn't the right one for all cases.  With regards to terminology, Jagged arrays are a unique distinction in C# that is not commonly used in other languages, especially where there is no implementation distinction. For documentation purposes, if we need to say that javascript can, for example, represent a matrix, then the term multidimensional arrays is more useful as it is descriptive. "jagged" is less useful without first defining multidimensional, as it describes (in short hand, relative to the other datastructure) how it is different from a classic multidimensional array. 
+
+[03:11:59.0201] <Jessidhia>
+the usual way of doing multidimensional arrays on languages without the distinction between multidimensional and jagged arrays actually is to use stride (aka pitch); you probably saw something about it if you ever did 2d graphics
+
+nested arrays are actually pretty weird as far as representing “data with multiple dimensions” go, or at least I wouldn’t consider, say, an array of pairs an n-by-2 multidimensional array
+
+this is more of a philosophical discussion, though 😇
+
+[03:12:38.0248] <yulia>
+yep, agreed!
+
+[03:13:28.0162] <yulia>
+when it comes to communicating with learners i would go for simpler language in any case.
+
+[03:14:31.0371] <yulia>
+we had a proposal to introduce stride to typed arrays, but it isn't going forwards for a few reasons
+
+[03:14:37.0475] <yulia>
+ * we had a proposal to introduce stride to typed arrays, but it isn't going forwards for a few reasons
+
+[05:34:35.0969] <sideshowbarker>
+thanks all for the feedback about the `Array` article
+
+[05:35:39.0524] <sideshowbarker>
+another thing I’ve run into with the rewrite is, at MDN we lack a good explanation of what a “shallow copy” is, specifically for JavaScript objects
+
+[05:37:22.0441] <sideshowbarker>
+so as part of that, I have question: Is it accurate to state something like, *“JavaScript objects can contain two broad types of things: primitives, and references to objects”* ?
+
+[05:38:53.0671] <sideshowbarker>
+in other words, is any object member actually a reference to an object? — including one that’s an object literal? (rather than a variable)
+
+[05:41:47.0402] <sideshowbarker>
+for example, in `let foo = ["bar",  { "hoge": "moge" }]`, is the second array member actually a _reference_ to a `{"hoge": "moge"}` object?
+
+[05:47:50.0249] <Andreu Botella (he/they)>
+That's right
+
+[05:48:24.0209] <Andreu Botella (he/they)>
+But IMO I'm not sure treating primitives and references as two separate things is necessarily the best model, at least for beginners
+
+[05:48:50.0755] <Andreu Botella (he/they)>
+You can treat primitives as essentially immutable interned references
+
+[05:49:27.0781] <Andreu Botella (he/they)>
+That doesn't work with, say, proxies, but we're talking beginners
+
+[06:04:16.0794] <sideshowbarker>
+I wonder if explaining interned references might be more than needed for beginners, in the context of this
+
+[06:08:06.0706] <Ashley Claymore>
+I quite like the model described by the JustJavascript course. How everything is a value and objects can point to other values. 
+
+[06:13:32.0805] <jmdyck>
+i.e. you can think of a reference to the "bar" string in the same way you think of a reference to the {"hoge": "moge"} object
+
+[06:14:31.0079] <jmdyck>
+(But note that the spec uses "reference" in a different context.)
+
+[06:16:41.0175] <sideshowbarker>
+yeah — except that if you copy `foo` to `baz`, and change the "bar" in `foo`, the "bar" in `baz` doesn’t change — but if you change the `{"hoge": "moge"}` object in `foo`, it does change in `baz` too, right?
+
+[06:16:58.0176] <sideshowbarker>
+ * yeah — except that if you copy `foo` to `baz`, and change the "bar" in `foo`, the "bar" in `baz` doesn’t change — but if you change the `{"hoge": "moge"}` object in `foo`, it does change in `baz` too, right?
+
+[06:18:14.0309] <Ashley Claymore>
+"bar" can't be changed? only foo[0] can be changed
+
+[06:18:18.0309] <jmdyck>
+That's where you have to be careful with wording
+
+[06:18:59.0277] <Andreu Botella (he/they)>
+> <@sideshowbarker:mozilla.org> I wonder if explaining interned references might be more than needed for beginners, in the context of this
+
+by "interned" I just meant that 40 + 2 always returns the same "reference" as 42, so equality just works
+
+[06:19:19.0191] <sideshowbarker>
+> <@andreubotella:mozilla.org> by "interned" I just meant that 40 + 2 always returns the same "reference" as 42, so equality just works
+
+ah OK
+
+[06:20:29.0456] <jmdyck>
+You can't change a string value, but you can change which value a property refers to.
+
+[06:20:53.0327] <sideshowbarker>
+> <@aclaymore:matrix.org> "bar" can't be changed? only foo[0] can be changed
+
+OK yeah maybe that’s the point I need to focus on for the “shallow copy” explanation
+
+[06:21:40.0583] <Ashley Claymore>
+> <@jmdyck:matrix.org> You can't change a string value, but you can change which value a property refers to.
+
+right, and that is regardless of what type of value the property is referring to, primitive or another object.
+
+[06:22:58.0850] <Ashley Claymore>
+when something is shallow copied, it is as the first level of values are all 'moved' so they are also in the copy, while still remaining in the original.
+
+[06:24:10.0386] <Ashley Claymore>
+or from a different angle, when an object is shallow copied. Only the object itself is copied, so the copy's properties still point to the same values as the original's. again it doesn't matter if the values are objects or primitives
+
+[06:24:17.0116] <Ashley Claymore>
+ * or from a different angle, when an object is shallow copied. Only the object itself is copied, so the copy's properties still point to the same values as the original. again it doesn't matter if the values are objects or primitives
+
+[06:24:27.0403] <Ashley Claymore>
+ * or from a different angle, when an object is shallow copied. Only the object itself is copied, so the copy's properties still point to the same values as the original's. again it doesn't matter if the values are objects or primitives
+
+[06:24:29.0501] <sideshowbarker>
+changing the value of `foo[0]` assigns a completely new value, while changing `{ "hoge": "moge" }` to `{ "foo": "bar" }` is just altering properties of the existing `foo[1]` value
+
+[06:25:56.0185] <jmdyck>
+No, `{ "foo": "bar"}` creates a new object, doesn't affect the {"hoge":"moge"} object.
+
+[06:26:06.0727] <sideshowbarker>
+OK
+
+[06:26:08.0673] <Andreu Botella (he/they)>
+```js
+foo[1] = {"foo": "bar"};  // assigns a completely new value
+
+// alters the existing foo[1] value
+foo[1].foo = "bar";
+delete foo[1].hoge;
+
+[06:26:45.0775] <sideshowbarker>
+ah yeah
+
+
+
+2022-01-28
+[18:33:15.0935] <jmdyck>
+jschoi: The forbidden extension re colon was added in ES6.
+
+[18:34:16.0014] <jmdyck>
+(The whole Forbidden Extensions clause was added in ES6.)
+
+[18:35:50.0925] <Jessidhia>
+the “let’s not break typescript” clauses?
+
+[04:35:09.0731] <sideshowbarker>
+FYI, I wrote drafts of “shallow copy”  and “deep copy” glossary entries for MDN. PR is at https://github.com/mdn/content/pull/12474. Review would be very much appreciated.
+
+[04:35:51.0501] <sideshowbarker>
+The rendered draft pages are here:
+- https://pr12474.content.dev.mdn.mozit.cloud/en-US/docs/Glossary/Shallow_copy
+- https://pr12474.content.dev.mdn.mozit.cloud/en-US/docs/Glossary/Deep_copy
+
+[05:53:46.0372] <jmdyck>
+Re the Shallow_copy draft:
+- You're using "member" where the proper term is "property". (Unless you mean something different?)
+- For "All standard built-in object-copy operations", maybe list them, or at least name a few.
+- I think you'd benefit from having a shorter way to say "the object from which the shallow copy was made". E.g., you could set up the terms "the original" and "the copy". Or even just call them (say) "X" and "Y".
+
+
+2022-01-31
+[23:22:45.0300] <sideshowbarker>
+jmdyck: thanks — made those changes; see the updated versions:
+- https://pr12474.content.dev.mdn.mozit.cloud/en-US/docs/Glossary/Shallow_copy
+- https://pr12474.content.dev.mdn.mozit.cloud/en-US/docs/Glossary/Deep_copy
+

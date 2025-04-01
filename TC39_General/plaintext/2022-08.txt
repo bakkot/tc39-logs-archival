@@ -1,0 +1,477 @@
+2022-08-03
+[05:16:34.0727] <Jack Works>
+For a Pattern ({ a: b }), is Assignment ( pattern = expr ) and ForIn/ForOf ( for (pattern of) ) the only case that can change "b" instead of declare a new "b"?
+
+[05:37:33.0833] <Ashley Claymore>
+they do appear to be the only two places that reference AssignmentPattern in the spec, other references are for early errors
+
+
+2022-08-04
+[21:14:31.0457] <jmdyck>
+Did github get rid of the "suggest a change" button (when reviewing  a PR)? Or has it moved somewhere?
+
+[22:09:30.0330] <bakkot>
+jmdyck: same place as always for me
+
+[22:09:59.0700] <jmdyck>
+I guess github just doesn't like me then.
+
+[05:16:22.0821] <Feng Yu>
+Can I make my pr merged if I am not a delegate? https://github.com/tc39/ecma262/pull/2800
+
+[08:04:12.0936] <Jack Works>
+you need to sign some law thing about intelligent property (?) as I can recall?
+
+[08:06:03.0654] <littledan>
+https://tc39.es/agreements/contributor/
+
+[08:06:19.0443] <littledan>
+Did someone say intellectual property? *comes running*
+
+[08:14:56.0619] <ljharb>
+I’ll bring it up in the next editor call
+
+[16:06:07.0788] <Feng Yu>
+> <@ljharb:matrix.org> I’ll bring it up in the next editor call
+
+Thank you. Jordan 
+
+[16:07:07.0300] <Feng Yu>
+> <@littledan:matrix.org> https://tc39.es/agreements/contributor/
+
+Done! I filled this form.
+
+
+2022-08-05
+[15:25:22.0013] <torazaburo>
+What is the prerequisite for being able to join TC39-delegates? It only shows me "View". Is it trying to match my email with that at my employer and through which I am a delegate? That didn't seem to work.
+
+
+2022-08-07
+[10:32:31.0442] <snek>
+does anyone know any tools to catch inconsistent sort functions in codebases? like some sort of linting
+
+[10:33:16.0853] <snek>
+my top idea right now is if development, override Array.prototype.sort with a custom function that checks and yells at you
+
+
+2022-08-09
+[05:24:17.0168] <Jack Works>
+> <@devsnek:matrix.org> does anyone know any tools to catch inconsistent sort functions in codebases? like some sort of linting
+
+What do you mean by inconsistent sorts? 
+
+[05:59:12.0913] <Ashley Claymore>
+`(a, b) => Math.random() > 0.5 ? -1 : 1`
+
+[06:00:51.0049] <Ashley Claymore>
+I could swear some browsers do (or used to) throw if they detected an inconsistent sort while running their algo
+
+[06:12:41.0256] <Jack Works>
+Enforced PartialOrd 🤔
+
+[06:30:59.0462] <Ashley Claymore>
+In ES5 said "If comparefn [..] is not a consistent comparison function [...] the behaviour of sort is implementation-defined." - which would have allowed an engine to throw if it detected it
+
+[06:31:46.0063] <Ashley Claymore>
+now we seem to only say that the "SortOrder" is implementation defined. So I _think_ throwing would no longer be spec compliant
+
+[06:32:07.0425] <Ashley Claymore>
+ * now we seem to only say that the "SortOrder" is implementation defined. So I _think_ throwing would no longer be spec compliant
+
+[06:56:43.0823] <jmdyck>
+ES6 (draft 27) changed "the behaviour of sort is implementation-defined" to "the sort order is implementation-defined" in that sentence.
+
+[06:57:14.0970] <jmdyck>
+ * ES6 (draft 27) changed "the behaviour of sort is implementation-defined" to "the sort order is implementation-defined" in that sentence.
+
+[08:47:00.0096] <snek>
+> <@jackworks:matrix.org> What do you mean by inconsistent sorts? 
+
+look up "consistent comparator" in the spec
+
+[10:14:02.0152] <snek>
+> <@jmdyck:matrix.org> ES6 (draft 27) changed "the behaviour of sort is implementation-defined" to "the sort order is implementation-defined" in that sentence.
+
+i just fixed a change someone made with a sort function inconsistent to the point that it displayed somewhat normally but still weird on chrome, reversed on firefox, and random order in hermes
+
+[10:14:13.0659] <snek>
+nothing threw thankfully :)
+
+[10:15:26.0849] <Ashley Claymore>
+and they did that accidentally?
+
+[10:15:32.0170] <snek>
+i put this together to detect inconsistent functions https://engine262.js.org/#gist=49dc7f2fb9ff3095d401f22529b4443f
+
+[10:15:43.0262] <snek>
+> <@aclaymore:matrix.org> and they did that accidentally?
+
+yes
+
+[10:16:47.0127] <Ashley Claymore>
+it sounds more like an esoteric JS quiz question
+
+[10:17:10.0097] <snek>
+yeah we need more implementation defined behavior
+
+[10:17:22.0167] <snek>
+like those funny c programs 
+
+[10:17:39.0201] <Ashley Claymore>
+`evalAsYouLike(...)`
+
+[10:18:13.0001] <snek>
+technically `eval('debugger')` returns an implementation defined value
+
+[10:18:27.0932] <snek>
+i don't think anyone does anything interesting with it
+
+[10:19:05.0763] <snek>
+we should specify that to return undefined lol
+
+[10:19:13.0760] <snek>
+or empty i guess
+
+[11:29:43.0689] <bakkot>
+ubsan, but for javascript
+
+[12:08:45.0264] <shu>
+idbsan
+
+[12:23:31.0792] <rkirsling>
+absan (Annex B sanitizer)
+
+[13:37:29.0349] <snek>
+> <@bakkot:matrix.org> ubsan, but for javascript
+
+i legit tried searching for this the other day, with lots of keywords, and i am surprised to not even find any bad statups advertising this?
+
+[13:38:09.0721] <bakkot>
+there's just not that much implementation-defined behavior
+
+[13:38:40.0012] <bakkot>
+and a majority of it is stuff like the precision of math operations and number parsing, which no one wants to audit
+
+[13:39:03.0776] <bakkot>
+array sort comparators are probably genuinely the only case worth worrying about
+
+[13:39:13.0014] <bakkot>
+ * array sort comparators are probably genuinely the only case worth worrying about
+
+[13:39:33.0269] <snek>
+oh yeah i don't literally mean only finding ID/UB, i mean finding weird bugs just due to js being weird
+
+[13:39:45.0536] <snek>
+ * oh yeah i don't literally mean onnly finding ID/UB, i mean finding weird bugs just due to js being weird
+
+[13:39:48.0418] <snek>
+ * oh yeah i don't literally mean only finding ID/UB, i mean finding weird bugs just due to js being weird
+
+[13:40:42.0111] <bakkot>
+eslint has some of those checks, as does typescript
+
+[13:40:49.0014] <bakkot>
+but they're static, yes
+
+[13:41:46.0536] <snek>
+maybe a good one would have been catching the `__proto__` bugs that every json handling http library has
+
+[13:42:20.0737] <bakkot>
+by adding a check at every single computed property assignment?
+
+[13:42:39.0709] <bakkot>
+I mean... I guess? but you'd still need to actually run into the bad code for it to be triggered
+
+[13:42:46.0076] <bakkot>
+that one seems like a better use case for a fuzzer
+
+[13:42:53.0128] <bakkot>
+ * that one seems like a better use case for a fuzzer
+
+[13:43:09.0973] <snek>
+yeah these all require fuzzing
+
+[13:43:23.0836] <snek>
+or letting it loose on your users 😄
+
+[13:43:34.0971] <bakkot>
+ah, sure
+
+[13:43:50.0725] <bakkot>
+a ubsan designed to be used with a fuzzer would be valuable, for sure
+
+[13:44:08.0635] <snek>
+at discord we have a system that scans for a11y problems as users use the app and reports them 
+
+[13:44:43.0756] <snek>
+its an interesting concept
+
+[13:47:48.0507] <bakkot>
+>by adding a check at every single computed property assignment?
+
+on further consideration you'd do this by overriding `Object.prototype.__proto__` and friends, of course
+
+
+2022-08-10
+[23:15:44.0664] <le1039dxl12>
+https://i.imgflip.com/6pggbb.jpg
+
+[07:07:46.0321] <Jack Works>
+> <@devsnek:matrix.org> technically `eval('debugger')` returns an implementation defined value
+
+returns an <del>implementation defined value</del> implementation defined **Completion Record**
+
+which means `for (const a of b) { eval("debugger") }` might be able to break the for loop?
+
+
+2022-08-11
+[20:33:54.0805] <snek>
+> <@jackworks:matrix.org> returns an <del>implementation defined value</del> implementation defined **Completion Record**
+> which means `for (const a of b) { eval("debugger") }` might be able to break the for loop?
+
+function calls are not allowed to return break or continue completions 
+
+[20:34:18.0341] <snek>
+if someone cares we should add the same restriction to debugger 
+
+[20:34:29.0938] <snek>
+or just remove the return entirely 
+
+[20:36:02.0387] <snek>
+actually I wonder.... direct eval may not have that assert cuz it forks evaluatecall
+
+[20:36:08.0444] <snek>
+this is so niche lol
+
+[03:05:50.0985] <Jack Works>
+> <@devsnek:matrix.org> function calls are not allowed to return break or continue completions 
+
+Oh then `for (x in b) debugger` 😂
+
+[12:38:32.0093] <Kris Kowal>
+I’m looking forward to the proposal that adds `forAwaitEach` to the iterator and async iterator prototypes.
+
+[12:45:24.0555] <Kris Kowal>
+> <@kriskowal:matrix.org> I’m looking forward to the proposal that adds `forAwaitEach` to the iterator and async iterator prototypes.
+
+Such that it returns a promise for the final value https://github.com/tc39/proposal-iterator-helpers/issues/217
+
+[12:50:23.0821] <bakkot>
+hmm, really the async `forEach` should be returning a promise already
+
+[12:50:30.0596] <bakkot>
+so you can tell if it's done / catch errors
+
+[12:50:43.0925] <Kris Kowal>
+Yes
+
+[12:51:01.0814] <bakkot>
+I am less sold on the `return` value, mostly because I've never encountered a compelling use case
+
+[12:52:26.0153] <Kris Kowal>
+Came up because a member of Agoric’s dev community needed the final value from one of our async iterators https://github.com/Agoric/agoric-sdk/discussions/5924#discussioncomment-3378600
+
+[12:53:32.0171] <Kris Kowal>
+In this case, the final iteration value is a timestamp that marks the time the sequence stopped.
+
+[16:43:46.0801] <snek>
+> <@bakkot:matrix.org> hmm, really the async `forEach` should be returning a promise already
+
+was this not already the case?
+
+[16:53:37.0300] <Kris Kowal>
+I can imagine there being a concern if `AsyncIterator.prototype.forEach` returns a promise where folks expect `forEach` generally to not return a promise. A pretty easy solution to that would be to have `Iterator.prototype.forEach`, `Iterator.prototype.forAwaitEach`, and `AsyncIterator.prototype.forAwaitEach`, but no `AsyncIterator.prototype.forEach`.
+
+[16:53:48.0915] <Kris Kowal>
+ * I can imagine there being a concern if `AsyncIterator.prototype.forEach` returns a promise where folks expect `forEach` generally to not return a promise. A pretty easy solution to that would be to have `Iterator.prototype.forEach`, `Iterator.prototype.forAwaitEach`, and `AsyncIterator.prototype.forAwaitEach`, but no `AsyncIterator.prototype.forEach`.
+
+[16:54:25.0131] <Kris Kowal>
+Where `forEach` returns the final value and `forAwaitEach` returns a promise for the final value.
+
+
+2022-08-12
+[17:26:43.0599] <Kris Kowal>
+I see `toAsync` and how it avoids a {,Async} method name doubling so please disregard forAwaitEach and just assume I mean the behavior of AsyncIterator.protoype.forEach, which I think should return a promise for the done value
+
+[17:27:07.0455] <Kris Kowal>
+Thanks @bakkot
+
+[18:03:58.0620] <bakkot>
+> <@devsnek:matrix.org> was this not already the case?
+
+it's just kind of underspecified
+
+[18:04:09.0442] <bakkot>
+https://github.com/tc39/proposal-iterator-helpers/issues/218
+
+
+2022-08-16
+[23:28:50.0186] <sideshowbarker>
+Are there tests somewhere for https://github.com/tc39/proposal-regexp-legacy-features/ ?
+
+I’m looking in https://github.com/tc39/test262 and not finding anything — but maybe I’m not looking in the right place.
+
+e.g., looking in https://github.com/tc39/test262/tree/main/test/built-ins/RegExp I’d naïvely expect to find some test for `RegExp.input`…
+
+[23:54:08.0701] <Domenic>
+sideshowbarker: the cursed annex B division strikes again, https://github.com/tc39/test262/tree/main/test/annexB/built-ins/RegExp/legacy-accessors
+
+[23:54:33.0036] <sideshowbarker>
+/me looks
+
+[23:54:57.0526] <Domenic>
+There, uh, appear to be no actual tests of the functionality...
+
+[23:55:12.0373] <Domenic>
+Just tests that it *doesn't* work in some situations
+
+[23:55:25.0061] <Domenic>
+Possibly that's why it's stuck at stage 3
+
+[23:56:00.0095] <littledan>
+yeah tests and implementation priority (I guess it goes both ways)
+
+[23:56:25.0759] <littledan>
+I mean, engines implement legacy accessors, but I don't know if they implement the cleanups proposed
+
+[23:56:44.0770] <Domenic>
+Not sure how up to date https://github.com/tc39/proposal-regexp-legacy-features/blob/master/changes.md is
+
+[23:57:09.0187] <littledan>
+ES6 made some limits on how bad the legacy accessors could possibly be, and the proposal spells things out in an even "cleaner" way than that
+
+[23:57:42.0421] <littledan>
+yeah I don't know either, I haven't been following browser changes here
+
+[23:58:03.0875] <littledan>
+so, yeah, if someone wants a project, that's up for grabs and there's a clear way forward
+
+[23:58:41.0601] <littledan>
+namely, write the tests, assess which browsers already do those semantics, and maybe implement in a browser and convince them to ship
+
+[03:59:48.0093] <sideshowbarker>
+now looking for Array.p.group tests, and not finding any in https://github.com/tc39/test262/tree/main/test/built-ins/Array/prototype
+
+[05:03:07.0016] <Ashley Claymore>
+Looks like they are still in PR https://github.com/tc39/test262/pull/3354
+
+[05:03:24.0338] <Ashley Claymore>
+https://github.com/tc39/test262/pull/3353
+
+[08:10:32.0319] <bakkot>
+we should get those merged
+
+[08:10:53.0746] <bakkot>
+the submitter probably isn't gonna come back at this point so someone else will need to pick those up
+
+
+2022-08-17
+[15:56:30.0554] <snek>
+does anyone here know what method "ajax" style requests used to actually parse the xml? was DOMParser available back then?
+
+[15:56:53.0245] <snek>
+my understanding is this was preferable because the `JSON` api didn't exist yet(?)
+
+[15:57:20.0123] <snek>
+ * my understanding is this was preferable because the `JSON` api didn't exist yet(?)
+
+[16:01:59.0639] <ljharb>
+i think it might have been yeah
+
+[16:02:54.0319] <snek>
+its hard to search cuz so much "ajax" stuff is just jquery's json api now 😔
+
+[16:04:12.0973] <snek>
+oh `XMLHttpRequest` has `responseXML`
+
+[16:04:14.0716] <snek>
+that makes sense
+
+
+2022-08-18
+[17:01:06.0848] <Kris Kowal>
+JSON and AJAX popped into existence around the same time. The X in AJAX became J some time between the original blog and when someone read the blog.
+
+[17:38:28.0362] <joepie91 🏳️‍🌈>
+lol
+
+[17:38:52.0446] <joepie91 🏳️‍🌈>
+yeah I think pretty much only Microsoft ever did the 'X' part of 'AJAX'
+
+[18:36:05.0588] <Domenic>
+Back in the days when I gave conference talks, I sometimes got a laugh with the line "XHR, which stands for JSON SPDY request".
+
+[18:39:10.0067] <joepie91 🏳️‍🌈>
+lol
+
+
+2022-08-20
+[19:01:39.0481] <sideshowbarker>
+FYI https://platform.html5.org/ now has the ES spec and ES Internationalization spec, as well as all current TC39 proposals that have documentation in MDN — along with links to the corresponding test cases and MDN articles and CanIUse pages and flags to indicate the current level of browser support
+
+If you (re)sort the list by the **Category** heading, it’ll group all the JavaScript specs together
+
+[19:02:30.0304] <sideshowbarker>
+ * FYI https://platform.html5.org/ now has the ES spec and ES Internationalization spec, as well as all current TC39 proposals that have documentation in MDN — along with links to the corresponding test cases and MDN articles and CanIUse pages and flags to indicate the current level of browser support
+
+If you (re)sort the list by the **Category** heading, it’ll group all the JavaScript specs together
+
+[10:06:07.0477] <jschoi>
+This thread might be worth looking at by the tuple/record champions; it’s about adding support for them as “composite keys” to IndexedDB: https://github.com/w3c/IndexedDB/issues/390
+
+
+2022-08-23
+[03:21:10.0305] <sideshowbarker>
+Have https://tc39.es/proposal-array-find-from-last/ and https://github.com/tc39/proposal-hashbang/ already been incorporated into the spec? (I noticed their repos have been archived…)
+
+[05:11:31.0025] <jmdyck>
+array-find-from-last (PR #2476) was merged July 13
+
+[05:12:14.0103] <jmdyck>
+hashbang comments (PR #2816) was merged Aug 15
+
+[10:41:41.0292] <ljharb>
+sideshowbarker: generally a proposal repo should only be archived after it's both stage 4 and merged
+
+
+2022-08-31
+[08:43:40.0329] <nicolo-ribaudo>
+I'm updating a repository to from ecmarkup 12.1.0 to 14.1.2, and it gives me a warning for this code:
+
+```
+Return Script Record { [[Realm]]: _realm_, [[ECMAScriptCode]]: _script_, <ins>[[LoadedModules]]: a new empty List,</ins> [[HostDefined]]: _hostDefined_ }
+```
+
+because it expects a "valid record field" instead of `<ins>`: is there an alternative way of marking changes in records?
+
+[08:45:00.0443] <nicolo-ribaudo>
+ * I'm updating a repository to from ecmarkup 12.1.0 to 14.1.2, and it gives me a warning for this code:
+
+```
+Return Script Record { [[Realm]]: _realm_, [[ECMAScriptCode]]: _script_, <ins>[[LoadedModules]]: a new empty List,</ins> [[HostDefined]]: _hostDefined_ }
+```
+
+because it expects a "valid record field" instead of `<ins>`: is there an alternative way of marking changes in records?
+
+[08:47:31.0442] <nicolo-ribaudo>
+As a workaround, I'm wrapping only the field value in `<ins>`
+
+[08:49:40.0037] <bakkot>
+hmm, yeah, I guess I need to teach it about ins/del
+
+[08:49:45.0126] <bakkot>
+I always forget about those
+
+[09:59:44.0923] <annevk>
+Sora Morimoto: thanks for adding the links to tc39.es; that's useful!
+
+[10:03:14.0078] <Sora Morimoto>
+You are too quick to notice that!
+
+[10:38:11.0245] <bakkot>
+nicolo-ribaudo: just published 14.1.3, which should fix it
+
+[10:47:43.0782] <nicolo-ribaudo>
+Thank you!
+

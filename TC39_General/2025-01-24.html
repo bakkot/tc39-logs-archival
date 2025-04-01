@@ -1,0 +1,129 @@
+<!DOCTYPE html><html><head>
+  <title>TC39 General on 2025-01-24</title>
+  <link rel="stylesheet" href="../style.css">
+  <script>window.room = "TC39 General";</script><script src="../render-roomlist.js"></script>
+  <script src="../logs.js"></script>
+</head>
+<body><div class="wrapper">
+<div class="sidebar">
+<div class="title">TC39 General<br>2025-01-24<br><a href="plaintext/">plaintext logs</a></div>
+<div class="nav">
+<a href="2025-01-23" class="nav-link"><span>prev</span></a>
+<a href="2025-01-27" class="nav-link"><span style="float:right">next</span></a>
+</div>
+    <div class="all-rooms"><noscript>JavaScript is required to load the channel index, but you can go to <a href="../..">the static index</a> directly.</noscript></div>
+<div class="footer"><a href="https://github.com/bakkot/matrix-archive-bot">source on github</a></div>
+</div>
+<div class="rhs">
+<div class="rhs-header">
+<span id="error" style="color: red; display:none">error</span>
+
+<input type="text" id="query" size="25" placeholder="Search TC39 General">
+<a id="search-submit" class="button icon-link" title="Search">
+  <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M505 442.7L405.3 343c-4.5-4.5-10.6-7-17-7H372c27.6-35.3 44-79.7 44-128C416 93.1 322.9 0 208 0S0 93.1 0 208s93.1 208 208 208c48.3 0 92.7-16.4 128-44v16.3c0 6.4 2.5 12.5 7 17l99.7 99.7c9.4 9.4 24.6 9.4 33.9 0l28.3-28.3c9.4-9.4 9.4-24.6.1-34zM208 336c-70.7 0-128-57.2-128-128 0-70.7 57.2-128 128-128 70.7 0 128 57.2 128 128 0 70.7-57.2 128-128 128z"></path></svg>
+</a>
+</div>
+
+<div class="log"><table id="log-table"><tbody id="log-tbody">
+
+  <tr class="msg" id="L0"><td class="ts-cell"><a class="ts" href="#L0" alt="Thu Jan 23 2025 16:48:45 GMT-0800 (Pacific Standard Time)">00:48</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-11" title="@gibson042:matrix.org">Richard Gibson</span>&gt;</div></td><td class="msg-cell"><p><span class="nick-6">ljharb</span>: I have a not-yet-committed version of what you're looking for; the ultimate fallback really is memory allocations. Simplified version:</p>
+<pre><code class="language-js">const enqueueTask = callback =&gt; {
+  const id = setTimeout(callback);
+  return () =&gt; clearTimeout(id);
+};
+const gcWatches = new FinalizationRegistry(([callback, data]) =&gt; void callback(data));
+const whenCollected = (target, data = undefined) =&gt;
+  new Promise(resolve =&gt; gcWatches.register(target, [resolve, data]));
+const watchGC = (target, data = undefined) =&gt; {
+  const collected = whenCollected(target, data);
+  let retained = true;
+  collected.then(() =&gt; { retained = false; });
+  // Return a new promise that waits for GC plus a turn (in case the GC promise
+  // of the new sentinel object fulfills before that of the target) and then
+  // fulfills with the then-current retention status of the target.
+  const isRetained = () =&gt; whenCollected({}).then().then(() =&gt; retained);
+  return { collected, isRetained };
+};
+const forceCollectionP = (async () =&gt; {
+  let garbageScale = 2 ** 16;
+  const tryTriggerGC = () =&gt; void new Uint8Array(garbageScale);
+  const forceGC = async (patience = 1000) =&gt; {
+    const sentinelCollectedP = whenCollected({});
+
+    // Wait a turn to clear the stack, then add pressure in a sequence of prompt jobs.
+    await null;
+    let reject;
+    const pressureP = new Promise((...resolvers) =&gt; { reject = resolvers[1]; });
+    void pressureP.catch(() =&gt; {});
+    let jobCount = 0;
+    let abortNextJob = () =&gt; {};
+    const abort = () =&gt; {
+      abortNextJob();
+      reject();
+      patience = 0;
+    };
+    (function startNextJob() {
+      if (!(jobCount &lt; patience)) return reject(Error(`failed to GC after ${jobCount} attempts`));
+      tryTriggerGC();
+      jobCount++;
+      abortNextJob = enqueueTask(startNextJob);
+    })();
+    await Promise.race([sentinelCollectedP, pressureP]);
+    abort();
+
+    // Try to tune garbageScale for forcing GC in one job.
+    if (jobCount &gt; 1 &amp;&amp; garbageScale &gt; 0 &amp;&amp; garbageScale &lt; 2 ** 28) garbageScale *= 2;
+
+    return { jobCount };
+  };
+
+  // Run sanity checks before releasing the function.
+  await forceGC();
+  const weakmap = new WeakMap();
+  let { fastKeyWatch, slowKeyWatch, slowKey } = (() =&gt; {
+    const fastKey = {};
+    const slowKey = {};
+    weakmap.set(fastKey, 'fast-gc sanity check');
+    weakmap.set(slowKey, 'slow-gc sanity check');
+    const fastKeyWatch = watchGC(fastKey);
+    const slowKeyWatch = watchGC(slowKey);
+    return { fastKeyWatch, slowKeyWatch, slowKey };
+  })();
+  const fastKeyRetainedP = fastKeyWatch.isRetained();
+  const slowKeyRetainedP = slowKeyWatch.isRetained();
+  await forceGC();
+  if (await fastKeyRetainedP) throw Error('fast-gc key was not collected!');
+  if (!(await slowKeyRetainedP)) throw Error('slow-gc key was collected early!');
+  const slowKeyStillRetainedP = slowKeyWatch.isRetained();
+  slowKey = null;
+  await forceGC();
+  if (await slowKeyStillRetainedP) throw Error('slow-gc key was not collected!');
+
+  return forceGC;
+})();
+
+const forceGC = await forceCollectionP;
+</code></pre>
+</td></tr>
+  <tr class="msg" id="L1"><td class="ts-cell"><a class="ts" href="#L1" alt="Thu Jan 23 2025 19:05:58 GMT-0800 (Pacific Standard Time)">03:05</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@domenicdenicola:matrix.org">Domenic</span>&gt;</div></td><td class="msg-cell">Bikeshedding help requested for an error type that includes properties with how much X is available, versus how much X you requested: <a href="https://github.com/whatwg/webidl/issues/1463">https://github.com/whatwg/webidl/issues/1463</a></td></tr>
+  <tr class="msg" id="L2"><td class="ts-cell"><a class="ts" href="#L2" alt="Fri Jan 24 2025 12:29:53 GMT-0800 (Pacific Standard Time)">20:29</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-12" title="@matthewdean:matrix.org">Matthew Dean</span>&gt;</div></td><td class="msg-cell">Hi all!</td></tr>
+  <tr class="msg" id="L3"><td class="ts-cell"><a class="ts" href="#L3" alt="Fri Jan 24 2025 12:30:00 GMT-0800 (Pacific Standard Time)">20:30</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-12" title="@matthewdean:matrix.org">Matthew Dean</span>&gt;</div></td><td class="msg-cell">How would one submit a proposal to TC39?</td></tr>
+  <tr class="msg" id="L4"><td class="ts-cell"><a class="ts" href="#L4" alt="Fri Jan 24 2025 12:30:52 GMT-0800 (Pacific Standard Time)">20:30</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-14" title="@michaelficarra:matrix.org">Michael Ficarra</span>&gt;</div></td><td class="msg-cell"><a href="https://github.com/tc39/ecma262/blob/main/CONTRIBUTING.md">https://github.com/tc39/ecma262/blob/main/CONTRIBUTING.md</a></td></tr>
+  <tr class="msg" id="L5"><td class="ts-cell"><a class="ts" href="#L5" alt="Fri Jan 24 2025 12:32:13 GMT-0800 (Pacific Standard Time)">20:32</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-12" title="@matthewdean:matrix.org">Matthew Dean</span>&gt;</div></td><td class="msg-cell">🤔 I've been going through that, and I see that proposals are separate repos... but... you can't make a PR to submit a whole repo, can you? </td></tr>
+  <tr class="msg" id="L6"><td class="ts-cell"><a class="ts" href="#L6" alt="Fri Jan 24 2025 12:32:30 GMT-0800 (Pacific Standard Time)">20:32</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-12" title="@matthewdean:matrix.org">Matthew Dean</span>&gt;</div></td><td class="msg-cell">It's related to: <a href="https://github.com/matthew-dean/proposal-hash-comments">https://github.com/matthew-dean/proposal-hash-comments</a></td></tr>
+  <tr class="msg" id="L7"><td class="ts-cell"><a class="ts" href="#L7" alt="Fri Jan 24 2025 12:32:48 GMT-0800 (Pacific Standard Time)">20:32</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-14" title="@michaelficarra:matrix.org">Michael Ficarra</span>&gt;</div></td><td class="msg-cell">yes, proposals are self-contained repos</td></tr>
+  <tr class="msg" id="L8"><td class="ts-cell"><a class="ts" href="#L8" alt="Fri Jan 24 2025 12:32:55 GMT-0800 (Pacific Standard Time)">20:32</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-14" title="@michaelficarra:matrix.org">Michael Ficarra</span>&gt;</div></td><td class="msg-cell">they don't become PRs until much later in the process</td></tr>
+  <tr class="msg" id="L9"><td class="ts-cell"><a class="ts" href="#L9" alt="Fri Jan 24 2025 12:33:07 GMT-0800 (Pacific Standard Time)">20:33</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-12" title="@matthewdean:matrix.org">Matthew Dean</span>&gt;</div></td><td class="msg-cell">How would I move this under tc39 though?</td></tr>
+  <tr class="msg" id="L10"><td class="ts-cell"><a class="ts" href="#L10" alt="Fri Jan 24 2025 12:34:08 GMT-0800 (Pacific Standard Time)">20:34</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-14" title="@michaelficarra:matrix.org">Michael Ficarra</span>&gt;</div></td><td class="msg-cell">from the <a href="http://CONTRIBUTING.md">CONTRIBUTING.md</a> document,<br><br><blockquote data-md=">">If you have a new proposal you want to get into the language, you first need a TC39 "champion": a member of the committee who will make the case for the proposal at in-person TC39 meetings and help it move through the process. If you are a TC39 member, you can be a champion; otherwise, find a TC39 member to work with for this (e.g., through the TC39 discussion group or the Matrix chat room). Proposals may have multiple champions (a "champion group").<br></blockquote></td></tr>
+  <tr class="msg" id="L11"><td class="ts-cell"><a class="ts" href="#L11" alt="Fri Jan 24 2025 12:34:33 GMT-0800 (Pacific Standard Time)">20:34</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-12" title="@matthewdean:matrix.org">Matthew Dean</span>&gt;</div></td><td class="msg-cell">ah ok</td></tr>
+  <tr class="msg" id="L12"><td class="ts-cell"><a class="ts" href="#L12" alt="Fri Jan 24 2025 12:34:43 GMT-0800 (Pacific Standard Time)">20:34</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-12" title="@matthewdean:matrix.org">Matthew Dean</span>&gt;</div></td><td class="msg-cell">So I have to find my champion a la Game of Thrones-style?</td></tr>
+  <tr class="msg" id="L13"><td class="ts-cell"><a class="ts" href="#L13" alt="Fri Jan 24 2025 12:35:02 GMT-0800 (Pacific Standard Time)">20:35</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-14" title="@michaelficarra:matrix.org">Michael Ficarra</span>&gt;</div></td><td class="msg-cell">so you'll need to convince at least one delegate that it's worthwhile, and once it has been presented, it will be moved within the TC39 org</td></tr>
+  <tr class="msg" id="L14"><td class="ts-cell"><a class="ts" href="#L14" alt="Fri Jan 24 2025 12:35:09 GMT-0800 (Pacific Standard Time)">20:35</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-12" title="@matthewdean:matrix.org">Matthew Dean</span>&gt;</div></td><td class="msg-cell">got it</td></tr>
+  <tr class="msg" id="L15"><td class="ts-cell"><a class="ts" href="#L15" alt="Fri Jan 24 2025 12:35:25 GMT-0800 (Pacific Standard Time)">20:35</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-14" title="@michaelficarra:matrix.org">Michael Ficarra</span>&gt;</div></td><td class="msg-cell">not familiar with the GoT process, but you can find champions both on here or on Discourse</td></tr>
+  <tr class="msg" id="L16"><td class="ts-cell"><a class="ts" href="#L16" alt="Fri Jan 24 2025 12:36:18 GMT-0800 (Pacific Standard Time)">20:36</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-14" title="@michaelficarra:matrix.org">Michael Ficarra</span>&gt;</div></td><td class="msg-cell">Discourse is probably better since it's less synchronous and less ephemeral</td></tr>
+  <tr class="msg" id="L17"><td class="ts-cell"><a class="ts" href="#L17" alt="Fri Jan 24 2025 12:36:22 GMT-0800 (Pacific Standard Time)">20:36</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-12" title="@matthewdean:matrix.org">Matthew Dean</span>&gt;</div></td><td class="msg-cell">The Game of Thrones was a dumb joke reference to an episode</td></tr>
+  <tr class="msg" id="L18"><td class="ts-cell"><a class="ts" href="#L18" alt="Fri Jan 24 2025 12:38:57 GMT-0800 (Pacific Standard Time)">20:38</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-12" title="@matthewdean:matrix.org">Matthew Dean</span>&gt;</div></td><td class="msg-cell">But anyway, thanks for the help!</td></tr>
+  <tr class="msg" id="L19"><td class="ts-cell"><a class="ts" href="#L19" alt="Fri Jan 24 2025 12:43:42 GMT-0800 (Pacific Standard Time)">20:43</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-14" title="@michaelficarra:matrix.org">Michael Ficarra</span>&gt;</div></td><td class="msg-cell">no problem</td></tr>
+
+</tbody></table></div></div></div>
+</body></html>

@@ -1,0 +1,334 @@
+2024-05-01
+[16:12:26.0134] <guybedford>
+Thanks for the feedback, I've added another agenda item to tomorrow's meeting to discuss weak imports again as well if anyone would like to join that discussion
+
+
+2024-05-02
+[08:04:46.0819] <jakobjingleheimer>
+Sorry, i can't make it today, and then i'm on holiday for a few weeks
+
+[08:05:14.0444] <Chengzhong Wu>
+I have a conflict as well
+
+[08:53:35.0114] <nicolo-ribaudo>
+Ughh power went out
+
+[09:05:58.0219] <guybedford>
+I've updated the notes from the weak discussion in the meeting today at https://docs.google.com/document/d/1CD5lIBZLl24XBWbQhokqBdt4Zl7wPAcFJKJrgePr9HU/edit?pli=1
+
+[09:06:16.0953] <guybedford>
+jakebailey: nicolo-ribaudo please make any corrections or additions as necessary, and feel free to share
+
+[09:06:24.0101] <guybedford>
+would be great to find our true weak champion!
+
+[16:00:41.0196] <jakebailey>
+I got it working enough to use from tsc, the public API, and run our test suite. https://github.com/microsoft/TypeScript/pull/58419
+
+[16:01:01.0490] <jakebailey>
+No idea if CI passes, `gh act` was not playing nice locally so I could not check 🙂
+
+
+2024-05-03
+[18:00:49.0793] <kriskowal>
+Thanks for the notes.
+
+[18:02:38.0148] <kriskowal>
+(Hard no on a registry from me, fwiw.)
+
+[18:03:09.0030] <kriskowal>
+What’s the key differentiator between `import weak` vs `import defer` or `import source`?
+
+[18:54:36.0306] <Richard Gibson>
+IIUC, `weak` indicates that a module (or presumably a related entity in the case of e.g. `source`) should be returned if already available but otherwise the barest of stubs should appear in its place. It's like an opportunistic ESM analog of old-school feature testing.
+
+[19:07:21.0592] <jakebailey>
+The definition we were working with was "if resolution fails, return undefined", so more "optional" than anything 
+
+[19:13:22.0436] <kriskowal>
+That is interesting because it could apply at finer granularity of individual bindings, syntactically like import type in ts
+
+[19:16:37.0123] <kriskowal>
+Could be virtualized by allowing importHook to return undefined instead of throwing
+
+[19:17:17.0103] <kriskowal>
+Or tolerating the exception if weakly imported. “optional import” as it were
+
+[19:18:18.0484] <kriskowal>
+Or optionality could be indicated as we do elsewhere in destructuring with an explicit default
+
+[19:45:02.0372] <jakebailey>
+Yeah; the difference between the "deferred" import is that a deferred import will still error if the resolution fails, before anything else even happens. In that sense I prefer the term "optional" for clarity, especially given "weak" has existing connotations elsewhere
+
+[19:45:23.0271] <jakebailey>
+Though I honestly can't remember what a "source" import is.
+
+[20:35:39.0677] <kriskowal>
+Source imports are for grabbing a handle on the compiled source and not executing, to pass it to a worker, multiply instantiate, or isolate in another evaluation context (think mocks, dsls, or sandboxes)
+
+[20:35:54.0380] <jakebailey>
+Gotcha 🙂
+
+[02:43:12.0570] <Chengzhong Wu>
+the term "weak" sounds strongly relevant to memory management to me. How abot "import optional"?
+
+[02:47:44.0524] <nicolo-ribaudo>
+`try import`
+
+[02:47:51.0161] <nicolo-ribaudo>
+Since it's suppressing an error
+
+[02:50:40.0420] <Rob Palmer>
+I think that "weak" could be fully understood by module experts such as those in this room and is an appropriate name for the proposal.  To the wider world, I don't think it conveys "ability to tolerate failure" in the way that other words could, so maybe not good as a language keyword.  Others that might work:
+
+- `optional`try" or "maybe" or "attempt"
+
+[02:51:43.0852] <Rob Palmer>
+ * I think that "weak" could be fully understood by module experts such as those in this room and is an appropriate name for the proposal.  To the wider world, I don't think it conveys "ability to tolerate failure" in the way that other words could, so maybe not good as a language keyword.  Others that might work:
+
+- `optional`
+- `try`
+- `maybe`
+- `attempt`
+
+[02:52:37.0002] <Rob Palmer>
+`maybe import ns as * from "this-might-not-exist";`
+
+[02:53:02.0263] <Rob Palmer>
+`attempt import ns as * from "this-might-not-exist";
+
+[02:53:18.0023] <Rob Palmer>
+ * `attempt import ns as * from "this-might-not-exist";`
+
+[02:53:37.0817] <Rob Palmer>
+(I am joking about leading with it, but the sentence like nature is cute)
+
+[02:54:23.0748] <Chengzhong Wu>
+> <@nicolo-ribaudo:matrix.org> `try import`
+
+suffix vs. prefix, my first impression is that `import optional_or_try nil from "nil"` might be easier to be parsed by toolings than `optional_or_try import nil from "nil"`
+
+[02:56:10.0337] <Rob Palmer>
+If we had `from "mod" import x` all of this would go away and we could have `from "mod" try import x`
+
+[02:57:34.0629] <Chengzhong Wu>
+`from "mod" try import x` reads different meaning to me... it could mean optional export names...
+
+[03:19:06.0456] <nicolo-ribaudo>
+> <@legendecas:matrix.org> suffix vs. prefix, my first impression is that `import optional_or_try nil from "nil"` might be easier to be parsed by toolings than `optional_or_try import nil from "nil"`
+
+Well `try` is a keyword, so `try import` is fully unambiguous and doesn't even require NLT restrictions 
+
+[07:55:21.0315] <joyee>
+maybe import looks cute….bonus points if there can be a named exports syntax using with ? :)
+
+[07:59:27.0401] <bakkot>
+I kind of like "fallible imports" but it is a moderately obscure word
+
+[09:20:11.0075] <ljharb>
+> <@nicolo-ribaudo:matrix.org> Since it's suppressing an error
+
+that's not what `try` does, though :-)
+
+[09:20:50.0122] <ljharb>
+> <@nicolo-ribaudo:matrix.org> Since it's suppressing an error
+
+ * that's not what `try` does, though :-) catch is what suppresses errors, try just makes them catchable
+
+[09:22:05.0145] <kriskowal>
+Strawpoke:
+import * as x = {} from “x”
+
+[09:36:01.0101] <nicolo-ribaudo>
+> <@ljharb:matrix.org> that's not what `try` does, though :-) catch is what suppresses errors, try just makes them catchable
+
+`try import "foo" catch (e) { console.log("Failed importing foo") }` :P
+
+[09:37:14.0567] <ljharb>
+right. it's the catch that does it tho, as you can see by using try finally (which would have to work with any `try import` keyword, too)
+
+[09:40:55.0447] <joyee>
+Throwing on error feels like repeating the issue that URL.parse() tries to solve (compared to new URL())
+
+[10:51:40.0706] <littledan>
+import { foo } from.? "bar";
+
+[10:52:07.0336] <littledan>
+import?. { foo } from "bar";
+
+[10:52:16.0885] <littledan>
+(there are not serious suggestions)
+
+[10:54:19.0842] <kriskowal>
+Strawpoke:
+import * as foo = {} from "bar";
+import foo = {} from "bar";
+import { foo = {} } from "bar";
+import bar = {}, { baz = {}, qux } from "foo";
+Where in the last, we expect "foo" to load but don’t expect it to export bar and baz, but do expect it to export qux.
+
+
+2024-05-07
+[14:48:31.0453] <jakebailey>
+joyee (OOO until May 20):  Out of curiosity, do you think that once stable, the require(ESM) stuff is likely to be ported back to Node 20 or even Node 22? Trying to gauge the timeline of when TS could adopt it (sorry if this it the wrong forum). It turns out that there's some goofy things that we could actually already do today that would no longer require the `getBuiltinModule` thing, technically (e.g. an entrypoint just for node that requires the ESM TS API but polyfills the API ahead of time)
+
+[14:49:34.0952] <jakebailey>
+ * joyee (OOO until May 20):  Out of curiosity, do you think that once stable, the require(ESM) stuff is likely to be ported back to Node 20 or even Node 18? Trying to gauge the timeline of when TS could adopt it (sorry if this it the wrong forum). It turns out that there's some goofy things that we could actually already do today that would no longer require the `getBuiltinModule` thing, technically (e.g. an entrypoint just for node that requires the ESM TS API but polyfills the API ahead of time)
+
+[14:49:53.0158] <joyee (OOO until May 20)>
+I think backporting to 20 should be doable. 18 requires more effort because it's a much older branch but nothing more complicated than dealing with git conflicts
+
+[14:50:03.0835] <jakebailey>
+Ron came up with:
+```
+// cjs stub
+require("./processPatch");
+module.exports = require("./typescript");
+
+// esm stub
+import "./processPatch";
+export * from "./typescript";
+
+ 
+
+[14:50:13.0710] <jakebailey>
+ * Ron came up with:
+
+```
+// cjs stub
+require("./processPatch");
+module.exports = require("./typescript");
+
+// esm stub
+import "./processPatch";
+export * from "./typescript";
+```
+
+
+[14:50:34.0486] <jakebailey>
+Yeah, I was hoping the chances were high just because this feature is so useful to everyone
+
+[14:51:29.0621] <jakebailey>
+Should I just ask on the require(ESM) tracker to get that request noted somewhere? 😄
+
+
+2024-05-09
+[11:17:21.0748] <guybedford>
+nicolo-ribaudo: I remember the reason GetExports is harder to define now - we have that information for ECMAScript modules, but not for Wasm modules
+
+[11:17:32.0786] <guybedford>
+unless we treat it as a concrete method to be implemented separately in the Wasm spec
+
+[11:18:16.0304] <guybedford>
+so I don't know if I can easily come up with an implementation for it right now?
+
+[11:19:45.0170] <guybedford>
+an alternative might be to say that `exports` is only defined for JS module sources
+
+
+2024-05-23
+[08:02:02.0691] <nicolo-ribaudo>
+The agenda is empty, but I am available if anybody has topics
+
+[08:15:42.0508] <jakobjingleheimer>
+I can't make it today but i can again starting next week
+
+[08:18:16.0532] <guybedford>
+I couldn't make it today myself but let's pick up on the agenda next week
+
+[08:19:46.0231] <nicolo-ribaudo>
+Chengzhong Wu and I talked a bit about implementation of import source/defer, I wrote some short notes
+
+
+2024-05-29
+[17:50:37.0367] <kriskowal>
+At the last TG3 meeting, I volunteered to figure out what we used `exports` (a list of all exported names) for on `ModuleSource`. The answer is somewhat weak…
+
+[17:52:02.0976] <kriskowal>
+The virtual module source “handler” must contain a property that describes all the names it exports and all the specifiers it imports and reexports.
+
+[17:53:12.0709] <kriskowal>
+There is no firm reason that the schema of the virtual module source handler should be identical to a `ModuleSource`, and we don’t currently use the `exports` property of actual/vicious `ModuleSource` instances for anything.
+
+[17:55:05.0796] <kriskowal>
+I personally have a strong æsthetic preference that, if `ModuleSource` and a virtual `ModuleSource` communicate the same information that they use the same schema.
+
+[17:56:14.0128] <kriskowal>
+I can _imagine_ using a virtual module source to mock an actual/vicious module source, and for that, I would definitely need to both consume the reflection information off the actual module source and provide the same properties on the handler of a virtual module source.
+
+[17:57:17.0587] <kriskowal>
+So, let’s chalk up “module mocks” as a motivating use case for both module source reflection and virtual module sources. They can’t be done without both features.
+
+[17:58:06.0329] <kriskowal>
+Correction: “module mocks” could be done with “module source reflection” and code generation (in lieu of virtual module sources).
+
+[17:58:37.0802] <kriskowal>
+ * Correction: “module mocks” could be done with “module source reflection”, code generation and the JavaScript “ModuleSource(source)” constructor (in lieu of virtual module sources).
+
+[23:12:18.0749] <Jack Works>
+i like `optional import x from 'y'`, that's read most natural to me
+
+[08:12:13.0457] <ljharb>
+what could have been… `from 'y' optionally import 'x‘
+
+[08:12:19.0890] <ljharb>
+* what could have been… `from 'y' optionally import 'x‘`
+
+[10:15:22.0257] <kriskowal>
+> <@kriskowal:aelf.land> I can _imagine_ using a virtual module source to mock an actual/vicious module source, and for that, I would definitely need to both consume the reflection information off the actual module source and provide the same properties on the handler of a virtual module source.
+
+I’m struggling to create an example of an “instrumenting mock” example based on this idea because of live bindings. It may be helpful to jam with someone with an iron in the mocking fire.
+
+[10:30:51.0287] <guybedford>
+when we were working through use cases, we very much did design for this one as a key use case
+
+[10:31:07.0686] <guybedford>
+there's an example here during some of our loader design discussions - https://github.com/lucacasonato/module-harmony-usecases/blob/main/module-wrapper/main.js
+
+[10:31:14.0445] <guybedford>
+ * there's an example here from during some of our loader design discussions - https://github.com/lucacasonato/module-harmony-usecases/blob/main/module-wrapper/main.js
+
+[10:31:19.0157] <guybedford>
+outdated now, but may be helpful?
+
+[10:47:40.0479] <kriskowal>
+very clarifying
+
+[10:48:04.0639] <kriskowal>
+notably does not attempt to instrument live bindings
+
+[10:48:57.0961] <kriskowal>
+but yes, stale but does substantiate `exports` reflection and would continue to if we dusted it off
+
+[13:00:23.0361] <kriskowal>
+guybedford: first pass at updating the mocking case https://gist.github.com/kriskowal/5c1258095692ce790d40a646e4f83d84
+
+[13:01:06.0991] <kriskowal>
+Does not attempt to instrument reexports, but that’s feasible.
+
+[13:01:42.0502] <kriskowal>
+Might also be the basis of establishing a module namespace membrane.
+
+
+2024-05-30
+[08:02:20.0700] <littledan>
+will join slightly late
+
+[08:02:38.0995] <littledan>
+ * will join slightly late (don't wait for me)
+
+[08:03:01.0438] <jakobjingleheimer>
+I'll be a bit late too
+
+[08:03:41.0782] <Chengzhong Wu>
+3 of us (jack and richard) are in the room, still waiting
+
+[08:13:21.0320] <jakobjingleheimer>
+littledan: did you add today's agenda items? We don't have anything else to discuss.
+
+[08:13:33.0639] <littledan>
+nothing to raise
+
+[08:47:50.0768] <guybedford>
+hey, apologies for missing this one, was hoping to briefly discuss implementation progress on esm integration, will follow up offline
+

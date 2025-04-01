@@ -1,0 +1,100 @@
+2023-09-13
+[06:52:14.0037] <zacque>
+Hi, what's the difference between Completion Record `normal` and `return` type?
+
+[06:53:37.0088] <zacque>
+https://tc39.es/ecma262/#table-completion-record-fields
+
+[06:56:41.0097] <jmdyck>
+If you evaluate a statement (within a function body, say), and it causes a return from that function, then that's signaled via a `return` completion. If evaluation is to proceed normally to the next statement, then that's signaled by a `normal` completion.
+
+[07:00:39.0083] <zacque>
+Makes sense, but what about the next paragraph: "Callable objects that are defined in this specification only return a normal completion or a throw completion. Returning any other kind of Completion Record is considered an editorial error."
+
+[07:00:55.0657] <zacque>
+I'll expect it to include `return` completion?
+
+[07:02:45.0717] <jmdyck>
+No, if, within function A, you call function B, that call cannot cause a return from function A. (But it can cause A to throw.)
+
+[07:05:24.0742] <jmdyck>
+The wording you quoted is not the best: callable objects (i.e., functions) don't return completions at all.
+
+[07:08:33.0899] <jmdyck>
+Rather, the completions are 'internal' to the process of calling a function. I.e., certain algorithms in the spec are returning completions. 
+
+[07:12:24.0409] <jmdyck>
+It would be more accurate to say something like "a function's [[Call]] internal method can only return a normal completion or a throw completion..."
+
+[07:13:55.0208] <zacque>
+Hmm, I see... But still, it's a bit weird to me. Can you please point me to the semantics of function invocation in the spec? I can't seem to find it in https://tc39.es/ecma262/#sec-function-objects, https://tc39.es/ecma262/#sec-ecmascript-language-functions-and-classes, or https://tc39.es/ecma262/#sec-ecmascript-language-expressions
+
+[07:14:23.0438] <zacque>
+What if I want to describe the semantics of invoking function A?
+
+[07:16:50.0202] <jmdyck>
+Function invocation is kind of involved. You should maybe start at https://tc39.es/ecma262/#sec-function-calls-runtime-semantics-evaluation
+
+[07:17:25.0396] <jmdyck>
+skip the first group and go to ` CallExpression : CallExpression Arguments`
+
+[07:18:22.0270] <jmdyck>
+to EvaluateCall(), to Call(), to [[Call]]()
+
+[07:18:36.0225] <jmdyck>
+ * to EvaluateCall(), to Call(), to \[\[Call\]\]
+
+[07:20:49.0875] <jmdyck>
+And then either https://tc39.es/ecma262/#sec-ecmascript-function-objects-call-thisargument-argumentslist or https://tc39.es/ecma262/#sec-built-in-function-objects-call-thisargument-argumentslist, depending on whether the function is a built-in.
+
+[07:22:27.0812] <jmdyck>
+For a built-in function, that'll go to BuiltinCallOrConstruct, which basically bottoms out in prose.
+
+[07:26:17.0168] <jmdyck>
+For a non-built-in, you'll get to OrdinaryCallEvaluateBody, which calls  EvaluateBody, which goes various ways depending on what kind of function it is. If it's the plainest kind of function, then you'll go to EvaluateFunctionBody which calls FunctionDeclarationInstantiation to instantiate the function's declarations, and then Evaluation to evaluate its body. 
+
+[07:27:49.0267] <jmdyck>
+ * And then either https://tc39.es/ecma262/#sec-ecmascript-function-objects-call-thisargument-argumentslist or https://tc39.es/ecma262/#sec-built-in-function-objects-call-thisargument-argumentslist, depending on whether the function is a built-in. (Actually, there are a couple other possibilities here that you don't need to worry about.)
+
+[07:35:39.0978] <zacque>
+Great, thanks for your pointers! I'll need some time to digest them
+
+[07:36:03.0438] <jmdyck>
+Yup!
+
+[07:39:52.0245] <jmdyck>
+And all those operations return a completion, either `normal` or `throw`.
+
+[07:42:30.0347] <jmdyck>
+(Actually, some say "an abrupt completion" rather than "a throw completion". I'm not sure whether that's an unnecessary generalization, or I'm forgetting something.)
+
+[07:44:36.0750] <nicolo-ribaudo>
+An abrupt completion is any completion that's not a normal completion 
+
+[07:44:58.0927] <nicolo-ribaudo>
+So throw/return/break/continue
+
+[07:45:26.0056] <jmdyck>
+Right, but do you think these ops can validly return a retturn/break/continue completion?
+
+[07:45:32.0941] <jmdyck>
+ * Right, but do you think these ops can validly return a return/break/continue completion?
+
+[07:46:04.0912] <nicolo-ribaudo>
+No — in this case they are equivalent, but not always :)
+
+[07:47:20.0070] <jmdyck>
+Okay, so that's what I meant by "unnecessary generalization". The operation header is naming a more general return-type than necessary.
+
+[07:48:40.0643] <jmdyck>
+ * Okay, so that's what I meant by "unnecessary generalization". The operation header is naming a more general return-type than it could.
+
+[10:22:12.0043] <jmdyck>
+In the case of EvaluateCall, it looks like the possibility of a non-throw abrupt completion comes from  ArgumentListEvaluation, which I think has that possibility because an argument could involve a `yield` expression, which (under somewhat obscure circumstances) could result in a `return` completion. Is that right, @bakkot?
+
+[10:35:20.0164] <jmdyck>
+Similarly, for OrdinaryCallEvaluateBody and the ones below it, I think "an abrupt completion" is in practice "a throw completion or a return completion". But here, the return completion happens for a more prosaic reason (usually): executing a ReturnStatement.
+
+[10:41:56.0230] <jmdyck>
+(`[[Call]]` and `[[Construct]]` explicitly handle the possibility of a `return` completion, and only return a `normal` completion or `throw` completion .)
+

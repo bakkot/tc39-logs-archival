@@ -1,0 +1,146 @@
+2023-07-25
+[14:49:09.0111] <ljharb>
+how come `new Intl.NumberFormat('en-US', { style: 'unit', unit: 'byte', unitDisplay: 'narrow', notation: 'compact' }).format(1234567891)` prints out `1.2BB` and not `1.2GB`?
+
+[14:59:16.0239] <Chris de Almeida>
+because you said you wanted bytes
+
+[15:13:05.0094] <Chris de Almeida>
+whoa, that is weird
+
+[15:15:32.0560] <Chris de Almeida>
+```
+100000000 -> 100MB
+1000000000 -> 1BB
+10000000000 -> 10BB
+100000000000 -> 100BB
+1000000000000 -> 1 TB
+```
+
+[15:15:43.0473] <Chris de Almeida>
+ * ```
+100000000 -> 100MB
+1000000000 -> 1BB
+10000000000 -> 10BB
+100000000000 -> 100BB
+1000000000000 -> 1TB
+```
+
+[15:18:06.0174] <sffc>
+You want `new Intl.NumberFormat('en-US', { style: 'unit', unit: 'gigabyte' }).format(1.234567891)`
+
+[15:18:29.0556] <Chris de Almeida>
+sure, but if you didn't want to have to do your own unit calc for human readable...
+
+[15:19:17.0295] <Chris de Almeida>
+it appears every other expression is what one would expect
+
+[15:19:33.0697] <sffc>
+There's a proposal for unit calculations/preferences but it's blocked on (1) user preferences and (2) lack of consensus that units math belongs in the standard library
+
+[15:19:56.0679] <sffc>
+currently at Stage 1 and last presented in 2020 I believe
+
+[15:20:57.0537] <sffc>
+The `1BB` is because you're printing `1B` in compact notation (`1K`, `1M`, `1B`, `1T`), and then you're attaching a unit to the end
+
+[15:21:53.0779] <Chris de Almeida>
+ * it appears every other expression is what one would expect.  edit: stops at TB tho
+
+[15:22:45.0066] <Chris de Almeida>
+I don't understand why it's not `1G`, what am I missing here
+
+[15:24:18.0978] <sffc>
+https://www.youtube.com/watch?v=kJQP7kiw5Fk has 8.2B Views
+
+[15:28:05.0148] <Chris de Almeida>
+so you're saying :
+K = thousand
+M = million
+B = billion
+T = trillion
+and we are just associating M and T with mega and tera erroneously
+
+[15:29:59.0948] <sffc>
+Compact decimal notation != SI prefixes
+
+[15:30:14.0246] <Chris de Almeida>
+aye
+
+[15:30:39.0937] <Chris de Almeida>
+it's the overloading that causes the confusion.  thanks
+
+[15:30:41.0558] <sffc>
+See https://unicode.org/cldr/charts/43/by_type/numbers.compact_decimal_formatting.html for the symbols different locales use
+
+[15:31:47.0297] <sffc>
+I see where the confusion comes from. I wouldn't be opposed to a proposal that uses SI prefixes _instead of_ compact decimal notation when style is "unit"
+
+[15:32:19.0609] <sffc>
+If someone files an issue, we can track that better :)
+
+[15:33:22.0747] <Chris de Almeida>
+wouldn't that be a breaking change at this point?
+
+[15:34:12.0987] <sffc>
+A normative change, sure, but not necessarily web-incompatible; unclear if any of this behavior is required by the spec. I think not.
+
+[15:34:53.0006] <sffc>
+A normative change could be a one-liner "the compact decimal suffix can depend on style"
+
+[15:40:11.0145] <sffc>
+Yeah actually in practice we already have special patterns for notation: compact with style: currency. So it shouldn't be hard to allow special patterns to be used in that way for style: unit as well.
+
+[15:48:22.0188] <sffc>
+https://github.com/tc39/ecma402/issues/810
+
+[15:50:21.0346] <ljharb>
+if the unit is "byte" i wouldn't expect anything but megabyte, gigabyte, terabyte, etc
+
+[16:02:08.0797] <Chris de Almeida>
+yeah, now that I understand what's happening, it makes perfect sense, but I agree, the number of people who would actually want this behavior in this case is near zero
+
+
+2023-07-26
+[08:47:15.0783] <ljharb>
+an astute question i was asked:
+> The M stands for Million and the K stands for KThousand?
+
+[08:50:38.0424] <Chris de Almeida>
+indeed.  they have played us for absolute fools
+
+[08:50:41.0065] <Chris de Almeida>
+https://cldr.unicode.org/translation/number-currency-formats/number-and-currency-patterns#h.eradhhuxzqqz
+
+[08:52:22.0063] <Chris de Almeida>
+lol, I didn't even notice the `KThousand`
+
+[08:56:59.0890] <sffc>
+CLDR just reflects common use. It would be interesting to read a study of the origin of these abbreviations in English and in other languages.
+
+[08:58:10.0171] <Chris de Almeida>
+ironically, M, B, and T are probably the outliers
+
+[08:58:41.0678] <Chris de Almeida>
+kilo prefix in metric system, etc
+
+[08:59:56.0315] <Chris de Almeida>
+although then you get into metric ton vs SI megagram...
+
+[09:01:38.0734] <Chris de Almeida>
+but the SI prefix for 10^9 IS giga...
+
+[09:02:20.0347] <Chris de Almeida>
+clear as mud
+
+[09:02:39.0741] <sffc>
+Looks like Quebecois (fr-CA) has it right: https://github.com/unicode-org/cldr/blob/d1ae244c0ed6084b933646707f99925e26a22e97/common/main/fr_CA.xml#L5841
+
+But it seems they're the only one who uses SI prefixes for compact notation
+
+[09:27:57.0680] <ljharb>
+for normal quantities these might be fine. but for bits/bytes almost universal use would be mega/giga/tera
+
+[09:44:27.0024] <Chris de Almeida>
+right.  I doubt supporting/changing this would be controversial.  (famous last words notwithstanding)
+

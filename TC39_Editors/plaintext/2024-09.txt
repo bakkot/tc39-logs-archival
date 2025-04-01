@@ -1,0 +1,425 @@
+2024-09-02
+[17:49:37.0578] <bakkot>
+Michael Ficarra I finally updated https://github.com/tc39/ecma262/pull/2924 if you want to review my changes
+
+[18:11:23.0343] <shu>
+> <@michaelficarra:matrix.org> send me some times that work for you
+
+same time thurs and fri but strongly prefer not fri
+
+[14:48:09.0278] <bakkot>
+I am going through and approving and stamping some trivial PRs that michael has approved but shu has not
+
+[14:48:19.0043] <bakkot>
+fixing types of parameters of AOs, etc
+
+[14:48:51.0512] <bakkot>
+shu I assume you don't want to review things this trivial but if you want to check first I can take the label off
+
+[14:49:21.0204] <bakkot>
+it's the following:
+- https://github.com/tc39/ecma262/pull/3380
+- https://github.com/tc39/ecma262/pull/3378
+- https://github.com/tc39/ecma262/pull/3376
+- https://github.com/tc39/ecma262/pull/3375
+
+
+2024-09-03
+[07:39:53.0211] <shu>
+if they're small i can just look through them right now
+
+[08:05:40.0275] <Michael Ficarra>
+> <@shuyuguo:matrix.org> same time thurs and fri but strongly prefer not fri
+
+sure, same time Thu works for me
+
+[08:08:16.0308] <Michael Ficarra>
+@ljharb:matrix.org do you mind updating the calendar invite?
+
+[08:31:42.0386] <shu>
+moved
+
+[08:32:50.0606] <ljharb>
+was just about to, i see shu did it
+
+
+2024-09-05
+[14:31:23.0317] <Michael Ficarra>
+I'm running a few minutes late
+
+[15:30:01.0020] <shu>
+ljharb: oops, what'd you say?
+
+[15:30:17.0186] <ljharb>
+just asking about the merge label on 3409 and 3410, but michael's doing it
+
+[15:33:16.0672] <Michael Ficarra>
+@ljharb:matrix.org so next PR is refactoring that lookup table and removing the Type AO?
+
+[15:33:33.0658] <ljharb>
+yep. first i have to come up with an idea to refactor the lookup table tho :-)
+
+[15:33:59.0408] <ljharb>
+if not in the next week, i've got 2 cross-country flights the following week so i'll have plenty of thinkin time
+
+[16:04:38.0745] <Michael Ficarra>
+I think just use 2 tables and do the type discrimination in the algorithm steps before referring to which table to look at
+
+[16:09:40.0323] <ljharb>
+i literally was just looking at it now, and i agree
+
+[16:09:52.0741] <ljharb>
+(it's already weird that bigint has 4 of its ops outside the table, but other ops in the table)
+
+[16:10:13.0666] <ljharb>
+i'll make the PR today or tomorrow, that splits it into a number table and a bigint table.
+
+[16:14:57.0297] <Michael Ficarra>
+👍️ thanks
+
+
+2024-09-06
+[17:34:59.0401] <jmdyck>
+Those 4 BigInt ops are outside the table because they return completions.
+
+[17:38:34.0874] <jmdyck>
+Pulled out in https://github.com/tc39/ecma262/pull/2547
+
+[22:53:31.0805] <ljharb>
+thanks, gotcha. it's a shame that we can't just do `return ? operation()` because of completion record reform :-)
+
+[03:59:38.0337] <jmdyck>
+I think we can. Like, I think step 6's body could have been "Let _operation_ be <table>. Return ? _operation_(_lNum_, _rNum_)." I'm guessing 2547 didn't do it that way because the increase in DRYness wasn't worth the visual cost.
+
+[04:05:58.0383] <jmdyck>
+(I.e., completion record reform doesn't prevent `return ? operation()` in step 6, it just prevents combining step 6 + 7. I think.)
+
+[06:58:01.0048] <Michael Ficarra>
+oh I forgot that I'm on PTO next week, so I won't be at the Sept 11th editor call @shuyuguo:matrix.org
+
+[07:48:36.0122] <shu>
+ljharb: Michael Ficarra i didn't +1 https://github.com/tc39/ecma262/pull/3409's change to boolean
+
+[07:48:57.0761] <shu>
+you talked about it but i don't think you were changing it for the PR
+
+[07:49:02.0996] <shu>
+i'd prefer the 2-state enum back
+
+[07:49:12.0786] <shu>
+ * you talked about it but i didn't think you were changing it for the PR
+
+[07:49:41.0514] <Michael Ficarra>
+oh I thought you were okay with it from your comments on the call
+
+[07:49:51.0481] <Michael Ficarra>
+yeah it's fine to put it back, I was fairly neutral about it
+
+[07:49:57.0494] <shu>
+no, i just didn't say anything while you were talking about it
+
+[07:50:11.0590] <shu>
+because i didn't get the sense you actually wanted to change it
+
+[07:50:48.0330] <Michael Ficarra>
+it seems that will obsolete https://github.com/tc39/ecma262/pull/3419
+
+[07:51:25.0767] <ljharb>
+oh i thought you did in the call. want me to change it back to an enum? 
+
+[07:51:30.0004] <Michael Ficarra>
+yeah to me it sounded like Jordan was positive about it and you and I were both neutral, so I just went with it
+
+[07:51:32.0273] <shu>
+yes
+
+[07:52:16.0612] <ljharb>
+I’ll add it into 3419 (if jmdyck doesn’t get to it first)
+
+[07:52:27.0846] <shu>
+> <@ljharb:matrix.org> oh i thought you did in the call. want me to change it back to an enum?
+
+yes please
+
+[07:59:45.0975] <bakkot>
+I would be on board with changing almost all boolean parameters to enums tbh
+
+[08:35:22.0423] <Michael Ficarra>
+FYI @bakkot:matrix.org this came out of me remarking that this case is atypical in that a boolean is just as good as an enum
+
+[08:35:28.0618] <Michael Ficarra>
+or at least an enum with poorly chosen names
+
+[08:35:56.0300] <Michael Ficarra>
+if we did like `no-validation` and `validate-as-property-keys`, then the enum is better
+
+[09:07:48.0887] <ljharb>
+yeah generally i'd prefer an enum too, this case a boolean seemed like it'd help imply a third state wouldn't be accepted :-)
+
+
+2024-09-07
+[18:55:07.0998] <jmdyck>
+Urgh. Just noticed another problem in CreateListFromArrayLike: the sentence `_elementTypes_ contains the names of ECMAScript Language Types that are allowed for element values of the List that is created.` Should instead be saying something about `_validElementTypes_`.
+
+[11:16:29.0949] <jmdyck>
+I've added code to ecmaspeak to detect when an algorithm description mentions an alias that isn't a parameter. It found a bunch of cases, but most are reasonable. One that's questionable is in ValidateAndApplyPropertyDescriptor, which has a parameter _extensible_, but the description refers to it via _extensibility_ (which certainly reads better in context).
+
+
+2024-09-08
+[07:43:30.0127] <Richard Gibson>
+> <@jmdyck:matrix.org> I've added code to ecmaspeak to detect when an algorithm description mentions an alias that isn't a parameter. It found a bunch of cases, but most are reasonable. One that's questionable is in ValidateAndApplyPropertyDescriptor, which has a parameter _extensible_, but the description refers to it via _extensibility_ (which certainly reads better in context).
+
+looks like that's my fault from https://github.com/tc39/ecma262/pull/2468 ; I think I intended to rename the parameter to better indicate that it refers to extensibility of _O_ (and probably likewise in IsCompatiblePropertyDescriptor) but failed to include that change
+
+
+2024-09-10
+[13:53:50.0616] <shu>
+> <@michaelficarra:matrix.org> oh I forgot that I'm on PTO next week, so I won't be at the Sept 11th editor call @shuyuguo:matrix.org
+
+oops missed this, canceling for this week then
+
+
+2024-09-17
+[11:00:47.0906] <shu>
+hmm, in a spec draft i'm writing SDOs aren't being autolinked. i have e.g. `<emu-clause id="sec-struct-definitions-static-semantics-containsinstanceprivateidentifier" type="sdo">` and no linter errors
+
+[11:00:50.0896] <shu>
+what am i missing there
+
+[11:03:58.0488] <bakkot>
+probably the `<dl class="header">`
+
+[11:05:26.0205] <bakkot>
+currently that's mandatory for it to figure out this is specifically an algorithm definition and not just some random clause
+
+[11:05:59.0770] <bakkot>
+probably that requirement could be dropped now that everyone's adopted structured headers and we can just look for the `type` attribute instead
+
+[11:06:09.0058] <shu>
+ah, thanks
+
+[11:37:32.0650] <shu>
+it was even dumber
+
+[11:37:59.0058] <shu>
+it was because VS Code's auto-quote insertion thing caused me to have `<dl class=""header">` instead of `<dl class="header">`
+
+[11:39:04.0018] <shu>
+chaotic evil feature
+
+[12:15:52.0949] <Michael Ficarra>
+I hate when editors do auto pairing
+
+[12:16:18.0345] <Michael Ficarra>
+this is the same kind of terrible as Ctrl+V being changed to paste-with-formatting
+
+[13:41:51.0844] <shu>
+hear hear
+
+
+2024-09-18
+[17:23:07.0417] <Michael Ficarra>
+ecmarkup should check that all agorithms either end with a return step or an assertion that it's unreachable
+
+[17:25:29.0986] <Michael Ficarra>
+also ACs
+
+[19:06:33.0369] <Michael Ficarra>
+@shuyuguo:matrix.org FYI I want to discuss https://github.com/tc39/proposal-joint-iteration/pull/30 tomorrow and you may want to read the conversation beforehand if you have time
+
+[14:24:57.0743] <bakkot>
+brief summary of that issue:
+
+Recall that for a syntactic generator, a `return` statement provides the value to be used alongside the first `{ done: true }`, as in `let g = (function* (){ yield 0; return 1; })(); console.log(g.next(), g.next(), g.next())`
+
+this is accomplished by, GeneratorStart evaluates the function body to completion, after which it checks whether it ends up with a return completion (in which case its value is used to give the `value` of the final iterator result) or a normal completion (in which case there was no explicit `return` statement, and it ignores the value of the normal completion and uses `undefined`)
+
+built-in generators use the GeneratorStart machinery with an abstract closure instead of a function body, but I don't think it makes sense for them to use the "check for return vs normal completion" logic. there's a few ways to accomplish this.
+
+one way is to have GeneratorStart assert that the AC produces either a throw completion or a normal completion containing `unused`, which would mean that GeneratorStart would go down the path for implicit returns from syntactic generators. then built-in generators could never have `{ done: true, value: "something other than undefined" }`, which seems fine though it's kind of an odd restriction to build in.
+
+another would be to assert that the AC produces either a throw completion or a _return_ completion, and require the AC to explicitly return `ReturnCompletion(*undefined*)` instead of `NormalCompletion(~unused~)`. Then GeneratorStart would go down the path for _explicit_ returns from syntactic generators, and use the value of the return completion to provide the `value` slot.
+
+I'd mildly prefer the second but am fine either way. Currently we have no asserts in either direction, such that the AC used to define a built-in generator can return both normal and return completions and go down either path, which seems unnecessarily complicated.
+
+[14:25:26.0801] <bakkot>
+(I was considering joining the call to explain this but I have a sleeping baby on top of me currently so that's not happening)
+
+[14:25:50.0349] <Michael Ficarra>
+just whisper 😛
+
+[14:26:37.0222] <bakkot>
+also Michael Ficarra I addressed your comments on the remaining ecmarkup PRs
+
+[14:27:18.0531] <Michael Ficarra>
+@bakkot:matrix.org I still don't like that it's a skip annotation instead of an xfail...
+
+[14:27:53.0159] <bakkot>
+oh I thought of a way to do the xfail without requiring me to do much work, I'll see about making that change
+
+[14:28:04.0046] <Michael Ficarra>
+🙇‍♂️
+
+[14:29:51.0065] <Michael Ficarra>
+> <@bakkot:matrix.org> brief summary of that issue:
+> 
+> Recall that for a syntactic generator, a `return` statement provides the value to be used alongside the first `{ done: true }`, as in `let g = (function* (){ yield 0; return 1; })(); console.log(g.next(), g.next(), g.next())`
+> 
+> this is accomplished by, GeneratorStart evaluates the function body to completion, after which it checks whether it ends up with a return completion (in which case its value is used to give the `value` of the final iterator result) or a normal completion (in which case there was no explicit `return` statement, and it ignores the value of the normal completion and uses `undefined`)
+> 
+> built-in generators use the GeneratorStart machinery with an abstract closure instead of a function body, but I don't think it makes sense for them to use the "check for return vs normal completion" logic. there's a few ways to accomplish this.
+> 
+> one way is to have GeneratorStart assert that the AC produces either a throw completion or a normal completion containing `unused`, which would mean that GeneratorStart would go down the path for implicit returns from syntactic generators. then built-in generators could never have `{ done: true, value: "something other than undefined" }`, which seems fine though it's kind of an odd restriction to build in.
+> 
+> another would be to assert that the AC produces either a throw completion or a _return_ completion, and require the AC to explicitly return `ReturnCompletion(*undefined*)` instead of `NormalCompletion(~unused~)`. Then GeneratorStart would go down the path for _explicit_ returns from syntactic generators, and use the value of the return completion to provide the `value` slot.
+> 
+> I'd mildly prefer the second but am fine either way. Currently we have no asserts in either direction, such that the AC used to define a built-in generator can return both normal and return completions and go down either path, which seems unnecessarily complicated.
+
+I pretty strongly prefer the former until we have a need for the latter, and I've updated all my iterator proposals to do this
+
+[14:55:55.0673] <Michael Ficarra>
+@bakkot:matrix.org after talking about it, I'm neutral on the two approaches and @shuyuguo:matrix.org is leaning toward the latter
+
+
+2024-09-19
+[09:07:43.0235] <Michael Ficarra>
+@shuyuguo:matrix.org turns out there's not old ID to preserve: https://github.com/tc39/ecma262/pull/3420#discussion_r1767107398
+
+[09:07:50.0077] <Michael Ficarra>
+given that, I'm marking as ready to merger
+
+[09:07:55.0780] <Michael Ficarra>
+* given that, I'm marking as ready to merge
+
+[10:35:00.0401] <shu>
+what did that aoid do then?
+
+[11:43:26.0042] <jmdyck>
+I think the aoid causes uses of Type(x) to link to that section.
+
+[11:45:32.0609] <jmdyck>
+(The definition of Type() is just text, nothing that would cause auto-linking.)
+
+[11:53:01.0868] <shu>
+i see
+
+[11:53:02.0920] <shu>
+wfm
+
+
+2024-09-20
+[17:11:02.0441] <Michael Ficarra>
+@shuyuguo:matrix.org can I get a super quick review on this one? https://github.com/tc39/ecma262/pull/3415
+
+[17:12:26.0269] <shu>
+lgtm
+
+
+2024-09-23
+[10:35:13.0824] <Michael Ficarra>
+@ljharb:matrix.org can you merge these? https://github.com/tc39/ecma262/issues?q=sort%3Aupdated-desc+is%3Aopen+label%3A%22ready+to+merge%22
+
+[10:35:51.0030] <Michael Ficarra>
+the iterator proposals are all currently dependent on the ReturnCompletion AO and therefore failing their respective CIs
+
+[12:13:53.0767] <ljharb>
+oh sure, on it
+
+[14:00:17.0451] <Michael Ficarra>
+thanks @ljharb:matrix.org
+
+
+2024-09-24
+[18:32:51.0412] <Michael Ficarra>
+reminder that iterator helpers is going for Stage 4 at the next plenary and needs final editorial approval: https://github.com/tc39/ecma262/pull/3395
+
+
+2024-09-25
+[14:32:17.0468] <jmdyck>
+Is there a meeting now?
+
+[14:41:03.0940] <jmdyck>
+guess not.
+
+[14:41:23.0666] <ljharb>
+i forgot to join 10m ago, but afaik there's supposed to be
+
+[14:45:09.0090] <shu>
+i thought we cancelled because michael was out
+
+[14:45:16.0620] <shu>
+that's why we did the slides last meeting
+
+[14:47:09.0206] <jmdyck>
+ok
+
+[14:48:10.0542] <jmdyck>
+so is next week's cancelled too?
+
+[14:49:45.0911] <shu>
+is Michael Ficarra also out next next week? i forget
+
+[14:49:53.0612] <shu>
+if only one of us is in, then we should consider it cancelled
+
+[14:55:08.0578] <ljharb>
+i certainly won't be there next week, and plenary week's cancelled already
+
+[14:57:34.0794] <bakkot>
+I'll be in, I'm back to work on Tuesday
+
+[15:05:21.0781] <Michael Ficarra>
+I'll be back next week
+
+[15:09:03.0258] <shu>
+i had a cursed realization the other day while working on some bugs
+
+[15:09:37.0464] <shu>
+the spec pretends stack overflows are impossible, so our !s and non-completion value returning AOs are correct only with that assumption
+
+[15:09:49.0353] <shu>
+the unfortunate state of the world is that stack overflow RangeErrors are both possible and are catchable by user code, lol
+
+[15:13:59.0245] <bakkot>
+yup!!
+
+[15:14:37.0992] <bakkot>
+would be nice to fix that, someday; I want a [allocates] attribute for AOs
+
+[15:14:43.0757] <bakkot>
+but like... not actually
+
+[15:15:48.0373] <shu>
+the most surprising one of that is Await
+
+[15:30:41.0051] <bakkot>
+`await` is fallibe anyway because the fast path in Promise.resolve does a user-hookable lookup
+
+[15:31:12.0276] <shu>
+indeed
+
+[15:31:18.0990] <shu>
+but PerformPromiseThen can stack overflow!
+
+[15:32:33.0637] <bakkot>
+(though I think we might actually be able to fix that: right now it's `IsPromise(p) && p.constructor === %Promise%` but it should be `IsPromise(p) && GetPrototypeOf(p) === %Promise.prototype%`; the first check rules out proxies which makes the second check unobservable. https://github.com/tc39/proposal-faster-promise-adoption/issues/1 )
+
+[15:33:08.0925] <bakkot>
+(I feel like this is _probably_ web-compat but maybe you'd want a use counter first?)
+
+
+2024-09-26
+[20:34:01.0649] <Richard Gibson>
+> <@shuyuguo:matrix.org> the spec pretends stack overflows are impossible, so our !s and non-completion value returning AOs are correct only with that assumption
+
+not just stack overflows either; see also https://github.com/tc39/ecma262/issues/2623
+
+[14:43:41.0489] <shu>
+Michael Ficarra: what is happening with the comment threads on https://github.com/tc39/ecma262/pull/3395/files
+
+[14:43:42.0876] <shu>
+real bugged out
+
+[14:53:21.0283] <Michael Ficarra>
+yeah GitHub is broken, I dunno man
+

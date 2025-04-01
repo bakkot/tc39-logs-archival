@@ -1,0 +1,840 @@
+2024-10-01
+[23:38:21.0264] <littledan>
+we could've introduced an optimized fake getter scheme for class fields (Kevin [zenparsing] raised that at some point) but we decided not to, partly due to implementation complexity/expected slowness
+
+
+2024-10-10
+[09:57:11.0280] <rbuckton>
+Since it is plenary week, should we assume the structs meeting is cancelled for today?
+
+[09:57:43.0857] <nicolo-ribaudo>
+Yes
+
+[09:58:10.0761] <nicolo-ribaudo>
+Unless we want to have little stage 2 party :P
+
+[09:59:40.0344] <rbuckton>
+I'd rather save that for the next meeting
+
+[16:16:39.0738] <shu>
+i talked with jordan and mark in the hallway and i think we have promising directions to explore for both of the big issue areas of:
+
+- unsafe {} opposition
+- jordan's concern of "i want every object to be able to get private fields"
+
+the "can be used as weakmap keys" concern basically 100% rides on implementation feasibility from others at this point, and i don't think it's useful for this group to design around it yet
+
+[16:18:47.0637] <shu>
+for unsafe {}, mark is also happy with "all shared struct fields always private", then we don't need unsafe {}, because the idea is the public API must be written by the developer, which should be threadsafe
+
+the implementation constraint for me with that world is that we must be able to compile #-names in shared structs just as normal property slots. because of the "#-names have different identities depending on the evaluation of the class declaration" thing, they are wildly inefficient in engines. this problem might not exist at all if we have the restriction that struct decls are top-level only and thus can't be reevaluated anyways
+
+so that sounds like a promising thing for us to explore
+
+[16:20:13.0754] <shu>
+for "i want to stamp private fields", jordan is happy with an outcome where we expose a new method like preventExtensions that also prohibits any object from being stampable. mark has been independently working on a new integrity level that already has that capability, and is happy to unbundle that new method from the integrity level.
+
+so it sounds like if we just introduce that method, here or independently, that solves it. everyone AFAIK agrees return override is loathsome so that method would be a good addition independently anyway
+
+[16:20:47.0718] <shu>
+structs, then, would be born as if that method were already called on them
+
+[16:21:53.0571] <shu>
+oh, one additional caveat to the unsafe {} thing, without unsafe {}, shared arrays would just work, which is also racy. i flagged this to mark, who thinks that is actually fine and as intended, because the indexed properties _are_ the public API of an array
+
+[16:38:55.0499] <Mathieu Hofman>
+> for "i want to stamp private fields", jordan is happy with an outcome where we expose a new method like preventExtensions that also prohibits any object from being stampable
+That is great news
+
+> mark has been independently working on a new integrity level that already has that capability, and is happy to unbundle that new method from the integrity level.
+Yeah we've been going at this from different approaches for a couple years now. In the latest iteration we were thinking of a new explicit integrity level above "freeze", but I have to think if we lower that to an explicit integrity level right above "prevent extensions". The thing is that we wanted to attach some different proxy trap semantics as well, and I don't know if that can work in that case.
+
+> for unsafe {}, mark is also happy with "all shared struct fields always private", then we don't need unsafe {}
+I had independently been mulling over this, and the 2 issues I came up with are:
+- WASM integration: I doubt an FFI style approach and wasm having to go through JS would be acceptable for every shared field access?
+- shared struct extend: the semantics of privates in JS is lexical. I think we may need a notion of protected here. Or at least a way to extract and represent the power to access private fields (which could be used to solve the wasm issue as well)
+
+[16:39:15.0049] <Mathieu Hofman>
+ * > for "i want to stamp private fields", jordan is happy with an outcome where we expose a new method like preventExtensions that also prohibits any object from being stampable
+
+That is great news
+
+> mark has been independently working on a new integrity level that already has that capability, and is happy to unbundle that new method from the integrity level.
+
+Yeah we've been going at this from different approaches for a couple years now. In the latest iteration we were thinking of a new explicit integrity level above "freeze", but I have to think if we lower that to an explicit integrity level right above "prevent extensions". The thing is that we wanted to attach some different proxy trap semantics as well, and I don't know if that can work in that case.
+
+> for unsafe {}, mark is also happy with "all shared struct fields always private", then we don't need unsafe {}
+
+I had independently been mulling over this, and the 2 issues I came up with are:
+
+- WASM integration: I doubt an FFI style approach and wasm having to go through JS would be acceptable for every shared field access?
+- shared struct extend: the semantics of privates in JS is lexical. I think we may need a notion of protected here. Or at least a way to extract and represent the power to access private fields (which could be used to solve the wasm issue as well)
+
+[16:40:00.0527] <Mathieu Hofman>
+ * > for "i want to stamp private fields", jordan is happy with an outcome where we expose a new method like preventExtensions that also prohibits any object from being stampable
+
+That is great news
+
+> mark has been independently working on a new integrity level that already has that capability, and is happy to unbundle that new method from the integrity level.
+
+Yeah we've been going at this from different approaches for a couple years now. In the latest iteration we were thinking of a new explicit integrity level above "freeze", but I have to think if could we lower that to an explicit integrity level right above "prevent extensions". The thing is that we wanted to attach some different proxy trap semantics as well, and I don't know if that can work in that case.
+
+> for unsafe {}, mark is also happy with "all shared struct fields always private", then we don't need unsafe {}
+
+I had independently been mulling over this, and the 2 issues I came up with are:
+
+- WASM integration: I doubt an FFI style approach and wasm having to go through JS would be acceptable for every shared field access?
+- shared struct extend: the semantics of privates in JS is lexical. I think we may need a notion of protected here. Or at least a way to extract and represent the power to access private fields (which could be used to solve the wasm issue as well)
+
+[16:42:04.0507] <Mathieu Hofman>
+ * > for "i want to stamp private fields", jordan is happy with an outcome where we expose a new method like preventExtensions that also prohibits any object from being stampable
+
+That is great news
+
+> mark has been independently working on a new integrity level that already has that capability, and is happy to unbundle that new method from the integrity level.
+
+Yeah we've been going at this from different approaches for a couple years now. In the latest iteration we were thinking of a new explicit integrity level above "freeze", but I have to think if could we lower that to an explicit integrity level right above "prevent extensions". The thing is that we wanted to attach some different proxy trap semantics as well, and provide a signal to not trigger the override mistake, and I don't know if that can work in that case.
+
+> for unsafe {}, mark is also happy with "all shared struct fields always private", then we don't need unsafe {}
+
+I had independently been mulling over this, and the 2 issues I came up with are:
+
+- WASM integration: I doubt an FFI style approach and wasm having to go through JS would be acceptable for every shared field access?
+- shared struct extend: the semantics of privates in JS is lexical. I think we may need a notion of protected here. Or at least a way to extract and represent the power to access private fields (which could be used to solve the wasm issue as well)
+
+
+2024-10-11
+[17:13:22.0770] <shu>
+> WASM integration: I doubt an FFI style approach and wasm having to go through JS would be acceptable for every shared field access?
+
+privacy is a source-language level concept, not a target language level concept. how JS structs are reflected in wasm is just an independent discussion IMO.
+
+[17:14:03.0684] <shu>
+> shared struct extend: the semantics of privates in JS is lexical. I think we may need a notion of protected here. Or at least a way to extract and represent the power to access private fields (which could be used to solve the wasm issue as well)
+
+yes, the existing semantics of #-names binds us in a way. i don't have a good answer
+
+[17:14:21.0753] <shu>
+like wasmgc structs don't have names, just offsets, right?
+
+[17:14:27.0402] <shu>
+privacy is just not a question there
+
+[17:30:22.0020] <rbuckton>
+> <@shuyuguo:matrix.org> for unsafe {}, mark is also happy with "all shared struct fields always private", then we don't need unsafe {}, because the idea is the public API must be written by the developer, which should be threadsafe
+> 
+> the implementation constraint for me with that world is that we must be able to compile #-names in shared structs just as normal property slots. because of the "#-names have different identities depending on the evaluation of the class declaration" thing, they are wildly inefficient in engines. this problem might not exist at all if we have the restriction that struct decls are top-level only and thus can't be reevaluated anyways
+> 
+> so that sounds like a promising thing for us to explore
+
+If struct fields are always private, how would you even use them with Atomics? I'm not sure I'm in favor of that direction, for more reasons than that.
+
+[17:58:35.0909] <shu>
+> <@rbuckton:matrix.org> If struct fields are always private, how would you even use them with Atomics? I'm not sure I'm in favor of that direction, for more reasons than that.
+
+you expose methods that does the atomics thing
+
+[17:58:59.0102] <shu>
+the "always private" direction has a strong dependency on per-realm prototypes with methods
+
+[17:59:17.0929] <shu>
+oh you mean, like, you can't reify #-names so how do you even call Atomics.load
+
+[17:59:19.0694] <shu>
+i misunderstood
+
+[17:59:46.0652] <shu>
+yeah idk
+
+[17:59:51.0965] <shu>
+we're gonna need to come up with something there
+
+[18:00:26.0844] <shu>
+i am of course more than happy with a direction with neither unsafe{} _nor_ always private, but i think agoric still can't live with that
+
+[18:03:48.0225] <shu>
+the atomics thing is one to be solved regardless of always-private, i suppose, because rbuckton you wanted to be able to use private state eventually anyway
+
+[18:04:18.0397] <rbuckton>
+> <@shuyuguo:matrix.org> you expose methods that does the atomics thing
+
+This doesn't make sense. Atomics requires a field name, but you cannot reference a private field
+
+[18:04:30.0625] <shu>
+i know, i misunderstood the question
+
+[18:06:28.0421] <rbuckton>
+> <@shuyuguo:matrix.org> we're gonna need to come up with something there
+
+I agree, and I already have a solution for this, but I also am not partial to private fields only as a direction. I could have multiple structs representing a complex data structure that are fully guarded, but I would always have to access their fields indirectly. IMO, that is not a great solution.
+
+[18:06:50.0759] <rbuckton>
+> <@shuyuguo:matrix.org> we're gonna need to come up with something there
+
+ * I agree, and I already have a solution for this, but I also am not partial to private fields only as a direction. I could have multiple structs representing a complex data structure that are fully guarded, but I would always have to access their fields indirectly through accessors? IMO, that is not a great solution.
+
+[18:07:17.0552] <shu>
+i think if you have a bunch of friend classes, i agree friend classes ought to be able to see each other somehow, but i don't know how complex we wanna make it
+
+[18:07:38.0232] <shu>
+but we still need to thread the needle between a guardrail that Agoric requires for this to progress
+
+[18:08:00.0265] <shu>
+that's the most viable option i see, if choosing between this and no guardrails at all
+
+[18:08:03.0542] <shu>
+are there other ideas?
+
+[18:08:43.0533] <shu>
+(assuming unsafe{} is dead in the water, given how much opposition we heard during plenary)
+
+[18:10:03.0372] <rbuckton>
+We're making this so much more complicated than it needs to be
+
+[18:10:24.0561] <shu>
+i agree personally
+
+[18:10:42.0751] <rbuckton>
+What opposition, aside from Waldemar's?
+
+[18:10:53.0345] <shu>
+oh, your preference is to _have_ unsafe{}?
+
+[18:11:02.0794] <rbuckton>
+I'd much rather have no guardrails than only private fields.
+
+[18:11:20.0975] <rbuckton>
+I'd rather have `unsafe` than only private fields.
+
+[18:11:34.0919] <shu>
+not just Waldemar, you also said TS gave negative feedback (i saw ryanc hating on it for the same reasons), i saw matrix conversations that were very much against the idea
+
+[18:12:03.0266] <shu>
+okay, it'd be good to get a ranking and take stock of the options at the next meeting. i've invited Waldemar but i don't know if he'll attend
+
+[18:12:38.0679] <shu>
+the known options so far are:
+
+1. no guardrails at all
+2. volatile {} (people definitely hated unsafe)
+3. private only
+
+[18:12:44.0518] <rbuckton>
+One suggestion that seemed interesting was using a different punctuator for field access. Something like `obj->x`, but maybe without the pointer dereferencing baggage.
+
+[18:13:20.0385] <rbuckton>
+Like, we have `.id` and `.#id` we could just have something else
+
+[18:13:23.0631] <shu>
+that seems also like a lot of complexity to me
+
+[18:13:28.0512] <shu>
+but sure, we can also talk about it
+
+[18:13:55.0008] <shu>
+my preference is 1 > 3 > 2, ron's is 1 > 2 > 3, agoric's AFAIU is 2 = 3 (?) > 1
+
+[18:14:29.0521] <rbuckton>
+I think private only is a non-starter because it requires so much additional complexity. 
+
+[18:15:00.0348] <rbuckton>
+As far as atomic access to privates, there's always https://github.com/rbuckton/proposal-ref
+
+[18:15:10.0411] <rbuckton>
+ * As far as atomic access to privates, there's always https://github.com/rbuckton/proposal-refs
+
+[18:15:11.0424] <Mathieu Hofman>
+one advantage of new syntax is that it opens up the possibility of not allowing access to these fields through reflection, the same way private fields cannot be accessed through reflection
+
+[18:15:38.0979] <rbuckton>
+I haven't proposed it, but I've been thinking about it for years.
+
+[18:15:48.0471] <Mathieu Hofman>
+it also means that private shared fields don't need to have exactly the same semantics as private fields
+
+[18:16:08.0246] <shu>
+> <@mhofman:matrix.org> it also means that private shared fields don't need to have exactly the same semantics as private fields
+
+the Atomics methods problem is a hard requirement though
+
+[18:16:26.0064] <shu>
+to not be able to do seq-cst, or acq/rel (as waldemar is proposing now) on those fields would be fatal
+
+[18:16:28.0980] <rbuckton>
+This is supposed to be a perf-critical feature. Routing everything through accessors is antithetical to that
+
+[18:16:43.0367] <shu>
+well, it's only via public use is the point
+
+[18:16:57.0721] <shu>
+i'm actually not super concerned for routing through accessors because that only happens externally to the class's methods
+
+[18:16:59.0518] <Mathieu Hofman>
+yeah Atomics becomes difficult to explain with new syntax if there is no reflection
+
+[18:17:04.0581] <shu>
+which would only be a perf problem in your cluster-of-friends case
+
+[18:17:40.0407] <Mathieu Hofman>
+accessors on fixed shape objects, especially if they're possibly autogenerated, don't have to have any overhead, right ?
+
+[18:17:42.0096] <rbuckton>
+the refs proposal would introduce a mechanism for reified References.
+
+[18:17:50.0613] <shu>
+> <@mhofman:matrix.org> accessors on fixed shape objects, especially if they're possibly autogenerated, don't have to have any overhead, right ?
+
+oh they have super overhead as a function call
+
+[18:17:55.0357] <rbuckton>
+So you could do `Atomics.load(ref struct.#x)`
+
+[18:17:57.0674] <shu>
+that is a huge overhead compared to a load on a struct
+
+[18:18:11.0089] <shu>
+but i can live with it if it's for public users only
+
+[18:18:17.0436] <shu>
+because that shouldn't happen frequently for public users
+
+[18:19:32.0524] <shu>
+> <@rbuckton:matrix.org> the refs proposal would introduce a mechanism for reified References.
+
+that's a big dependency to take :(
+
+[18:19:41.0269] <rbuckton>
+> <@shuyuguo:matrix.org> which would only be a perf problem in your cluster-of-friends case
+
+Which is something I'm already doing in the TS experiment to build the lock free data structures I need to actually get work done.
+
+[18:19:56.0643] <shu>
+interesting, what is your cluster of friend classes in that case?
+
+[18:20:03.0429] <rbuckton>
+I agree, but it has other uses. It's had use cases since Decorators was proposed.
+
+[18:20:04.0441] <shu>
+just pick a concrete one, just curious
+
+[18:20:11.0556] <rbuckton>
+Writing a Deque
+
+[18:20:27.0159] <shu>
+and the subclasses that comprise it that need to see each others' state?
+
+[18:20:27.0598] <rbuckton>
+there are about 4-5 data structures that are all interrelated. 
+
+[18:20:47.0516] <rbuckton>
+The `Deque` needs to be able to access the ring buffer's state. 
+
+[18:21:00.0873] <rbuckton>
+This is all lock free, so only the Deque public methods need to be guarded.
+
+[18:21:29.0968] <shu>
+okay so you have like a RingBuffer and you want Deque to just get ._buffer, not RingBuffer.p.getBufferElementAt(n) or whatever
+
+[18:21:33.0334] <rbuckton>
+And you need to use objects for ringbuffer entries for appropriate CAS operations.
+
+[18:21:42.0403] <rbuckton>
+roughly.
+
+[18:21:47.0044] <shu>
+right, or .compareExchangeElementAt
+
+[18:22:20.0695] <rbuckton>
+https://github.com/microsoft/TypeScript/blob/shared-struct-test/src/compiler/sharing/collections/deque.ts
+
+[18:22:22.0675] <shu>
+right, if we take alway-private to mean literal #-names with their semantics today, this works very poorly
+
+[18:23:26.0801] <rbuckton>
+(though that's using `class` and TS legacy decorators to give me something to attach types to, the constructors actually return structs) 
+
+[18:23:58.0634] <shu>
+man why is this so hard
+
+[18:24:16.0135] <shu>
+i am _really_ skeptical about adding a new kind of property after private names
+
+[18:24:32.0644] <shu>
+also for a new pointer-field-access syntax, but i'd need to see the specifics i guess
+
+[18:25:04.0717] <rbuckton>
+Everyone I've spoken to on my team seems to be in agreement that this additional guardrail is wholly unnecessary.
+
+[18:26:02.0435] <rbuckton>
+JS has getters and setters, so an object's properties can change underneath you unexpectedly already, and reads and writes don't tear.
+
+[18:26:41.0244] <shu>
+this was waldemar's core point iirc
+
+[18:27:53.0588] <shu>
+i confess i am also confused _why_ data races are categorically different from "wacky getters". mark's explanation to me in the hallway was, getters are the public API of the class designer, so it is intentional by the designer. whereas fields are just fields, so i guess to expose racy access on them by default without additional signal of intent is the contagion he wants to prevent
+
+[18:28:19.0013] <shu>
+i didn't have time to really dig in, but a struct designer still has to type `foo;`
+
+[18:28:24.0071] <shu>
+ * i didn't have time to really dig in, but a struct designer still has to type `fieldName;`
+
+[18:30:14.0640] <rbuckton>
+`shared struct` is in the public API of the struct author as well. I don't see how this is different.
+
+[18:30:38.0701] <shu>
+it would be good to dig into more there, for sure
+
+[18:30:39.0772] <rbuckton>
+What's *not* in the public API of the class designer are Proxies, and Proxies can change values on you even for *fields*
+
+[18:31:17.0688] <shu>
+because mark's actual goal as articulated is "how do we better ensure a world where by default devs interact with shared structs only via their public interface, which should be threadsafe"
+
+[18:33:12.0186] <rbuckton>
+If you don't have COOP/COEP enabled, then it is threadsafe because you can't actually share it?
+
+[18:55:51.0105] <rbuckton>
+Stage 2 is a little early, but I'm experimenting with a TypeScript downleveling for shared structs that uses the dev trial constructor:
+
+
+
+[18:57:27.0616] <rbuckton>
+No `shared struct`-specific type checking though, it piggybacks on `class`.
+
+[18:57:34.0619] <rbuckton>
+ * No `shared struct`-specific type checking though, it piggybacks on `class` type checking.
+
+[18:57:50.0358] <rbuckton>
+i.e., it doesn't disallow non-static methods/accessors at present.
+
+[18:58:51.0147] <rbuckton>
+and the [[Prototype]] chain of the struct constructor doesn't match spec since the actual struct type gets stuffed in there.
+
+[19:05:42.0444] <rbuckton>
+it also doesn't allow subclassing
+
+[19:07:35.0038] <Mathieu Hofman>
+> <@rbuckton:matrix.org> If you don't have COOP/COEP enabled, then it is threadsafe because you can't actually share it?
+
+My understanding is that it's mostly in a world where we accept shared memory concurrency, and where it's available. What can we do to steer authors towards designing their shared data so that race conditions are contained and not exposed to users.
+
+[19:10:49.0351] <Mathieu Hofman>
+For example most host APIs are internally multi-threaded with shared memory, but thankfully they do not expose that to the JS program. Host object rarely expose objects with data properties that change without local action
+
+[21:37:57.0037] <shu>
+Mathieu Hofman: i want to get to a shared understanding in this group (and in committee) the way in which shared memory data race in shared struct public fields is a categorically different kind of unsafe than getters and proxies doing arbitrary things
+
+[21:39:23.0243] <shu>
+namely, the assertion from mark seems to have been "those getters are the intended public API provided by the author", while the contention is "from the consumer's point of view, unclear why public fields don't constitute the same intent"
+
+is the main issue perhaps that there _can't_ be private fields currently? so the conscientious shared struct author has no way to express the intent?
+
+[21:39:57.0288] <shu>
+like, _if_ we had both public and private fields in shared structs (assuming we can somehow make Atomics work, no idea how), what is the issue?
+
+[23:41:23.0628] <nicolo-ribaudo>
+I see discussion about how to use private fields and atomics — both Justin and littledan had proposals to reify private names as first-class values, you should probably also get in touch with them
+
+[12:45:28.0860] <rbuckton>
+True, which is why I've held off on proposing it until there were more motivating use cases. I initially wrote up the proposal to address a concern around decorators surfaced by the Angular team:
+
+```js
+class A { @dec(B) b; }
+class B { @dec(A) a; }
+```
+
+This throws because `B` is not yet defined (even w/o TDZ it would have been `undefined`). You can address this with arrow functions, but its easy to accidentally pass an actual function and forget the arrow as you cannot readily distinguish between function types.
+
+With references, this might be:
+```js
+class A { @dec(&B) b; }
+class B { @dec(&A) a; }
+```
+
+A second motivator is to support both conditional and unconditional output values w/o the overhead of destructuring:
+
+```js
+Map.prototype.tryGet = function (key, &value) {
+  // naive implementation
+  if (this.has(key)) {
+    value = this.get(key);
+    return true;
+  }
+  return false;
+}
+
+let value;
+if (map.tryGet(key, &value) && value > 0) { ... }
+```
+
+And refs could be used to pass a reference to a variable, field, or array element:
+
+```js
+// private field and array element refs for atomics
+Atomics.load(&this.#x);
+Atomics.store(&ar[0], value);
+
+// private field refs for friend classes
+class Source {
+  signal;
+  #waiters;
+  constructor() {
+    this.signal = new Signal(&this.#waiters);
+  }
+}
+class Signal {
+  #waiters;
+  constructor(&waiters) { // deref/bind 
+    this.#waiters = &waiters; // ref, reified
+  }
+  subscribe(cb) {
+    let &waiters = this.#waiters; // deref
+    waiters ??= new Set(); // assigns to source.#waiters
+    waiters.add(cb);
+  }
+}
+```
+
+A reified reference is roughly akin to a closure:
+```js
+let a = 1;
+let b = &a;
+b.value; // 1
+b.value++;
+a; // 2
+
+// rough desugaring
+let a = 1;
+let b = { get value() { return a; }, set value(v) { a = v; } };
+b.value; // 1
+b.value++;
+a; // 2
+```
+
+Except that for fields its actually more like a Reference record in that it holds the object and property key, which is how something like `Atomics` could reach in and touch the actual field value. This is the only behavior that refs provide that isn't already possible in the language as a closure. My hope is, though, that engines could potentially optimize ref/deref pairs and avoid reification when it isn't necessary:
+```js
+let a = 1;
+let &b = &a; // ref/deref. 'b' holds same binding as 
+
+```
+
+
+[12:49:39.0634] <rbuckton>
+ * True, which is why I've held off on proposing it until there were more motivating use cases. I initially wrote up the proposal to address a concern around decorators surfaced by the Angular team:
+
+```js
+class A { @dec(B) b; }
+class B { @dec(A) a; }
+```
+
+This throws because `B` is not yet defined (even w/o TDZ it would have been `undefined`). You can address this with arrow functions, but its easy to accidentally pass an actual function and forget the arrow as you cannot readily distinguish between function types.
+
+With references, this might be:
+
+```js
+class A { @dec(&B) b; }
+class B { @dec(&A) a; }
+```
+
+A second motivator is to support both conditional and unconditional output values w/o the overhead of destructuring:
+
+```js
+Map.prototype.tryGet = function (key, &value) {
+  // naive implementation
+  if (this.has(key)) {
+    value = this.get(key);
+    return true;
+  }
+  return false;
+}
+
+let value;
+if (map.tryGet(key, &value) && value > 0) { ... }
+```
+
+And refs could be used to pass a reference to a variable, field, or array element:
+
+```js
+// private field and array element refs for atomics
+Atomics.load(&this.#x);
+Atomics.store(&ar[0], value);
+
+// private field refs for friend classes
+class Source {
+  signal;
+  #waiters;
+  constructor() {
+    this.signal = new Signal(&this.#waiters);
+  }
+}
+class Signal {
+  #waiters;
+  constructor(&waiters) { // deref/bind 
+    this.#waiters = &waiters; // ref, reified
+  }
+  subscribe(cb) {
+    let &waiters = this.#waiters; // deref
+    waiters ??= new Set(); // assigns to source.#waiters
+    waiters.add(cb);
+  }
+}
+```
+
+A reified reference is roughly akin to a closure:
+
+```js
+let a = 1;
+let b = &a;
+b.value; // 1
+b.value++;
+a; // 2
+
+// rough desugaring
+let a = 1;
+let b = { get value() { return a; }, set value(v) { a = v; } };
+b.value; // 1
+b.value++;
+a; // 2
+```
+
+Except that for fields its actually more like a Reference record in that it holds the object and property key, which is how something like `Atomics` could reach in and touch the actual field value. This is the only behavior that refs provide that isn't already possible in the language as a closure. My hope is, though, that engines could potentially optimize ref/deref pairs and avoid reification when it isn't necessary:
+
+```js
+let a = 1;
+let &b = &a; // ref/deref. 'b' and 'a' point to same binding
+
+function &f(&x) { return &x; } // statically indicates ref return
+let x = 1;
+let &y = &f(&x); // ref/deref/ref/deref/ref/deref. 'y' and 'x' point to the same binding
+```
+
+[12:51:43.0476] <rbuckton>
+This also came up in the Extractors proposal when comparing how we would need to use array destructuring, while C#'s deconstruct uses `out` (same as `ref`, but statically enforced to ensure you assign to it before returning)
+
+[12:51:54.0196] <rbuckton>
+ * This also came up in the Extractors proposal when comparing how we would need to use array destructuring, while C#'s `Deconstruct` uses `out` (same as `ref`, but statically enforced to ensure you assign to it before returning)
+
+[12:54:50.0310] <rbuckton>
+I've gone back and forth on whether to use `ref` or `&`. I've felt `&` seems too pointer-y, but `ref` is ambiguous with call when the operand is parenthesized, e.g. `ref (x).y`. 
+
+[13:01:56.0662] <rbuckton>
+You could potentially split up something like refs into two parts: `&` for ref/deref but no reification (i.e., either statically an error if not derefing if that's feasible, or produces an opaque object), with reification coming later (if at all).
+
+[13:08:50.0038] <rbuckton>
+Prior to C# 8, you could only take a ref of an argument and pass it to a ref parameter, which is a further potential restriction.
+
+[13:11:51.0121] <rbuckton>
+That would still cover the main motivations I'd have for the `ref` proposal, though without some of the conveniences it offers. A decorator could take a ref as a parameter and internally close over it. The only problem being that the parameter could not be optional (or could be but it would be an error to access it, as if it had TDZ, which I know that's not a good direction)
+
+[13:12:02.0465] <rbuckton>
+ * That would still cover the main motivations I'd have for the refs proposal, though without some of the conveniences it offers. A decorator could take a ref as a parameter and internally close over it. The only problem being that the parameter could not be optional (or could be but it would be an error to access it, as if it had TDZ, which I know that's not a good direction)
+
+[13:14:52.0730] <rbuckton>
+There was also some interest in using refs with the signals proposal. I spoke with Domenic Gannaway a few months back about that, as it could potentially allow for reactive variables similar to Svelte.
+
+[13:23:00.0679] <rbuckton>
+For exampler:
+```js
+const nameState = new Signal.State("Bob");
+const helloComputed = new Signal.Computed(() => `Hello ${name}`);
+
+let &name = &nameState.getMutableRef();
+const &hello = &helloComputed.getImmutableRef();
+
+name; // "Bob";
+hello; // "Hello Bob";
+
+name = "Alice";
+hello; // "Hello Alice";
+```
+
+[13:23:05.0427] <rbuckton>
+ * For example:
+
+```js
+const nameState = new Signal.State("Bob");
+const helloComputed = new Signal.Computed(() => `Hello ${name}`);
+
+let &name = &nameState.getMutableRef();
+const &hello = &helloComputed.getImmutableRef();
+
+name; // "Bob";
+hello; // "Hello Bob";
+
+name = "Alice";
+hello; // "Hello Alice";
+```
+
+[13:25:04.0716] <nicolo-ribaudo>
+That seems exactly like the code that made the committee reject `import defer` without a namespace import 😅
+
+[13:25:26.0067] <nicolo-ribaudo>
+i.e. that it was introducing side-effects in binding access
+
+[13:26:22.0139] <rbuckton>
+Yeah, I am aware it's a hard sell. This is fairly explicit at the declaration site, on a per-binding case.
+
+[13:27:06.0112] <nicolo-ribaudo>
+I guess it's no worse than the alternative (using an object and property access)
+
+[13:27:16.0429] <nicolo-ribaudo>
+Given that it's statically a analyzable 
+
+[13:27:31.0371] <nicolo-ribaudo>
+* Given that it's statically analyzable 
+
+[13:27:41.0604] <rbuckton>
+With the exception of how Atomics would work, this is fully transpilable. 
+
+[13:33:53.0022] <rbuckton>
+Another use case is conditional references. We have functions in the TS compiler where we do some work with a secondary optional output parameter. To make it optional, we just either pass `undefined` when it's not needed or a `{ value: undefined }` object when it is needed. Passing a ref would be far more convenient.
+
+[13:40:24.0855] <rbuckton>
+shu: I have a thought, though maybe this isn't enough. What if shared structs can have private fields and public fields, but you must declare the public fields as `volatile`? If the answer to "if you want to make the field accessible w/o a guardrail is to use `accessor`", which has overhead, then perhaps marking the field with `volatile` would be acceptable without the overhead. 
+
+[13:41:29.0209] <rbuckton>
+ * shu: I have a thought, though maybe this isn't enough. What if shared structs can have private fields and public fields, but you must declare the public fields as `volatile`? If the answer to "if you want to make the field accessible w/o a guardrail is to use `get`/`set` (or `accessor`?)", which has overhead, then perhaps marking the field with `volatile` would be acceptable without the overhead.
+
+[14:55:57.0920] <shu>
+to make sure i understand, something like
+
+`shared struct S { publicField; }` doesn't parse, but `shared struct S { volatile publicField; }` does
+
+[14:56:51.0832] <shu>
+i get the intent and i can live with it, but it does feel confusing with conditional requirement for public fields and not private fields
+
+[14:57:06.0011] <shu>
+private names aren't any _less_ volatile because they're private
+
+[14:58:26.0955] <shu>
+i guess i can also live with that every field must be required tagged `volatile`, but that also feels kinda like we're just requiring devs to type an behaviorless incantation, the purpose of which is lost
+
+[15:07:51.0457] <shu>
+rbuckton: an actually orthogonal way to solve the Atomics-on-private issue is to give up on Atomics overloads, and go with Atomics objects which AFAICT is what most languages do anyway
+
+[15:08:31.0334] <shu>
+i.e. `#privateFoo = Atomics.Value()` or something, which you can then use `Atomics.load` on
+
+[15:08:58.0282] <shu>
+the problem is that this incurs an extra layer of indirection *and* an extra layer heap allocation, since i don't think it can be zero cost
+
+[15:09:18.0191] <rbuckton>
+> <@shuyuguo:matrix.org> i guess i can also live with that every field must be required tagged `volatile`, but that also feels kinda like we're just requiring devs to type an behaviorless incantation, the purpose of which is lost
+
+I'd rather do that than be required to write `accessor` or `get`, the behavior of which is unnecessary and pure overhead.
+
+[15:09:45.0558] <shu>
+unless we decide it's worth inlining into struct declarations with special syntax, like `atomic #foo` or `atomic foo`
+
+[15:10:08.0396] <shu>
+but even then i don't know how to avoid reifying it into an actual object if the goal is to do Atomics access on them
+
+[15:10:36.0067] <shu>
+ * but even then i don't know how to avoid materializing it into an actual object if the goal is to do Atomics access on them
+
+[15:10:44.0475] <rbuckton>
+> <@shuyuguo:matrix.org> i.e. `#privateFoo = Atomics.Value()` or something, which you can then use `Atomics.load` on
+
+I'm doing something similar in the shared structs experiment in the TS compiler, mostly to work around TypeScript's soft `private`. The `AtomicValue` isn't strictly necessary, but it type checks better than a bunch of `// @ts-ignore` comments.
+
+[15:11:06.0196] <shu>
+i think ergonomically the idea is pretty good and fits well with the language
+
+[15:11:08.0811] <rbuckton>
+In the case of the `AtomicValue` I wrote, it has all of the atomics methods itself.
+
+[15:11:13.0431] <shu>
+right
+
+[15:11:32.0305] <shu>
+but indirection and the always on-heap boxing are antithetical to the performance needs of lock-free algs
+
+[15:11:45.0607] <shu>
+so if we can thread that needle somehow that also sidesteps the problem
+
+[15:11:48.0654] <rbuckton>
+Agreed
+
+[15:12:50.0368] <shu>
+i _think_ it's probably doable if we have special syntax marker like `atomic #foo`
+
+[15:13:19.0224] <shu>
+then it can be treated like primitive prototype lookups when you access, say, `42.toString` or whatever
+
+[15:13:30.0303] <shu>
+you don't _really_ need to materialize the box in all cases
+
+[15:13:44.0323] <rbuckton>
+If Mark's concern is that volatile fields on a shared struct could be be surfaced as part of a public API, could that not be guarded against via a type-aware linter like `eslint` w/`ts-eslint` instead?
+
+[15:14:15.0044] <shu>
+perhaps, that's up to mark and i think the highest order thing we should talk through before we return to investigating correlation
+
+[15:14:26.0439] <rbuckton>
+i.e., if you are concerned about it, you lint for it?
+
+[15:14:55.0312] <shu>
+i guess it comes down to how is mark running the linter?
+
+[15:15:00.0158] <shu>
+like since the concern is about other libraries
+
+[15:15:06.0288] <shu>
+is the linter being run on the whole project, across all its deps?
+
+[15:15:11.0771] <shu>
+if so that seems like it should point it out
+
+[15:15:12.0770] <rbuckton>
+I don't think the average dev is just going to start using `shared struct` over something like `class`.
+
+[15:15:24.0898] <rbuckton>
+No, but you should be vetting your dependencies anyways.
+
+[15:15:32.0054] <shu>
+right, but the worry was something like
+
+[15:16:22.0222] <rbuckton>
+your dependencies could also start using Proxies and report things that are fields that could change on you at a moment's notice.
+
+[15:16:26.0991] <shu>
+i mean yeah
+
+[15:16:30.0365] <shu>
+i have the same confusion
+
+[15:16:54.0439] <shu>
+anyway i gotta go pack and check out
+
+[15:16:59.0854] <shu>
+i'll also noodle more on the atomic value idea
+
+[15:17:27.0348] <shu>
+the Atomics methods with reflected property access really was like, forced on us by SABs
+
+[15:17:33.0530] <shu>
+perhaps we should dream a little bigger here anyway
+
+[15:20:48.0935] <rbuckton>
+for what it's worth, `&` refs would work for array elements, so `Atomics.load(&u32array[0])` would also work.
+
+
+2024-10-16
+[08:29:08.0513] <shu>
+heads up for the next meeting on Oct 24: Waldemar has agreed to come. i might not be able to attend the entire time due to travel, but Mathieu Hofman could you please confirm Mark can make it to hash out concerns about `unsafe{}` with Waldemar?
+
+[15:14:52.0563] <kriskowal>
+> <@shuyuguo:matrix.org> heads up for the next meeting on Oct 24: Waldemar has agreed to come. i might not be able to attend the entire time due to travel, but Mathieu Hofman could you please confirm Mark can make it to hash out concerns about `unsafe{}` with Waldemar?
+
+Relayèd. Stand by.
+
+[15:51:33.0604] <kriskowal>
+> <@kriskowal:aelf.land> Relayèd. Stand by.
+
+Mark and Mathieu both plan to attend.
+
+[16:13:51.0655] <shu>
+excellent, thank you for confirmation
+

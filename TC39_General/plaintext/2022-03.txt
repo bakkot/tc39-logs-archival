@@ -1,0 +1,2275 @@
+2022-03-01
+[16:55:47.0607] <Justin Ridgewell>
+danielrosenwasser / rbuckton: The new What's Changed Since RC/Beta in the TS release notes are 👍
+
+[17:47:45.0044] <sirisian>
+Question. Possibly I'm not searching the right terms, but when async/await was added to ECMAScript, why was threading never pulled into the core language away from Web Workers? (As others I've done the blob thing for years with workers when doing heavily threaded things). I kind of expected that one would be able to just call an async function and have it execute on another thread by now with intuitive shared state, but that was never proposed. Why not?
+
+[17:55:08.0758] <bakkot>
+"intuitive shared state" is a contradiction in terms
+
+[17:55:51.0018] <bakkot>
+the thing you're proposing would be incredibly complicated to specify or implement, and we're just now getting to the point where we're fleshing out the building blocks which might let us get there someday
+
+[17:56:03.0616] <bakkot>
+or, well, not there precisely, but somewhere like it
+
+[18:19:23.0514] <Jack Works>
+> <@sirisian:matrix.org> Question. Possibly I'm not searching the right terms, but when async/await was added to ECMAScript, why was threading never pulled into the core language away from Web Workers? (As others I've done the blob thing for years with workers when doing heavily threaded things). I kind of expected that one would be able to just call an async function and have it execute on another thread by now with intuitive shared state, but that was never proposed. Why not?
+
+we're on the route of that. 🤔
+search for those proposals:
+- struct (shared struct section)
+- module block
+
+[18:41:56.0618] <bakkot>
+> <@gibson042:matrix.org> can someone verify my assessment that https://github.com/mishoo/UglifyJS/issues/5370 represents a deviation of V8 from other major implementations in FunctionDeclarationInstantiation with respect to non-simple parameter lists when VarDeclaredNames includes "arguments"?
+> ```
+> $ eshost -se '[].concat(...["function arguments(){}", "var arguments"].map(occluding => ["()", "(..._)", "(_=0)"].map(params => { const r="return typeof arguments; ", f=Function(params.slice(1,-1), r+occluding); return `${f().padEnd(9)} // function${params}{${r+occluding}}`; }))).join("\n")'
+> #### ChakraCore, engine262, JavaScriptCore, Moddable XS, SpiderMonkey
+> function  // function(){return typeof arguments; function arguments(){}}
+> function  // function(..._){return typeof arguments; function arguments(){}}
+> function  // function(_=0){return typeof arguments; function arguments(){}}
+> object    // function(){return typeof arguments; var arguments}
+> object    // function(..._){return typeof arguments; var arguments}
+> object    // function(_=0){return typeof arguments; var arguments}
+> 
+> #### V8
+> function  // function(){return typeof arguments; function arguments(){}}
+> function  // function(..._){return typeof arguments; function arguments(){}}
+> function  // function(_=0){return typeof arguments; function arguments(){}}
+> object    // function(){return typeof arguments; var arguments}
+> undefined // function(..._){return typeof arguments; var arguments}
+> undefined // function(_=0){return typeof arguments; var arguments}
+> ```
+
+Tracing through the full machinery would take me a while, but I can at least confirm that there should not be a difference between simple and non-simple arguments lists in this case, so V8 is definitely wrong _somewhere_, and it seems quite likely to be wrong in the cases where it differs from other implementations
+
+[18:42:31.0371] <sirisian>
+Well intuitive as in all closed over variables and they automatically behave like SharedArrayBuffer items without the bloat. (And in scope functions can just be called without any module syntax). Creating a variable and using an atomic to increment it or other operation would just "work" without stuff like shared structs or shuffling stuff into TypedArrays like it's some separate API.
+
+[18:45:12.0310] <bakkot>
+SABs are the single most "handle with care" part of the entire language, especially when used without atomics; making it so that every single thing in the language behaved like that would be... not an idea I'd endorse, to put it lightly, and I imagine that's a common sentiment among the committee
+
+[18:46:32.0295] <bakkot>
+Like, just getting the memory model right for SABs was incredibly complicated, and not without bugs; see e.g. https://github.com/tc39/ecma262/issues/1680 https://github.com/tc39/ecma262/issues/2231 https://github.com/tc39/ecma262/pull/1511
+
+[18:46:52.0305] <bakkot>
+and that's the _simple_ case, where you're just dealing with raw bytes; it gets more complicated when you get more complicated data structures involved
+
+[18:49:43.0636] <bakkot>
+(also blocking atomics don't work on the main thread, so the "using an atomic to increment it" thing doesn't really make sense at least not on the main thread)
+
+[18:49:58.0546] <bakkot>
+ * (also blocking atomics don't work on the main thread, so the "using an atomic to increment it" thing doesn't really make sense at least not on the main thread)
+
+[18:50:07.0307] <bakkot>
+ * (also blocking atomics don't work on the main thread, so the "using an atomic to increment it" thing doesn't really make sense, at least not on the main thread)
+
+[19:04:43.0339] <sirisian>
+I meant incrementing in other threads. My general thinking is I'd like for SharedArrayBuffer to be deprecated such that a variable and thread system works more like C++. In this case everything is handled with care implied. Was talking to someone about my type proposal/notes and they commented that you can't just create say an integer in the main thread and increment it in multiple threads (with atomics). In this setup you'd be able to do things like swap two object references atomically or set a variable object atomically. It definitely would be very complex to implement, but for the user they could just call functions to create threads and implement parallelism without any extra sugar (wrapping of objects, functions, variables).
+
+[19:05:06.0557] <ljharb>
+also, not everyone on the committee :cough: is convinced that threads are "not incredibly harmful" :-)
+
+[19:08:48.0643] <sirisian>
+I completely get that. I'm migrating over to WebGPU for my current toy projects. Most of my applications were more "spin up 8 threads because I can't use the GPU to compute this" situation. Still for simple projects for demos it would be nice to write a few lines of code to say run a pathfinding algorithm on multiple threads. Though the module block fits those kind of applications cleanly where I'm not sharing state between threads.
+
+[19:09:37.0328] <bakkot>
+As a rule we don't usually introduce features only intended to be used in toy projects, particularly when they have sharp edges
+
+[19:10:12.0960] <bakkot>
+and shared-memory parallelism isn't just a sharp edge, it's an entire box of rusty razor blades
+
+[19:10:44.0440] <Jack Works>
+> <@bakkot:matrix.org> and shared-memory parallelism isn't just a sharp edge, it's an entire box of rusty razor blades
+
+so how u think about the shared structs proposal?
+
+[19:12:01.0716] <bakkot>
+Jack Works: as with SABs it's something which will be useful to build safe-to-use libraries on top of, but not something I'd expect users to touch in everyday life
+
+[19:13:14.0651] <bakkot>
+it's carefully designed so that the shared memory parts are constrained to the struct and its references, and doesn't get out into the rest of your program, which is the only thing which makes it even conceivably a good idea
+
+[19:13:52.0803] <bakkot>
+that is, I agree with the readme:
+
+> Like other shared memory features in JavaScript, it is high in expressive power and high in difficulty to use correctly. This proposal is both intended as an incremental step towards higher-level, easier-to-use (e.g. data-race free by construction) concurrency abstractions as well as an escape hatch for expert programmers who need the expressivity.
+
+[19:13:56.0733] <Jack Works>
+> <@bakkot:matrix.org> Jack Works: as with SABs it's something which will be useful to build safe-to-use libraries on top of, but not something I'd expect users to touch in everyday life
+
+once it is available, it will be used in everyday life by programmers that has c++/rust/java/... background
+
+[19:14:05.0084] <bakkot>
+well
+
+[19:14:07.0179] <bakkot>
+seems bad
+
+[19:14:11.0859] <Jack Works>
+lol
+
+[19:14:15.0817] <bakkot>
+if we actually think that's going to happen, it's probably not worth putting in the language
+
+[19:15:06.0585] <bakkot>
+that said, I have a background in all of those languages and still wouldn't touch structs without thinking _extremely_ carefully about it
+
+[19:15:18.0687] <Jack Works>
+no one use SAB+worker because it's too hard to create one than just following JS style of multi-thread programming 
+
+[19:15:42.0800] <bakkot>
+I use SABs...
+
+[19:16:02.0938] <bakkot>
+but, you know, only after thinking extremely carefully about it
+
+[19:16:13.0919] <bakkot>
+and emscripten uses them to good effect as well
+
+[19:16:45.0896] <bakkot>
+I think module blocks will make workers more popular in general, tbh
+
+[19:17:02.0815] <Jack Works>
+> <@sirisian:matrix.org> I completely get that. I'm migrating over to WebGPU for my current toy projects. Most of my applications were more "spin up 8 threads because I can't use the GPU to compute this" situation. Still for simple projects for demos it would be nice to write a few lines of code to say run a pathfinding algorithm on multiple threads. Though the module block fits those kind of applications cleanly where I'm not sharing state between threads.
+
+🤔 for a toy project maybe you can try a toy runtime. I've heard that the structed proposal has a demo implementation in V8. maybe u can contact v8 team to get a demo build and play around
+
+[19:17:06.0434] <ljharb>
+if something is going to encourage wider usage of multi-threaded programming in JS, that sounds like a huge detriment to the language
+
+[19:17:14.0140] <bakkot>
+multi-threading is good!
+
+[19:17:14.0805] <ljharb>
+"being single-threaded" is a feature, not a bug
+
+[19:17:16.0216] <sirisian>
+Well WebGPU makes it not a toy project technically since it's identical to an existing piece of software. The performance issue of doing the project with web workers made it very suboptimal compared to usual approaches (like much slower with limitations a GPU approach wouldn't have). The main idea though is taking a data structure and passing it through a pipeline where each operation is expensive. One could imagine say using the pipeline proposal and each function just calls a thread? yeah, that's probably close, but simplified.
+
+[19:17:20.0962] <bakkot>
+shared-memory multithreading is bad
+
+[19:17:25.0919] <bakkot>
+but multiple threads are good
+
+[19:17:38.0830] <bakkot>
+CPUs have many cores
+
+[19:17:43.0400] <ljharb>
+i can agree that things that are observably the same as "being single-threaded" is good
+
+[19:18:10.0593] <ljharb>
+the thing i value is that things must act as if they're single-threaded. they can be faster than that if i can't tell the difference, and that's a good thing
+
+[19:18:12.0630] <bakkot>
+deliberately limiting your programming language so that it can't use more than 1/16th of the CPU seems like... bad
+
+[19:18:28.0620] <sirisian>
+I have a 12900k for reference. :|
+
+[19:19:07.0801] <bakkot>
+we shouldn't be optimizing for people with 12900ks
+
+[19:19:24.0616] <Jack Works>
+> <@ljharb:matrix.org> "being single-threaded" is a feature, not a bug
+
+this goes too far. i support multi-thread by message passing, not memory sharing
+
+[19:19:26.0333] <bakkot>
+but even the cheapest android phones available have 4 cores these days
+
+[19:21:23.0012] <pokute>
+We could simultaneously introduce manual memory management as a viable alternative to GC in ECMAScript since users will appreciate the freedom. 🚎
+
+[19:21:35.0740] <pokute>
+ * We could simultaneously introduce manual memory management as a viable alternative to GC in ECMAScript since users will appreciate the freedom. 🚎
+
+[19:22:02.0476] <Jack Works>
+actually I'm curious about, if Record&Tuple are shipped and highly optimized by the engine, does that make life easier?
+
+[19:22:30.0437] <bakkot>
+records and tuples are immutable so it doesn't much matter
+
+[19:22:37.0048] <Jack Works>
+we can pass immutable object/arrays with 0 serialization cost (engine can share the memory)
+
+[19:22:38.0197] <bakkot>
+you'd still have to `postMessage` them, and you can do that with a plain object
+
+[19:22:50.0823] <Jack Works>
+> <@bakkot:matrix.org> you'd still have to `postMessage` them, and you can do that with a plain object
+
+yeah, but that need a clone
+
+[19:22:54.0308] <bakkot>
+yeah that's fair
+
+[19:23:38.0057] <bakkot>
+my impression is that the expensiveness of the clone is rarely a limiting factor, but it might be for some projects
+
+[19:23:51.0863] <Jack Works>
+> <@pokute:matrix.org> We could simultaneously introduce manual memory management as a viable alternative to GC in ECMAScript since users will appreciate the freedom. 🚎
+
+WeakMap[@@iterator]!
+
+[19:24:07.0494] <bakkot>
+that's been proposed...
+
+[19:24:14.0977] <bakkot>
+you can do it yourself with weakrefs if you really want to
+
+[19:24:16.0614] <bakkot>
+but, like
+
+[19:24:17.0232] <bakkot>
+don't
+
+[19:25:11.0342] <Jack Works>
+> <@bakkot:matrix.org> my impression is that the expensiveness of the clone is rarely a limiting factor, but it might be for some projects
+
+👀 what's the common limit?
+
+[19:25:55.0423] <bakkot>
+workers are annoying to create, mostly
+
+[19:26:01.0347] <bakkot>
+and postmessage is annoying to use
+
+[19:26:11.0469] <bakkot>
+you can't just `await` stuff without building some wrappers
+
+[19:27:23.0324] <sirisian>
+> <@ljharb:matrix.org> if something is going to encourage wider usage of multi-threaded programming in JS, that sounds like a huge detriment to the language
+
+My thinking is people should be able to use it without thinking much or from other libraries. Like years ago I wrote a small game server in C++ for web sockets then converted it to node.js with WS. In order to speed up things to support thousands of players again I moved the packet deserialization stuff to another "thread" with cluster. Creating simple producer/consumer systems in worker threads for processing packets should be like super simple. (In C++ I was using I think boost fibers for something similar and it was very elegant).
+
+[19:27:59.0220] <Jack Works>
+I think requiring memory-sharing in JS is like requiring imperative style programming in haskell 🤔
+
+[19:28:01.0716] <ljharb>
+you've got a lot of "shoulds" in there that seem pretty informed by C++ experience, which isn't something most JS programmers have or will ever have
+
+[19:30:18.0863] <ljharb>
+i'm pretty confident that in the fullness of time, the majority of JS devs won't have ever used something besides JS :-) no way to prove it either way, ofc.
+
+[19:30:29.0151] <bakkot>
+ljharb I feel like "it is good to do expensive compute off the main thread" is like... not a principle I would expect to find disagreement with?
+
+[19:30:30.0857] <Jessidhia>
+I haven’t used Go in over 5 years but I miss goroutines and channels
+
+[19:31:00.0977] <sirisian>
+Well I'm just saying there are situations where a JS programmer runs into an issue and the real solution of just calling a thread and passing work over is much more complicated than it should be.
+
+[19:31:04.0714] <pokute>
+Well, I would be interested in what kind of API would be super simple for a JS developer for writing "multi-threaded" code.
+
+[19:31:06.0529] <ljharb>
+bakkot: yeah i'm not disputing that. something that worked identically single-threaded as multi-threaded, so engines could unobservably execute them across multiple cores, would be amazing
+
+[19:31:35.0556] <bakkot>
+yeah but that's not... possible
+
+[19:31:44.0246] <bakkot>
+the whole point is that the compute is happening _while other compute is happening_
+
+[19:31:48.0288] <bakkot>
+which is inherently observable
+
+[19:31:57.0644] <ljharb>
+ay, there's the rub
+
+[19:32:37.0600] <ljharb>
+personally i would prefer a world where everything is eternally single-threaded, and parallelism is done via processes, to a world where JS is ruined by bringing in all the problems of threading. i'm quite sure there are those who violently disagree with me, ofc.
+
+[19:32:52.0500] <bakkot>
+threading is already a thing in JS
+
+[19:33:03.0280] <ljharb>
+sadly, that is true
+
+[19:33:10.0489] <bakkot>
+doesn't seem to have been ruined
+
+[19:33:15.0554] <bakkot>
+... at least, not by that
+
+[19:33:20.0526] <ljharb>
+that's because it's unapproachable and not super usable :-)
+
+[19:33:35.0116] <Jack Works>
+> <@bakkot:matrix.org> doesn't seem to have been ruined
+
+because that api is tooooo hard to use
+
+[19:33:37.0219] <ljharb>
+i'm content to keep it that way, so that advanced niche use cases can leverage it, but regular JS devs aren't tempted to
+
+[19:34:05.0738] <Jack Works>
+you could only manipulate a number array
+
+[19:34:13.0163] <bakkot>
+you can postmessage
+
+[19:34:27.0051] <bakkot>
+which is the _only_ multithreading in some languages
+
+[19:34:43.0810] <bakkot>
+message passing is a totally normal way of doing multithreading
+
+[19:35:13.0926] <Jack Works>
+> <@bakkot:matrix.org> which is the _only_ multithreading in some languages
+
+(including JS before we have SAB)
+
+[19:35:13.0938] <bakkot>
+ljharb I stand by "it is good to do expensive compute off the main thread"
+
+[19:35:28.0013] <bakkot>
+if that is good in general, then it is good for "regular JS devs"
+
+[19:35:41.0384] <ljharb>
+i think the goodness of that is far outweighed by the badness of threaded programming gotchas.
+
+[19:35:54.0096] <ljharb>
+slowness >>>>>> race conditions, always
+
+[19:36:00.0013] <ljharb>
+ * slowness >>>>>> race conditions, always
+
+[19:36:02.0445] <bakkot>
+basically all threaded programming gotchas are about shared memory
+
+[19:36:19.0459] <pokute>
+> <@sirisian:matrix.org> Well I'm just saying there are situations where a JS programmer runs into an issue and the real solution of just calling a thread and passing work over is much more complicated than it should be.
+
+We can compare this to a early 2000s C++ programmer runs into an issue where they are waiting for a long operation (like disk read) and want to do something in the meantime. The default solution of threads and passing work over is a lot more complicated to wrap around than most other C++ code, especially with the special and hard-to-intuit considerations of thread-safeness.
+
+[19:36:29.0439] <bakkot>
+race conditions are almost always a thing in shared memory, but are no more a thing with message passing than they are with async functions
+
+[19:36:30.0022] <ljharb>
+i would be happy to be convinced that there's a threading model that has no shared memory yet has a deterministic way to communicate
+
+[19:36:38.0108] <bakkot>
+postmessage
+
+[19:36:41.0763] <bakkot>
+postmessage is the thing you are talking about
+
+[19:36:45.0808] <bakkot>
+also channels in go
+
+[19:36:51.0771] <ljharb>
+postMessage takes objects too
+
+[19:36:54.0839] <bakkot>
+it's like a very normal way of doing multithreading
+
+[19:36:59.0517] <ljharb>
+and to be fair, i'm not familiar with go
+
+[19:36:59.0522] <bakkot>
+the objects are cloned, not shared, in postMessage
+
+[19:37:09.0905] <bakkot>
+ * the objects are cloned, not shared, in postMessage
+
+[19:37:33.0016] <ljharb>
+sure, but structured cloning is its own pile of problems :-)
+
+[19:38:06.0780] <bakkot>
+right but whatever problems structured clone has, those problems aren't inherent to multithreading
+
+[19:38:14.0824] <Jack Works>
+> <@pokute:matrix.org> We can compare this to a early 2000s C++ programmer runs into an issue where they are waiting for a long operation (like disk read) and want to do something in the meantime. The default solution of threads and passing work over is a lot more complicated to wrap around than most other C++ code, especially with the special and hard-to-intuit considerations of thread-safeness.
+
+don't know c++, but is io_uring some kind of async without block threading?
+
+[19:38:30.0260] <bakkot>
+being against shared memory parallelism is very reasonable, but it seems wrong to generalize this to being against multithreading in general
+
+[19:39:44.0959] <sirisian>
+That reminds me of someone's finance app I saw they made for a company. Kind of lagged. Was doing stuff with hundreds of thousands of records client-side. This was before web workers (and Power BI I think). Fascinating what people try to do in JS single page applications. Granted computers are faster now, so I don't think it's as huge of an issue.
+
+[19:39:49.0767] <Jack Works>
+> <@ljharb:matrix.org> sure, but structured cloning is its own pile of problems :-)
+
+then message passing by R&T ™!
+
+[19:42:48.0431] <pokute>
+> <@sirisian:matrix.org> That reminds me of someone's finance app I saw they made for a company. Kind of lagged. Was doing stuff with hundreds of thousands of records client-side. This was before web workers (and Power BI I think). Fascinating what people try to do in JS single page applications. Granted computers are faster now, so I don't think it's as huge of an issue.
+
+I bet in a hundred years people will still be able to write lagging apps, even with thousands of items and even with multithreading. Can't underestimate people.  (Though if AI will write the software......)
+
+[19:44:24.0947] <Jack Works>
+another question. now we reified Realms and some host hooks (compartment proposal) as something we can control. is it impossible to have Agent/Agent Clusters reified to run suspious code? 
+
+[19:44:59.0591] <bakkot>
+depends on what you mean by "suspicious code"?
+
+[19:45:11.0661] <Jack Works>
+untrusted code
+
+[19:45:22.0801] <bakkot>
+completely untrusted? no
+
+[19:46:02.0457] <bakkot>
+spectre is going to sit there haunting you
+
+[19:46:32.0100] <bakkot>
+if timing attacks are outside your thread model, though, what do you want that realms don't already give you?
+
+[19:46:34.0886] <Jack Works>
+oh... but you can turn off high resolution timer right?
+
+[19:46:39.0983] <bakkot>
+no
+
+[19:46:48.0216] <bakkot>
+https://gruss.cc/files/fantastictimers.pdf
+
+[19:47:01.0251] <Jack Works>
+> <@bakkot:matrix.org> if timing attacks are outside your thread model, though, what do you want that realms don't already give you?
+
+```js
+while (true);
+```
+
+[19:47:15.0702] <bakkot>
+do it in a worker?
+
+[19:48:26.0980] <Jack Works>
+well maybe i dont need to worry about while true so much
+
+[19:52:22.0759] <pokute>
+I would be really interested in any threading model that would allow something like `myThread.shareReference(globalThis);` that wouldn't completely break every JS coder's expectations.
+
+[19:55:15.0922] <bakkot>
+I don't think you can simultaneously have "shared memory" and "doesn't completely break every JS coder's expectations"
+
+[19:55:36.0436] <bakkot>
+at least not without adding in the whole of Rust's ownership model
+
+[19:55:42.0946] <bakkot>
+... which is going to break every JS coder's expectations anyway, for that matter
+
+[20:00:04.0097] <pokute>
+I think "multi-threading" in JS is a bad term, since "threads" imply certain stuff like shared memory that is practically impossible with JS.
+
+[20:01:56.0621] <pokute>
+threads are (I think) OS feature leveraging CPU capabilities that nothing of JS actually relies on. Workers could run on a separate process or even a remote server.
+
+[20:03:02.0495] <pokute>
+ * threads are (I think) OS feature leveraging CPU capabilities that nothing of JS actually relies on. Workers could run on a separate process or even a remote server.
+
+[20:04:57.0734] <sirisian>
+Again shared memory already exists. SharedArrayBuffer has allowed this for a long time now.
+
+[20:06:04.0661] <pokute>
+It's explicitly shared memory. That's very different from implicitly shared memory where all of a process' memory is shared between threads.
+
+[20:24:07.0322] <pokute>
+@sirisian I was thinking about your initial question, about the async/await. Async/await is just a different way to write some function calls (callbacks). For it to use multiple threads, every function call would have to be possibly using threads. For most callbacks, they just only call other functions. The functions that actually do heavy computation is a vanishingly small percentage. Creating a new costly thread for each function call would immediately erode any performance benefit gained from parallelism.
+
+This might be fixed by JS engines inspecting code and spinning only such heavy computation functions into separate threads if it recognizes it to be safe. But that completely up to engine whether to do it and isn't a language issue at all.
+
+[20:25:29.0164] <sirisian>
+The threading would be explicit when making a call.
+
+[20:25:30.0846] <pokute>
+There's nothing that prevents existing engines to add a feature that they run heavy computation parallelly in separate threads if they can handle the possible side effects.
+
+[20:27:01.0143] <pokute>
+So it would be a normal function that is called?
+
+[20:27:37.0722] <sirisian>
+yes
+
+[20:29:14.0921] <pokute>
+A normal function has access to all globals and closures and is free to modify them as it sees fit. If it was run as a thread, this would mean implicit shared memory. How would other code that runs parallel to that be safe from variables changing their values suddenly?
+
+[20:29:47.0993] <pokute>
+ * A normal function has access to all globals and closures and is free to modify them as it sees fit. If it was run as a thread, this would mean implicit shared memory. How would other code that runs parallel to that be safe from variables changing their values suddenly?
+
+[20:29:57.0932] <sirisian>
+You could for example call multiple functions then await Promise.allSettled on them if you wanted to join back in an async task. I haven't thought about this hard at all, but like foo.callThread(..., args); which returns a promise. Ideally we'd have cancellable promises by then. >_>
+
+[20:30:47.0310] <sirisian>
+It wouldn't be safe at all. Using threads would have an assumed level of complexity just like using SharedArrayBuffer stuff.
+
+[20:32:18.0095] <pokute>
+From what I've understood of SharedArrayBuffer is that it's always completely safe to use due to how extremely narrow and restricted it's features are. It's not even complex. It's cumbersome.
+
+[20:32:29.0063] <sirisian>
+I should mentioned it would be my hope that with this we'd all get concurrent data structures and standard library stuff in the far future. I noticed that state of JS mentioned some data structure stuff. Not sure the context of that. Concurrent queue at the least. heh.
+
+[20:35:18.0413] <pokute>
+Also, people should take their promises more seriously. :-) Don't ask for promises that you can't receive later.
+
+[20:39:51.0033] <pokute>
+Cancelable promises are a terrible term since it never cancels any work a promise does. It only cancels the receiving of results. That's not what people expect.
+
+[20:40:16.0194] <pokute>
+ * Cancelable promises are a terrible term since it never reliably cancels any work a promise does. It only cancels the receiving of results. That's not what people expect.
+
+[20:41:12.0611] <sirisian>
+Good point.
+
+[20:49:37.0390] <pokute>
+Which is why code should rather gracefully receive and discard out-of-order and obsolete data received from promises. Instead of canceling promises (which is quite simple to do), you could expect a version number from a REST call. You could add metadata to a REST call that you receive with the result in a way to see that the result is for the current context you're viewing. Etc...
+
+[20:50:18.0594] <sirisian>
+Kind of surprised there isn't a simple way to throw at the next await kind of language design that could be made for that. I have a few cancellable systems where there's stuff like await Promise.race([cancelPromise, workPromise]); multiple lines.
+
+[20:54:01.0994] <pokute>
+You could do it with generators.
+
+[20:55:49.0280] <pokute>
+But it's very cumbersome.
+
+[20:56:16.0126] <sirisian>
+Consume the generator unless the cancel flag is set kind of thing and in the worker just yield all the work?
+
+[20:57:02.0346] <sirisian>
+Not a bad idea. I could see that being kind of elegant in some of my code. I think it was written before async generators.
+
+[20:57:36.0933] <pokute>
+Yeah. redux-saga is one pretty well known example of that.
+
+[21:00:49.0648] <pokute>
+I really liked redux-saga at one point. I tried to use it in everything non-simple. Now I removed it from my own hobby project.
+
+[21:01:28.0655] <pokute>
+Now I write mega-reducers. :-)
+
+[21:02:50.0815] <pokute>
+Well, I'm in the process of removing most of the complex sagas.
+
+[09:27:42.0035] <Richard Gibson>
+> Tracing through the full machinery would take me a while, but I can at least confirm that there should not be a difference between simple and non-simple arguments lists in this case, so V8 is definitely wrong _somewhere_, and it seems quite likely to be wrong in the cases where it differs from other implementations
+
+@bakkot it looks to me like _nobody_ is following the spec here but V8 comes closest. Absent overlap between VarDeclaredNames and parameter names, FunctionDeclarationInstantiation steps 27 and 28 (the former when any parameter has an initializer, the latter otherwise) should both create a binding for each variable and initialize it to `undefined`—even if that variable is named "arguments".
+
+[09:41:40.0245] <shu>
+that does not sound like a thing i want to implement
+
+[10:01:17.0864] <Richard Gibson>
+my primary concern on this is alignment between spec and implementations, and resolution by changing the former to match the latter seems expedient
+
+[10:29:18.0713] <bakkot>
+Richard Gibson: step 22.f:
+```
+Let parameterBindings be the list-concatenation of parameterNames and « "arguments" ».
+```
+
+step 27:
+```
+ [...]
+ b. Let instantiatedVarNames be a copy of the List parameterBindings.
+ c. For each element n of varNames, do
+   i. If n is not an element of instantiatedVarNames, then
+     1. Append n to instantiatedVarNames.
+     2. Perform ! env.CreateMutableBinding(n, false).
+     3. Perform ! env.InitializeBinding(n, undefined).
+```
+
+[10:29:48.0274] <bakkot>
+ * Richard Gibson: step 22.f:
+```
+Let parameterBindings be the list-concatenation of parameterNames and « "arguments" ».
+```
+
+step 27:
+```
+ [...]
+ b. Let instantiatedVarNames be a copy of the List parameterBindings.
+ c. For each element n of varNames, do
+   i. If n is not an element of instantiatedVarNames, then
+     1. Append n to instantiatedVarNames.
+     2. Perform ! env.CreateMutableBinding(n, false).
+     3. Perform ! env.InitializeBinding(n, undefined).
+```
+
+[10:30:09.0613] <bakkot>
+so no, step 27 should not create/initialize the `arguments` binding, to my reading
+
+[10:31:35.0807] <bakkot>
+step 28 works a little differently but has the same practical effect for the purposes of the code in question
+
+[10:32:02.0339] <Richard Gibson>
+/me sighs with relief
+
+
+2022-03-06
+[18:33:04.0550] <devsnek>
+i kinda want a `new DataView(ArrayBufferView)` shortcut for `new DataView(view.buffer, view.byteOffset, view.byteLength)`
+
+[18:37:07.0819] <Jack Works>
+We have ArrayBufferView in the language? 
+
+[18:37:42.0632] <Jack Works>
+* We have ArrayBufferView in the language? 
+
+[21:11:43.0636] <yodacode>
+hello! I'm new to the tc39 proposal system, but I just wanted to ask if anyone would find a syntax feature like this useful:
+instead of using `foo = foo.bar`, just using `foo = .bar` or `foo .= bar`. this just came to my mind since I use things like `array = array.map` and `array = array.filter` a lot.
+
+[22:10:29.0632] <Jack Works>
+is `foo = foo.bar` common enough to add syntax for it?
+
+[22:11:06.0529] <Jack Works>
+in my daily programming I barely write that (maybe because I'm using TypeScript and mostly it doesn't pass the type check)
+
+[01:03:04.0362] <Ashley Claymore>
+> <@yodacode:matrix.org> hello! I'm new to the tc39 proposal system, but I just wanted to ask if anyone would find a syntax feature like this useful:
+> instead of using `foo = foo.bar`, just using `foo = .bar` or `foo .= bar`. this just came to my mind since I use things like `array = array.map` and `array = array.filter` a lot.
+
+There is a thread here https://es.discourse.group/t/operator/586
+
+[01:03:55.0291] <Ashley Claymore>
+* > <@yodacode:matrix.org> hello! I'm new to the tc39 proposal system, but I just wanted to ask if anyone would find a syntax feature like this useful:
+> instead of using `foo = foo.bar`, just using `foo = .bar` or `foo .= bar`. this just came to my mind since I use things like `array = array.map` and `array = array.filter` a lot.
+
+There is a thread here https://es.discourse.group/t/operator/586
+
+[01:07:28.0638] <YodaCode>
+interesting, thanks!
+
+[14:01:28.0792] <devsnek>
+do any engines optimize queue-like array usage?
+
+[15:14:26.0794] <Ashley Claymore>
+This post seems to suggest they do/did: https://esdiscuss.org/topic/queue-feature-request#content-3
+
+[15:14:45.0216] <Ashley Claymore>
+> “In WebKit the array implementation switches to an amortized constant time deque if you use push/pop/shift/unshift in anger.”
+
+[15:14:58.0550] <Ashley Claymore>
+* > “In WebKit the array implementation switches to an amortized constant time deque if you use push/pop/shift/unshift in anger.”
+
+[15:17:15.0668] <devsnek>
+intresting
+
+
+2022-03-08
+[06:25:12.0989] <Jack Works>
+https://dev.to/smpnjn/future-javascript-shadowrealms-20mg
+
+[06:25:28.0425] <Jack Works>
+I read this article and I think there are some wrong statements....
+
+[06:26:02.0679] <Jack Works>
+(or is Realm proposal updated again?? let me check that)
+
+[06:27:42.0425] <Jack Works>
+```js
+let myRealm = new ShadowRealm();
+
+const { runFunction, testFunction, createFunction } = await myRealm.importValue('./function-script.js');
+
+let fileAnalysis = runFunction();
+```
+
+[06:28:08.0455] <Jack Works>
+this article wrote this, but this actually not work 🤔
+
+[06:34:30.0787] <Jack Works>
+https://github.com/tc39/proposal-shadowrealm/issues/350
+
+[08:34:45.0304] <Mathieu Hofman>
+That article completely glosses over the callable boundary, and the fact only primitives and "functions" can be used through ShadowRealm 
+
+[09:01:40.0825] <shu>
+i... wouldn't put too much weight on content farm articles
+
+[12:18:56.0230] <Domenic>
+To me, dev.to will always be on the wrong side of the great DigitalOcean spamfest of 2020... https://blog.domenic.me/hacktoberfest/
+
+[12:19:10.0752] <Domenic>
+ * To me, dev.to will always be on the wrong side of the great DigitalOcean spamfest of 2020... https://blog.domenic.me/hacktoberfest/
+
+
+2022-03-09
+[17:38:51.0117] <Jack Works>
+oh... I though dev.to is a new blogger for programmers. And how people misunderstand the API also give us information about how to improve it
+
+[17:39:02.0530] <Jack Works>
+> <@shuyuguo:matrix.org> i... wouldn't put too much weight on content farm articles
+
+ * oh... I though dev.to is a new blogger for programmers. And how people misunderstand the API also give us information about how to improve it
+
+[20:19:12.0429] <devsnek>
+dev.to makes me very sad. so much useful content pushed out of the way for incorrect clickbait articles.
+
+[00:07:26.0465] <sideshowbarker>
+If anybody has a few minutes to do a technical review of https://github.com/mdn/content/pull/13681 that’d be great
+…as far as whether it’s a useful addition to the docs, and accurate
+
+[00:07:53.0620] <sideshowbarker>
+comments welcome here or there
+
+[00:19:11.0803] <nicolo-ribaudo>
+I'd rather just say "the sort implementation can vary among engines, so there is no guarantee about the order array elements are compared or how many times `compareFn` is called"
+
+[00:21:10.0310] <nicolo-ribaudo>
+I find mentioning the array length to be confusing, since in the general case sort algorithms are expected to be O(n*log(n)) or O(n²) (regardless of what JS engines do)
+
+[00:21:29.0531] <nicolo-ribaudo>
+* I find mentioning the array length to be confusing, since in the general case sort algorithms are expected to be O(n*log(n)) or O(n²) (regardless of what JS engines do)
+
+[00:36:20.0959] <sideshowbarker>
+nicolo-ribaudo: thanks
+
+[11:26:13.0961] <devsnek>
+so uh
+
+[11:26:15.0440] <devsnek>
+https://devblogs.microsoft.com/typescript/a-proposal-for-type-syntax-in-javascript/
+
+[11:27:10.0754] <devsnek>
+i will be very sad if we put type syntax in the language and it doesn't have some sort of reflection capability like python
+
+[11:28:25.0643] <bakkot>
+I would not regard this as "putting type syntax in the language"
+
+[11:28:32.0662] <bakkot>
+it's just adding a dozen new, weird comment forms
+
+[11:28:45.0550] <bakkot>
+personally I am inclined to regard the existing comment forms as adequate
+
+[11:29:07.0092] <devsnek>
+yeah calling them comment forms is what makes me sad
+
+[11:30:42.0096] <devsnek>
+i mean they don't need to be evaluated, python just gives you strings of them
+
+[11:32:32.0480] <bakkot>
+I can't say I've ever used python's type reflection
+
+[11:32:39.0077] <bakkot>
+or, for that kind of types
+
+[11:32:44.0448] <devsnek>
+it enables some very cool stuff
+
+[11:32:44.0805] <bakkot>
+what is the thing you use it for?
+
+[11:33:15.0387] <devsnek>
+for example, `@server.route('/foo') fn get_foo(body: T)`
+
+[11:33:25.0953] <devsnek>
+ * for example, `@server.route('/foo') fn get_foo(body: T)`
+
+[11:33:34.0699] <devsnek>
+server can automatically validate the body against T
+
+[11:34:42.0617] <devsnek>
+another example i think is very cool is discord.py, which allows you to specify how discord bot commands are parsed, like `def ban_user(user: User)`
+
+[11:36:01.0058] <shu>
+i don't think i'd be supportive of having reflection capabilities here
+
+[11:36:46.0240] <shu>
+the implementation complexity and runtime costs would be too high -- i can only imagine some kind of reparsing when reflection is actually required, there's no way it'd be acceptable to parse it and actually keep the info around
+
+[11:36:47.0943] <devsnek>
+i really wish we could combine the usefulness of python with the expressiveness of js
+
+[11:37:26.0164] <devsnek>
+> <@shuyuguo:matrix.org> the implementation complexity and runtime costs would be too high -- i can only imagine some kind of reparsing when reflection is actually required, there's no way it'd be acceptable to parse it and actually keep the info around
+
+i think all impls already support lazy parsing for errors, so really it would just be doing a getter of a symbol or something i think.
+
+[11:40:18.0182] <devsnek>
+basically exactly like how Error.prototype.stack is a lazy property in v8
+
+[11:43:45.0347] <shu>
+i'm not claiming impossibility, just undesirability
+
+[13:05:31.0862] <ljharb>
+> <@devsnek:matrix.org> basically exactly like how Error.prototype.stack is a lazy property in v8
+
+fwiw unless v8 is willing to make it work eagerly, like everyone else, i doubt we'd be able to standardize stacks
+
+[13:06:11.0995] <ljharb>
+(but the stacks proposal isn't anywhere near close enough to advancing for that to be a discussion point yet)
+
+[13:06:23.0604] <devsnek>
+wdym eagerly?
+
+[13:06:56.0729] <devsnek>
+like generate a stack trace string on new Error() instead of when the .stack property is accessed?
+
+[13:07:03.0765] <ljharb>
+correct
+
+[13:07:13.0469] <devsnek>
+i mean it should be invisible to js code
+
+[13:07:27.0863] <ljharb>
+true, if it can be unobservably optimized then obv the proposal/spec wouldn't care :-)
+
+[13:08:36.0712] <devsnek>
+i guess its (error instance).stack instead of on the prototype but
+
+[13:09:05.0142] <devsnek>
+its not a js getter so that should be fine
+
+[13:09:09.0907] <devsnek>
+its engine magic
+
+[13:10:11.0808] <ljharb>
+the proposal would make it an internal slot, observable via a normative-optional getter on the prototype (_not_ an own property), and also via a static method or two on Error. so it def could be lazily generated as long as the contents matched "as if" they were eagerly generated
+
+[13:10:36.0589] <ljharb>
+ * the proposal would make it an internal slot, observable via a normative-optional getter on the prototype (_not_ an own property), and also via a static method or two on Error. so it def could be lazily generated as long as the contents matched "as if" they were eagerly generated
+
+
+2022-03-10
+[16:53:08.0224] <Jack Works>
+I like TypeScript, but I don't think that type comment proposal is a good idea...
+
+[16:53:44.0515] <Jack Works>
+the goal of that proposal, "make devs no need to transpile code" cannot be really achieved by this approach
+
+[16:54:48.0545] <Jack Works>
+for example, TS 4.7 has a new syntax, instantiation expression like this:
+
+```js
+const numberSet = Set<number>;
+const set = new numberSet(); // type: Set<number>
+```
+
+[16:55:32.0215] <Jack Works>
+this syntax will somehow has ASI hazard if I don't write `;`
+
+[16:56:46.0760] <Jack Works>
+To achieve the goal of this proposal "make devs no need to transpile code", everytime Flow, TS, ... adds a new Type level syntax, we need to cover that in the language
+
+[16:56:59.0158] <Jack Works>
+I don't think it's a good way to go.
+
+[16:57:19.0014] <Jessidhia>
+it’s intentionally incomplete, IIUC
+
+[16:57:27.0804] <Jessidhia>
+it can’t cover enums for example
+
+[16:57:52.0812] <Jessidhia>
+I think the idea is just to take the `:` reserved token and make it comment-like instead
+
+[16:58:29.0581] <Jack Works>
+so how does that make devs no need to transpile code? If we only have `:` style types
+
+[16:59:18.0900] <Jack Works>
+I write a lot generics, conditional types, union/conjunction types, etc
+
+[17:00:06.0993] <bakkot>
+it definitely lists lots of things beyond `:`, but also yes it is not everything in TS
+
+[17:01:59.0542] <bakkot>
+given that this is just for development anyway, I wonder how hard it would be to make a chrome extension which rewrote typescript to js so developers could use that
+
+[17:03:59.0267] <Jack Works>
+it's very hard. From Jan 2022, you cannot upload new Manifest V2 extension, and you need webRequest API to modify network requests.
+
+[17:04:12.0368] <Jack Works>
+ * it's very hard. From Jan 2022, you cannot upload new Manifest V2 extension, and you need webRequest API to modify network requests.
+
+[17:05:18.0747] <bakkot>
+oh right, boooooo
+
+[17:05:21.0218] <Jack Works>
+it's very easy on MV2, you just get every request and parse the html and send inline JS to the transpiler (maybe also recompute CSP hash)
+
+[17:32:32.0547] <danielrosenwasser>
+For what it's worth, the Python community recently tried to turn off the by-defualt reflective capabilities of type hints (due to the performance impact) and they had to pull the changes back.
+
+[17:32:41.0348] <danielrosenwasser>
+> <@devsnek:matrix.org> i really wish we could combine the usefulness of python with the expressiveness of js
+
+ * For what it's worth, the Python community recently tried to turn off the by-defualt reflective capabilities of type hints (due to the performance impact) and they had to pull the changes back.
+
+[17:34:35.0767] <danielrosenwasser>
+> <@jackworks:matrix.org> I write a lot generics, conditional types, union/conjunction types, etc
+
+In these cases, you'd be able to leverage the full type syntax in a `.d.ts` file or parenthesize the syntax that you need
+
+[17:35:16.0889] <danielrosenwasser>
+ * For what it's worth, I believe the Python community recently tried to turn off the by-default reflective capabilities of type hints (due to the performance impact) and they had to pull the changes back.
+
+[17:35:30.0770] <danielrosenwasser>
+Most of those types would be parsed at the top level, and parentheses/bracketing is your escape hatch
+
+[17:35:45.0564] <devsnek>
+i mean i haven't deeply investigated this obviously but i think fancy js engines that care about this sort of thing could make the cost of the strings only be paid if you actually use it, without a silly amount of effort
+
+[17:36:06.0802] <danielrosenwasser>
+FWIW we have a (tentative!) grammar
+
+https://github.com/giltayar/proposal-types-as-comments/blob/master/site/src/grammar-input.html
+
+[17:36:12.0525] <devsnek>
+ * i mean i haven't deeply investigated this obviously but i think fancy js engines that care about this sort of thing could make the cost of the strings only be paid if you actually use it, without a silly amount of effort
+
+[17:48:01.0766] <danielrosenwasser>
+So hey all, sorry I haven't had the chance to discuss the proposal more in this room - there's been a lot going on today! What I'll just say before I have to run is that we're just trying to make type analysis easier in JavaScript given how popular TypeScript has grown over the past few years. I think that Rob Palmer , Romulo Cintra  and I extremely open to questions/comments/concerns/criticisms on all this. I'll try to be more available tomorrow/later this week if people want to discuss
+
+[17:49:11.0345] <devsnek>
+i think its very cool i will just be sad if we do not get *any* reflective capabilities on this given that this is a dynamic language
+
+[17:50:20.0904] <Jack Works>
+https://github.com/giltayar/proposal-types-as-comments/blob/master/site/src/grammar-input.html#L196
+
+[17:50:27.0477] <Jack Works>
+👀
+
+[18:05:52.0254] <Jack Works>
+> <@devsnek:matrix.org> i think its very cool i will just be sad if we do not get *any* reflective capabilities on this given that this is a dynamic language
+
+I tried Typescript's metadata reflection type. It's tooooo weak, any complex type will be transformed to Object. It cannot express any complex type. Only classes and primitive types
+
+[18:06:49.0660] <devsnek>
+tbh all i'm asking for is strings
+
+[18:09:05.0739] <Jack Works>
+Even worse... How do you know those types are referring difference entities if their share the same name?
+
+[18:10:19.0300] <Jack Works>
+And if it contains complex structures, you need to parse them by yourself
+
+[18:16:13.0634] <Jack Works>
+my personal opinion on this proposal: it has an ambitious goal, but I don't think it will achieve the goal, and it's not worth to add so many syntax and all of them doesn't do anything; but if it cannot really do anything, real type check is not a path (web compat) or python style reflection (performance? and I don't like that either)
+
+[18:37:53.0329] <bakkot>
+i wonder how hard it would be to make a VSCode plugin that let you edit a file with flow-style type-comments (https://flow.org/en/docs/types/comments/) as if the comments weren't there
+
+[18:38:02.0609] <bakkot>
+that is, as if you'd written the contents of the comments inline
+
+[18:38:55.0271] <bakkot>
+so you could write `let x: y = z` but the file on disk would be `let x/*: y */ = z`
+
+
+[19:17:42.0927] <Jack Works>
+Then why not use compileOnSave to let ide just compile the file directly for you 🤔
+
+[19:26:05.0789] <bakkot>
+tsc is soooooo slow
+
+[19:26:08.0579] <bakkot>
+is the main reason
+
+[19:26:14.0347] <bakkot>
+though I guess you could set up esbuild instead
+
+[21:12:26.0866] <Jack Works>
+one possible usage of this is
+
+[21:12:40.0840] <Jack Works>
+engine can use type comment as the JIT hint
+
+[21:12:58.0092] <Jack Works>
+to get the better hint at the first time, don't need to guess
+
+[21:13:21.0707] <Jack Works>
+and if type mismatches, engine can still deoptimize
+
+[21:15:45.0293] <Jessidhia>
+that would require some sort of standardization for the type hints themselves, not only the syntax markers, though
+
+[21:16:00.0888] <Jessidhia>
+and `number` is not a good enough type hint for engine optimization
+
+[21:17:04.0456] <bakkot>
+also most types in most TS codebases I've seen are inferred, and the cost of doing the type inference is probably significantly more than the benefit you'd get from skipping some JIT warmup
+
+[21:17:26.0749] <Jessidhia>
+ * that would require some sort of standardization for the type hints themselves, and not only the syntax markers, though
+
+[21:17:45.0820] <Jack Works>
+well, at least you will type your function parameter when there is no contextual typing is available
+
+[21:17:53.0605] <Jessidhia>
+ * that would require some sort of standardization for the type hints themselves, not only the syntax markers, though
+
+[09:23:12.0876] <sirisian>
+My greatest fear has become reality with this proposal. Locking the : syntax to comments forever. I blame phones for not being powerful enough.
+
+[09:25:21.0311] <ljharb>
+btw what is Hegel? it's referenced in the types proposal's issue comments a number of times but i've never heard of it before
+
+[09:25:34.0791] <ryzokuken>
+https://hegel.js.org/
+
+[09:29:36.0013] <ljharb>
+ok - so this one that has 73 downloads a week? https://www.npmjs.com/package/@hegel/cli
+
+[09:31:15.0528] <ryzokuken>
+seems like it, yes
+
+[09:31:27.0768] <ljharb>
+k, thanks
+
+[09:32:02.0286] <danielrosenwasser>
+> <@bakkot:matrix.org> i wonder how hard it would be to make a VSCode plugin that let you edit a file with flow-style type-comments (https://flow.org/en/docs/types/comments/) as if the comments weren't there
+
+It ends up being the same thing as building the infrastructure for a type-checker that supports that
+
+[09:33:41.0900] <danielrosenwasser>
+or a language server that has to take the place of the default one, and do a bunch of rewriting to the TS language service, kind of what plugins do for `.vue` files
+
+[09:34:43.0013] <Ashley Claymore>
+Hegel uses the babel-parser with the flow-plugin. So from a syntax perspective it is the same as flow.  I like that it is called out anyway :)
+
+[09:37:53.0823] <danielrosenwasser>
+> <@danielrosenwasser:matrix.org> or a language server that has to take the place of the default one, and do a bunch of rewriting to the TS language service, kind of what plugins do for `.vue` files
+
+But I don't think that's the point really. There's a valid question of whether or not the format of JSDoc is the most painful part - but I think most of our team feel convinced that the issue is really around having to jump into an actual JS comment wrapped in `/*`..`*/`. It really doesn't feel that natural.
+
+[09:40:22.0304] <ljharb>
+> <@aclaymore:matrix.org> Hegel uses the babel-parser with the flow-plugin. So from a syntax perspective it is the same as flow.  I like that it is called out anyway :)
+
+thanks, that's good context. it's fine to call it out but implying it's a third equal alternative seems a bit strange :-)
+
+[09:42:57.0253] <Ashley Claymore>
+Considering Flow has built in support for `/*:: <type> */` syntax but Meta still decided to build direct support for parsing non-comment syntax types directly into Hermes (JS engine for react native) might be some evidence that they saw value in avoiding intermediate files?
+
+[09:43:13.0613] <Ashley Claymore>
+ * Considering Flow has built in support for `/*:: <type> */` syntax but Meta still decided to build direct support for parsing non-comment syntax types directly into Hermes (JS engine for react native) might be some evidence that they saw value in avoiding intermediate files?
+
+[09:43:32.0705] <ljharb>
+i think flow didn't start out with that support tho
+
+[09:43:54.0281] <ljharb>
+i distinctly remember asking someone on the flow team why it didn't, many years ago at a TC39 meeting, and then seeing a bit after that that such support had shipped
+
+[09:44:23.0440] <ljharb>
+(i guess the history there isn't relevant to hermes tho, since by the time hermes was created it def was supported)
+
+[09:51:37.0763] <Ashley Claymore>
+> <@ljharb:matrix.org> i think flow didn't start out with that support tho
+
+yep, support added 2015 after being "one of our most requested features" https://flow.org/blog/2015/02/20/Flow-Comments/
+
+[09:52:51.0978] <bakkot>
+> <@danielrosenwasser:matrix.org> But I don't think that's the point really. There's a valid question of whether or not the format of JSDoc is the most painful part - but I think most of our team feel convinced that the issue is really around having to jump into an actual JS comment wrapped in `/*`..`*/`. It really doesn't feel that natural.
+
+well, two things:
+
+1. It would feel a lot more natural if the comment were syntax highlighted properly
+2. the point of my VSCode plugin suggestion was that you'd edit the file as if the `/*` comment weren't there, thus getting rid of even that hurdle
+
+[09:55:23.0120] <Ashley Claymore>
+the main issue I've found with `/* */`  comments is they can't be nested
+
+[09:55:29.0397] <Ashley Claymore>
+for when I want to comment my types
+
+[09:55:42.0357] <bakkot>
+you can still use `//` though
+
+[09:56:26.0494] <Ashley Claymore>
+yep though they tend to be ignored by documentation generators
+
+[09:56:32.0156] <bakkot>
+I used flow-style type comments for a couple years and it wasn't really an issue
+
+[09:56:38.0049] <bakkot>
+ok but that's just a problem with the documentation generators
+
+[09:57:29.0766] <danielrosenwasser>
+> <@ljharb:matrix.org> i think flow didn't start out with that support tho
+
+I don't really understand the significance there though - 2015 is just a year after Flow went public
+
+[09:57:53.0027] <ljharb>
+danielrosenwasser: yeah given that the question was about hermes, it's not relevant, i just missed that when replying
+
+[10:00:30.0120] <Ashley Claymore>
+> <@bakkot:matrix.org> ok but that's just a problem with the documentation generators
+
+yes and maybe no? I've always seen it as `//` is for _less official_ comments that don't make it to the documentation. And `/**` is the special signal for this is a doc comment
+
+[10:35:05.0201] <danielrosenwasser>
+So I would also like to point to Python which started out with type comments
+
+[10:35:38.0000] <danielrosenwasser>
+Type comments were okay, but clearly people wanted something a bit more ergonomic with a dedicated syntax
+
+[10:36:26.0427] <bakkot>
+python's type comments were significantly less ergonomic than flow's type comments, IIRC
+
+[10:36:45.0904] <danielrosenwasser>
+In what ways?
+
+[10:36:48.0256] <danielrosenwasser>
+ * In what ways?
+
+[10:37:13.0530] <bakkot>
+just like
+
+[10:38:08.0618] <bakkot>
+one sec while I make sure I remember the syntax here
+
+[10:40:32.0608] <bakkot>
+```
+def method(self, lst, opt=0, *args, **kwargs):
+    # type: (List[str], int, *str, **bool) -> int
+    body()
+```
+vs
+
+```
+function m(lst/*: string[]*/, opt/*: number*/, ...args/*: string[]*/) /*: number */ {
+  bod()
+}
+```
+
+[10:40:54.0144] <bakkot>
+python's type comments aren't as bad as jsdoc but they're still not really how you'd want to write types
+
+[10:41:16.0349] <bakkot>
+you can't put them on individual parameters, and also you need to spell out `type:` for every single one
+
+[10:55:58.0574] <danielrosenwasser>
+I personally don't like the second one because you have to jump in and out of comments 4 times
+
+[10:56:35.0876] <bakkot>
+I agree it's moderately more annoying than just using typescript syntax directly, yes
+
+[10:57:52.0351] <danielrosenwasser>
+So we got the (*tentative!!!* - not written in stone) proposed syntax rendered
+
+https://giltayar.github.io/proposal-types-as-comments/grammar.html
+
+[10:57:56.0127] <ljharb>
+when using jsdoc with tsc i usually go for something like
+```
+/* import('./types') */
+function m(lst, op, args) { }
+```
+
+
+2022-03-11
+[18:17:03.0616] <sirisian>
+I feel like the decorator proposal needs a giant section explaining why the metadata has like public/private sections and such. It's probably intuitive to the designers, but reading the proposal it's not. I saw: https://github.com/tc39/proposal-decorators/issues/427 which brings this up also tying the metadata to the property.
+
+[08:00:29.0371] <Jack Works>
+why AsyncFunction is not exposed to the global scope?
+
+[09:11:49.0944] <ljharb>
+good question. some things would be a lot easier if it were.
+
+[09:11:51.0853] <ljharb>
+ * good question. some things would be a lot easier if it were.
+
+[09:21:04.0004] <Ashley Claymore>
+which things? You've got me curious 🙂 The downsides to needing to do `const AsyncFunction = Object.getPrototypeOf(async () => {});` are not immediately clear to me.
+
+[09:29:26.0788] <Jack Works>
+I searched for async await proposal repo, and didn't find a decision of this topic. 
+
+[09:29:52.0473] <Jack Works>
+Is this intentional? For what reason? Security? Or just forgot in the spec? 🤔
+
+[09:30:19.0988] <Ashley Claymore>
+Maybe following precedence of generators?
+
+[09:30:32.0104] <Ashley Claymore>
+maybe there was a conversation for that earlier proposal?
+
+[09:30:46.0187] <Ashley Claymore>
+ * maybe there was a conversation for that earlier proposal?
+
+[09:31:25.0436] <Jack Works>
+But generators comes from ES6, don't have a repo 🤔
+
+[09:31:44.0893] <Ashley Claymore>
+ah yes of course!
+
+[09:32:04.0940] <Ashley Claymore>
+harder to search notes
+
+[09:32:17.0126] <Ashley Claymore>
+ * harder to search notes
+
+[09:33:33.0624] <Ashley Claymore>
+https://esdiscuss.org/topic/why-generatorfunction-constructor-isn-t-directly-exposed-to-end-users#content-1
+
+[09:34:06.0116] <Ashley Claymore>
+> "It wasn't directly exposed in ES6 was because it lacked strong use cases and we didn't want to clutter up the global namespace with something of little value"
+
+[09:35:11.0962] <Jack Works>
+Well.. it's proven to be useful. Can we have a proposal to add them now? 😂
+
+[09:36:14.0565] <bakkot>
+what did you want it for?
+
+[09:40:13.0110] <Jack Works>
+Extending generator prototype
+
+[10:17:04.0041] <ljharb>
+it requires syntax, which means you can't support older engines that way without eval. also, it's harder to do SES stuff
+
+[10:17:20.0623] <ljharb>
+> <@aclaymore:matrix.org> which things? You've got me curious 🙂 The downsides to needing to do `const AsyncFunction = Object.getPrototypeOf(async () => {});` are not immediately clear to me.
+
+ * it requires syntax, which means you can't support older engines that way without eval. also, it's harder to do SES stuff
+
+[10:52:29.0569] <Ashley Claymore>
+Thanks, makes sense
+
+[10:54:35.0802] <Ashley Claymore>
+Tangentially related, for future browsers with `ShadowRealm`. Would `sr.evaluate(str)` be allowed even if eval was blocked by CSP? 
+
+[11:00:14.0332] <bakkot>
+> Extending generator prototype
+
+this seems like something few enough people want that it's not worth cluttering the global namespace
+
+[11:14:39.0387] <Michael Ficarra>
+also in the absence of a convenient way to build protocols (I know, I will work on it), probably something we want to discourage for now
+
+[13:21:02.0397] <sirisian>
+Is someone here an expert on decorator history. (Not sure if Garett is here). I have a side question related to how/if the decorator syntax could change if function  overloading existed. https://github.com/sirisian/ecmascript-types/issues/59#issuecomment-1065517382 Specifically if the return (value, context) => {} syntax holds some special use cases. Like are there situations where one runs code before the return that has a meaningful purpose? I'm not familiar with when the function runs vs when the returned function is executed. Is that used for certain techniques?
+
+
+2022-03-12
+[19:04:22.0403] <Jack Works>
+> <@aclaymore:matrix.org> Tangentially related, for future browsers with `ShadowRealm`. Would `sr.evaluate(str)` be allowed even if eval was blocked by CSP?
+
+no, sr.evaluate obeys CSP
+
+[19:04:54.0873] <Jack Works>
+> <@aclaymore:matrix.org> Tangentially related, for future browsers with `ShadowRealm`. Would `sr.evaluate(str)` be allowed even if eval was blocked by CSP?
+
+and even allowed, you cannot get the real AsyncFunction from another realm.
+
+[03:18:20.0161] <Ashley Claymore>
+> <@jackworks:matrix.org> and even allowed, you cannot get the real AsyncFunction from another realm.
+
+I was thinking more for feature detection that required syntax. Not getting hold of the reference 🙂
+
+
+2022-03-13
+[19:27:49.0036] <ljharb>
+would CSP even allow a string to be passed into sr.evaluate?
+
+[20:25:22.0604] <Jack Works>
+> <@ljharb:matrix.org> would CSP even allow a string to be passed into sr.evaluate?
+
+If the script hash is matching 
+
+[20:25:44.0007] <ljharb>
+ok, so effectively no :-)
+
+[20:26:15.0414] <ljharb>
+since only the top-level app can do anything with hashes and CSP settings, that means that packages can't use ShadowRealm.evaluate at all :-/
+
+[20:27:38.0830] <Jack Works>
+Not a bad thing 
+
+[20:29:25.0282] <Jack Works>
+We will have module blocks in the future 
+
+
+2022-03-17
+[07:52:09.0228] <r3st>
+Howdy all, can someone help me understand what 'toString' is? Is it a function object? I don't get it at all.
+
+[07:53:38.0812] <jmdyck>
+There are built-in functions named 'toString', yes.
+
+[07:54:09.0427] <jmdyck>
+e.g. Object.prototype.toString, Boolean.prototype.toString
+
+[07:55:38.0490] <jmdyck>
+Within the spec, there's also `ToString` (note the capital `T`) which is something different.
+
+[07:55:50.0401] <r3st>
+So this is the part of the specification that pertains to it? https://262.ecma-international.org/12.0/#sec-built-in-function-objects
+
+[07:55:57.0229] <r3st>
+Thank you for the help btw
+
+[07:57:21.0115] <jmdyck>
+Yup, that section does pertain to the built-in `toString` functions, but it's not the *only* pertinent section.
+
+[07:57:39.0664] <jmdyck>
+Each built-in `toString` function has its own section in the spec.
+
+[07:59:49.0672] <jmdyck>
+e.g. Object.prototype.toString is defined here: https://tc39.es/ecma262/#sec-object.prototype.tostring
+
+[08:01:35.0640] <r3st>
+Okay, got it. So there's one for each primitive type? 
+
+[08:02:24.0657] <r3st>
+That makes sense.
+
+[08:03:51.0920] <r3st>
+I have another tangential question. 
+
+[08:04:52.0889] <r3st>
+The expression statement "toString.constructor" is the function constructor for the "toString" method. This is the section related to it, right? https://tc39.es/ecma262/#sec-function-constructor
+
+[08:06:44.0852] <r3st>
+TLDR, I'm trying to understand how ECMAScript evalutaes the statement "toString.constructor.prototype".
+
+[08:07:02.0411] <jmdyck>
+Hm...
+
+[08:08:46.0387] <r3st>
+ * TLDR, I'm trying to understand how ECMAScript evalutaes the statement "toString.constructor.prototype".
+
+[08:09:02.0880] <jmdyck>
+None of the built-in `toString` functions has a property named `constructor`, so I wouldn't expect `toString.constructor` to mean anything.
+
+[08:09:15.0214] <jmdyck>
+oh no, wait
+
+[08:09:21.0745] <jmdyck>
+ * oh no, wait
+
+[08:09:48.0959] <jmdyck>
+They don't have an *own* property by that name,
+
+[08:10:26.0928] <jmdyck>
+but they all have Function.prototype as their `[[Prototype]]`
+
+[08:10:39.0463] <r3st>
+So it's accessed by the prototype chain, got it
+
+[08:12:18.0084] <jmdyck>
+Yup, Function.prototype has a property named `constructor`, whose value is (initially at least) the `Function` object.
+
+[08:14:21.0893] <jmdyck>
+So initially, `toString.constructor.prototype` would refer to the `Function.prototype` object.
+
+[08:14:34.0334] <jmdyck>
+I think I got that right.
+
+[08:17:20.0769] <r3st>
+Okay. So to summarize:
+
+The built-in function =toString= links to the function object Function via the prototype chain. 
+
+[08:17:29.0909] <r3st>
+How did you add that formatting to the chat?
+
+[08:17:53.0627] <jmdyck>
+backticks
+
+[08:18:02.0518] <r3st>
+`classic`
+
+[08:19:52.0862] <r3st>
+Thanks a lot for your help jmdyck 
+
+[08:20:52.0639] <jmdyck>
+Mind you, I don't think you're guaranteed that there's a `toString` in the global scope.
+
+[08:20:59.0429] <jmdyck>
+ * Mind you, I don't think you're guaranteed that there's a `toString` in the global scope.
+
+[08:23:01.0396] <jmdyck>
+Yeah, I think that's up to the host.
+
+[08:23:31.0258] <r3st>
+In this implementation-driven world? I don't doubt it haha
+
+[08:52:44.0225] <Mathieu Hofman>
+r3st: sounds like you're trying to understand how somehow is reaching into `Function.prototype`, probably related to some prototype pollution ?
+
+[08:55:09.0937] <Mathieu Hofman>
+there are a million ways to get to intrinsics prototypes. Best defense is usually to check for own properties before drilling into a parsed value.
+
+[08:56:47.0417] <Mathieu Hofman>
+and to use define prop instead of doing an assignment when the there is no own prop
+
+[08:57:09.0396] <Mathieu Hofman>
+a ton of query string parsers do this wrong
+
+[08:57:42.0297] <Mathieu Hofman>
+ * r3st: sounds like you're trying to understand how someone is reaching into `Function.prototype`, probably related to some prototype pollution ?
+
+[09:06:00.0954] <r3st>
+Mathieu Hofman: Didn't know tc39 chat had mind readers. You're right. I'm trying to understand the solution to a mock vulnerable website (https://portswigger.net/web-security/cross-site-scripting/contexts/angularjs-sandbox/lab-angular-sandbox-escape-without-strings
+)
+
+[09:11:15.0550] <Mathieu Hofman>
+Let's say there is very few reasons why one would walk properties like this ;)
+
+[09:12:05.0766] <Mathieu Hofman>
+And I have mitigated proto pollution vulnerabilities in the past (PSA: checking for `__proto__` is often not enough)
+
+[09:22:04.0003] <ljharb>
+i'm not aware of a host where the global doesn't inherit from Object.prototype, which would make `toString` a global
+
+[09:25:43.0931] <r3st>
+Is there a specific definition for the term 'host'? Just making sure I'm not misunderstanding. 
+
+[09:27:09.0791] <Mathieu Hofman>
+the embedder of a JS engine, like a web browser, node or React Native
+
+[15:33:34.0353] <jschoi>
+I’m pursuing a Function.prototype.once proposal. But I just discovered that there’s a widely used NPM module that can monkey-patch Function.prototype with a once method: https://www.npmjs.com/package/once.
+
+However, the monkey-patching mode has required opting in with an extra method (`require('once').proto()`), ever since its first public version in 2012. Its default form has never monkey-patched the global.
+
+So would adding a method named Function.prototype.once to the language core probably still be web compatible?…
+
+[15:33:56.0705] <jschoi>
+* I’m pursuing a Function.prototype.once proposal. But I just discovered that there’s a widely used NPM module that can monkey-patch Function.prototype with a once method: https://www.npmjs.com/package/once.
+
+However, the monkey-patching mode has required opting in with an extra method (`require('once').proto()`), ever since its first public version in 2012. Its default form has never monkey-patched the global.
+
+So would adding a method named Function.prototype.once to the language core probably still be web compatible?…
+
+[15:41:32.0032] <TabAtkins>
+Do we consider NPM libraries in the "web compat" category? 
+
+[15:42:10.0381] <TabAtkins>
+If we do, then the answer would be "depends on how popular the library is and how popular using `.proto()` version is"
+
+[15:44:10.0456] <bakkot>
+jschoi: monkey patching is actually _usually_ web compat; the problems tend to arise when it's done conditionally, or when something else is then copying methods off of the builtin prototype with for-in (which is a problem because standard methods are not enumerable, and monkey-patched ones usually are)
+
+[15:44:37.0163] <bakkot>
+"done conditionally" meaning specifically "only done when the property does not already exist", I should say
+
+[15:44:50.0492] <jschoi>
+Right, it’s conditional monkey-patching that’s the problem…That’s reassuring.
+
+[15:45:26.0191] <bakkot>
+this one looks like it's fine, unless some popular library is doing something like `if (!Function.prototype.once) require('once').proto()`
+
+[15:46:08.0731] <bakkot>
+also I suspect this implementation matches what ours would be anyway [roughly], so even if they were I doubt it would break anything
+
+[15:46:11.0277] <bakkot>
+so: probably it's fine!
+
+[15:47:29.0688] <bakkot>
+ * also I suspect this implementation matches what ours would be anyway [roughly], so even if they were I doubt it would break anything
+
+[15:47:48.0017] <jschoi>
+> <@bakkot:matrix.org> also I suspect this implementation matches what ours would be anyway [roughly], so even if they were I doubt it would break anything
+
+The functions that the library returns appear to have an additional `.called` boolean property, and I’m uncertain whether we would add a similar property to our version…but yeah, it should be fine. 
+
+[15:48:43.0848] <jschoi>
+* > <@bakkot:matrix.org> also I suspect this implementation matches what ours would be anyway [roughly], so even if they were I doubt it would break anything
+
+The functions that the library returns appear to have an additional `.called` boolean property, and I’m uncertain whether we would add a similar property to our version…but yeah, it should be fine. 
+
+[15:50:21.0463] <bakkot>
+I would not expect us to do that, no, but I doubt that sees all that much use
+
+[15:50:25.0550] <bakkot>
+could be wrong though
+
+
+2022-03-19
+[20:28:13.0221] <sirisian>
+Curious, is there a syntax limitation that stops say: { foo.bar } being equal to { bar: foo.bar }. Could that be allowed in a proposal? I know it's not valid syntax right now for anything.
+
+[20:28:55.0715] <sirisian>
+I guess it might be covered by one of the many pick proposals maybe. Haven't followed those.
+
+[20:29:59.0493] <bakkot>
+there is no fundamental limitation but I don't think you are likely to convince people it's worth adding that syntax to the language
+
+[20:30:17.0476] <bakkot>
+many things are possible but not necessarily good ideas
+
+[20:50:15.0007] <Justin Ridgewell>
+We had exactly that proposal maybe three years ago
+
+[08:10:07.0313] <Hemanth H.M>
+Yup, https://github.com/rbuckton/proposal-shorthand-improvements
+
+[09:08:03.0425] <Jack Works>
+```
+function x(...args) { return (args) }
+Object.defineProperty(x, 'length', { value: 2**50 })
+var infArr = new Proxy([], {
+    get(x, k) { if (k === 'length') return 2**50; else return k }
+})
+Reflect.apply(x, null, infArr)
+```
+
+[09:08:27.0871] <Jack Works>
+why it throws Invalid Array length? I didn't see a step in the Reflect.apply calls anything that might throw
+
+[09:08:33.0095] <Jack Works>
+👀
+
+[09:32:33.0217] <ljharb>
+Jack Works: step 2 is https://tc39.es/ecma262/#sec-createlistfromarraylike, step 3 of that is https://tc39.es/ecma262/#sec-lengthofarraylike, which leads to https://tc39.es/ecma262/#sec-tolength, which should clamp it to `2**53`, and then the Call call takes that List and calls the function, and then i assume the args rest param throws trying to make an array out of it, since arrays are limited to `2**32`
+
+[09:32:54.0793] <ljharb>
+* Jack Works: step 2 is https://tc39.es/ecma262/#sec-createlistfromarraylike, step 3 of that is https://tc39.es/ecma262/#sec-lengthofarraylike, which leads to https://tc39.es/ecma262/#sec-tolength, which should clamp it to `2**53`, and then the Call call takes that List and calls the function, and then i assume the args rest param throws trying to make an array out of it, since arrays are limited to `2**32`
+
+[09:37:07.0087] <Jack Works>
+👀 thanks! 
+
+
+2022-03-20
+[17:21:12.0115] <bakkot>
+> <@devsnek:matrix.org> i will be very sad if we put type syntax in the language and it doesn't have some sort of reflection capability like python
+
+have been thinking about this some: I think it would make more sense as a build step.
+
+e.g., you could, I think, write a babel plugin that transformed `type(x)` into a representation of the type of the expression `x` at build time.
+
+that is probably better than building it in to the language, in a couple ways: 1) it lets you get a rich representation, instead of just a string, and do name resolution etc, 2) it means there is no risk to stripping types in prod, which is important lest we bloat every shipped file forever
+
+[17:23:30.0337] <devsnek>
+that is certainly something that could happen
+
+[17:23:57.0014] <devsnek>
+I'd still be sad though 🤷
+
+[21:22:54.0176] <justingrant>
+> have been thinking about this some: I think it would make more sense as a build step.
+
+I worked on a project 2 years ago where I wanted reflection to power validation that proved at runtime that an object had the shape that TS claimed it did at development time. FWIW, I came to the same conclusion that bakkot did, that the most natural way to do what I wanted was via babel (or perhaps a plugin to the TS compiler itself).
+
+Specifically, the babel part I wanted would turn TS types into plain schema-describing objects that could be accessed at runtime. Building these objects manually at development time was tedious, non-DRY, and error-prone.  I ended up using [runtypes](https://github.com/pelotom/runtypes#readme) which solves the DRY problem via uses ingenious hacks that build TS types based on validation code, but I really wanted to go in the other direction: start with TS code and get easy runtime-visible, validation-ready schema objects from it. Here's an overview of various ways people have tried to solve this problem: https://learning-notes.mistermicheels.com/javascript/typescript/runtime-type-checking/
+
+What makes validation an interesting case is that type validation is necessary but not sufficient. For example, for `type Foo = { someInt: number; }` you want to validate that the `someInt` property is a `Number`, but you might also want to validate that it's an integer. Other languages (I'm thinking of C#) enable this case via static typing + decorators + validation libraries so you can colocate validation requirements with your type declarations.
+
+The problem with putting type syntax & reflection into the JS language is that you'd end up with a similar kind of bifurcated solution where reflecting on the newest TS (and Flow and...) versions would require a polyfill or would require TS/Flow/etc to stop innovating with the types that were available. At that point, you've got a build step anyways so it's not clear that enough value is being added in exchange for making the language much more complicated, and for the inevitable language bugs that would be challenging to fix without breaking the web.
+
+
+[09:11:16.0256] <devsnek>
+the main issue with a build step is that it's somewhat internal to each project
+
+[09:11:36.0927] <devsnek>
+perhaps if ts had a standardized mode for emitting the info it would be better 
+
+[09:11:50.0854] <devsnek>
+but that still seems unfortunate cuz I don't like using ts
+
+[09:16:36.0442] <devsnek>
+seems like a lot of proposals these days are like "JavaScript is an interpreted dynamic language, and I took that personally"
+
+[10:12:35.0651] <Mathieu Hofman>
+> <@bakkot:matrix.org> have been thinking about this some: I think it would make more sense as a build step.
+> e.g., you could, I think, write a babel plugin that transformed `type(x)` into a representation of the type of the expression `x` at build time.
+> that is probably better than building it in to the language, in a couple ways: 1) it lets you get a rich representation, instead of just a string, and do name resolution etc, 2) it means there is no risk to stripping types in prod, which is important lest we bloat every shipped file forever
+
+I am hopeful that decorators will ultimately allow us to build a runtime type checking system, at least once we have variable and param decorators. It can hopefully integrate with static typing too, with the decorator helping with the type inference of these identifiers.
+
+
+2022-03-25
+[12:05:05.0515] <danielrosenwasser>
+> <@bakkot:matrix.org> have been thinking about this some: I think it would make more sense as a build step.
+> 
+> e.g., you could, I think, write a babel plugin that transformed `type(x)` into a representation of the type of the expression `x` at build time.
+> 
+> that is probably better than building it in to the language, in a couple ways: 1) it lets you get a rich representation, instead of just a string, and do name resolution etc, 2) it means there is no risk to stripping types in prod, which is important lest we bloat every shipped file forever
+
+libraries that rely on reified types today tend to rely on some extra build step, and it's generally not too bad
+
+[12:05:54.0182] <danielrosenwasser>
+Embedding the resolution logic into a runtime library would be much worse simply because I don't think most systems would have "enough" to resolve on
+
+[12:10:46.0670] <danielrosenwasser>
+It's not like you can't create something here, but my personal feeling is that it's one of those things where you get 70% of the way, then every piece of the next 30% is either unreasonably expensive or impossible, but a ton of devs will end up hitting that 30% 
+
+[12:23:47.0892] <pzuraq>
+where is the best place to discuss scheduling?
+
+[12:24:17.0453] <pzuraq>
+I have a hard conflict on Tuesday morning so want to make sure that decorators don't get scheduled for then
+
+[12:24:35.0210] <nicolo-ribaudo>
+You can do something like https://github.com/tc39/agendas/pull/1140
+
+[12:25:38.0332] <pzuraq>
+ah, perfect, ty
+
+[12:26:07.0819] <pzuraq>
+also how do I get voice in TC39 Delegates and TDZ?
+
+[12:26:20.0777] <nicolo-ribaudo>
+ryzokuken ^
+
+[13:41:17.0127] <jschoi>
+FYI: The W3C TAG is seeking feedback from TC39 about the general design question of type overloading in web JS APIs.
+
+They’re distinguishing between at least two types (heh) of type overloading: parameters with simple type unions, like with arithmetic operators—versus more-complex alternative parameter forms in which the valid types of subsequent parameters depend on those of earlier parameters, such as with FormData’s methods).
+
+…This was way back in January and I promised to link to it here but forgot, oops.
+
+https://github.com/w3ctag/design-principles/issues/131
+
+[13:41:28.0879] <jschoi>
+ * FYI: The W3C TAG is seeking feedback from TC39 about the general design question of type overloading in web JS APIs.
+
+They’re distinguishing between at least two types (heh) of type overloading: parameters with simple type unions, like with arithmetic operators—versus more-complex alternative parameter forms in which the valid types of subsequent parameters depend on those of earlier parameters, such as with FormData’s methods).
+
+…This was way back in January and I promised to link to it here but forgot, oops.
+
+https://github.com/w3ctag/design-principles/issues/131
+
+[15:44:24.0338] <pzuraq>
+ljharb full username is @pzura:matrix.org I think
+
+[15:44:35.0699] <pzuraq>
+I got locked out of `@pzuraq` 🙃
+
+
+2022-03-26
+[17:03:22.0599] <Hemanth H.M>
+Any V8 friends here? 
+
+Why do we still have `--harmony-error-cause` and  `--harmony-object-has-own` flags? 
+
+I am on version 10.2.0 (candidate)
+
+[17:13:14.0413] <Hemanth H.M>
+expected ^ ? 
+
+
+2022-03-27
+[01:43:47.0776] <pokute>
+I remember seeing horrible implementations of overloading in JS: `function foo(index, name) { if (name === undefined) name = index; ... }` that devastates readability.
+
+[01:44:47.0365] <pokute>
+ * I remember seeing horrible implementations of overloading in JS: `function foo(index, name) { if (name === undefined) name = index; ... }` that devastates readability.
+
+[07:22:34.0615] <ljharb>
+it used to be very common in the node ecosystem to have an optional argument be “not at the end”, so that kind of argument shuffling would end up being gross boilerplate at the beginning of most functions. I’m very glad we’ve all collectively stopped doing that, for the most part
+
+
+2022-03-28
+[19:05:15.0650] <Jack Works>
+The sad part, you have to do this even if you're using typescript 
+
+[19:09:14.0335] <Jessidhia>
+it’d be weird if typescript could magically implement overloads for you
+
+[19:09:48.0710] <Jessidhia>
+would likely end up with C++ name mangling and having to annotate functions meant to interop with regular JavaScript as “extern”
+
+[08:45:32.0815] <TabAtkins>
+That example just shows ordinary end-of-signature optionality, doesn't it? you could just write it as `function foo(index, name=index)` today, if i'm reading correctly
+
+[08:50:09.0514] <jschoi>
+> <@tabatkins:matrix.org> That example just shows ordinary end-of-signature optionality, doesn't it? you could just write it as `function foo(index, name=index)` today, if i'm reading correctly
+
+Note that the example sets `name` to `index` if `name` is undefined. So it’s not similar to `function foo(index, name=index)`; it’s basically `function foo(«optional index», name)`.
+
+[08:51:22.0568] <TabAtkins>
+??? You just explained what my code did, then gave an example that didn't match.
+
+[08:55:31.0690] <ljharb>
+TabAtkins: except that defaulting only works on `undefined`, and "the arg isn't passed" is usually pivoting on more than that
+
+[08:55:43.0401] <joepie91 🏳️‍🌈>
+jschoi: can brief feedback be provided here or should it be on that issue specifically?
+
+[08:55:47.0372] <ljharb>
+like, "is this arg a function? it's a callback, else it's an options bag"
+
+[08:57:01.0005] <TabAtkins>
+ljharb: yeah i get the case they're talking about, but the code example given was literally checking the final argument for === undefined, and defaulting it to a preceding argument, which is just a manual implementation of normal argument defaulting
+
+[08:57:17.0741] <TabAtkins>
+joepie91 🏳️‍🌈: on the issue, please
+
+[08:57:22.0605] <Jessidhia>
+my specific reaction was to typescript overloads; if you just do trailing optional arguments then you don’t need overloads; typescript overloads do a whole lot more than awkwardly expressing optionality
+
+[08:57:23.0214] <joepie91 🏳️‍🌈>
+alright :)
+
+[08:58:16.0635] <joepie91 🏳️‍🌈>
+/me notes that a far more common case of prefix optionality is based on runtime type-checking of the first arguments rather than existence of the last ones
+
+[08:58:56.0695] <joepie91 🏳️‍🌈>
+(source: N=1, all the various code I've seen pass by as a professional dependency auditor)
+
+[08:59:50.0153] <joepie91 🏳️‍🌈>
+so eg. if the first argument is a number then that implies that the first argument was left out and the second should be moved to the first, but if the first argument is a string then a second argument will be expected, that sort of thing
+
+[09:00:01.0694] <joepie91 🏳️‍🌈>
+ * so eg. if the first argument is a number then that implies that the first argument was left out and the second should be moved to the first, but if the first argument is a string then a second argument will be expected, that sort of thing
+
+[09:33:55.0099] <TabAtkins>
+Yeah, I've seen that before (and written it - canonical example is a range() function, where the arglists are either `(end)` (implied start of 0) or `(start, end)`).
+
+[09:34:02.0537] <TabAtkins>
+ * Yeah, I've seen that before (and written it - canonical example is a range() function, where the arglists are either `(end)` (implied start of 0) or `(start, end)`).
+
+[09:55:20.0232] <jschoi>
+> <@tabatkins:matrix.org> ljharb: yeah i get the case they're talking about, but the code example given was literally checking the final argument for === undefined, and defaulting it to a preceding argument, which is just a manual implementation of normal argument defaulting
+
+Oh wait, I misread your example, oops. Need coffee. 
+
+
+2022-03-29
+[20:09:37.0744] <jmdyck>
+@devsnek (re question in Delegates room): Netscape's proposal for ES4 doesn't mention decorators: https://www-archive.mozilla.org/js/language/old-es4
+
+[06:32:08.0090] <Daniel Ehrenberg>
+OK, I came in to talk over one thing (https://github.com/tc39/proposal-destructuring-private/issues/9) in DMs, now going back to my cave in an undisclosed location. Enjoy the meeting everyone!
+
+[12:00:35.0565] <TabAtkins>
+I appear to have been removed from the "Delegates" team in GitHub this morning - was that intentional, or part of some incidental back-end cleanup of stuff?
+
+[12:01:01.0690] <jschoi>
+> <@tabatkins:matrix.org> I appear to have been removed from the "Delegates" team in GitHub this morning - was that intentional, or part of some incidental back-end cleanup of stuff?
+
+They’re cleaning up stuff; they mentioned it in the Delegates channel but it got lost in the flood.
+
+[12:01:12.0549] <TabAtkins>
+ok, cool
+
+[12:04:37.0651] <ljharb>
+TabAtkins: yep, you're on the google team; if you see any access issues please ping me
+
+[13:01:22.0019] <Jack Works>
+hello, is it possible to move agenda item
+
+> 60m New integrity level, a try to unify limited array buffer and read only collection proposal (Jack Works and Mark Miller)
+
+to 10:00 ~ 12:00 so I can sleep earlier tomorrow? 👀
+
+[13:01:40.0792] <Jack Works>
+I'll ask if Mark Miller have time at 10:00~12:00
+
+
+2022-03-30
+[20:26:19.0046] <Jack Works>
+thanks!
+
+[10:13:10.0209] <jschoi>
+Kris Kowal: Looking at https://www.collectionsjs.com/, I’m wondering if you haven’t had any demand for LIFO or FIFO maps or sets. I wouldn’t use them myself in favor of LRU or LFU, but LIFO and FIFO are so simple that I’m wondering if anyone has asked for them.
+
+[10:14:08.0427] <jschoi>
+ * Kris Kowal: Looking at https://www.collectionsjs.com/, I’m wondering if you haven’t had any demand for LIFO or FIFO maps or sets. I wouldn’t use them myself in favor of LRU or LFU, but LIFO and FIFO so simple that I’m wondering if anyone has asked for them.
+
+[10:14:12.0763] <jschoi>
+ * Kris Kowal: Looking at https://www.collectionsjs.com/, I’m wondering if you haven’t had any demand for LIFO or FIFO maps or sets. I wouldn’t use them myself in favor of LRU or LFU, but LIFO and FIFO are so simple that I’m wondering if anyone has asked for them.
+
+[10:14:24.0065] <Kris Kowal>
+> <@jschoi:matrix.org> Kris Kowal: Looking at https://www.collectionsjs.com/, I’m wondering if you haven’t had any demand for LIFO or FIFO maps or sets. I wouldn’t use them myself in favor of LRU or LFU, but LIFO and FIFO are so simple that I’m wondering if anyone has asked for them.
+
+I made some mistakes in the design of collections that precluded adoption, so I don’t have meaningful signal.
+
+[10:15:11.0301] <Kris Kowal>
+That said, those mistakes are addressable and I’ve got a plan, but not time.
+
+[10:33:35.0464] <bakkot>
+> I wondering if you haven’t had any demand for LIFO or FIFO maps or sets
+
+fwiw I would expect these to exist in more languages if they were actually commonly needed
+
+[10:33:57.0716] <bakkot>
+or maybe it's just that they are called a different thing
+
+[10:34:09.0563] <shu>
+i have an interest in these things, but not as general purpose collections but as caches
+
+[10:34:46.0250] <shu>
+we have a lot of pressure, from my observations, of large and "expert" apps asking for GC hooking points and GC info to be exposed for the purpose of writing userland caches
+
+[10:35:07.0562] <shu>
+they might misguidedly use WeakRefs right now, which, with a "maybe clear on every GC", is a particularly bad cache eviction policy
+
+[10:35:28.0942] <shu>
+one realization the v8 team has had recently is well, maybe there's space for directly designing caches instead of exposing GC stuff, which seems blech
+
+[10:39:48.0603] <jschoi>
+Well, the main purpose of https://github.com/js-choi/proposal-policy-map-set would be to act as caches, and so LIFOMap and FIFOMap are in it right now. Hopefully they would match what you’re looking for.
+
+[10:39:59.0727] <jschoi>
+> <@shuyuguo:matrix.org> i have an interest in these things, but not as general purpose collections but as caches
+
+ * Well, the main purpose of https://github.com/js-choi/proposal-policy-map-set would be to act as caches, and so LIFOMap and FIFOMap are in it right now. Hopefully they would match what you’re looking for.
+
+[10:40:09.0265] <jschoi>
+E.g., `const cache = new LIFOMap(100)`.
+
+[10:40:30.0482] <shu>
+i have not thought yet deeply about if LIFO and FIFO with a simple size are sufficiently flexible eviction policies
+
+[10:40:56.0543] <jschoi>
+I’d love to hear about your use cases more sometime.
+
+[10:41:27.0772] <jschoi>
+I plan to present this for Stage 1 at the next plenary.
+
+[10:41:33.0667] <jschoi>
+ * I plan to present this for Stage 0 at the next plenary.
+
+[10:41:33.0884] <shu>
+roughly, the same kind of things Java's soft reference and prio references tried to solve
+
+[10:41:36.0753] <jschoi>
+ * I plan to present this for Stage 1 at the next plenary.
+
+[10:55:27.0725] <rickbutton>
+what interesting timing, userland caches with gc-hooks has come up on our side internally as something people are really asking for
+
+[10:55:45.0153] <rickbutton>
+not convinced but it keeps getting mentioned
+
+[10:56:46.0744] <rickbutton>
+we also had the thought "what if we provided a cache instead"
+
+[10:57:32.0907] <shu>
+even for a tightly coupled engine and userspace like bbg has, surfacing gc hooks still seems like a choice you'll rue
+
+[10:57:43.0187] <jschoi>
+> <@rick.button:matrix.org> we also had the thought "what if we provided a cache instead"
+
+If you are interested in co-championing policy caches, or if you have concrete use cases that I can put in the explainer, please let me know!
+
+[10:57:52.0104] <rickbutton>
+that is exactly what I said shu 
+
+[10:58:24.0437] <rickbutton>
+providing a higher-level cache to userland is slightly less "rue the day" but still not pleasant
+
+[10:59:50.0502] <rickbutton>
+> <@jschoi:matrix.org> If you are interested in co-championing policy caches, or if you have concrete use cases that I can put in the explainer, please let me know!
+
+I'll make a note to write down what people have mentioned and forward it along. To be fair it isn't anything concrete on our side, there has been some interest from app teams in something like this tho
+
+[11:04:43.0719] <jschoi>
+Re: https://github.com/js-choi/proposal-function-memo/issues/5#issuecomment-1083446581
+
+
+[11:04:44.0894] <jschoi>
+What was the logic of Maps using SameValueZero again? Was it because of NaN?
+
+[11:06:45.0403] <ljharb>
+no, it doesn’t impact NaN, it’s because of -0
+
+[11:06:58.0655] <bakkot>
+yeah it's just the right thing
+
+[11:07:34.0907] <jschoi>
+Should `f(+0)` and `f(-0)` always memoize to the same thing, then?
+
+[11:07:47.0789] <bakkot>
+haha good luck, that depends on the use case
+
+[11:07:49.0340] <jschoi>
+I really would like to allow users to supply Map-like caches…
+
+[11:08:06.0943] <bakkot>
+the notion of equality for memoization inherently depends on the use case
+
+[11:08:07.0626] <jschoi>
+I suppose the user could supply a MapLikeButWithNegativeZero that has the same interface.
+
+[11:08:16.0268] <bakkot>
+this is the main reason memoization is hard
+
+[11:08:16.0919] <jschoi>
+ * I suppose the user could supply a MapLikeButWithNegativeZero that has the same interface.
+
+[11:08:38.0243] <jschoi>
+`f.memo(new MapLikeButWithNegativeZeroAlsoItIsLFU(100))`
+
+[11:08:55.0218] <jschoi>
+ * `f.memo(new MapLikeButWithNegativeZeroAlsoItIsLFU(100))`
+
+[11:11:54.0669] <jschoi>
+The idea is that the user could supply a map-like cache to `memo`, with which they can customize both argument-lookup matching and cache policy. By default it would be an unbounded ordinary `new Map`, but they could also supply `new LFUMap(100)` or whatever…and that hopefully would be flexible enough for everyone.
+
+[11:12:17.0355] <jschoi>
+ * The idea is that the user could supply a map-like cache to `memo`, with which they can customize both argument-lookup matching and cache policy. By default it would be an unbounded ordinary `new Map`, but they could also supply `new LFUMap(100)` or whatever…and that hopefully would be flexible enough for everyone.
+
+[11:26:49.0235] <jschoi>
+ * The idea is that the user could supply a map-like cache to `memo`, with which they can customize both argument-lookup matching and cache policy. By default it would be an unbounded ordinary `new Map` with SameValueZero semantics, but they could also supply `new MapWithDifferentEquivalence` or whatever…and that hopefully would be flexible enough for everyone.
+
+
+2022-03-31
+[11:20:14.0267] <danielrosenwasser>
+https://1drv.ms/b/s!AltPy8G9ZDJdq3JSrN6Dh1XYVwpW
+
+[15:08:56.0014] <Michael Ficarra>
+jschoi: you could start by proposing a SameValueSet and SameValueMap, though I doubt it would be too popular
+
+[15:09:59.0882] <Michael Ficarra>
+I continue to believe that these data structures should've used SameValue, and this is a perfect example of why
+
+[15:10:48.0961] <Michael Ficarra>
+you could easily have the current behaviour by replacing `-0` with `0` before doing any map operations, but you can't easily go the other way around
+
+[15:11:24.0642] <Mathieu Hofman>
+We you can easily replace with a unique symbol
+
+[15:11:43.0685] <Mathieu Hofman>
+That's what I've done when I needed to support `-0` in Map/Set
+
+[15:11:58.0690] <Michael Ficarra>
+as long as that symbol doesn't escape, which you can't guarantee when the map is user-provided
+
+[15:12:11.0916] <Mathieu Hofman>
+if the map is user provided, sure
+
+[15:12:31.0754] <Mathieu Hofman>
+I'm talking in the case of wrapping a map
+
+[15:12:42.0994] <Michael Ficarra>
+also jschoi has use cases in mind like the user priming the cache, which again wouldn't work with a special replacement symbol
+
+[15:12:53.0964] <Mathieu Hofman>
+which as we agreed was the only way to preserve that kind of invariants
+
+[15:13:46.0006] <Michael Ficarra>
+yeah I used the strategy of wrapping two sets in https://www.npmjs.com/package/samevalueset, but a symbol probably would've worked fine there
+
+[15:15:15.0805] <Mathieu Hofman>
+That said, I'd love if we could have a comparison predicate configurable when building the map, but to no shoot down performance, we may need to expose `SameValueZero` as a predicate the same way `SameValue` is exposed as `Object.is`, so that not providing a comparison predicate isn't magical. 
+
+[15:17:26.0632] <Michael Ficarra>
+`const SameValueZero = (a, b) => a === 0 && b === 0 || Object.is(a, b);`
+
+[15:19:09.0059] <Michael Ficarra>
+are you saying that passing that in would be too slow because it's not built-in?
+
+[15:21:25.0033] <bakkot>
+passing it in fundamentally does not work because that means you have to do a comparison against every element
+
+[15:21:40.0330] <bakkot>
+you need a user-defined hash function as well; just having user-defined equality is not useful
+
+[15:21:55.0454] <Mathieu Hofman>
+Why so complicated? `const SameValueZero = (a, b) => a === b`, but the point is that this wouldn't be optimizable as the implementation has to call the user predicate instead or recognizing it as its own
+
+[15:22:08.0497] <nicolo-ribaudo>
+NaN
+
+[15:22:15.0780] <Michael Ficarra>
+not sure if trolling...
+
+[15:23:12.0253] <Mathieu Hofman>
+Oh right, ugh I'm tired
+
+[15:23:42.0349] <Michael Ficarra>
+we all are after this week
+
+[15:23:54.0202] <Mathieu Hofman>
+Ok nvm forget all of the above
+
+[15:28:59.0945] <Mathieu Hofman>
+yeah in that case the only other alternative I can think of if would be providing mapping functions that transform keys before insertion, probably with a SameValue based caching mechanism to be robust against instability of the transform function if the initial key is already known
+
+[15:29:31.0137] <Mathieu Hofman>
+which seems not very efficient
+
+[15:30:46.0054] <Ashley Claymore>
+> <@michaelficarra:matrix.org> yeah I used the strategy of wrapping two sets in https://www.npmjs.com/package/samevalueset, but a symbol probably would've worked fine there
+
+At first I thought the second set was just to store the `-0`, then checked the code. Using two sets to also preserve the insertion order is a classy touch!
+
+[15:31:42.0398] <Ashley Claymore>
+* > <@michaelficarra:matrix.org> yeah I used the strategy of wrapping two sets in https://www.npmjs.com/package/samevalueset, but a symbol probably would've worked fine there
+
+At first I thought the second set was just to store the `-0`, then checked the code. Using two sets to also preserve the insertion order is a classy touch!
+
+[15:32:29.0377] <ljharb>
+efficiency is nice, but the capability is more important
+
+[15:32:53.0351] <ljharb>
+what's the typical range of map/set content counts?
+
+[15:33:28.0227] <ljharb>
+are many people making maps and sets with a million+ things, in a hot path, and who *also* want this extra capability?
+
+[15:40:54.0177] <Kris Kowal>
+I think tens of thousands is a pretty reasonable estimate for a production-sized Map in some Node.js applications.
+
+[15:43:12.0783] <Michael Ficarra>
+if they're backing their memoisation implementation with it, it could see a lot of content
+
+[15:44:02.0771] <ljharb>
+and would any of these use cases (which obviously exist; i'm asking about %) need any of the functionality from these hooks?
+
+[15:44:35.0287] <ljharb>
+because if so, they're probably already paying the perf cost, and if not, they presumably wouldn't pay it (we wouldn't want to add a feature that penalized existing code paths, obv)
+
+[15:45:43.0568] <bakkot>
+I think a lot of people would be very surprised if using a hook made set membership O(n) instead of ~constant
+
+[15:46:19.0238] <bakkot>
+you don't need large sets for that to be a problem, you just need to be doing lots of queries
+
+[15:46:40.0974] <bakkot>
+like if you don't want fast membership tests, you can just use a list and `.find`. which is what this would amount to anyway
+
+[15:48:08.0654] <jschoi>
+> <@michaelficarra:matrix.org> jschoi: you could start by proposing a SameValueSet and SameValueMap, though I doubt it would be too popular
+
+Distinguishing `-0` is probably uncommon enough that we can punt doing so to a userland Map-like class. But at least it would be possible, if `memo` takes a Map-like cache argument. I’m already going to propose LRUMap and friends. 
+
+[15:48:20.0229] <shu>
+> <@ljharb:matrix.org> efficiency is nice, but the capability is more important
+
+if that is the case just write your own set?
+
+[15:48:35.0029] <shu>
+or map, i guess this conversation is about map
+
+[15:48:53.0329] <ljharb>
+> <@shuyuguo:matrix.org> if that is the case just write your own set?
+
+that's what folks already are doing. but it's not ergonomic to do so, and, there's a bunch of other downsides including that your invariants are hard to enforce
+
+[15:48:59.0438] <jschoi>
+* > <@michaelficarra:matrix.org> jschoi: you could start by proposing a SameValueSet and SameValueMap, though I doubt it would be too popular
+
+Distinguishing `-0` is probably uncommon enough that we can punt doing so to a userland Map-like class. But at least it would be possible, if `memo` takes a Map-like cache argument. I’m already going to propose LRUMap and friends. 
+
+[15:49:21.0933] <Michael Ficarra>
+jschoi: I guess? It's a design worth considering, but it feels a bit icky for default memoise to do any coalescing.
+
+[15:49:32.0857] <bakkot>
+i am very, very strongly opposed to having hooks which cause set membership querying to be O(n)
+
+[15:49:37.0750] <bakkot>
+we just... we cannot do that
+
+[15:49:55.0838] <bakkot>
+the _whole point_ of the data structure is to have Not That
+
+[15:50:28.0860] <shu>
+ergonomics is a bad reason to slow down cases that do require performance
+
+[15:50:33.0624] <jschoi>
+> <@michaelficarra:matrix.org> jschoi: I guess? It's a design worth considering, but it feels a bit icky for default memoise to do any coalescing.
+
+Do you think a EquivalenceMap(mapLike, equivalenceFn) built-in would be useful?
+
+[15:50:48.0158] <jschoi>
+* > <@michaelficarra:matrix.org> jschoi: I guess? It's a design worth considering, but it feels a bit icky for default memoise to do any coalescing.
+
+Do you think a EquivalenceMap(mapLike, equivalenceFn) built-in would be useful?
+
+[15:50:49.0725] <Michael Ficarra>
+jschoi: no, for the reasons we're talking about above
+
+[15:50:53.0500] <shu>
+i'm slowly being radicalized into something more extreme, which is that ergonomics is a bad argument
+
+[15:52:08.0990] <ljharb>
+> <@bakkot:matrix.org> i am very, very strongly opposed to having hooks which cause set membership querying to be O(n)
+
+i mean, i would hope that's not the case, and i think we could design something where it wouldn't have to be
+
+[15:52:19.0193] <shu>
+> <@bakkot:matrix.org> i am very, very strongly opposed to having hooks which cause set membership querying to be O(n)
+
+i am also strongly opposed
+
+[15:52:44.0259] <ljharb>
+for example, instead of a "predicate" hook, a "comparison value" hook, that by default is `x => x` but could be made to return a string, or a unique symbol, or something
+
+[15:52:59.0524] <ljharb>
+i assume that would have potential memory costs but little to no lookup costs
+
+[15:53:53.0551] <Kris Kowal>
+My position is approximately that more interesting Maps and Sets can be created in user code by composition, without inheritance, using what we already have, and that record and tuple keys will just make that easier.
+
+[15:54:16.0563] <Mathieu Hofman>
+Right that's what I suggested earlier, but to prevent bugs due to instability of the mapping function, you have to cache its results
+
+[15:54:22.0641] <ljharb>
+> <@kriskowal:matrix.org> My position is approximately that more interesting Maps and Sets can be created in user code by composition, without inheritance, using what we already have, and that record and tuple keys will just make that easier.
+
+yes but `Map.prototype.set.call` will continue to not work properly on these userland maps
+
+[15:54:32.0589] <bakkot>
+sure they will
+
+[15:54:34.0164] <bakkot>
+well
+
+[15:54:35.0349] <bakkot>
+it will throw
+
+[15:54:36.0509] <ljharb>
+> <@mhofman:matrix.org> Right that's what I suggested earlier, but to prevent bugs due to instability of the mapping function, you have to cache its results
+
+yes, in that example the hook is only ever called once per key
+
+[15:54:38.0490] <bakkot>
+it won't violate any invariants
+
+[15:54:39.0970] <bakkot>
+so, seems fine
+
+[15:54:47.0538] <shu>
+why do you want built-in map methods to work for your userland maps?
+
+[15:55:00.0756] <ljharb>
+the same reason i want built-in iteration syntax to work for userland iterables?
+
+[15:55:04.0923] <Kris Kowal>
+> <@shuyuguo:matrix.org> why do you want built-in map methods to work for your userland maps?
+
+I certainly have no such expectation.
+
+[15:55:09.0341] <bakkot>
+those are... very... different
+
+[15:55:15.0367] <shu>
+> <@ljharb:matrix.org> the same reason i want built-in iteration syntax to work for userland iterables?
+
+lol i am leaving this convo
+
+[15:55:19.0699] <ljharb>
+to me they're all conceptual protocols
+
+[15:55:36.0798] <ljharb>
+i want to be able to work with map-like collections in a robust fashion
+
+[15:55:45.0239] <bakkot>
+just call `.set`
+
+[15:55:51.0474] <bakkot>
+that is how you work with map-likes
+
+[15:56:00.0931] <Mathieu Hofman>
+The protocol in this case is `.get`, `.set`, `.delete` ?
+
+[15:56:21.0671] <Mathieu Hofman>
+ * The protocol in this case is `.get`, `.set`, `.delete` ?
+
+[15:56:23.0934] <ljharb>
+lol i can see none of you are going to react well to my preferences here
+
+[15:56:32.0760] <Kris Kowal>
+I mean, I love protocols.
+
+[15:56:45.0951] <ljharb>
+in general, i want to minimize how much i trust other code.
+
+[15:56:57.0475] <ljharb>
+"just call .foo on the argument" is not doing that
+
+[15:57:14.0425] <jschoi>
+> <@kriskowal:matrix.org> My position is approximately that more interesting Maps and Sets can be created in user code by composition, without inheritance, using what we already have, and that record and tuple keys will just make that easier.
+
+Speaking of tuples, has there been any recent activity around composite keys (which are kind of an alternative to tuple keys)? I ask because someone has suggested them for https://github.com/js-choi/proposal-function-memo/issues/4#issuecomment-1083552333, and I don’t see any activity around them since 2019.
+
+The alternative for memo would be to use argument tuples as keys in the Map-like cache and to replace objects in the tuple with symbols from a WeakMap. 
+
+[15:57:29.0250] <jschoi>
+* > <@kriskowal:matrix.org> My position is approximately that more interesting Maps and Sets can be created in user code by composition, without inheritance, using what we already have, and that record and tuple keys will just make that easier.
+
+Speaking of tuples, has there been any recent activity around composite keys? I ask because someone has suggested them for https://github.com/js-choi/proposal-function-memo/issues/4#issuecomment-1083552333, and I don’t see any activity around them since 2019.
+
+The alternative for memo would be to use argument tuples as keys in the Map-like cache and to replace objects in the tuple with symbols from a WeakMap. 
+
+[15:58:12.0669] <ljharb>
+> <@shuyuguo:matrix.org> lol i am leaving this convo
+
+right but see this kind of reaction to the things i find important encourages me to react equally strongly to things like structs and atomics.
+
+[15:58:22.0456] <jschoi>
+* > <@kriskowal:matrix.org> My position is approximately that more interesting Maps and Sets can be created in user code by composition, without inheritance, using what we already have, and that record and tuple keys will just make that easier.
+
+Speaking of tuples, has there been any recent activity around composite keys (which are kind of an alternative to tuple keys)? I ask because someone has suggested them for https://github.com/js-choi/proposal-function-memo/issues/4#issuecomment-1083552333, and I don’t see any activity around them since 2019.
+
+The alternative for memo would be to use argument tuples as keys in the Map-like cache and to replace objects in the tuple with symbols from a WeakMap. 
+
+[15:58:33.0667] <shu>
+excuse me?
+
+[15:58:40.0386] <Mathieu Hofman>
+Unfortunately I hear there is push back against considering tuples of unique symbols as WeakMap keys ...
+
+[15:58:43.0378] <ljharb>
+because i don't value any of the motivations for either of those, personally, but that should mean i stay out of the conversation, not that i ridicule or block them
+
+[15:58:56.0874] <ljharb>
+ * because i don't value any of the motivations for either of those, personally, but that should mean i stay out of the conversation, not that i ridicule or block them
+
+[15:59:14.0866] <Kris Kowal>
+> <@jschoi:matrix.org> Speaking of tuples, has there been any recent activity around composite keys (which are kind of an alternative to tuple keys)? I ask because someone has suggested them for https://github.com/js-choi/proposal-function-memo/issues/4#issuecomment-1083552333, and I don’t see any activity around them since 2019.
+> 
+> The alternative for memo would be to use argument tuples as keys in the Map-like cache and to replace objects in the tuple with symbols from a WeakMap.
+
+We have certainly had conversations about records and tuples as recently as last December in the SES calls https://docs.google.com/document/d/1FZ95-NZIQE9fw3A8Sgcz2BKep6MlC_Kng0dlf1ehabQ/edit#heading=h.kf3ndl27679m
+
+[15:59:39.0062] <ljharb>
+i think i'm going to step out of the convo myself; this is reminding me of the completely BS response i get to "brand checking" desires, and i'm a bit too tired to handle it well.
+
+[16:00:46.0137] <jschoi>
+> <@mhofman:matrix.org> Unfortunately I hear there is push back against considering tuples of unique symbols as WeakMap keys ...
+
+Yeah, fortunately in this case, the object-replacement symbols would be the WeakMap’s values, not its keys. See https://github.com/js-choi/proposal-function-memo/blob/main/README.md#result-caches.
+
+But we couldn’t use a WeakMap directly as the cache, though, if we used tuple keys, since tuples can’t contain objects anyway. But that’s fine. We’re using user-provided Map-likes anyway. 
+
+[16:00:48.0605] <shu>
+> <@ljharb:matrix.org> because i don't value any of the motivations for either of those, personally, but that should mean i stay out of the conversation, not that i ridicule or block them
+
+it is not the case i don't value the motivation, it is that i think i understand the motivation, and that it is the wrong thing to trade off, and that i find your equivocating of _very_ different things in the language frustrating
+
+[16:01:25.0239] <shu>
+my reaction is not because "lol i don't care about robustness, get out of here with that proposal"
+
+[16:01:50.0624] <jschoi>
+> <@kriskowal:matrix.org> We have certainly had conversations about records and tuples as recently as last December in the SES calls https://docs.google.com/document/d/1FZ95-NZIQE9fw3A8Sgcz2BKep6MlC_Kng0dlf1ehabQ/edit#heading=h.kf3ndl27679m
+
+Sorry, I had meant recent activity around compositeKeys (https://github.com/tc39/proposal-richer-keys/blob/master/compositeKey/README.md), not around tuples. 
+
+[16:02:02.0245] <jschoi>
+* > <@kriskowal:matrix.org> We have certainly had conversations about records and tuples as recently as last December in the SES calls https://docs.google.com/document/d/1FZ95-NZIQE9fw3A8Sgcz2BKep6MlC_Kng0dlf1ehabQ/edit#heading=h.kf3ndl27679m
+
+Sorry, I had meant recent activity around compositeKeys (https://github.com/tc39/proposal-richer-keys/blob/master/compositeKey/README.md), not arums tuples. 
+
+[16:02:17.0234] <jschoi>
+* > <@kriskowal:matrix.org> We have certainly had conversations about records and tuples as recently as last December in the SES calls https://docs.google.com/document/d/1FZ95-NZIQE9fw3A8Sgcz2BKep6MlC_Kng0dlf1ehabQ/edit#heading=h.kf3ndl27679m
+
+Sorry, I had meant recent activity around compositeKeys (https://github.com/tc39/proposal-richer-keys/blob/master/compositeKey/README.md), not around tuples. 
+
+[16:02:19.0079] <Kris Kowal>
+> <@ljharb:matrix.org> in general, i want to minimize how much i trust other code.
+
+Sympathetic to this position, since I find myself in situations where reentrance of guest code can violate my invariants. Protocols are actually a hazard in these situations.
+
+[16:03:10.0601] <Kris Kowal>
+But I do like collection protocols, though there is a design tension in performance.
+
+[16:03:51.0005] <Kris Kowal>
+Much depends on what kind of contract you’re providing.
+
+[16:04:47.0347] <Kris Kowal>
+In the situations where we find ourselves `uncurryThis(String.prototype.set)`, the contract is not object oriented, not lazy bound, instances must be Sets and anything else is going to be ignored.
+
+[16:05:34.0736] <Kris Kowal>
+Whereas `Array.prototype.slice.call(arguments)` is from a very different design space.
+
+[16:05:49.0298] <Kris Kowal>
+And I like both of these subjectively.
+
+[16:07:24.0135] <Kris Kowal>
+The one thing that Map and Set do that I can’t do in user code is fast hashing on an opaque object, so I’d turn to them as a high performance building block for user code collections with rich protocols.
+
+[16:07:40.0953] <Kris Kowal>
+Thus, cake and eat it.
+
+[16:07:54.0142] <jschoi>
+* > <@kriskowal:matrix.org> We have certainly had conversations about records and tuples as recently as last December in the SES calls https://docs.google.com/document/d/1FZ95-NZIQE9fw3A8Sgcz2BKep6MlC_Kng0dlf1ehabQ/edit#heading=h.kf3ndl27679m
+
+Sorry, I had meant whether there has been any recent activity around compositeKeys (https://github.com/tc39/proposal-richer-keys/blob/master/compositeKey/README.md), not around tuples. 
+

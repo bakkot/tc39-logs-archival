@@ -1,0 +1,70 @@
+<!DOCTYPE html><html><head>
+  <title>TC39 ECMA402 on 2023-02-01</title>
+  <link rel="stylesheet" href="../style.css">
+  <script>window.room = "TC39 ECMA402";</script><script src="../render-roomlist.js"></script>
+  <script src="../logs.js"></script>
+</head>
+<body><div class="wrapper">
+<div class="sidebar">
+<div class="title">TC39 ECMA402<br>2023-02-01<br><a href="plaintext/">plaintext logs</a></div>
+<div class="nav">
+<a href="2023-01-31" class="nav-link"><span>prev</span></a>
+<a href="2023-02-02" class="nav-link"><span style="float:right">next</span></a>
+</div>
+    <div class="all-rooms"><noscript>JavaScript is required to load the channel index, but you can go to <a href="../..">the static index</a> directly.</noscript></div>
+<div class="footer"><a href="https://github.com/bakkot/matrix-archive-bot">source on github</a></div>
+</div>
+<div class="rhs">
+<div class="rhs-header">
+<span id="error" style="color: red; display:none">error</span>
+
+<input type="text" id="query" size="25" placeholder="Search TC39 ECMA402">
+<a id="search-submit" class="button icon-link" title="Search">
+  <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M505 442.7L405.3 343c-4.5-4.5-10.6-7-17-7H372c27.6-35.3 44-79.7 44-128C416 93.1 322.9 0 208 0S0 93.1 0 208s93.1 208 208 208c48.3 0 92.7-16.4 128-44v16.3c0 6.4 2.5 12.5 7 17l99.7 99.7c9.4 9.4 24.6 9.4 33.9 0l28.3-28.3c9.4-9.4 9.4-24.6.1-34zM208 336c-70.7 0-128-57.2-128-128 0-70.7 57.2-128 128-128 70.7 0 128 57.2 128 128 0 70.7-57.2 128-128 128z"></path></svg>
+</a>
+</div>
+
+<div class="log"><table id="log-table"><tbody id="log-tbody">
+
+  <tr class="msg" id="L0"><td class="ts-cell"><a class="ts" href="#L0" alt="Tue Jan 31 2023 16:21:14 GMT-0800 (Pacific Standard Time)">00:21</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-16" title="@sffc:mozilla.org">sffc</span>&gt;</div></td><td class="msg-cell">Hmm, I may be open to considering if DTF *always* throws on ZDT, or perhaps any Temporal object, if the time zone is not undefined, because if you're using Temporal, you shouldn't get your time zone from Intl</td></tr>
+  <tr class="msg" id="L1"><td class="ts-cell"><a class="ts" href="#L1" alt="Tue Jan 31 2023 17:37:17 GMT-0800 (Pacific Standard Time)">01:37</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-12" title="@justingrant:matrix.org">justingrant</span>&gt;</div></td><td class="msg-cell"><p>There are three cases:</p>
+<ul>
+<li><code>Instant</code> - time zone is unknown, so no potential for conflict. <code>Instant</code> has the same data model as <code>Date</code>, so they should behave identically in <code>format</code>.</li>
+<li><code>ZonedDateTime</code> - time zone is known, so there's potential for conflict. This is the focus of the PR linked above.</li>
+<li><code>Plain*</code> types - time zone is excluded from the data model, so currently the 402 section of the Temporal spec doesn't include the <code>[[timeZoneName]]</code> in the <a href="https://tc39.es/proposal-temporal/#table-temporal-patterns">list of supported fields</a>. We could discuss changing this behavior, but IMO this should be a separate PR and discussion.</li>
+</ul>
+<p>So the issue at hand is really focused on how to handle <code>ZonedDateTime</code> output only.</p>
+</td></tr>
+  <tr class="msg" id="L2"><td class="ts-cell"><a class="ts" href="#L2" alt="Tue Jan 31 2023 17:42:32 GMT-0800 (Pacific Standard Time)">01:42</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-16" title="@sffc:mozilla.org">sffc</span>&gt;</div></td><td class="msg-cell">Right. Yeah. So it seems reasonable that Instant always converts to the time zone if the DTF, and ZDT always retains its time zone</td></tr>
+  <tr class="msg" id="L3"><td class="ts-cell"><a class="ts" href="#L3" alt="Tue Jan 31 2023 17:43:51 GMT-0800 (Pacific Standard Time)">01:43</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-12" title="@justingrant:matrix.org">justingrant</span>&gt;</div></td><td class="msg-cell"><mx-reply><blockquote> Hmm, I may be open to considering if DTF *always* throws on ZDT, or perhaps any Temporal object, if the time zone is not undefined, because if you're using Temporal, you shouldn't get your time zone from Intl</blockquote></mx-reply><p>My main concern is ensuring that, if there's no <code>timeZone</code> option specified on the Intl side, then the output of <code>format</code> includes the ZDT's time zone.</p>
+<p>What we do if there's also a <code>timeZone</code> option on the Intl side is a much lower priority because it seems like it'll be a pretty rare use case. I'm not strongly opposed to your suggestion to always throw in that case, but I'd like to understand your reasoning for why we'd deviate from <code>calendar</code> behavior where both are allowed as long as they don't conflict.</p>
+</td></tr>
+  <tr class="msg" id="L4"><td class="ts-cell"><a class="ts" href="#L4" alt="Tue Jan 31 2023 17:43:54 GMT-0800 (Pacific Standard Time)">01:43</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-16" title="@sffc:mozilla.org">sffc</span>&gt;</div></td><td class="msg-cell">The only thing I'm unsure about are the implications for data loading. With this model, the DTF needs to be able to select the time zone in the format function, which means all the display names for all time zones need to be available and efficiently indexable </td></tr>
+  <tr class="msg" id="L5"><td class="ts-cell"><a class="ts" href="#L5" alt="Tue Jan 31 2023 17:44:39 GMT-0800 (Pacific Standard Time)">01:44</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-16" title="@sffc:mozilla.org">sffc</span>&gt;</div></td><td class="msg-cell">Currently, the DTF can do the time zone name lookup in the constructor, which is likely more efficient</td></tr>
+  <tr class="msg" id="L6"><td class="ts-cell"><a class="ts" href="#L6" alt="Tue Jan 31 2023 17:49:03 GMT-0800 (Pacific Standard Time)">01:49</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-12" title="@justingrant:matrix.org">justingrant</span>&gt;</div></td><td class="msg-cell">Is there any choice but to solve this perf problem?  Otherwise, <code>zonedDateTime.toLocaleString()</code> would return the system time zone which is never what's intended.</td></tr>
+  <tr class="msg" id="L7"><td class="ts-cell"><a class="ts" href="#L7" alt="Tue Jan 31 2023 17:49:24 GMT-0800 (Pacific Standard Time)">01:49</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-16" title="@sffc:mozilla.org">sffc</span>&gt;</div></td><td class="msg-cell">I'm not sure if that's a real concern; Frank could weigh in. A workaround would be that the time zone must match, a restriction we could later lift. This is fine in toLocaleString.</td></tr>
+  <tr class="msg" id="L8"><td class="ts-cell"><a class="ts" href="#L8" alt="Tue Jan 31 2023 17:50:28 GMT-0800 (Pacific Standard Time)">01:50</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-16" title="@sffc:mozilla.org">sffc</span>&gt;</div></td><td class="msg-cell">I definitely think that DTF converting ZDT to a different time zone is a bad idea, just like converting to a different calendar is a bad idea</td></tr>
+  <tr class="msg" id="L9"><td class="ts-cell"><a class="ts" href="#L9" alt="Tue Jan 31 2023 17:52:33 GMT-0800 (Pacific Standard Time)">01:52</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-16" title="@sffc:mozilla.org">sffc</span>&gt;</div></td><td class="msg-cell">So I guess the options are (1) always use ZDT zone and eat the format-time lookup cost; (2) require the time zones to match; or (3) require the time zones to match but only if the constructor received an explicit zone.</td></tr>
+  <tr class="msg" id="L10"><td class="ts-cell"><a class="ts" href="#L10" alt="Tue Jan 31 2023 17:53:36 GMT-0800 (Pacific Standard Time)">01:53</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-12" title="@justingrant:matrix.org">justingrant</span>&gt;</div></td><td class="msg-cell"><blockquote>
+<p>I'm not sure if that's a real concern; Frank could weigh in.</p>
+</blockquote>
+<p>Even if it's a real concern, doesn't that concern have to be solved in order to implement an efficient parameterless <code>toLocaleString</code>?</p>
+</td></tr>
+  <tr class="msg" id="L11"><td class="ts-cell"><a class="ts" href="#L11" alt="Tue Jan 31 2023 17:54:08 GMT-0800 (Pacific Standard Time)">01:54</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-13" title="@pchimento:igalia.com">ptomato</span>&gt;</div></td><td class="msg-cell">no, because toLocaleString would have no choice but to construct the DTF instance, so that cost is incurred in toLocaleString either way</td></tr>
+  <tr class="msg" id="L12"><td class="ts-cell"><a class="ts" href="#L12" alt="Tue Jan 31 2023 17:54:09 GMT-0800 (Pacific Standard Time)">01:54</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-16" title="@sffc:mozilla.org">sffc</span>&gt;</div></td><td class="msg-cell">If we did (2) we could switch to (1) or (3) later since they are less strict </td></tr>
+  <tr class="msg" id="L13"><td class="ts-cell"><a class="ts" href="#L13" alt="Tue Jan 31 2023 17:54:43 GMT-0800 (Pacific Standard Time)">01:54</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-13" title="@pchimento:igalia.com">ptomato</span>&gt;</div></td><td class="msg-cell">in other words, if you want efficient toLocaleString, you create a DTF and call format instead 😄</td></tr>
+  <tr class="msg" id="L14"><td class="ts-cell"><a class="ts" href="#L14" alt="Tue Jan 31 2023 17:56:38 GMT-0800 (Pacific Standard Time)">01:56</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-16" title="@sffc:mozilla.org">sffc</span>&gt;</div></td><td class="msg-cell">But I think we should decide on the issue <span class="nick-13">ptomato</span> raised in Intl about whether to resolve the undefined time zone at construction or formating time, because that decision could lead to different value judgements here</td></tr>
+  <tr class="msg" id="L15"><td class="ts-cell"><a class="ts" href="#L15" alt="Tue Jan 31 2023 17:57:41 GMT-0800 (Pacific Standard Time)">01:57</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-16" title="@sffc:mozilla.org">sffc</span>&gt;</div></td><td class="msg-cell">Like, if DTF responds to browser time zone changes, it means it must retain access to time zone data even after it is constructed</td></tr>
+  <tr class="msg" id="L16"><td class="ts-cell"><a class="ts" href="#L16" alt="Tue Jan 31 2023 18:05:13 GMT-0800 (Pacific Standard Time)">02:05</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-12" title="@justingrant:matrix.org">justingrant</span>&gt;</div></td><td class="msg-cell">AFAICT, in the current spec, <code>toLocaleString</code> doesn't work either. At a minimum could we get consensus on fixing that method now, even if the DTF side of things is still an open question?</td></tr>
+  <tr class="msg" id="L17"><td class="ts-cell"><a class="ts" href="#L17" alt="Tue Jan 31 2023 18:08:17 GMT-0800 (Pacific Standard Time)">02:08</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-12" title="@justingrant:matrix.org">justingrant</span>&gt;</div></td><td class="msg-cell">BTW, the polyfill doesn't match the spec today. In the polyfill, <code>ZDT.p.toLocaleString</code> outputs the ZDT's time zone name.</td></tr>
+  <tr class="msg" id="L18"><td class="ts-cell"><a class="ts" href="#L18" alt="Tue Jan 31 2023 18:10:06 GMT-0800 (Pacific Standard Time)">02:10</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-12" title="@justingrant:matrix.org">justingrant</span>&gt;</div></td><td class="msg-cell">In the current spec, it just passes <code>locales</code> and <code>options</code> directly down to the internal DTF constructor.</td></tr>
+  <tr class="msg" id="L19"><td class="ts-cell"><a class="ts" href="#L19" alt="Tue Jan 31 2023 18:16:14 GMT-0800 (Pacific Standard Time)">02:16</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-12" title="@justingrant:matrix.org">justingrant</span>&gt;</div></td><td class="msg-cell">Here's the current spec: <a href="https://tc39.es/proposal-temporal/#sup-temporal.zoneddatetime.prototype.tolocalestring">https://tc39.es/proposal-temporal/#sup-temporal.zoneddatetime.prototype.tolocalestring</a></td></tr>
+  <tr class="msg" id="L20"><td class="ts-cell"><a class="ts" href="#L20" alt="Tue Jan 31 2023 18:16:38 GMT-0800 (Pacific Standard Time)">02:16</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-12" title="@justingrant:matrix.org">justingrant</span>&gt;</div></td><td class="msg-cell"><pre><code>1. Let zonedDateTime be the this value.
+2. Perform ? RequireInternalSlot(zonedDateTime, [[InitializedTemporalZonedDateTime]]).
+3. Let dateFormat be ? Construct(%DateTimeFormat%, « locales, options »).
+4. Return ? FormatDateTime(dateFormat, zonedDateTime).
+</code></pre>
+</td></tr>
+
+</tbody></table></div></div></div>
+</body></html>

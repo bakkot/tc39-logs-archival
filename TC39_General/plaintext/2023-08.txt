@@ -1,0 +1,868 @@
+2023-08-03
+[20:24:26.0115] <jmdyck>
+re question in Delegates room: Originally, it was "... to link, instantiate, and evaluate the module". Then PR #1312 changed occurrences of "instantiate" to "link", and didn't notice what that did to that sentence.
+
+[20:27:13.0912] <jmdyck>
+ * HE Shi-Jun: re question in Delegates room: Originally, it was "... to link, instantiate, and evaluate the module". Then PR #1312 changed occurrences of "instantiate" to "link", and didn't notice what that did to that sentence.
+
+
+2023-08-04
+[20:23:06.0921] <kai>
+> <@jmdyck:matrix.org> HE Shi-Jun: re question in Delegates room: Originally, it was "... to link, instantiate, and evaluate the module". Then PR #1312 changed occurrences of "instantiate" to "link", and didn't notice what that did to that sentence.
+
+Thank you for your answer, but it is difficult to distinguish the difference between "to link" and "link" in the description. Should "to link" be changed to the concrete method LoadRequestedModules to represent the previous stage
+
+[10:11:50.0989] <jmdyck>
+kai: seems like changing it to "to load" would fit the sentence better.
+
+
+2023-08-20
+[17:41:52.0385] <tewuzij>
+What is the TC39 space id on Matrix?
+
+
+2023-08-21
+[07:23:29.0333] <Chris de Almeida>
+> <@tewuzij:tzchat.org> What is the TC39 space id on Matrix?
+
+https://matrix.to/#/#tc39-space:matrix.org
+
+[14:58:43.0458] <Yehor Yatskevych>
+Hey there! 👋 
+I had an idea for a long time related to static variables inside the functions like how it's implemented in other low-level languages like C++ and I finally and I finally decided to start describing the document. Unfortunately, I have not yet figured out exactly how to describe it correctly and where I should publish it, but I found this chat in the CONTRIBUTING document of the ecma262 repo.
+
+Here is my proposal: https://github.com/yehoryatskevych/proposal-function-static-variables
+Please correct me if I'm wrong somewhere and I'm open for the discussion.
+Thanks! 🙏
+
+```javascript
+function func() {
+    static let isFirstCall = true;
+    static let counter = 0;
+
+    if (isFirstCall) {
+        isFirstCall = false;
+        console.log('Static variables initialized!');
+    }
+
+    console.log("Counter:", counter);
+
+    counter++;
+}
+
+func(); // OUT: "Static variables initialized!", "Counter: 0"
+func(); // OUT: "Counter: 1"
+func(); // OUT: "Counter: 2"
+```
+
+[14:59:10.0764] <Yehor Yatskevych>
+ * Hey there! 👋
+I had an idea for a long time related to static variables inside the functions like how it's implemented in other low-level languages like C++ and I finally and I finally decided to start describing the document. Unfortunately, I have not yet figured out exactly how to describe it correctly and where I should publish it, but I found this chat in the CONTRIBUTING document of the ecma262 repo.
+
+Here is my proposal: https://github.com/yehoryatskevych/proposal-function-static-variables
+
+Please correct me if I'm wrong somewhere and I'm open for the discussion.
+Thanks! 🙏
+
+```javascript
+function func() {
+    static let isFirstCall = true;
+    static let counter = 0;
+
+    if (isFirstCall) {
+        isFirstCall = false;
+        console.log('Static variables initialized!');
+    }
+
+    console.log("Counter:", counter);
+
+    counter++;
+}
+
+func(); // OUT: "Static variables initialized!", "Counter: 0"
+func(); // OUT: "Counter: 1"
+func(); // OUT: "Counter: 2"
+```
+
+[15:08:24.0988] <bakkot>
+Yehor Yatskevych the most important part of any proposal is to explain what problem you're solving, compared to what you'd currently do.
+
+[15:08:48.0762] <ljharb>
+What's the problem this is solving? How would this work better than:
+```
+let isFirstCall = true;
+let counter = 0;
+function func() {
+  …
+```
+?
+
+[15:08:48.0878] <bakkot>
+Right now the thing you'd do is use a closure, and hoist the `static` variables out of the closure. How is your suggestion better than that?
+
+[15:13:13.0187] <bakkot>
+(also the main place suggestions go is the discourse; in this case this exact thing was proposed a few years ago; you may find the discussion helpful though it's pretty brief https://es.discourse.group/t/c-style-static-variables/511 )
+
+[15:13:33.0820] <Yehor Yatskevych>
+> <@bakkot:matrix.org> Right now the thing you'd do is use a closure, and hoist the `static` variables out of the closure. How is your suggestion better than that?
+
+I see, I'll try to write about the problem more, thanks for your answer!
+
+[15:15:03.0081] <Yehor Yatskevych>
+> <@bakkot:matrix.org> (also the main place suggestions go is the discourse; in this case this exact thing was proposed a few years ago; you may find the discussion helpful though it's pretty brief https://es.discourse.group/t/c-style-static-variables/511 )
+
+Oh, let me take a look! Thanks!
+
+[15:18:21.0931] <Yehor Yatskevych>
+> <@ljharb:matrix.org> What's the problem this is solving? How would this work better than:
+> ```
+> let isFirstCall = true;
+> let counter = 0;
+> function func() {
+>   …
+> ```
+> ?
+
+Better, because functions can have their own state independently from the global context and remove the problem with naming variables and name conflicts, also the function can be easily refactored and moved to another file without wasting time on finding all variables the function depends on.
+
+[15:19:30.0883] <bakkot>
+If it's just about encapsulation, you can do that pretty easily:
+
+```
+let fn = (() => {
+  let isFirstCall = true;
+  let counter = 0;
+  return function fn() {...};
+})();
+```
+
+[15:19:58.0578] <bakkot>
+That would get even simpler with https://github.com/tc39/proposal-do-expressions/, if that ends up happening
+
+[15:24:10.0580] <Yehor Yatskevych>
+> <@bakkot:matrix.org> If it's just about encapsulation, you can do that pretty easily:
+> 
+> ```
+> let fn = (() => {
+>   let isFirstCall = true;
+>   let counter = 0;
+>   return function fn() {...};
+> })();
+> ```
+
+of course, that's how you can do it right now, but that's dirty code and it is already problematic to use this in methods. At the moment I'm looking for solutions and I'm trying to create a concept in which JS can be used as scripting engine for the gamedev and static variables is extremely useful for "update" and other functions which should be called every frame.
+
+[15:24:48.0225] <bakkot>
+I don't think it's especially dirty code? And it works fine for methods, not sure what you mean there.
+
+[15:25:01.0023] <Yehor Yatskevych>
+ * of course, that's how you can do it right now, but that's dirty code and it is already problematic to use this in methods. At the moment I'm looking for solutions and I'm trying to create a concept in which JS can be used as scripting engine for the gamedev and static variables is extremely useful for "update" and other functions which should be called every frame. This is also applicable for other high performance programs and recursion to avoid unnecessary allocations.
+
+[15:37:46.0861] <Yehor Yatskevych>
+Closure
+```javascript
+GameEvents.subscribe('frame', (
+    () => {
+        let velocity = new Vec3();
+
+        return () => {
+            for (player of getPlayers()) {
+                const position = player.getPosition();
+                const dir = player.getAngles().toVector();
+                velocity.set(position).addScaled(dir, 200);
+                player.setVelocity(velocity);
+            }
+        };
+    }
+)());
+```
+
+```javascript
+const onServerFrame = (
+    () => {
+        let velocity = new Vec3();
+
+        return () => {
+            for (player of getPlayers()) {
+                const position = player.getPosition();
+                const dir = player.getAngles().toVector();
+                velocity.set(position).addScaled(dir, 200);
+                player.setVelocity(velocity);
+            }
+        };
+    }
+)();
+
+GameEvents.subscribe('frame', onServerFrame);
+```
+
+Versus static proposal.
+
+```javascript
+GameEvents.subscribe('frame', () => {
+    static let velocity = new Vec3();
+
+    for (player of getPlayers()) {
+        const position = player.getPosition();
+        const dir = player.getAngles().toVector();
+        velocity.set(position).addScaled(dir, 200);
+        player.setVelocity(velocity);
+    }
+});
+```
+```javascript
+GameEvents.subscribe('frame', onServerFrame);
+
+function onServerFrame() {
+    static let velocity = new Vec3();
+
+    for (player of getPlayers()) {
+        const position = player.getPosition();
+        const dir = player.getAngles().toVector();
+        velocity.set(position).addScaled(dir, 200);
+        player.setVelocity(velocity);
+    }
+}
+```
+
+Better readability, function declaration pattern support, less code
+
+[15:39:00.0675] <Yehor Yatskevych>
+ * Closure
+
+```javascript
+GameEvents.subscribe('frame', (
+    () => {
+        let velocity = new Vec3();
+
+        return () => {
+            for (player of getPlayers()) {
+                const position = player.getPosition();
+                const dir = player.getAngles().toVector();
+                velocity.set(0, 0, 0).addScaled(dir, 200);
+                player.setVelocity(velocity);
+            }
+        };
+    }
+)());
+```
+
+```javascript
+const onServerFrame = (
+    () => {
+        let velocity = new Vec3();
+
+        return () => {
+            for (player of getPlayers()) {
+                const position = player.getPosition();
+                const dir = player.getAngles().toVector();
+                velocity.set(0, 0, 0).addScaled(dir, 200);
+                player.setVelocity(velocity);
+            }
+        };
+    }
+)();
+
+GameEvents.subscribe('frame', onServerFrame);
+```
+
+Versus static proposal.
+
+```javascript
+GameEvents.subscribe('frame', () => {
+    static let velocity = new Vec3();
+
+    for (player of getPlayers()) {
+        const position = player.getPosition();
+        const dir = player.getAngles().toVector();
+        velocity.set(0, 0, 0).addScaled(dir, 200);
+        player.setVelocity(velocity);
+    }
+});
+```
+
+```javascript
+GameEvents.subscribe('frame', onServerFrame);
+
+function onServerFrame() {
+    static let velocity = new Vec3();
+
+    for (player of getPlayers()) {
+        const position = player.getPosition();
+        const dir = player.getAngles().toVector();
+        velocity.set(0, 0, 0).addScaled(dir, 200);
+        player.setVelocity(velocity);
+    }
+}
+```
+
+Better readability, function declaration pattern support, less code
+
+[15:40:16.0588] <Yehor Yatskevych>
+ * Closure
+
+```javascript
+GameEvents.subscribe('frame', (
+    () => {
+        let velocity = new Vec3();
+
+        return () => {
+            for (player of getPlayers()) {
+                const dir = player.getAngles().toVector();
+                velocity.set(0, 0, 0).addScaled(dir, 200);
+                player.setVelocity(velocity);
+            }
+        };
+    }
+)());
+```
+
+```javascript
+const onServerFrame = (
+    () => {
+        let velocity = new Vec3();
+
+        return () => {
+            for (player of getPlayers()) {
+                const dir = player.getAngles().toVector();
+                velocity.set(0, 0, 0).addScaled(dir, 200);
+                player.setVelocity(velocity);
+            }
+        };
+    }
+)();
+
+GameEvents.subscribe('frame', onServerFrame);
+```
+
+Versus static proposal.
+
+```javascript
+GameEvents.subscribe('frame', () => {
+    static let velocity = new Vec3();
+
+    for (player of getPlayers()) {
+        const dir = player.getAngles().toVector();
+        velocity.set(0, 0, 0).addScaled(dir, 200);
+        player.setVelocity(velocity);
+    }
+});
+```
+
+```javascript
+GameEvents.subscribe('frame', onServerFrame);
+
+function onServerFrame() {
+    static let velocity = new Vec3();
+
+    for (player of getPlayers()) {
+        const dir = player.getAngles().toVector();
+        velocity.set(0, 0, 0).addScaled(dir, 200);
+        player.setVelocity(velocity);
+    }
+}
+```
+
+Better readability, function declaration pattern support, less code
+
+[15:40:33.0636] <Yehor Yatskevych>
+ * Closure
+
+```javascript
+GameEvents.subscribe('frame', (
+    () => {
+        let velocity = new Vec3();
+
+        return () => {
+            for (player of getPlayers()) {
+                const dir = player.getAngles().toVector();
+                velocity.set(0, 0, 0).addScaled(dir, 200);
+                player.setVelocity(velocity);
+            }
+        };
+    }
+)());
+```
+
+```javascript
+const onServerFrame = (
+    () => {
+        let velocity = new Vec3();
+
+        return () => {
+            for (player of getPlayers()) {
+                const dir = player.getAngles().toVector();
+                velocity.set(0, 0, 0).addScaled(dir, 200);
+                player.setVelocity(velocity);
+            }
+        };
+    }
+)();
+
+GameEvents.subscribe('frame', onServerFrame);
+```
+
+Versus static proposal.
+
+```javascript
+GameEvents.subscribe('frame', () => {
+    static let velocity = new Vec3();
+
+    for (player of getPlayers()) {
+        const dir = player.getAngles().toVector();
+        velocity.set(0, 0, 0).addScaled(dir, 200);
+        player.setVelocity(velocity);
+    }
+});
+```
+
+```javascript
+GameEvents.subscribe('frame', onServerFrame);
+
+function onServerFrame() {
+    static let velocity = new Vec3();
+
+    for (player of getPlayers()) {
+        const dir = player.getAngles().toVector();
+        velocity.set(0, 0, 0).addScaled(dir, 200);
+        player.setVelocity(velocity);
+    }
+}
+```
+
+Better readability, function declaration support, less code
+
+[15:41:23.0095] <bakkot>
+Yeah, I don't think that difference is significant enough to warrant new syntax. In practice, in almost all code, you'd just put the "static" variable immediately before the function, which has the advantage of having completely unambiguous semantics (for example: with `static`, what happens if you have multiple such declarations and one of them throws the first time you call the function?). In the rare cases where putting your variables before the function doesn't work, the IIFE pattern is not really that bad.
+
+[15:42:26.0790] <bakkot>
+That is to say, in practice, what you'd write is usually
+
+```
+let velocity = new Vec3();
+function onServerFrame() {
+    for (player of getPlayers()) {
+        const dir = player.getAngles().toVector();
+        velocity.set(0, 0, 0).addScaled(dir, 200);
+        player.setVelocity(velocity);
+    }
+}
+
+GameEvents.subscribe('frame', onServerFrame);
+```
+
+[15:42:34.0959] <ptomato>
+maybe I'm not understanding the API of `Vec3` there, but it looks like the variable doesn't need to be static at all in this example? isn't it always reset with `.set(0, 0, 0)` before it is accessed?
+
+[15:44:42.0532] <Yehor Yatskevych>
+> <@pchimento:igalia.com> maybe I'm not understanding the API of `Vec3` there, but it looks like the variable doesn't need to be static at all in this example? isn't it always reset with `.set(0, 0, 0)` before it is accessed?
+
+just an example, but at least it not allocate object every frame which save time, function can be called thousand times per second and for example logic can be moved to separate function then complexity will be `playersNum * serverFps`
+
+[15:44:49.0774] <Yehor Yatskevych>
+> <@pchimento:igalia.com> maybe I'm not understanding the API of `Vec3` there, but it looks like the variable doesn't need to be static at all in this example? isn't it always reset with `.set(0, 0, 0)` before it is accessed?
+
+ * just an example, but at least it not allocate object every frame which save time, function can be called thousand times per second and for example logic can be moved to separate function then allocation complexity will be `playersNum * serverFps`
+
+[15:45:49.0770] <Yehor Yatskevych>
+in case server updates 10000 times per second and we have for example 100 players it will be 100000 calls per second and the same allocations number 
+
+[15:46:35.0410] <Yehor Yatskevych>
+ * in case server updates 10000 times per second and we have for example 100 players it will be 100000 calls per second and the same allocations number, some the number of variables needed may also be significantly larger
+
+[15:46:49.0036] <Yehor Yatskevych>
+ * in case server updates 10000 times per second and we have for example 100 players it will be 100000 calls per second and the same allocations number, some the number of variables needed may also be significantly larger, it's just an example with one variable
+
+[15:49:34.0684] <Yehor Yatskevych>
+> <@bakkot:matrix.org> That is to say, in practice, what you'd write is usually
+> 
+> ```
+> let velocity = new Vec3();
+> function onServerFrame() {
+>     for (player of getPlayers()) {
+>         const dir = player.getAngles().toVector();
+>         velocity.set(0, 0, 0).addScaled(dir, 200);
+>         player.setVelocity(velocity);
+>     }
+> }
+> 
+> GameEvents.subscribe('frame', onServerFrame);
+> ```
+
+game script usually contains a huge number of functions and every of this function may have their own "velocity" variable, moving it to global context is not a solution, in case you need to somehow read previous state you should create the same variable for each function in global context with different names.
+
+[15:51:29.0865] <Yehor Yatskevych>
+ * game script usually contains a huge number of functions and every of this function may have their own "velocity" variable, moving it to global context is not a solution, in case you need to somehow read previous state you should create the same variable for each function in global context with different names.
+It's easiest for me to describe it like for games, but it almost the same for other high loading programs and calculations.
+
+[15:52:26.0785] <Yehor Yatskevych>
+ * game scripts usually contain a huge number of functions and every of this function may have their own "velocity" variable, moving it to global context is not a solution, in case you need to somehow read the previous state you should create the same variable for each function in global context with different names.
+It's easiest for me to describe it like for games, but it almost the same for other high loading programs and calculations. Currently math is one of the weakest points of js <del>and mine</del>.
+
+[15:52:54.0842] <bakkot>
+Hoisting variables to the outer scope is in fact a solution. I agree that there are cases where that means you will need to spend slightly more effort naming things, or otherwise have some awkwardness, but I don't think this is bad enough to warrant new syntax.
+
+[15:53:26.0089] <Yehor Yatskevych>
+ * game scripts usually contain a huge number of functions and each of these functions may have its own "velocity" variable, moving it to a global context is not a solution, in case you need to somehow read the previous state you should create the same variable for each function in the global context with different names.
+It's easiest for me to describe it as for games, but it is almost the same for other high-loading programs and calculations. Currently, math is one of the weakest points of js <del>and my</del>.
+
+[15:58:56.0065] <ptomato>
+in practice how the process works is that you identify the problem first, before proposing a solution - this proposed solution moves a feature from C into JS which brings its own problems along. for example, the cognitive load for learning it due to most JS developers not being familiar with C; even in C, the feature is named confusingly, because `static` means two different things, 3 in C++. so during the early stages of such a proposal, there'd be a search through the solution space for a more "JavaScript-y" solution
+
+[15:59:19.0228] <ptomato>
+(& I think bakkot's point is that such a "JavaScript-y" solution already exists)
+
+[16:00:13.0891] <ptomato>
+how about, by the way:
+```js
+GameEvents.subscribe('frame', () => {
+    let {velocity} = this;
+
+    for (player of getPlayers()) {
+        const dir = player.getAngles().toVector();
+        velocity.set(0, 0, 0).addScaled(dir, 200);
+        player.setVelocity(velocity);
+    }
+}.bind({
+});
+```
+
+[16:00:57.0837] <ptomato>
+ * how about, by the way:
+
+```js
+GameEvents.subscribe('frame', () => {
+    let {state} = this;
+
+    for (player of getPlayers()) {
+        const dir = player.getAngles().toVector();
+        state.velocity.set(0, 0, 0).addScaled(dir, 200);
+        player.setVelocity(state.velocity);
+    }
+}.bind({
+  state: { velocity: new Vec3() },
+});
+```
+
+[16:02:51.0169] <Yehor Yatskevych>
+> <@bakkot:matrix.org> Hoisting variables to the outer scope is in fact a solution. I agree that there are cases where that means you will need to spend slightly more effort naming things, or otherwise have some awkwardness, but I don't think this is bad enough to warrant new syntax.
+
+I think any proposal is almost always about effort and time, that's why there are many syntax stuff proposals and why programmers love new syntax updates especially updates that improve development speed and the ability to make prototypes in minutes. JS is currently one of the best language to prototype something. The problem I want to solve is somewhat deeper than what I described here and I'll think how to describe it better.
+
+[16:03:41.0731] <bakkot>
+I don't think I would say without qualification that programmers love new syntax updates.
+
+[16:04:49.0184] <bakkot>
+If we added all the syntax people have proposed which would solve a problem they had, without considering the cost of new syntax, the language would be completely unusable. So we have to think carefully about how bad the problem is, and how costly the solution would be.
+
+[16:05:08.0542] <bakkot>
+In this case I think the problem is not all that bad, and the proposed solution is very costly (mostly because of the potential for confusion).
+
+[16:06:26.0564] <Yehor Yatskevych>
+> <@pchimento:igalia.com> how about, by the way:
+> 
+> ```js
+> GameEvents.subscribe('frame', () => {
+>     let {state} = this;
+> 
+>     for (player of getPlayers()) {
+>         const dir = player.getAngles().toVector();
+>         state.velocity.set(0, 0, 0).addScaled(dir, 200);
+>         player.setVelocity(state.velocity);
+>     }
+> }.bind({
+>   state: { velocity: new Vec3() },
+> });
+> ```
+
+hm, there is a mistake, but I get the idea! Looks as interesting solution, however only in case you have free context.
+
+[16:07:19.0462] <Yehor Yatskevych>
+ * hm, there is a mistake, but I get the idea! Looks like the interesting solution, however only in case you have "free" context.
+
+[16:07:48.0344] <ptomato>
+no doubt there is a mistake but now I'm curious what it is 😅
+
+[16:09:14.0296] <Yehor Yatskevych>
+> <@bakkot:matrix.org> If we added all the syntax people have proposed which would solve a problem they had, without considering the cost of new syntax, the language would be completely unusable. So we have to think carefully about how bad the problem is, and how costly the solution would be.
+
+sure, you are right, let me make more investigation and try to describe the problem better and also advantages of this propose.
+
+[16:11:38.0894] <Yehor Yatskevych>
+> <@bakkot:matrix.org> If we added all the syntax people have proposed which would solve a problem they had, without considering the cost of new syntax, the language would be completely unusable. So we have to think carefully about how bad the problem is, and how costly the solution would be.
+
+ * sure, you are right, let me make more investigation and try to describe the problem better and also advantages of this propose. I think functions with their own states can bring many new possibilities, not only for optimization proposals.
+
+[16:11:45.0693] <Yehor Yatskevych>
+ * sure, you are right, let me make more investigation and try to describe the problem better and also advantages of this propose. I think functions with their own states can bring many new possibilities, not only for optimizations proposals.
+
+[16:17:56.0628] <Yehor Yatskevych>
+> <@pchimento:igalia.com> no doubt there is a mistake but now I'm curious what it is 😅
+
+I mean binding context to arrow function plus operation priority
+
+[16:18:04.0330] <Yehor Yatskevych>
+> <@pchimento:igalia.com> no doubt there is a mistake but now I'm curious what it is 😅
+
+ * I mean binding context to arrow function and operation priority
+
+[16:45:05.0679] <Yehor Yatskevych>
+```javascript
+
+const ITERATIONS_NUM = Math.pow(10, 8);
+
+function testWithAllocation(i) {
+    new Vector3(i + 1.13, i + 5.231, i + 7.1247);
+}
+
+function testWithoutAllocation(i) {
+    if (!this.vec) {
+        this.vec = new Vector3(0, 0, 0);
+    }
+
+    this.vec.set(i + 1.13, i + 5.231, i + 7.1247);
+}
+
+console.time('with-allocation');
+for (let i = 0; i < ITERATIONS_NUM; ++i) {
+    testWithAllocation(i);
+}
+console.timeEnd('with-allocation');
+
+console.time('without-allocation');
+let vec = new Vector3(0, 0, 0);
+for (let i = 0; i < ITERATIONS_NUM; ++i) {
+    testWithoutAllocation(i);
+}
+console.timeEnd('without-allocation');
+```
+
+```bash
+with-allocation: 912.862ms
+without-allocation: 65.783ms
+```
+
+[16:45:23.0587] <Yehor Yatskevych>
+ * Also performance test:
+
+```javascript
+const ITERATIONS_NUM = Math.pow(10, 8);
+
+function testWithAllocation(i) {
+    new Vector3(i + 1.13, i + 5.231, i + 7.1247);
+}
+
+function testWithoutAllocation(i) {
+    if (!this.vec) {
+        this.vec = new Vector3(0, 0, 0);
+    }
+
+    this.vec.set(i + 1.13, i + 5.231, i + 7.1247);
+}
+
+console.time('with-allocation');
+for (let i = 0; i < ITERATIONS_NUM; ++i) {
+    testWithAllocation(i);
+}
+console.timeEnd('with-allocation');
+
+console.time('without-allocation');
+let vec = new Vector3(0, 0, 0);
+for (let i = 0; i < ITERATIONS_NUM; ++i) {
+    testWithoutAllocation(i);
+}
+console.timeEnd('without-allocation');
+```
+
+```bash
+with-allocation: 912.862ms
+without-allocation: 65.783ms
+```
+
+[16:48:27.0017] <Yehor Yatskevych>
+ * Also performance test:
+
+```javascript
+const ITERATIONS_NUM = Math.pow(10, 8);
+
+function testWithAllocation(i) {
+    new Vector3(i + 1.13, i + 5.231, i + 7.1247);
+}
+
+function testWithoutAllocation(i) {
+    if (!this.vec) {
+        this.vec = new Vector3(0, 0, 0);
+    }
+
+    this.vec.set(i + 1.13, i + 5.231, i + 7.1247);
+}
+
+console.time('with-allocation');
+for (let i = 0; i < ITERATIONS_NUM; ++i) {
+    testWithAllocation(i);
+}
+console.timeEnd('with-allocation');
+
+console.time('without-allocation');
+let vec = new Vector3(0, 0, 0);
+for (let i = 0; i < ITERATIONS_NUM; ++i) {
+    testWithoutAllocation(i);
+}
+console.timeEnd('without-allocation');
+```
+
+```bash
+with-allocation: 912.862ms
+without-allocation: 65.783ms
+```
+
+With static syntax to avoid unwanted allocations:
+```javascript
+function testWithoutAllocation(i) {
+    static let vec = new Vector(0, 0, 0);
+    vec.set(i + 1.13, i + 5.231, i + 7.1247);
+}
+```
+
+[16:48:58.0388] <Yehor Yatskevych>
+ * Also performance test:
+
+```javascript
+const ITERATIONS_NUM = Math.pow(10, 8);
+
+function testWithAllocation(i) {
+    new Vector3(i + 1.13, i + 5.231, i + 7.1247);
+}
+
+function testWithoutAllocation(i) {
+    if (!this.vec) {
+        this.vec = new Vector3(0, 0, 0);
+    }
+
+    this.vec.set(i + 1.13, i + 5.231, i + 7.1247);
+}
+
+console.time('with-allocation');
+for (let i = 0; i < ITERATIONS_NUM; ++i) {
+    testWithAllocation(i);
+}
+console.timeEnd('with-allocation');
+
+console.time('without-allocation');
+let vec = new Vector3(0, 0, 0);
+for (let i = 0; i < ITERATIONS_NUM; ++i) {
+    testWithoutAllocation(i);
+}
+console.timeEnd('without-allocation');
+```
+
+```bash
+with-allocation: 912.862ms
+without-allocation: 65.783ms
+```
+
+And how it looks like with static syntax to avoid unwanted allocations:
+
+```javascript
+function testWithoutAllocation(i) {
+    static let vec = new Vector(0, 0, 0);
+    vec.set(i + 1.13, i + 5.231, i + 7.1247);
+}
+```
+
+
+2023-08-22
+[18:49:49.0952] <Yehor Yatskevych>
+ * Also performance test:
+
+```javascript
+const ITERATIONS_NUM = Math.pow(10, 8);
+
+function testWithAllocation(i) {
+    new Vector3(i + 1.13, i + 5.231, i + 7.1247);
+}
+
+function testWithoutAllocation(i) {
+    if (!this.vec) {
+        this.vec = new Vector3(0, 0, 0);
+    }
+
+    this.vec.set(i + 1.13, i + 5.231, i + 7.1247);
+}
+
+console.time('with-allocation');
+for (let i = 0; i < ITERATIONS_NUM; ++i) {
+    testWithAllocation(i);
+}
+console.timeEnd('with-allocation');
+
+console.time('without-allocation');
+let vec = new Vector3(0, 0, 0);
+for (let i = 0; i < ITERATIONS_NUM; ++i) {
+    testWithoutAllocation(i);
+}
+console.timeEnd('without-allocation');
+```
+
+```bash
+with-allocation: 912.862ms
+without-allocation: 65.783ms
+```
+
+And how it looks like with static syntax to avoid unwanted allocations:
+
+```javascript
+function testWithoutAllocation(i) {
+    static let vec = new Vector(0, 0, 0);
+    vec.set(i + 1.13, i + 5.231, i + 7.1247);
+}
+```
+
+I've added answers from our discussion to the repo: https://github.com/yehoryatskevych/proposal-function-static-variables/
+
+
+2023-08-23
+[13:05:57.0718] <voidhedron>
+> function testWithoutAllocation(i) {
+    if (!this.vec) {
+
+doesn't this mean you have to call this function with `new`?? Otherwise `this` is undefined?
+
+
+2023-08-24
+[07:02:58.0159] <nicolo-ribaudo>
+Does anybody know where this `integrity` attribute might come from? https://github.com/rayjlim/miniblog/blob/790502f16738ce11e0548902ed2bc1117c8487b2/scripts/validate-setup.js#L3C1-L3C1
+
+
+[07:03:07.0724] <nicolo-ribaudo>
+ * Does anybody know where this `integrity` attribute might come from? https://github.com/rayjlim/miniblog/blob/790502f16738ce11e0548902ed2bc1117c8487b2/scripts/validate-setup.js#L3C1-L3C1
+Is that some tool that validates it?
+
+[07:13:24.0007] <nicolo-ribaudo>
+Oh found it, they copied it from a blog post
+
+[07:13:39.0963] <nicolo-ribaudo>
+ * Oh found it, they copied it from a [blog post](https://codereviewvideos.com/how-i-fixed-needs-an-import-assertion-of-type-json/)
+
+
+2023-08-26
+[15:39:12.0342] <snek>
+did async iterator helpers get split out just because of concurrency?
+
+[16:20:27.0805] <Justin Ridgewell>
+Yes
+
+
+2023-08-27
+[18:36:56.0372] <bakkot>
+"just"
+
+[18:36:57.0472] <bakkot>
+I mean
+
+[18:36:59.0881] <bakkot>
+concurrency is a lot
+
+[18:37:03.0527] <bakkot>
+I am actively working on it though
+

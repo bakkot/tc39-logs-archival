@@ -1,0 +1,464 @@
+2025-01-15
+[07:53:30.0230] <shu>
+hi folks, i have no new topics to discuss for the next structs call, but would like someone there to jog my memory (kriskowal and nicolo-ribaudo preferably) on where exactly we left off and agreed on for the module identity thing for per-realm prototypes
+
+[11:08:26.0633] <Mathieu Hofman>
+Kris is out this week. I'm a bit tied up but if necessary I can free myself up tomorrow.
+
+[11:43:09.0074] <shu>
+we can also postpone until kris is back
+
+[12:09:51.0404] <Mathieu Hofman>
+Postponing by a week would work for us
+
+[13:45:18.0187] <shu>
+if i don't hear other concerns by EOD pi'll postpone by a week
+
+[13:45:23.0001] <shu>
+* if i don't hear other concerns by EOD i'll postpone by a week
+
+[13:56:42.0545] <shu>
+ah shoot i actually have a conflict from 1000-1030 PT next week
+
+[13:56:48.0288] <shu>
+i'll postpone to 1030-1100
+
+
+2025-01-16
+[19:47:45.0874] <Mathieu Hofman>
+I let Mark know, but if you can, please update the calendar invite.
+
+
+2025-01-22
+[17:03:40.0296] <shu>
+thoughts on prohibiting computed property names in struct bodies? with structs positioned as "restricted classes that trade expressivity for performance and analyzability", prohibiting computed property names furthers the analyzability goal
+
+[17:19:00.0372] <iain>
+I would support it. If I'd had to guess without looking, I'd have assumed they were already prohibited.
+
+[18:23:12.0511] <shu>
+they are currently allowed, but not really intentionally
+
+[21:10:49.0989] <rbuckton>
+Would this then prohibit using symbol named properties like `Symbol.dispose`? If so, I am not in favor. 
+
+[22:14:32.0219] <shu>
+the principle is statically analyzable name
+
+[22:14:43.0818] <shu>
+i wonder if there's a way to recover well-known symbol names and retaining analyzability
+
+[22:17:24.0491] <ljharb>
+then you also wouldn't be able to have a string property name?
+
+[06:10:03.0124] <Ashley Claymore>
+Was going to say: Well known `Symbol` fields are non-writable&non-configurable.
+so `[Symbol.iterator]` is statically known.
+ expect Symbol itself could be replaced
+
+[07:01:29.0678] <rbuckton>
+Allowing `[Symbol.dispose]` but not `[x]` would be inconsistent and a source of confusion for users.
+
+[07:03:57.0133] <rbuckton>
+Why is this static analyzability necessary? The shape will be locked down when the definition is evaluated. I'd be fine with implementations having fast paths for statically analyzable definitions, but not with disallowing them entirely. 
+
+[07:06:01.0450] <rbuckton>
+Static analysis for `Symbol` isn't necessarily reliable anyways given polyfills for new built in symbols, the fact you can redeclare `Symbol` in your module, and that you could have `const x = Symbol.iterator`.
+
+[07:07:26.0611] <rbuckton>
+I also have cases where I've used vm.Context in NodeJS to replace `Symbol` with a mock, which would likely violate static analysis. 
+
+[07:22:48.0994] <shu>
+it's not necessary for the engine, but came as a request from tooling folks internally
+
+[07:23:55.0017] <shu>
+not sure i follow
+
+[07:28:37.0352] <rbuckton>
+I would be opposed to disallowing computed properties for the reasons stated: Disallowing entirely would break important use cases (e.g., `Symbol.dispose`, `Symbol.iterator`), and only allowing a restricted set of "statically analyzable" computed properties would be confusing, fragile, and break user expectations. 
+
+[07:29:14.0618] <shu>
+a possibility is to disallow all computed property names for own fields, but allow it for instance fields (methods, getters), and static fields
+
+[07:30:56.0892] <shu>
+since:
+
+- you get declarative instance layout with all known field names
+- all static use cases today for computed names are about symbol protocols, which are on the prototype
+- prototype shapes require analysis to get even without computed property names
+
+[08:43:37.0751] <littledan>
+can you elaborate on static analyzability goals? Are we going for soundness or "works in practice"?
+
+[08:52:17.0458] <rbuckton>
+Disallowing for own fields but allowing for methods is just another source of confusion for users.
+
+[08:53:15.0168] <rbuckton>
+> all static use cases today for computed names are about symbol protocols, which are on the prototype
+
+Not all use cases today are for symbols on the prototype. NodeJS internals are rife with symbols defined on instance objects.
+
+[08:53:42.0594] <rbuckton>
+And none of those protocols _require_ those symbols be on the prototype.
+
+[08:57:35.0751] <shu>
+and is it important to support those use cases with structs?
+
+[08:58:58.0912] <shu>
+"works in practice" for sure, but by construction than by, say, linting
+
+[08:59:12.0197] <rbuckton>
+I believe it is, yes. 
+
+[08:59:23.0705] <shu>
+can you show me an example?
+
+[09:00:50.0949] <rbuckton>
+Shortly, yes. I'm about to step into a meeting.
+
+[09:00:53.0079] <iain>
+I seem to recall that we were talking about source location as a mechanism for solving the coordination problem. Has that changed? If computed properties are allowed, then the same source location can define multiple distinct types.
+
+[09:01:16.0445] <shu>
+i've been talking about unshared structs
+
+[09:01:40.0765] <shu>
+but yeah that's a good point for the shared ones
+
+[09:03:47.0132] <rbuckton>
+If they didn't point to the same properties, they wouldn't match, much like how if you had two references to the same source location with different field layouts wouldn't match (say, due to a new version of the file being loaded in a worker)
+
+[09:04:01.0670] <shu>
+the use cases all revolve around symbols. i'd like to solve that more directly
+
+[09:05:10.0046] <shu>
+being declarative is a good goal; i think there's a world of difference between supporting Symbol.iterator, which is important, and supporting arbitrary computation for field names
+
+[09:05:58.0775] <rbuckton>
+NodeJS might want to take advantage of the fixed field layout and one shot initialization of structs. 
+
+[09:06:39.0388] <rbuckton>
+There are many across the codebase. You could imagine examples like this being converted to a `struct` and needing computed property names to declare fields: https://github.com/nodejs/node/blob/01dd7c4f6450ac5f092f98a5a85f00d0a7f489b2/lib/wasi.js#L113-L118
+
+[09:08:03.0424] <shu>
+okay i see
+
+[09:08:12.0994] <rbuckton>
+Just search https://github.com/search?q=repo%3Anodejs%2Fnode+%22Symbol%28%22+language%3AJavaScript&type=code and look at the references for any symbol defined as `const kName = Symbol(...)`
+
+[09:29:02.0741] <rbuckton>
+And there are numerous cases of user defined symbols [all over GitHub](https://github.com/search?q=%2Fconst+%5Cw%2B+%3D+Symbol%5C%28%2F+language%3AJavaScript&type=code), though its difficult to craft a search query for computed property usages themselves
+
+[09:34:38.0753] <rbuckton>
+Though searching for computed property names isn't even useful, since any `class` currently using `this[x] = v` in the constructor instead of fields that wanted to convert to `struct` would, by necessity, need to convert to computed property names to declare the fields.
+
+[09:37:51.0624] <rbuckton>
+some of those symbols are used instead of `#` private, but many others are used as a way for different objects in the same package to communicate with each other, or as a poor man's `protected`. They are also often used as user-defined protocols, such as [`util.inspect.custom`](https://nodejs.org/docs/latest/api/util.html#utilinspectcustom) in NodeJS
+
+[09:39:21.0652] <rbuckton>
+I think there are far to many use cases for user-defined symbols to exclude them. I think possibly the only corner case I'd disallow is local symbol-named properties in a shared struct, while still allowing built-ins and `Symbol.for`
+
+[09:40:20.0152] <rbuckton>
+(and `Symbol.for` could conceivably be handled by associating the field name in the struct with the symbol description passed to `Symbol.for` rather than the symbol itself)
+
+[09:41:15.0679] <rbuckton>
+* I think there are far too many use cases for user-defined symbols to exclude them. I think possibly the only corner case I'd disallow is local symbol-named properties in a shared struct, while still allowing built-ins and `Symbol.for`
+
+[09:47:23.0427] <rbuckton>
+And `inspect.custom` *is* used as an instance field in a number of cases (https://github.com/search?q=%2Fthis%5C%5B%28%5Cw%2B%5C.%29%3Finspect%5C.custom%5D+%3D%2F+language%3AJavaScript&type=code)
+
+[09:50:19.0669] <shu>
+well, not everything needs to be converted to structs
+
+[09:50:38.0834] <shu>
+i am pretty convinced of the symbol use case, especially the well-known ones
+
+[09:50:56.0838] <rbuckton>
+Yes, but some things will be and this change would be a significant barrier to that
+
+[09:51:51.0694] <rbuckton>
+I also use user-defined symbols for protocols in some of my code for things that I would like to convert to `struct` or `shared struct`, and this change would block those use cases.
+
+[09:52:06.0691] <shu>
+well hold on
+
+[09:52:24.0760] <shu>
+you're wholly against any kind of symbol carve out?
+
+[09:52:37.0428] <shu>
+it's either arbitrary computed property names or nothing?
+
+[09:52:53.0740] <rbuckton>
+I already stated that. A built-in `Symbol` carve out is fragile and unreliable. 
+
+[09:53:37.0979] <shu>
+i see the developer surprise point but i don't see why it's unreliable
+
+[09:53:58.0890] <rbuckton>
+Even NodeJS would run afoul of a built-in `Symbol` carveout due to the common practice of saving off primordials
+
+[09:56:22.0672] <rbuckton>
+https://github.com/nodejs/node/blob/01dd7c4f6450ac5f092f98a5a85f00d0a7f489b2/lib/internal/per_context/primordials.js#L300
+
+[09:56:54.0965] <shu>
+yeaaah, i see
+
+[09:57:07.0664] <rbuckton>
+So a `Symbol` carve-out would preclude a common security pattern, unless you are also doing some kind of whole-program static analysis
+
+[09:57:52.0121] <littledan>
+do you mean you want soundness?
+
+[09:58:11.0188] <littledan>
+"by construction" sounds sound
+
+[09:58:21.0856] <shu>
+i mean i don't care about soundness
+
+[09:58:50.0102] <shu>
+but it's sounding more and more like there's no good way to allow for the Symbol use case, which is important, without allowing everything
+
+[09:59:21.0578] <littledan>
+OK so one simple solution (aside from what's discussed above) is for the language to allow random computed properties, and the static analysis can reject things which are not `Symbol.*` and assume that everything which is `Symbol.*` is what you're guessing
+
+[09:59:31.0770] <shu>
+there's what decorators do with `@MemberExpression` but even there you can escape it via `@ParenthesizedExpression`
+
+[09:59:42.0176] <littledan>
+yeah but your analysis can just reject those things
+
+[09:59:47.0809] <littledan>
+even if the language accepts them
+
+[10:00:04.0771] <littledan>
+(or the analysis just gives up and accept it but refuses to analyze)
+
+[10:00:08.0592] <shu>
+oh you mean the compiler? right
+
+[10:00:44.0178] <shu>
+i'm coming around to that's the right approach -- because no more runtime guarantees are needed. this is just about making assumptions at parse time of the declaration
+
+[10:01:02.0405] <ljharb>
+oh i guess nvm, it's only symbols since you don't need brackets for strings
+
+[10:01:29.0246] <shu>
+right, both strings and indexed strings already have a bare form in the syntax
+
+[10:01:38.0675] <shu>
+indexed strings meaning the numbers
+
+[10:01:54.0149] <shu>
+of course you _could_ do ["foo"] but why
+
+[10:04:15.0469] <iain>
+To be clear: we still intend to prohibit computed properties for shared structs, right?
+
+[10:07:19.0877] <shu>
+syntactically? is there a need to? you want to do the correlation at parsing time instead of struct-definition-evaluation time?
+
+[10:07:54.0284] <shu>
+at runtime, Symbol properties are outright prohibited because they can't be shared (there can be a carveout for Symbol.for symbols but those things are kind of useless and you should use a string)
+
+[10:11:31.0588] <ljharb>
+so you can't have an iterable structure?
+
+[10:11:31.0648] <iain>
+I see very little value in non-Symbol computed properties. It seems like it makes correlation strictly more difficult than if we prohibited it.
+
+[10:11:33.0612] <ljharb>
+* so you can't have an iterable struct?
+
+[10:11:51.0394] <shu>
+i'm certainly fine with prohibiting it
+
+[10:12:22.0341] <iain>
+I'm not going to die on this hill or anything, it just seems like we just make things complicated for ourselves for no reason
+
+[10:12:49.0739] <shu>
+unfortunately no, not without a wrapper object, because Symbol.iterator isn't a shared thing currently. though i _suppose_ it's unobservable since Symbols can't be structure cloned so the identity is not observable across threads, so maybe we can retcon it to be a shared thing
+
+[10:13:05.0706] <ljharb>
+well-known symbols are cross-realm, aren't they?
+
+[10:13:19.0003] <shu>
+but that doesn't say anything about cross-agent
+
+[10:13:22.0694] <ljharb>
+ah
+
+[10:13:43.0878] <shu>
+i think we can retcon them but we'd have to decide
+
+[10:13:57.0835] <shu>
+and that does reopen the computed property name question for shared structs as well
+
+[10:14:04.0049] <shu>
+well, at least that'd mean there's a reason to allow them
+
+[10:15:07.0683] <shu>
+the retconning may be possible for well-known symbols easily enough but for user symbols and polyfills it's not clear
+
+[10:15:52.0054] <shu>
+i think it's mainly an implementation burden rather than a language one
+
+[10:16:10.0612] <shu>
+though, an implementation has to solve sharing strings, so sharing symbols shouldn't be too hard
+
+[10:17:11.0870] <shu>
+but for polyfills, how does worker A coordinate its polyfill of `Symbol.someNewProtocolSymbol` with worker B's polyfill of it, so that there's one copy that both threads know to use?
+
+[10:17:25.0912] <shu>
+we can say, that case isn't supported out of the box, sorry, you have to manually coordinate
+
+[10:17:58.0546] <shu>
+or not even polyfills, normal library coordination, i guess
+
+[10:17:59.0857] <nicolo-ribaudo>
+> <@shuyuguo:matrix.org> but for polyfills, how does worker A coordinate its polyfill of `Symbol.someNewProtocolSymbol` with worker B's polyfill of it, so that there's one copy that both threads know to use?
+
+Could polyfills use registered symbols for this, and only registered and well-known symbols would be shareable?
+
+[10:19:47.0524] <shu>
+what are registered symbols? oh Symbol.for?
+
+[10:20:12.0168] <shu>
+yes, that's a possibility, if we retcon symbols to be inherently shareable things + make Symbol.for registry process-wide
+
+[10:20:40.0180] <shu>
+and that might be interesting in giving Symbol.for a reason for its pitiful existence
+
+[10:23:08.0262] <rbuckton>
+TypeScript used to only support `Symbol.x`, but we introduced a late binding mechanism during check to resolve user-defined symbols and `Symbol.for()`, which requires whole-program analysis.
+
+[11:16:37.0940] <rbuckton>
+Polyfills for built-in symbol should use `Symbol.for()`, not `Symbol()`.
+
+[11:19:29.0224] <shu>
+oh okay
+
+[11:19:34.0804] <shu>
+didn't know that was already best practice
+
+[11:21:58.0441] <Ashley Claymore>
+part of me wonders if it would be web compat to say that all the well knows are registered symbols. So `Symbol.iterator === `Symbol.for("com.ecma.262.symbol.iterator")`
+
+[11:22:52.0555] <shu>
+dang
+
+[13:31:20.0581] <ljharb>
+oof, i doubt it would be
+
+[13:31:37.0701] <ljharb>
+i have tests in multiple packages that would fail if `Symbol.keyFor` started returning strings for well known symbols
+
+[13:34:01.0058] <nicolo-ribaudo>
+A string with a [[Is262WKS]] ("is 262 well-known symbol") that makes `== undefined` return true on it
+
+[13:37:28.0547] <shu>
+sick
+
+
+2025-01-23
+[11:31:20.0678] <kriskowal>
+I’ve captured my reasoning about shared struct constructor and prototype registration, as I understand nicolo-ribaudo’s revelation, and how we expect shared struct semantics to compose or intersect with modules and evaluators, which would give users a level to designate a cohort of shared structs for purposes of evaluating some set of modules. https://gist.github.com/kriskowal/7f56e3bd5a634f1ca828fb3e571e3c7b
+
+[11:34:34.0264] <shu>
+thank you very much
+
+[11:36:44.0937] <nicolo-ribaudo>
+Thank you Kris, I've meant to write this down too but didn't find the time. I'll review your document instead :)
+
+
+2025-01-24
+[07:17:29.0141] <Ashley Claymore>
+> <@kriskowal:aelf.land> I’ve captured my reasoning about shared struct constructor and prototype registration, as I understand nicolo-ribaudo’s revelation, and how we expect shared struct semantics to compose or intersect with modules and evaluators, which would give users a level to designate a cohort of shared structs for purposes of evaluating some set of modules. https://gist.github.com/kriskowal/7f56e3bd5a634f1ca828fb3e571e3c7b
+
+"// tangentially, because these primitives are bytewise equal
+new alfa() === new bravo();"
+
+surprised me, they are separately mutable so their bytes can diverge 
+
+[07:42:49.0670] <kriskowal>
+That’s a thing I don’t know but suspected and expect to be corrected if inaccurate.
+
+[09:47:58.0239] <Richard Gibson>
+hmm, it is probably important for compatibility that primitive (i.e., `typeof x !== "object" && x !== null`) ⇒ immutable, and even more important that strict (in)equality is time-invariant
+
+[09:51:30.0487] <shu>
+yeah i wouldn't say shared structs are primitives, but exotic
+
+[09:51:42.0110] <shu>
+their prototype behavior is very similar to the prototype behavior of primitives
+
+[09:51:48.0047] <shu>
+but that doesn't imply that they are primitives
+
+[09:58:55.0242] <Richard Gibson>
+* hmm, it is probably important for compatibility that primitive (i.e., `typeof x !== "object" || x !== null`) ⇒ immutable, and even more important that strict (in)equality is time-invariant
+
+[10:06:09.0282] <kriskowal>
+off hand, what’s the planned typeof a struct?
+
+[10:06:27.0032] <kriskowal>
+(i’ve removed the spurious claim)
+
+[10:58:13.0994] <shu>
+object
+
+[10:58:25.0785] <shu>
+shared structs are like exotic objects
+
+[10:58:51.0467] <shu>
+unshared structs, after the no-private-stamping integrity trait, can be explained as sealed objects with that additional trait (if we don't retcon sealed to also contain that trait), i think
+
+
+2025-01-28
+[07:59:20.0403] <rbuckton>
+I do wonder if it would make sense to have structs have a unique `typeof`. Since implementations have been somewhat opposed to new primitives (i.e., decimal) as they require considerable changes to the implementation, introducing a single new "user-defined primitive" type a la `struct` might be the answer. If we were to ever introduce operator overloading, we could hang it off of a user-defined "primitive" like a `struct` has some similarities to other primitives (i.e., per-realm/per-compartment prototype lookup). We could define `new Decimal()` to return an object, but later define `Decimal()` as returning a `struct`/`shared struct` instance so that it could work with shared memory (treating the object form as a boxed primitive). If we ever did introduce operator overloading to structs we could extend the `struct` version `Decimal` to support operators.
+
+[08:06:12.0642] <Richard Gibson>
+I will reiterate, it is probably important for compatibility that primitive (i.e., `typeof x !== "object" || x !== null`) ⇒ immutable. IOW, new `typeof` values are not acceptable for mutable values.
+
+[08:54:18.0344] <ljharb>
+it is a certainty, not a probability, that primitives must be immutable, but theres multiple ways to test for being primitive:
+1. has one of the primitive `typeof`s (this logic broke in ES2015 with symbols, and in ES2020 with bigints, so we can probably assume this isn't relied upon as much)
+2. doesn't have one of the object `typeof`s - ie, is truthy, and is typeof object or function. however lots of people forget `function` (like above), but indeed a new object typeof value would break anyone relying on this check.
+3. `Object(x) === x` means it's an object. this check should remain robust forever, but it's thought to be slower, so people tend to prefer the typeof lists.
+
+[09:01:44.0161] <Mathieu Hofman>
+I would extend 2 to say we probably should not let a falsy value ever be mutable, in case anyone starts their check with `!x` (with the aim of excluding `null`)
+
+[09:03:23.0138] <Mathieu Hofman>
+All that to say I agree that anything mutable should have typeof object, or we'd break a ton of code.
+
+[09:11:27.0602] <Richard Gibson>
+ack on typeof result "object" and "function" belonging in the same category; that was written in haste
+
+[09:12:20.0180] <Richard Gibson>
+* hmm, it is probably important for compatibility that primitive (i.e., `typeof x !== "object" || x === null`) ⇒ immutable, and even more important that strict (in)equality is time-invariant
+
+[09:14:13.0361] <Richard Gibson>
+* I will reiterate, it is probably important for compatibility that primitive (i.e., `x === null || typeof x !== "object" && typeof x !== "function"`) ⇒ immutable. IOW, new `typeof` values are not acceptable for mutable values.
+
+[09:38:01.0380] <ljharb>
+of course, if we could add a new predicate like `isPrimitive` or `isObject`, then i think we'd be able to push people to use it and be free to add more `typeof` values (under the same mutability/falsiness constraints ofc)
+
+[09:44:13.0109] <rbuckton>
+I'm not sure I 100% agree with this in principle. If there is ever a future that includes operator overloading, being able to implicitly coerce decimal `0.0` to a falsy value to match the rest of the language would be invaluable. 
+
+[09:51:26.0286] <ljharb>
+that is a very big "if"
+
+[09:56:27.0036] <rbuckton>
+Sure, but maybe the best thing we could do for `struct` is to block most implicit coercion to give us a way forward if we ever wanted to take it, much like how `"" + Symbol()` throws today. 
+
+[10:35:38.0322] <Richard Gibson>
+that's only disagreement with "_should not let a falsy value ever be mutable_" if you're expecting decimal instances to be mutable
+
+[10:39:51.0908] <rbuckton>
+I'm not, but expressing immutability in `struct` isn't straightforward. You essentially declare all of your data as `#` private fields and just never mutate them. It's not statically enforceable. I'd like to find a way to define a `readonly` or init-only mechanism for struct fields that works with one-shot initialization and avoids the hazards of prematurely sharing a struct instance during construction.
+
+[10:46:35.0355] <Richard Gibson>
+that seems moot unless you're proposing reflection of those restrictions in `typeof` output
+

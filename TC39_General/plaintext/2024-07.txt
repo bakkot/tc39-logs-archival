@@ -1,0 +1,1340 @@
+2024-07-01
+[10:49:38.0640] <Michael Ficarra>
+will someone tell me why `structuredClone` is in HTML and not ECMAScript?
+
+[10:49:46.0317] <Michael Ficarra>
+this kinda thing is going to keep happening https://github.com/whatwg/html/issues/10425
+
+[10:50:20.0862] <littledan>
+ask Mark Miller, he has repeated his stance recently that structured clone is somehow bad and shouldn't be moved to ECMAScript. (I don't actually know the reason.)
+
+[10:53:33.0275] <shu>
+we got consensus to move it already
+
+[10:53:43.0019] <littledan>
+when was that?
+
+[10:53:47.0252] <shu>
+it keeps getting deprioritized for me though, probably need some help to work on it
+
+[10:54:07.0599] <shu>
+mark's hang up was about making proxies more transparent which i think was fine
+
+[10:54:25.0448] <shu>
+but that was planned to be sequenced after the behavior-preserving thing of moving the existing spec into ES
+
+[10:54:27.0223] <shu>
+let me dig up notes
+
+[10:54:31.0960] <littledan>
+ah OK perfect
+
+[10:54:42.0257] <littledan>
+I'm glad I'm wrong
+
+[10:56:31.0084] <shu>
+https://github.com/tc39/notes/blob/main/meetings/2022-01/jan-24.md#conclusionresolution-4
+
+[10:56:46.0933] <shu>
+would love to actually get started on this, but yeah, probably won't have cycles in the near future either
+
+[11:03:39.0925] <littledan>
+great, I'm glad Michael Ficarra is volunteering for this work!
+
+[11:04:56.0208] <littledan>
+speaking of relayering, here's a writeup of some of my thoughts about next steps for AbortSignal/AbortController: https://gist.github.com/littledan/47b4fe9cf9196abdcd53abee940e92df
+
+[11:06:31.0248] <littledan>
+I got plenty of feedback at the last TC39 meeting that we shouldn't have a separate parallel API, so this is moving in the direction of just slightly evolving the current one, as well as ensuring that it can be used from 262, without duplicating it
+
+[11:08:26.0433] <littledan>
+(if the implicit propagation section doesn't make sense because I didn't include usage examples yet, just ignore it)
+
+[11:09:47.0505] <shu>
+> <@littledan:matrix.org> great, I'm glad Michael Ficarra is volunteering for this work!
+
+he is?
+
+[11:09:55.0963] <Michael Ficarra>
+> <@shuyuguo:matrix.org> he is?
+
+no
+
+[11:10:06.0570] <littledan>
+aww, I thought that might work
+
+[11:10:12.0307] <littledan>
+was joking
+
+[11:10:22.0750] <Michael Ficarra>
+I know your tricks @littledan:matrix.org
+
+[11:12:53.0537] <Andreu Botella>
+I wonder if just calling a host hook if the value is an object, and then check the internal fields if it returns `EMPTY`, would just work well enough
+
+[11:14:30.0099] <Andreu Botella>
+IIUC, none of the internal slots the algorithm checks can be in a platform object other than [[ErrorData]] (for `DOMException`, and that is handled before the regular error handling)
+
+[11:15:12.0948] <bakkot>
+> <@littledan:matrix.org> speaking of relayering, here's a writeup of some of my thoughts about next steps for AbortSignal/AbortController: https://gist.github.com/littledan/47b4fe9cf9196abdcd53abee940e92df
+
+> It is critical to use `addEventListener` rather than `abortSignal.onabort = abortAction` because the latter code would overwrite any other reaction registered on the same `AbortSignal`.
+
+wait, really? I assumed it was a setter
+
+[11:23:59.0500] <littledan>
+definitely is a setter, but I may have misunderstood the semantics
+
+[11:27:03.0463] <littledan>
+https://html.spec.whatwg.org/multipage/webappapis.html#event-handler-idl-attributes
+
+[11:37:18.0180] <littledan>
+the value (single thing to be overwritten) vs listener list (for addEventListener) seems to be how this is specified. The setter sets the value, so it overwrites. A quick test script confirms that behavior is implemented.
+
+[11:37:54.0241] <littledan>
+anyway who knows if anyone makes the error in practice of setting .onabort rather than using addEventListener; presumably everyone knows that the setter strategy is deprecated, right?
+
+[11:39:16.0348] <Ashley Claymore>
+https://developer.mozilla.org/en-US/play?id=xlGpIW8PMTYxDhfmP5Bok40Q7Lh2gJ2EUfb8FUD5ABh3dk1JhEs7jssU4Enq2Rlwm0b7cRvhw2YJ4uLH
+
+[11:42:06.0836] <littledan>
+> <@abotella:igalia.com> I wonder if just calling a host hook if the value is an object, and then check the internal fields if it returns `EMPTY`, would just work well enough
+
+for what?
+
+[11:42:44.0750] <Andreu Botella>
+> <@littledan:matrix.org> for what?
+
+in terms of separating the web platform parts of the structured clone algorithm from the JS parts
+
+[11:43:33.0930] <Andreu Botella>
+looking at it some more, that could work, but it would need host hook requirements
+
+[11:43:56.0945] <Andreu Botella>
+things like, make sure to add an entry to `memory` before calling back into the 262 AO
+
+[11:44:29.0218] <littledan>
+yes, there definitely need to be host hooks for structured clone. Generally, I don't think test262 needs to have its hooks correspond to the spec hook structure, though, right?
+
+[11:46:19.0067] <Andreu Botella>
+right, I was kind of thinking out loud of a way to do that that would only require one host hook, since the current algorithm has a couple places where it goes from dealing with JS stuff to web platform stuff and back again
+
+
+2024-07-03
+[21:31:07.0465] <snek>
+could WeakRef have something like an `is(obj) -> bool` api? i feel like that's safe since `obj` has to be held strongly and any other mismatch is false.
+
+[21:31:15.0209] <snek>
+ * could WeakRef have something like an `is(obj) -> bool` method? i feel like that's safe since `obj` has to be held strongly and any other mismatch is false.
+
+[21:53:58.0403] <bakkot>
+would that be different from `.deref() == obj`?
+
+[21:54:22.0387] <bakkot>
+if not it doesn't seem necessary, unless I'm missing something
+
+[21:54:35.0718] <bakkot>
+ * would that be different from `.deref() === obj`?
+
+[00:07:45.0211] <Ashley Claymore>
+Would it still `AddToKeptObjects`?
+
+[00:45:46.0426] <Ashley Claymore>
+I presume the idea is that it could skip that? But then I think that means this is possible:
+
+```
+ref.is(obj); // true
+obj = null;
+ref.deref(); // undefined, we observed sync GC
+```
+
+[09:48:45.0826] <nicolo-ribaudo>
+Does the explicit resource management proposal have any tests? I see that there is a feature flag for it in test262, but I cannot find anywhere where it's used
+
+[09:51:32.0761] <nicolo-ribaudo>
+I'm trying to validate the Babel implementation
+
+[09:52:30.0975] <littledan>
+huh, I thought rbuckton said last meeting that he had some tests
+
+[09:52:35.0301] <littledan>
+but I can't find a PR for them
+
+[09:53:47.0486] <rbuckton>
+https://github.com/tc39/test262/pull/3866
+
+[09:54:31.0214] <rbuckton>
+Though I need to update the tests with some of the recent needs consensus changes. 
+
+
+2024-07-04
+[18:07:40.0320] <snek>
+> <@aclaymore:matrix.org> I presume the idea is that it could skip that? But then I think that means this is possible:
+> 
+> ```
+> ref.is(obj); // true
+> obj = null;
+> ref.deref(); // undefined, we observed sync GC
+> ```
+
+it could add `obj` to kept objects i guess. 
+
+[18:07:55.0479] <snek>
+the goal is to avoid adding the other thing it holds
+
+[18:08:11.0434] <snek>
+ * the goal is to avoid adding whatever it contains if its not `obj`
+
+[19:48:03.0198] <Ashley Claymore>
+That makes sense. Only add to kept objects if it returns true should solve the observable GC issue.
+
+[23:11:06.0626] <Mathieu Hofman>
+I'm curious about the use case tho. When does one need to test if a weakref contains a certain object. In my experience  if I have a weakref, it's because I don't hold the target. 
+
+[23:13:22.0537] <Mathieu Hofman>
+It sounds like one is trying to iterate a set or map of weakref, which is most likely the wrong thing to do in the first place, and sounds like weakmap and weakset should have been used
+
+[15:04:18.0907] <snek>
+i was just exploring some ways to implement async context stuff. i think you're right that it's probably not needed. you could give each variable a unique id and compare the ids instead of comparing the contents of the weakrefs
+
+
+2024-07-05
+[20:19:31.0064] <Jack Works>
+> <@softwarechris:matrix.org> the longer answer is that in order to get some flavor of `sleep()`, you would have to add various other things in the language first in order to support it
+
+well, we already have timers in the spec, in the Atomics.
+
+[20:20:40.0816] <Jack Works>
+> <@sirisian:matrix.org> Maybe I'm blanking since I forget proposals. Has anyone suggested an operator like f??.() that is equivalent to `typeof f === 'function' ? f() : f` ?
+
+rather than this, I have a lot of code doing things like `expr ? f(expr) : undefined`
+
+[20:27:00.0445] <Jack Works>
+> <@littledan:matrix.org> Are there particular design mistakes we might make with scheduler?
+
+since `.wait` is not available for now, I don't think `await scheduler.postTask(() => {}, { delay: time })` is better in any sense than `await new Promise(r => setTimeout(r, time))` in this use case. The old classic one is even shorter.
+
+```js
+await scheduler.postTask(() => {}, { delay: time })
+await new Promise(r => setTimeout(r, time))
+await scheduler.wait(time) // but it is not here yet!
+```
+
+[20:32:45.0813] <Jack Works>
+> <@shaylew:matrix.org> I wonder how far just pattern matching gets you in that domain. (might be asking a lot from the type inference)
+
+a lot, but we may not get all the features mentioned below (since the committee think it contains too much things)
+
+```js
+match (userData) {
+    when { type: 'a', field: Number and > 0 and < 100 }: ...
+    default: ...
+}
+```
+
+[20:42:16.0426] <Jack Works>
+> <@dalechyn:matrix.org> Hi folks! Great seeing TC39 being an open and collaborative space!
+> I joined here to express the problems and possible solutions over JSON serialization when it comes to `BigInt` type.
+> 
+> I originally come from Web3 where we are dealing with `uint256` – 32byte unsigned integer values and folks from Web3 space used to align on third party libraries to support numbers that big (https://github.com/GoogleChromeLabs/jsbi) until the official support for `BigInt`s came live in 2020!
+> There have been many editions of ECMA-262 published since 1999, and to my belief it needs an upgrade to handle `BigInt` types.
+> 
+> I will be honest I did not spend that much time to research the efforts of handling such but I've seen many discussions evolving around somehow "smartly" detecting wether a number value should be parsed as a `BigInt` or `Number`. I don't believe that those are correct nor backwards compatible.
+> 
+> What if JSON as a whole could retrieve an upgrade to support BigInt literals ending with "n", as it does now in JS?
+> 
+> ```json
+> {
+>   "value": 1337n
+> }
+> ```
+> 
+> I'd like to hear your thoughts wether you think if this possible and if so, what kind of backwards incompatibility issues this might have!
+> Regarding the latter I don't think this will introduce any issues as this addition doesn't change the serialization behavior of fields of other types – but instead introduces a new one.
+> I understand that making an addition like this is gonna introduce chain of changes of parsing JSON in different programming languages, but I believe this needs a review.
+> 
+> 
+
+JSON numbers don't have a limit on numbers, you can already represent bigint numbers. you just need a special serializer.
+
+```js
+JSON.stringify({ x: 999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999n }, (key, val) => typeof val === 'bigint' ? JSON.rawJSON(val) : val)
+```
+
+[20:58:15.0777] <Jack Works>
+* JSON numbers don't have a limit on numbers, you can already represent bigint numbers. you just need a special serializer.
+
+```js
+JSON.stringify({ x: 999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999n
+ }, (key, val) => typeof val === 'bigint' ? JSON.rawJSON(val) : val)
+```
+
+[03:38:58.0757] <Danielle Church>
+> <@jackworks:matrix.org> JSON numbers don't have a limit on numbers, you can already represent bigint numbers. you just need a special serializer.
+> 
+> ```js
+> JSON.stringify({ x: 999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999n
+>  }, (key, val) => typeof val === 'bigint' ? JSON.rawJSON(val) : val)
+> ```
+
+you could establish a convention like serializing bigints with an `e-0` suffix, which is highly unlikely to occur in nature; most serializers probably wouldn't include a zero exponent at all, or else they'd use `e+0`. Not to mention, typical numeric formatters using the exponent output in scientific notation, which includes a decimal point and thus is syntactically distinguishable from `JSON.stringify(15n) === "15e-0"`.
+
+[04:32:43.0085] <annevk>
+Speaking of JSON, https://www.mlsec.org/docs/2024b-asiaccs.pdf might be of interest
+
+[07:47:46.0139] <Michael Ficarra>
+why are we getting so much spam on github lately?!
+
+
+2024-07-07
+[06:31:01.0857] <nullvoxpopuli>
+If anyone is curious, the Signals proposal community call will be here on Tuesday at 11a ET: https://us02web.zoom.us/j/84763180621?pwd=bjVBT1B4dzdhdk80V3lQZG41eEVCZz09
+Timezone converter: https://www.worldtimebuddy.com/?qm=1&lid=5128581,5368361,2643743,2950159,2147714,1850147&h=5128581&date=2024-7-9&sln=11-12&hf=1
+
+
+2024-07-08
+[17:27:21.0219] <snek>
+is it reasonable for implementations to throw an error for `Array.prototype.sort.call({length: Infinity})`? currently jsc and quickjs get stuck in an infinite loop, spidermonkey and xs raise an error, and v8 and engine262 hard crash. i assume the two that get stuck in an infinite loop will eventually throw or crash either way.
+
+[17:28:34.0836] <bakkot>
+we currently underspecify resource limits in general; in practice most resource limits eventually hit a RangeError or something similar
+
+[17:28:57.0035] <bakkot>
+or a panic, in some cases
+
+[17:29:07.0811] <bakkot>
+so, yes, it's reasonable although not strictly allowed by the specification
+
+[22:02:46.0165] <Michael Ficarra>
+it would be nice if we stopped pretending implementations have infinite resources some day
+
+[22:57:50.0804] <Meghan Denny>
+i think its less about pretending limits dont exist and more about letting those limits be implementation defined
+
+[22:58:55.0733] <Meghan Denny>
+or host/environment defined
+
+[23:25:03.0003] <Meghan Denny>
+saying more about what happens when those limits are reached could still be useful tho, if thats what u mean
+
+[23:25:07.0553] <Meghan Denny>
+read it back again
+
+[01:41:45.0887] <littledan>
+I think we do currently let them be implementation-defined, and the main questions are:
+- Do we want to define always throwing an exception, or always crashing, when they are reached? (I vote crash if it is web compatible)
+- Do we want to define some of the limits? Wasm does, and it seems to work well for them. https://webassembly.github.io/spec/js-api/index.html#limits
+
+[07:00:47.0983] <Richard Gibson>
+related: https://github.com/tc39/ecma262/issues/2623
+
+[07:23:08.0444] <snek>
+> <@littledan:matrix.org> I think we do currently let them be implementation-defined, and the main questions are:
+> - Do we want to define always throwing an exception, or always crashing, when they are reached? (I vote crash if it is web compatible)
+> - Do we want to define some of the limits? Wasm does, and it seems to work well for them. https://webassembly.github.io/spec/js-api/index.html#limits
+
+crashing is web compatible? lol
+
+[07:23:34.0254] <snek>
+* crashing can be web compatible? lol
+
+[07:24:18.0382] <annevk>
+Should have made `new ArrayBuffer(too-large)` crash rather than throw.
+
+[07:25:15.0419] <snek>
+are we using crash with a different meaning than I'm used to
+
+[07:26:16.0377] <Meghan Denny>
+i take crash to mean in a way that stops all js execution but not the whole page; like html would still be interactable
+
+[07:27:02.0077] <snek>
+intentional and controlled vm halt sounds ok
+
+[07:27:45.0604] <snek>
+I'm referring to like v8 just std::abort()ing somewhere in the heap allocator, which is not great
+
+[07:30:33.0999] <annevk>
+That's not how people are thinking about it as far as I know. The complete website would crash. It's all rather intermingled so it's not even clear to me you could split it that way.
+
+[07:33:00.0512] <Bradford Smith>
+The links to the notes docs for the last meeting on https://github.com/tc39/Reflector/issues/527 all point to empty documents. What happened here? I need to check the notes for the 3rd day, because I didn't attend that one.
+
+[07:42:38.0891] <Michael Ficarra>
+@bradfordcsmith:matrix.org The version history shows someone cleared them out on July 4th. We should probably revert back to the previous version. Ping the chairs about it on the Reflector thread.
+
+[07:46:05.0054] <Bradford Smith>
+> <@michaelficarra:matrix.org> @bradfordcsmith:matrix.org The version history shows someone cleared them out on July 4th. We should probably revert back to the previous version. Ping the chairs about it on the Reflector thread.
+
+done
+
+[08:05:13.0264] <littledan>
+no it has to kernel panic or it doesn't count
+
+[08:05:54.0160] <littledan>
+it invokes the HCF instruction
+
+[08:05:59.0532] <Andreu Botella>
+bah, that's nothing, it has to actively fry the hardware
+
+[10:03:29.0815] <Ashley Claymore>
+the google doc being cleared is usually a sign that the text has been moved to another doc, usually just before the notes PR
+
+[10:03:45.0749] <Ashley Claymore>
+to avoid people making edits that will get ignored as it's too late to edit
+
+[10:53:29.0489] <Richard Gibson>
+ * related: https://github.com/tc39/ecma262/issues/2623 
+
+[10:53:36.0869] <Richard Gibson>
+ * related: https://github.com/tc39/ecma262/issues/2623
+
+[10:53:42.0408] <Richard Gibson>
+ * related: https://github.com/tc39/ecma262/issues/2623 
+
+[10:53:48.0473] <Richard Gibson>
+ * related: https://github.com/tc39/ecma262/issues/2623
+
+[12:56:54.0351] <Bradford Smith>
+> <@aclaymore:matrix.org> the google doc being cleared is usually a sign that the text has been moved to another doc, usually just before the notes PR
+
+So, I guess it's just my bad luck that I need to read the notes in the time between the docs being wiped and the final notes being posted. Drat.
+
+[12:59:33.0039] <Bradford Smith>
+It's not a big deal, really. I'm scheduled to give a summary of the meeting to a group at work in a couple of hours. I'll just tell them about the parts I did attend.
+
+[13:00:03.0632] <Bradford Smith>
+At this point I don't have time to spend reading the notes even if they suddenly became available.
+
+[13:24:54.0016] <Ashley Claymore>
+Yeah. Unfortunate timing!
+
+[13:43:02.0423] <Michael Ficarra>
+it's not a perfect process, unfortunately 🫤
+
+[13:59:45.0003] <Chris de Almeida>
+> <@bradfordcsmith:matrix.org> So, I guess it's just my bad luck that I need to read the notes in the time between the docs being wiped and the final notes being posted. Drat.
+
+you should always be able to get to the notes in one form or another, at any time.  let me know if you are still having trouble
+
+
+2024-07-09
+[00:50:47.0603] <littledan>
+Yay, notes posted at https://github.com/tc39/notes/pull/330
+
+[00:50:55.0562] <littledan>
+Thanks Aki 
+
+
+2024-07-16
+[12:49:34.0340] <nicolo-ribaudo>
+https://tc39.es/ecma262/multipage/additional-ecmascript-features-for-web-browsers.html#sec-web-compat-host-make-job-callback
+
+Should we remove the restriction that only web browsers can pass custom data in HostMakeJobCallback? Both Node.js and Demo already violate that restriction anyway, by implementing AsyncLocalStorage
+
+[13:01:01.0245] <nicolo-ribaudo>
+* https://tc39.es/ecma262/multipage/additional-ecmascript-features-for-web-browsers.html#sec-web-compat-host-make-job-callback
+Should we remove the restriction that only web browsers can pass custom data in HostMakeJobCallback? Both Node.js and Deno already violate that restriction anyway, by implementing AsyncLocalStorage
+
+
+[13:12:25.0939] <Michael Ficarra>
+> <@nicolo-ribaudo:matrix.org> https://tc39.es/ecma262/multipage/additional-ecmascript-features-for-web-browsers.html#sec-web-compat-host-make-job-callback
+> Should we remove the restriction that only web browsers can pass custom data in HostMakeJobCallback? Both Node.js and Deno already violate that restriction anyway, by implementing AsyncLocalStorage
+> 
+
+do you have any information on why it was originally scoped to only web browsers?
+
+[13:20:07.0989] <Meghan Denny>
+i dont think it means only web browsers can implement it, moreso that you can not implement it and still be conforming and that web browsers are the most common use case that would need/implement those features
+
+[13:23:25.0239] <Meghan Denny>
+i see 9.5.2 says 'must'
+
+[13:23:35.0823] <Meghan Denny>
+ * oh, i see 9.5.2 says 'must'
+
+[14:22:34.0928] <ljharb>
+we often have allowed browsers to do something "icky" out of necessity but intended to require non-browsers to do the better thing
+
+[14:38:55.0638] <Andreu Botella>
+it seems like one half of what those host hooks do is keeping track of which is the "incumbent realm", which according to littledan could be refactored to be built on top of AsyncContext
+
+[14:39:32.0306] <Andreu Botella>
+the other half of what they do seems to be making it so the dynamic import in `Promise.resolve('import(`./example.mjs`)').then(eval);` resolves relative to the script active when the promise job is enqueued
+
+[14:39:45.0448] <Andreu Botella>
+and I wonder what Node.js does there, and whether we want to keep this behavior or not
+
+[14:40:33.0475] <Andreu Botella>
+ * the other half of what they do seems to be making it so the dynamic import in ``Promise.resolve('import(`./example.mjs`)').then(eval);`` resolves relative to the script active when the promise job is enqueued
+
+[14:41:15.0492] <Andreu Botella>
+ * and I wonder what Node.js does there, and whether we would want to keep this behavior or not if there were no web compat concerns
+
+[14:45:22.0061] <shu>
+> <@michaelficarra:matrix.org> do you have any information on why it was originally scoped to only web browsers?
+
+because at the time, it was understood that the expressivity this hook enabled was 1) tantamount to dynamic scope, which Mark & co objected to philosophically, and 2) it described the reality of the incumbent settings object on the web
+
+so the reconcile the two, the decision was to reflect reality by speccing it, but limit it to the only implementation that needed it
+
+[14:45:46.0468] <shu>
+since then, i suppose those objectors have gotten over the philosophical objection that it was tantamount to unacceptabel dynamic scope, given the enthusiasm about AsyncContext
+
+
+2024-07-17
+[20:16:37.0286] <ljharb>
+that aspect may not have been made clear to those objectors tho; asynccontext is a tough proposal to grok imo
+
+[21:00:56.0000] <kriskowal>
+> <@shuyuguo:matrix.org> since then, i suppose those objectors have gotten over the philosophical objection that it was tantamount to unacceptabel dynamic scope, given the enthusiasm about AsyncContext
+
+Mark did a rather rigorous analysis of AsyncContext last year to settle those objections preemptively. I was taking a walk with my neighbor Malte Ubl who mentioned Vercel had hired Justin and that he was excited to push AsyncContext. My first thought was that our friendship might not endure that tension, but I arranged for Mark and Justin to talk thru how the design addresses OCap concerns over four or so meetings and we’re good now. 
+
+[21:02:00.0989] <kriskowal>
+Enthusiastic even, since we need such a thing for causal tracing. 
+
+[21:11:44.0491] <kriskowal>
+> <@abotella:igalia.com> the other half of what they do seems to be making it so the dynamic import in ``Promise.resolve('import(`./example.mjs`)').then(eval);`` resolves relative to the script active when the promise job is enqueued
+
+I believe the dynamic import *should* be resolved in the context of the script associated with the environment record internal slot on the globalThis.eval in the lexical scope. Else, bug.
+
+[21:12:05.0019] <kriskowal>
+Also https://github.com/tc39/ecma262/issues/3160
+
+[23:00:21.0966] <Mathieu Hofman>
+> <@shuyuguo:matrix.org> since then, i suppose those objectors have gotten over the philosophical objection that it was tantamount to unacceptabel dynamic scope, given the enthusiasm about AsyncContext
+
+I'd like to clarify that exposing AsyncContext as a feature is not the same as allowing a host or the 262 spec itself to use the AsyncContext mechanism to create a variable and make the state of that variable observable in any way. That is still completely unacceptable from an Ocap and dynamic scoping pov.
+
+[23:03:28.0517] <Mathieu Hofman>
+That is the same kind of concern I raised with the Signals proposal as currently designed.
+
+[02:39:56.0976] <Andreu Botella>
+> <@mhofman:matrix.org> I'd like to clarify that exposing AsyncContext as a feature is not the same as allowing a host or the 262 spec itself to use the AsyncContext mechanism to create a variable and make the state of that variable observable in any way. That is still completely unacceptable from an Ocap and dynamic scoping pov.
+
+I don't fully understand the whole incumbent realms thing, but from what I've looked at, it doesn't seem like that would be any different from having a userland library and scheduler that uses AsyncContext variables under the hood to know whether to expose something or other
+
+[04:28:28.0089] <littledan>
+> <@kriskowal:aelf.land> I believe the dynamic import *should* be resolved in the context of the script associated with the environment record internal slot on the globalThis.eval in the lexical scope. Else, bug.
+
+Seems like we are all in agreement, great to have an idea about how this relates to evaluators, which I hadn’t thought through
+
+[04:29:14.0757] <littledan>
+> <@mhofman:matrix.org> That is the same kind of concern I raised with the Signals proposal as currently designed.
+
+Oh I thought the signals concern was about certain leaks that were fixable, not the general mechanism 
+
+[04:29:21.0811] <littledan>
+> <@mhofman:matrix.org> I'd like to clarify that exposing AsyncContext as a feature is not the same as allowing a host or the 262 spec itself to use the AsyncContext mechanism to create a variable and make the state of that variable observable in any way. That is still completely unacceptable from an Ocap and dynamic scoping pov.
+
+Can you say why?
+
+[04:31:11.0213] <littledan>
+And if this is terrible for JS to do, is it terrible for the web to do?
+
+[06:46:25.0008] <Mathieu Hofman>
+> <@abotella:igalia.com> I don't fully understand the whole incumbent realms thing, but from what I've looked at, it doesn't seem like that would be any different from having a userland library and scheduler that uses AsyncContext variables under the hood to know whether to expose something or other
+
+And that is the problem. A library or user code can use AsyncContext all it wants. The spec could use an AsyncContext variable as long as it doesn't make it observable, which is roughly the same as saying it cannot. It's the same as saying user code can freely create global mutable variables, but the spec only can if it doesn't make them observable.
+
+[06:50:44.0862] <Mathieu Hofman>
+> <@littledan:matrix.org> Can you say why?
+
+Because observable global mutable state is bad? More specifically it enables 2 parties that have not been explicitly introduced to communicate using ambient powers.
+
+[06:53:21.0128] <littledan>
+So, are you upset about scheduler.yield(), which does this?
+
+[06:53:25.0228] <Mathieu Hofman>
+> <@littledan:matrix.org> Oh I thought the signals concern was about certain leaks that were fixable, not the general mechanism 
+
+My concern with Signals are about leaks of global mutable state. Whether they're fixable or not, I still don't know, but you and the champions did seem optimistic. Maybe there was a misunderstanding in the nature of the leak?
+
+[06:54:21.0013] <littledan>
+> <@mhofman:matrix.org> My concern with Signals are about leaks of global mutable state. Whether they're fixable or not, I still don't know, but you and the champions did seem optimistic. Maybe there was a misunderstanding in the nature of the leak?
+
+Yeah in particular I am wondering if there are any leaks without the subtle APIs, so without currentComputed or introspection 
+
+[06:58:57.0540] <Mathieu Hofman>
+> <@littledan:matrix.org> So, are you upset about scheduler.yield(), which does this?
+
+I wasn't aware of this API but in general the web has a lot of APIs that are not Ocap friendly and ambiently expose I/O or mutable state. That's the prerogative of the host, as long as it doesn't affect 262 behavior. One problem with the above is that it affects module resolution. 
+
+[07:08:53.0756] <Andreu Botella>
+As far as I can tell, incumbent realms are observable, but they shouldn't allow communication between any two parties
+
+[07:11:04.0089] <Andreu Botella>
+there is only some difference to observe if the two parties run in different realms, and it seems like when an ECMAScript function (that is, not a built-in) is called, that is the incumbent realm for that function and any built-in or host function it might call
+
+[07:11:13.0953] <Andreu Botella>
+ * there is only some difference to observe if the two parties run in different realms, and it seems like when an ECMAScript function (that is, not a built-in) is called, its realm is the incumbent realm for that function and any built-in or host function it might call
+
+[07:12:13.0196] <Andreu Botella>
+but I'm no expert on this
+
+[07:15:31.0796] <Andreu Botella>
+oh wait, maybe if some script in realm A causes a script execution in realm B, realm A might be observable
+
+[07:22:56.0838] <Mathieu Hofman>
+> <@littledan:matrix.org> So, are you upset about scheduler.yield(), which does this?
+
+Looking at this API a little more, this seems fine? Is there any global mutable state that's ambiently observable through this?
+
+[07:25:05.0387] <Andreu Botella>
+> <@mhofman:matrix.org> Looking at this API a little more, this seems fine? Is there any global mutable state that's ambiently observable through this?
+
+if you don't pass the `priority` or `signal` options in the option bag, they'll be preserved across the await
+
+[07:25:25.0060] <Andreu Botella>
+> <@mhofman:matrix.org> Looking at this API a little more, this seems fine? Is there any global mutable state that's ambiently observable through this?
+
+ * if you don't pass the `priority` or `signal` options in the option bag, they'll be preserved from the previous call to `scheduler.yield` in the same task, even through awaits
+
+[07:26:24.0594] <Mathieu Hofman>
+So it carries some internal state, but it still doesn't make it observable, right?
+
+[07:27:08.0891] <Andreu Botella>
+I think the "current" value of those properties are not exposed, but you can use `signal` to abort a yield and not continue the task
+
+[07:28:10.0459] <Andreu Botella>
+I guess that wouldn't count as communication between parties though
+
+[07:29:44.0342] <Andreu Botella>
+actually, the promise would reject if the signal is aborted, so I guess that *is* communication
+
+[07:57:48.0759] <Mathieu Hofman>
+Yeah I just saw that. That is indeed a way for the caller to ambiently communicate with the logic it spawned. I'm a little surprised they didn't go with an explicit context since retrofitting this ambient state to existing APIs like fetch seems inappropriate.
+
+[08:00:41.0419] <Mathieu Hofman>
+Aka as a developer I could be surprised by either the abort signal of my task not being respected by fetch called within my task's execution, or by an existing fetch all the sudden aborting not realizing it became part of a posted task.
+
+[08:00:58.0453] <Mathieu Hofman>
+* Aka as a developer I could be surprised by either the abort signal of my task not being respected by fetch called within my task's execution, or by an existing fetch all the sudden aborting not realizing it became part of a posted continued task.
+
+[08:24:44.0815] <Andreu Botella>
+I haven't looked enough at the details, but I think aborting the signal would only implicitly abort any "inherited" `scheduler.yield()` calls – implicit signal propagation is not in scope for that proposal\
+
+[08:24:51.0184] <Andreu Botella>
+ * I haven't looked enough at the details, but I think aborting the signal would only implicitly abort any "inherited" `scheduler.yield()` calls – implicit signal propagation is not in scope for that proposal
+
+[08:25:13.0638] <Andreu Botella>
+ * I haven't looked enough at the details, but I think aborting the signal would only implicitly abort any "inherited" `scheduler.yield()` calls – implicit signal propagation for e.g. fetch is not in scope for that proposal
+
+[09:19:40.0181] <littledan>
+It is limited in scope but still observable. But this is "deniable" by blocking APIs which do this sharing (just like all the other DOM APIs that deal with the document)
+
+[10:21:24.0825] <bakkot>
+> <@abotella:igalia.com> if you don't pass the `priority` or `signal` options in the option bag, they'll be preserved from the previous call to `scheduler.yield` in the same task, even through awaits
+
+sidebar, this behavior is very strange and I hate it for reasons having nothing to do with communications channels
+
+[10:21:29.0418] <bakkot>
+it just makes programs harder to reason about
+
+[10:21:31.0246] <bakkot>
+much harder
+
+[10:21:51.0018] <shu>
+love2global
+
+[10:23:28.0189] <bakkot>
+I don't know how it is that we have managed to get so many people doing API design who do not instinctively recoil from adding new global state
+
+[10:24:37.0434] <Michael Ficarra>
+the developer funnel will always be largest at the top
+
+[10:25:37.0123] <shu>
+why can't a developer love global state earnestly
+
+[10:28:00.0392] <bakkot>
+random developers can do whatever they want, it's only the platform designers whose bad opinions the rest of us have to live with
+
+[10:28:03.0275] <bakkot>
+speaking as a platform designer
+
+[10:28:08.0333] <ljharb>
+we used to, but then someone mutated it and now we don't
+
+[10:28:18.0323] <ljharb>
+ * we used to love it, but then someone mutated it and now we don't
+
+[10:28:32.0206] <Michael Ficarra>
+TIL that ClassHeritage has access to the inner immutable class name binding but not private names
+
+[10:28:35.0846] <Michael Ficarra>
+that is *so weird*
+
+[10:29:05.0661] <global_lover>
+yeah i'm a class hater now
+
+[10:29:54.0349] <bakkot>
+class name is outer to the `{` and so is ClassHeritage whil private names are inner to the `{`
+
+[10:30:01.0328] <bakkot>
+ * class name is outer to the `{` and so is ClassHeritage while private names are inner to the `{`
+
+[10:30:09.0078] <Michael Ficarra>
+@bakkot:matrix.org *inner* class name binding
+
+[10:30:13.0801] <Michael Ficarra>
+the immutable one
+
+[10:30:33.0067] <bakkot>
+I mean that the name occurs syntactically outside of the `{`
+
+[10:30:38.0169] <bakkot>
+so it makes sense that the binding lives outside of it also
+
+[10:30:39.0104] <Michael Ficarra>
+remember that classes create 2 bindings: an outer mutable one and an inner immutable one
+
+[10:30:43.0834] <bakkot>
+yes I know
+
+[10:30:50.0462] <bakkot>
+that does not contradiction what I just aid
+
+[10:31:13.0569] <bakkot>
+syntactically both bindings are created by a single identifier, and that identifier is outside of the `{`
+
+[10:31:25.0467] <bakkot>
+ * that does not contradict what I just aid
+
+[10:31:37.0712] <littledan>
+> <@bakkot:matrix.org> I don't know how it is that we have managed to get so many people doing API design who do not instinctively recoil from adding new global state
+
+The whole point of AsyncContext is that it's not global, but rather scoped in the appropriate way. And that's what scheduler.yield does. We just know, empirically, that if you ask everyone to put in the right priority, they will just forget a lot of the time. Just like if we asked them to explicitly pass around the Otel spanid/traceid.
+
+[10:31:48.0045] <Michael Ficarra>
+I think the inner one should only be available inside the `{`
+
+[10:33:20.0610] <bakkot>
+> <@littledan:matrix.org> The whole point of AsyncContext is that it's not global, but rather scoped in the appropriate way. And that's what scheduler.yield does. We just know, empirically, that if you ask everyone to put in the right priority, they will just forget a lot of the time. Just like if we asked them to explicitly pass around the Otel spanid/traceid.
+
+IIUC, with AsyncContext you have to have a reference to the context in order to see or affect the state. it's not going to be affected by calling into random libraries. whereas with `scheduler.yield`, if I am doing some random stuff, and then I do `library.doWork()`, and the library does `scheduler.yield({ its own config })`, now _my_ future calls to `scheduler.yield` don't work how I expected. that's crazy.
+
+[10:33:37.0822] <bakkot>
+if I gave the library the context object then it is perfectly reasonable for it to see/affect it
+
+[10:33:41.0624] <bakkot>
+but for it to be global, that's very strange
+
+[10:35:45.0581] <Jack Works>
+> <@michaelficarra:matrix.org> remember that classes create 2 bindings: an outer mutable one and an inner immutable one
+
+oh no I know this first time
+
+[10:35:47.0650] <bakkot>
+if you wanted to avoid the problem where people forget to pass the right priority for `scheduler`, the obvious fix is to require you to construct a `scheduler` object and pass it around, instead of there being a global one
+
+[10:36:09.0868] <bakkot>
+and to avoid the problem of requiring other libraries to thread it around, that's what AsyncContext is for
+
+[10:37:32.0685] <global_lover>
+look, even the functional people reconstructed implicit globals with monads to mimic their power
+
+[10:38:34.0487] <bakkot>
+ * if you wanted to avoid the problem where people forget to pass the right priority for `scheduler`, the obvious fix is to require you to construct a `scheduler` object (and explicitly specify the priority) and pass it around, instead of there being a global one
+
+[10:38:53.0547] <Andreu Botella>
+> <@bakkot:matrix.org> IIUC, with AsyncContext you have to have a reference to the context in order to see or affect the state. it's not going to be affected by calling into random libraries. whereas with `scheduler.yield`, if I am doing some random stuff, and then I do `library.doWork()`, and the library does `scheduler.yield({ its own config })`, now _my_ future calls to `scheduler.yield` don't work how I expected. that's crazy.
+
+I don't think it works like that
+
+[10:39:49.0538] <Andreu Botella>
+but maybe my understanding is wrong, because based on my understanding I don't understand how scheduler.yield would be implemented based on CPED
+
+[10:40:31.0029] <Andreu Botella>
+ * but maybe my understanding is wrong, because while I was trying to explain how it worked, I realized that according to my understanding scheduler.yield shouldn't be implementable based on CPED
+
+[10:40:36.0415] <Andreu Botella>
+but of course it is implemented that way
+
+[10:40:50.0633] <littledan>
+For context: https://github.com/WICG/scheduling-apis/blob/main/explainers/yield-and-continuation.md
+
+[10:49:16.0353] <bakkot>
+that lists as an open question:
+
+> Does `yield({priority})` set the priority to be inherited in future calls, or is the original signal used?
+
+if I understand what this is saying correctly, using the original priority would be fine by me - it's only the "calling a library function can change the priority used by the rest of my code" part I'm objecting to here
+
+[10:49:48.0586] <Mathieu Hofman>
+> The whole point of AsyncContext is that it's not global, but rather scoped in the appropriate way. And that's what scheduler.yield does
+Is it? AsyncContext allows you to propagate some data related to a reference you own. The web instead creates an internal reference, and exposes way to access information related to that reference to anyone. scheduler.yield is effectively equivalent to a `myInternalAsyncContextVar.get()` 
+
+[10:49:59.0858] <Mathieu Hofman>
+ * > The whole point of AsyncContext is that it's not global, but rather scoped in the appropriate way. And that's what scheduler.yield does
+
+Is it? AsyncContext allows you to propagate some data related to a reference you own. The web instead creates an internal reference, and exposes way to access information related to that reference to anyone. scheduler.yield is effectively equivalent to a `myInternalAsyncContextVar.get()`
+
+[10:51:39.0331] <Mathieu Hofman>
+> <@bakkot:matrix.org> IIUC, with AsyncContext you have to have a reference to the context in order to see or affect the state. it's not going to be affected by calling into random libraries. whereas with `scheduler.yield`, if I am doing some random stuff, and then I do `library.doWork()`, and the library does `scheduler.yield({ its own config })`, now _my_ future calls to `scheduler.yield` don't work how I expected. that's crazy.
+
+That is the outcome of having the equivalent of a single global asynccontext variable
+
+[10:53:30.0140] <Andreu Botella>
+> <@bakkot:matrix.org> that lists as an open question:
+> 
+> > Does `yield({priority})` set the priority to be inherited in future calls, or is the original signal used?
+> 
+> if I understand what this is saying correctly, using the original priority would be fine by me - it's only the "calling a library function can change the priority used by the rest of my code" part I'm objecting to here
+
+I think it would only set the priority to be inherited in promise reactions that flow from the returned promise
+
+[10:53:48.0004] <Andreu Botella>
+so in an async function, only for the remainder of the function
+
+[10:54:08.0075] <Andreu Botella>
+it wouldn't affect an outer function
+
+[10:54:10.0079] <Andreu Botella>
+I don't think
+
+[10:54:49.0726] <Andreu Botella>
+ * it wouldn't affect an outer async function
+
+[10:54:56.0909] <littledan>
+seems like yield does the equivalent of enterWith, which AsyncContext currently omits
+
+[10:55:06.0302] <littledan>
+ * seems like scheduler.yield does the equivalent of enterWith, which AsyncContext currently omits
+
+[10:56:03.0500] <bakkot>
+> <@abotella:igalia.com> it wouldn't affect an outer async function
+
+ah, that would be fine too then, though I'm not sure how that follows from "only reactions that flow from the returned promise" - the remainder of an outer async function would still ultimately flow from that reaction
+
+[10:56:31.0492] <bakkot>
+it's weird though - we don't normally treat function boundaries as special at all, except for like `using`
+
+[10:56:38.0425] <bakkot>
+ * it's weird in other ways though - we don't normally treat function boundaries as special at all, except for like `using`
+
+[11:01:22.0357] <Andreu Botella>
+it's not the function boundary that is special, it's the promise jobs that are
+
+[11:01:50.0263] <snek>
+is it treating function boundaries as special or treating promises as special, and async functions use promises
+
+[11:01:55.0263] <snek>
+oh lol
+
+[11:02:13.0018] <Andreu Botella>
+when you return from an async function, its reaction will run in a different promise job
+
+[11:02:56.0574] <Andreu Botella>
+the `.then()` was called before it, and since AsyncContext preserves the context when `.then()` was called, the context inside the async function can't flow back to its caller
+
+[11:04:07.0003] <bakkot>
+ah, makes sense
+
+[11:11:38.0225] <littledan>
+so the only boundary here is AsyncContext.Variable.prototype.run(callback) -- that's when something changes. Everything else is just propagating the map (as AsyncContext.Snapshot.prototype.run does)
+
+[11:11:52.0874] <littledan>
+both work by callbacks, not treating function boundaries or Promises special
+
+[11:12:08.0421] <littledan>
+Promises are just one of the cases where the snapshot is propagated (as a constant, not a subtask or something)
+
+[11:12:29.0503] <littledan>
+there's no way to mutate any variable in place, only to "fork" with variable.run
+
+[11:12:44.0185] <littledan>
+this all was pretty core to the SES analysis that AsyncContext was kosher
+
+[11:13:18.0732] <littledan>
+some people are coming into the AsyncContext group and proposing other semantics which would permit more like this yield pattern. I've generally been pushing back on it.
+
+[11:13:25.0946] <snek>
+as mentioned in the other channel you can still put a mutable thing into an async variable
+
+[11:23:34.0292] <Andreu Botella>
+btw, Dan and I only realized that `scheduler.yield` used basically enterWith or "flow-through" semantics during this conversation
+
+[11:24:02.0895] <Andreu Botella>
+so if it doesn't make too much sense that we brought up that API in this context, that's why
+
+[11:24:21.0568] <Andreu Botella>
+ * btw, Dan and I only realized that `scheduler.yield` used basically enterWith or these alternative semantics during this conversation
+
+
+2024-07-18
+[18:42:19.0115] <littledan>
+* some people are coming into the AsyncContext group and proposing other semantics which would permit more like this scheduler.yield pattern. I've generally been pushing back on it.
+
+[03:38:46.0920] <Andreu Botella>
+Hey, turns out scheduler.yield does not actually behave in the way we explained yesterday – I had a bad misunderstanding based on looking at that API only in a narrow context related to the AsyncContext web integration, and not looking at how it's actually used
+
+[03:40:15.0644] <Andreu Botella>
+there is no `enterWith`, and the API semantics are expressible with AsyncContext – but there's still a "shared global state" that can be observed
+
+[03:42:14.0747] <littledan>
+* some people are coming into the AsyncContext group and proposing other semantics which would permit more like this scheduler.yield pattern (EDIT: I had misunderstood scheduler.yield semantics, Andreu clarifies below). I've generally been pushing back on it.
+
+[03:46:44.0915] <Andreu Botella>
+```js
+const controller = new AbortController();
+scheduler.postTask(async () => {
+	// this "inherits" the signal set by postTask, and if it
+	// gets aborted before the task is scheduled, the promise rejects
+	await scheduler.yield(); 
+}, {signal: controller.signal})
+```
+
+[03:49:40.0133] <Andreu Botella>
+ * ```js
+const controller = new AbortController();
+scheduler.postTask(async () => {
+  try {
+    // this "inherits" the signal set by postTask, and if it
+    // gets aborted before the task is scheduled, the promise rejects
+	await scheduler.yield();
+  } catch(err) {
+    console.log("Signal was aborted!");
+  }
+}, {signal: controller.signal})
+```
+
+[03:49:50.0449] <Andreu Botella>
+ * ```js
+const controller = new AbortController();
+scheduler.postTask(async () => {
+  try {
+    // this "inherits" the signal set by postTask, and if it
+    // gets aborted before the task is scheduled, the promise rejects
+    await scheduler.yield();
+  } catch(err) {
+    console.log("Signal was aborted!");
+  }
+}, {signal: controller.signal})
+```
+
+[04:05:51.0589] <nicolo-ribaudo>
+So this is equivalent to doing the following with `AsyncContext`?
+
+```js
+globalThis.scheduler = new class Scheduler {
+  #signals = new AsyncContext.Variable();
+
+  postTask(fn, { signal }) {
+    this.#signals.run(signal, fn);
+  }
+
+  async yield() {
+    const signal = this.#signals.get();
+    while (waitedForEnough()) {
+      await yieldToTheEventLopo();
+      if (signal.aborted) throw new Error("Abort");
+    }
+  }
+};
+```
+
+[04:06:13.0558] <nicolo-ribaudo>
+i.e. the problem is not related to `AsyncContext` itself, but to the `globalThis.scheduler =` assignment
+
+[04:06:43.0437] <nicolo-ribaudo>
+ * So this is equivalent to doing the following with `AsyncContext`?
+
+```js
+globalThis.scheduler = new class Scheduler {
+  #signals = new AsyncContext.Variable();
+
+  postTask(fn, { signal }) {
+    this.#signals.run(signal, fn);
+  }
+
+  async yield() {
+    const signal = this.#signals.get();
+    while (shouldWaitABitMore()) {
+      await yieldToTheEventLopo();
+      if (signal.aborted) throw new Error("Abort");
+    }
+  }
+};
+```
+
+[04:11:50.0907] <Andreu Botella>
+that's right
+
+[10:54:51.0485] <snek>
+this seems like a pretty reasonable usage of async context, why is the word "problem" used/
+
+[10:54:52.0735] <snek>
+ * this seems like a pretty reasonable usage of async context, why is the word "problem" used?
+
+[11:03:11.0348] <Ashley Claymore>
+Two different bits of code that only share a reference to ‘globalThis.scheduler` can communicate information to each other. (Even after scheduler itself is frozen)
+
+[11:05:34.0268] <littledan>
+> <@devsnek:matrix.org> this seems like a pretty reasonable usage of async context, why is the word "problem" used?
+
+Because Mathieu Hofman previously said that this kind of thing might form a communication channel, so we were trying to figure out whether this was a problem (he seemed to be saying it was, but I'm having trouble understanding how/why)
+
+[11:06:12.0025] <snek>
+oh its an ses problem ok
+
+[11:07:27.0646] <Ashley Claymore>
+The ses recordings of the analysis of async context are really interesting 
+
+[11:10:42.0648] <snek>
+i wish all the human effort that went into ses went into a good realms api instead
+
+[13:43:42.0681] <Stephen Belanger>
+> <@littledan:matrix.org> Because Mathieu Hofman previously said that this kind of thing might form a communication channel, so we were trying to figure out whether this was a problem (he seemed to be saying it was, but I'm having trouble understanding how/why)
+
+Forming a communication channel is kind of _the point_ of async context management. It's a transport of values between two otherwise disconnected points. However, it's mediated through a storage variable and so should not be considered "insecure" as access to the store itself functions as the "key" to access that data.
+
+[13:46:01.0473] <Stephen Belanger>
+Context management is a mechanism of flowing data alongside execution without explicit passing but rather through a store mediator to essentially handle that flowing _itself_. Access is still explicit, just rather than passing something in as a function parameter you're passing it into a store to serve as a channel to the later point at which the value would be acquired.
+
+[13:46:18.0179] <Stephen Belanger>
+ * Context management is a mechanism of flowing data alongside execution without explicit argument passing but rather through a store mediator to essentially handle that flowing _itself_. Access is still explicit, just rather than passing something in as a function parameter you're passing it into a store to serve as a channel to the later point at which the value would be acquired.
+
+[13:46:29.0765] <Stephen Belanger>
+ * Context management is a mechanism of flowing data alongside execution without explicit argument passing but rather through a store mediator to essentially handle that flowing _itself_. Access is still explicit, just rather than passing something in as a function argument you're passing it into a store to serve as a channel to the later point at which the value would be acquired.
+
+[14:02:56.0414] <Mathieu Hofman>
+> <@devsnek:matrix.org> oh its an ses problem ok
+
+It's an everybody problem. Shared global mutable state is hard to reason about. It's spooky action at a distance. An app can do it, but libraries and runtimes shouldn't
+
+[14:04:00.0987] <Mathieu Hofman>
+> <@devsnek:matrix.org> oh its an ses problem ok
+
+ * It's an everybody problem. Observable global mutable state is hard to reason about. It's spooky action at a distance. An app can do it, but libraries and runtimes shouldn't
+
+[14:04:35.0395] <Mathieu Hofman>
+Are we really debating whether observable global mutable state is a good idea or not in a language?
+
+[14:08:35.0635] <Andreu Botella>
+it's observable only within a limited scope, and (presumably, although this will have to be discussed) overridable so nothing can be observed
+
+[14:09:17.0398] <Andreu Botella>
+ * it's observable only within a limited scope, and (presumably, although this will have to be discussed for every such API) overridable so nothing can be observed within an inner scope
+
+[14:09:38.0423] <Andreu Botella>
+ * it's observable only within a limited scope, and (presumably, although this will have to be discussed for every such API) overridable with `AsyncContext.Snapshot` so nothing can be observed within an inner scope
+
+[14:12:52.0810] <Stephen Belanger>
+Async context isn't global though, it's store-bound. It just happens to need global facilities to manage the propagation, but the same could be said of connecting lexical scopes. 🤷
+
+[14:13:01.0223] <Stephen Belanger>
+ * Async context _isn't_ global though, it's store-bound. It just happens to need global facilities to manage the propagation, but the same could be said of connecting lexical scopes. 🤷
+
+[14:13:20.0575] <bakkot>
+`scheduler` is global
+
+[14:14:38.0096] <Stephen Belanger>
+Ah, I don't have the full context on the scheduler part of the conversation, but async context on its own is certainly _not_ global. Definitely agreed global state is not great.
+
+[14:15:41.0026] <Stephen Belanger>
+I just joined this channel after some folks mentioned AsyncContext discussions were happening here too, so I'm a bit behind on the conversation. 😅
+
+[14:18:07.0378] <Stephen Belanger>
+I'm the maintainer of AsyncLocalStorage in Node.js, btw. 👋
+
+[14:19:37.0788] <Andreu Botella>
+> <@mhofman:matrix.org> Are we really debating whether observable global mutable state is a good idea or not in a language?
+
+Whether or not it's a good idea, there are use cases (in the web platform) that apparently can't be solved without some kind of observable global mutation. If you're arguing that HTML shouldn't use global mutable state, you're arguing that the web platform should stop existing because the DOM is globally mutable, and that can't change because it's part of web reality
+
+[14:26:41.0267] <ljharb>
+that's not the same thing. arguing that HTML "should have" been designed differently is not an argument that it should stop existing.
+
+[14:27:00.0220] <ljharb>
+in practice it's a huge mess that the DOM is globally mutable.
+
+[14:27:15.0789] <ljharb>
+that doesn't mean a better alternative currently exists, nor that the DOM should be summarily scrapped
+
+[14:29:05.0176] <Ashley Claymore>
+> <@stephenbelanger:matrix.org> Ah, I don't have the full context on the scheduler part of the conversation, but async context on its own is certainly _not_ global. Definitely agreed global state is not great.
+
+There is a 4 part series of ses analyzing AsyncContext on YouTube. The final conclusion is that it's OK 😀
+
+[14:29:29.0733] <Ashley Claymore>
+Also 👋🏻 welcome!
+
+[14:29:54.0783] <Stephen Belanger>
+Okay in the state it is _today_...which has some problems for tracing purposes. 😅
+
+[14:30:32.0565] <Stephen Belanger>
+But that's a whole can of worms I've already opened in the AsyncContext channel.
+
+[14:34:23.0936] <Stephen Belanger>
+Would you happen to have the link to those videos though? I've seen what I presume is the corresponding github repo where some analysis happened, but could use more context on exactly _what_ their analysis was of the model. Context management has basically been my entire job for half a decade now, so I have a whole lot of...context...in my head about the problem. 😅
+
+[14:35:29.0069] <Stephen Belanger>
+Ah, is this the first? https://www.youtube.com/watch?v=vECr5IDJzpg
+
+[14:36:33.0921] <Mathieu Hofman>
+The Web has indeed a few design flaws. What seems unfortunate is that it seems acceptable to justify the addition of similar flaws just because of these historical ones. JS on its own however does not have any problems of observable internal mutable state today. "internal" is specifically there to address the fact that the global properties and other language intrinsics are not frozen. 
+
+[14:41:26.0665] <Andreu Botella>
+The W3C has a concept called priority of constituencies, used for designing APIs and determining how to solve problems, and it puts the needs of users (of the web) at the top, followed by the needs of authors (i.e. web developers)... with ideological purity being at the bottom. And I see the principle of avoiding observable global mutable state as an ideological purity concern, way below the use cases authors might have.
+
+[14:41:36.0860] <Andreu Botella>
+That said, I can see how global mutable state can affect authors. But then we'd have to see how a particular API that adds global mutable state might make things harder for authors, and whether it might outweigh the needs for the API itself. That is a discussion I don't have enough context for, but it has to be discussed in those terms, not in terms of ideological purity.
+
+[14:43:55.0946] <Andreu Botella>
+ * That said, I can see how global mutable state can affect authors. But then we'd have to see how a particular API that adds global mutable state might make things harder for authors, and whether it might outweigh the needs for the API itself. For `scheduler.yield`, that is a discussion I don't have enough context for, but IMO it'd have to be discussed in those terms, not in terms of ideological purity.
+
+[14:45:26.0794] <bakkot>
+> And I see the principle of avoiding observable global mutable state as an ideological purity concern, way below the use cases authors might have.
+
+I think this attitude from web platform people is part of the reason that so much of the web is such a painful experience. it's not an ideological purity concern. it's a _reasoning about code_ concern: the point is that it makes it easier to _avoid bugs_, which is directly to the benefit of users.
+
+[14:47:50.0579] <bakkot>
+now, in any particular case it may or may not be warranted, depending on the details. but when discussing API design, dismissing "code should be easy to reason about" as being at the bottom of the hierarchy of constituencies does real and direct harm to users. people should stop that.
+
+[14:48:16.0729] <bakkot>
+ * now, in any particular case it may or may not be warranted, depending on the details. but when discussing API design, dismissing "code should be easy to reason about" as being at the bottom of the priority of constituencies does real and direct harm to users. people should stop that.
+
+[14:52:03.0799] <Andreu Botella>
+Anyway, I'm not trying to defend how `scheduler.yield` works, I'm just trying to see how/if the behavior it has (at least in Chrome behind a flag) could be specable and implementable based on AsyncContext, because if it's not, V8's odds of okaying AsyncContext might drop significantly
+
+[16:11:50.0189] <snek>
+maybe i misunderstood the concern. how would access to the ambient runtime scheduler *not* be a global
+
+[16:13:20.0069] <snek>
+oh that was meant to be a reply... Mathieu Hofman 
+
+[16:28:40.0348] <Mathieu Hofman>
+this is a loaded question. Pushing a task on a scheduling queue does not allow independent tasks to observe each other. After all we allow that at a lower level through `Promise.prototype.then`. So there is global mutable state (the scheduling queue), but it's not observable. The problem is with making some of that state observable. An obvious case would be letting user code ask the question "is there anything remaining on the global queue?". But there are more subtle cases: letting the spawner of the task ambiently communicate with the running task is effectively global mutable state being observed too. One way to make that explicit would be to require a shared reference between the spawner and the task, for example an instance of `Scheduler`, or simply letting the code plumb the abort signal on its own through an `AsyncContext` variable it creates. The latter would actually let it retrieve the signal and propagate it to other API calls such as `fetch`.
+
+[16:33:25.0032] <snek>
+hmm. all web code is kind of within a shared goal though i think... like there's a webpage with a viewport, and the browser wants to render it effectively, and all the code for the webpage presumably also wants the page to be rendered effectively. if you require all code to explicitly pass this info around, its less effective. and if you imagine every bit of code 100% proactively updated to support an explicit scheduler argument, isn't that just equiv to a global?
+
+[16:35:14.0502] <snek>
+well, if you're trying to defend against malevolent code, i can understand how its not equiv to a global. but the discussion above didn't seem like it was about that
+
+[16:35:42.0512] <snek>
+ * well, if you're trying to defend against malevolent code, i can understand how its not equiv to a global. but the discussion above didn't seem like it was about that, but rather avoiding bugs.
+
+
+2024-07-26
+[09:42:57.0075] <sirisian>
+When do you think import attributes for type: "text" will be supported?
+
+[14:31:06.0628] <ptomato>
+I'm not aware of any existing proposal for a `type: 'text'` import attribute, only `type: 'json'`
+
+[15:36:01.0571] <sirisian>
+yeah I noticed that. I can see references to it in discussions, but no follow-up. Not sure if it's contentious as json was added quickly. Perhaps the encoding complicated it.
+
+
+2024-07-28
+[19:42:49.0497] <kriskowal>
+> <@pchimento:igalia.com> I'm not aware of any existing proposal for a `type: 'text'` import attribute, only `type: 'json'`
+
+https://github.com/whatwg/html/issues/9444
+
+[20:29:38.0955] <Danielle Church>
+> <@pchimento:igalia.com> I'm not aware of any existing proposal for a `type: 'text'` import attribute, only `type: 'json'`
+
+no accepted proposal, at least 😉 I feel the need to mention that "regularization of alternative import strategies" was part of the core of the Parser Augmentation proposal I advanced, and that includes providing a mechanism for e.g. WHATWG or W3C to define named import types for use in a specific environment without having to enshrine them in 262
+
+[01:06:13.0145] <Ashley Claymore>
+https://es.discourse.group/t/text-modules/1031
+
+
+2024-07-29
+[16:17:59.0640] <sffc>
+We have a Google Summer of Code contributor working with ICU4X this summer who was potentially interested in observing TC39. They are a student at Purdue University and not an employee of Google. What would be the logistics for this?
+
+[16:40:11.0576] <Michael Ficarra>
+@littledan:matrix.org would probably know
+
+[16:40:17.0681] <Michael Ficarra>
+don't we have an observer status?
+
+
+2024-07-30
+[22:57:10.0041] <Rob Palmer>
+It's very simple. Note the observer on the plenary invite, then point them to the signin form, and advise them not to speak.
+
+[05:43:59.0310] <littledan>
+> <@robpalme:matrix.org> It's very simple. Note the observer on the plenary invite, then point them to the signin form, and advise them not to speak.
+
+Do you recommend doing this through a GitHub comment on the Reflector thread?
+
+[05:44:39.0958] <littledan>
+but in this case, Purdue is a member! maybe they can just become a delegate via Purdue
+
+[14:12:23.0862] <whosy>
+shu: I think it means the ordering of the word parts, Update+Insert=UpSert, when they're focusing more on the Insert rather than Update?
+
+[14:12:57.0896] <shu>
+how is the "focus more on insert than update" conclusion reached? they're both one syllable
+
+[14:13:58.0239] <whosy>
+I have no idea, I'm just reading off the document. "as there was a desire to focus on insertion. "
+
+I guess they wanted the name to reflect that, but somehow went with something entirely unrelated based on a precedent set by another language.
+
+It all seems a mess to me.
+
+[14:14:58.0757] <ljharb>
+i think it was a sense of "up is first in 'upsert', so update is more important"?
+
+[14:15:28.0578] <snek>
+updert
+
+[14:15:56.0669] <Ashley Claymore>
+> <@ljharb:matrix.org> i think it was a sense of "up is first in 'upsert', so update is more important"?
+
+sertup
+
+[14:16:16.0146] <ljharb>
+indate
+
+[14:16:31.0556] <snek>
+i feel like "upsert focuses too much on update" is some form of bait
+
+[14:23:00.0262] <whosy>
+I don't disagree with the result though. Emplace does have precedent, and it's an obscure enough word that it's unlikely to overlap with anything else.
+
+[14:24:48.0065] <littledan>
+(I don't really like either name)
+
+[14:24:58.0334] <bakkot>
+`compute`! a much better name
+
+[14:35:34.0769] <TabAtkins>
+smh that we're not going with `indate`
+
+[14:37:05.0142] <snek>
+how about `map.‽`
+
+[14:37:07.0747] <ljharb>
+insup
+
+[14:37:19.0957] <Chris de Almeida>
+oo Tab's here.  TabAtkins what's up with `|>` 
+
+[14:37:20.0834] <TabAtkins>
+wait this isn't tdz
+
+[14:37:22.0412] <ljharb>
+i would love a property named the snark
+
+[14:37:38.0358] <ljharb>
+ * i would love a property named with the snark
+
+[14:37:48.0925] <TabAtkins>
+> <@softwarechris:matrix.org> oo Tab's here.  TabAtkins what's up with `|>`
+
+need to meet with Shu about it again, but still planning on it
+
+[14:38:02.0701] <Chris de Almeida>
+peetk: 👀
+
+[14:38:31.0330] <TabAtkins>
+has it become more relevant suddenly, or is this just general interest?
+
+[14:38:54.0318] <Chris de Almeida>
+came up a few minutes ago at plenary
+
+[14:39:00.0439] <Chris de Almeida>
+reviewing stagnant stage 2 proposals
+
+[14:39:09.0737] <Chris de Almeida>
+`stagnant` used loosely
+
+[14:39:23.0766] <TabAtkins>
+ah kk
+
+[14:39:30.0809] <TabAtkins>
+nah that's a relevant term for it atm
+
+[14:40:03.0194] <whosy>
+Due to a distro upgrade (and I think an Element package downgrade for some reason), I've somehow lost all my chat history with you, TabAtkins .
+
+[14:40:13.0632] <TabAtkins>
+whoops!
+
+[14:40:13.0743] <whosy>
+ * Due to a distro upgrade (and I think an Element package downgrade for some reason), I've somehow lost all my chat history with you, TabAtkins .
+How's your proposal?
+
+[14:40:23.0099] <TabAtkins>
+the random one?
+
+[14:40:36.0524] <whosy>
+Ah, do you have multiple? (I'll have to check that out!)
+
+[14:40:44.0636] <whosy>
+ * Ah, do you have multiple? (I'll have to check that out!)
+But yeah, the seeded PRNG.
+
+[14:41:03.0681] <TabAtkins>
+nothing has changed since we last chatted, due to other things taking my time!
+
+[14:41:11.0795] <TabAtkins>
+(to a large extent, vacations)
+
+[14:41:50.0153] <Michael Ficarra>
+@tabatkins:matrix.org I think maybe @bakkot:matrix.org was interested in taking it off your hands? You two should chat.
+
+[14:41:52.0563] <whosy>
+That's a nice problem to have. I still look forward to seeing how it might progress.
+
+[14:42:10.0534] <TabAtkins>
+I am more than happy to get someone else in who has time for it, yes
+
+[14:42:28.0629] <TabAtkins>
+would like to still keep my hand in, but absolutely no problem with @bakkot coming in as co-champ
+
+[14:44:49.0077] <Michael Ficarra>
+it probably won't be until after he gets async iterator helpers over the line, so maybe another couple months
+
+[14:45:23.0692] <TabAtkins>
+Np
+
+[14:46:16.0069] <whosy>
+I'm still quite passionate on language Random-ness as a whole. 
+
+
+2024-07-31
+[12:30:56.0993] <bakkot>
+new JS engine https://porffor.dev/
+
+[12:34:02.0029] <akaster>
+Built by canadahonk , who also runs https://test262.fyi 😄
+
+[12:37:26.0345] <canadahonk>
+yep!
+
+[12:39:21.0672] <snek>
+how come you don't use binaryen
+
+[12:40:30.0439] <canadahonk>
+> <@devsnek:matrix.org> how come you don't use binaryen
+
+mostly just because doing stuff from scratch is fun
+
+[12:43:47.0202] <canadahonk>
+also because I wanted it to be in ~pure JS, and don't particularly need it
+
+[13:02:29.0613] <Michael Ficarra>
+@devsnek:matrix.org have you used binaryen?
+
+[13:02:39.0816] <snek>
+yes, i am a big fan
+
+[13:03:14.0291] <Michael Ficarra>
+interesting
+
+[13:03:16.0199] <snek>
+i should publish my rust bindings for it some time
+
+[13:04:07.0317] <snek>
+i think it makes a fantastic wasm backend for basically any project. great api and great codegen
+
+[13:06:50.0597] <snek>
+interesting sidenote, shu's shared structs would be good for the js bindings, since it supports generating functions in parallel
+

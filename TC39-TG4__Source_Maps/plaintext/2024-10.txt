@@ -1,0 +1,588 @@
+2024-10-01
+[14:30:11.0223] <Devin Rousso>
+i can work on getting the tests merged into WebKit
+
+[14:30:25.0530] <Devin Rousso>
+are there any features WebKit is missing that i should also implement?
+
+[14:32:51.0727] <Nic>
+A scopes implementation would be great eventually, for when we'll need the "two implementations" requirement!
+
+[14:33:08.0306] <Nic>
+Or — check which tests in the test suite are failing 😉
+
+
+2024-10-02
+[00:50:02.0695] <Simon Zünd>
+Do we have a table somewhere to track which proposals are at which stage? I can't find anything in the repo. The proposal docs themselves also don't contain which stage they are at.
+
+[01:30:13.0936] <jkup>
+We don’t. This is something we haven’t been great about. I need to do some work on my slides today, I can add a table to our readme and maybe label the specific proposal docs as well 
+
+[02:55:02.0967] <Simon Zünd>
+Just stumbled over a major issue with the scopes proposal: https://github.com/tc39/source-map/issues/133. We need to address this sooner rather than later.
+
+[16:04:05.0332] <jkup>
+> <@jkup:matrix.org> We don’t. This is something we haven’t been great about. I need to do some work on my slides today, I can add a table to our readme and maybe label the specific proposal docs as well
+
+added: https://github.com/tc39/source-map/pull/134
+
+
+2024-10-04
+[03:03:42.0241] <jkup>
+Hi folks! Sorry been traveling a lot and figured it might be best to ask all of my questions in one place! How are we feeling for plenary?
+
+- I have the slides linked above. Might add a bit more context to them 
+- Have we made a decision on https://github.com/tc39/source-map/pull/122 - are we still trying to get it in?
+- Have we cut the branch well point to as the 2024 spec?
+- Are we still working on generating the official pdf of the spec?
+
+
+2024-10-06
+[08:26:40.0928] <Nic>
+> Are we still working on generating the official pdf of the spec?
+
+Aki is going to do it, it will be ready in a few months
+
+> Have we cut the branch well point to as the 2024 spec?
+
+Not yet, but there are no changes on `main` that would not be in 2024. We can point to `main` for now
+
+[08:26:58.0756] <Nic>
+jkup: I made some changes to slide 6, please take a look!
+
+[08:27:52.0366] <jkup>
+Will do thank you! Maybe wait for Simon to weigh in on the "emit names" PR before cutting the branch?
+
+[08:28:01.0232] <jkup>
+I'm gonna add some more stuff in the morning Tokyo time too!
+
+
+2024-10-07
+[01:39:46.0371] <Simon Zünd>
+For the "names" PR: I updated it with the changes that we discussed in the last "Scopes" meeting and now I'm waiting for reviews.
+
+[01:44:53.0166] <jkup>
+Perfect, ty!
+
+[03:36:19.0454] <jkup>
+https://x.com/naugtur/status/1843235330406945272
+
+[03:36:39.0715] <jkup>
+Is this about sourceMappingUrl not being allowed in multiline comments?
+
+[03:37:04.0125] <jkup>
+Curious which tool produces them 
+
+[03:45:04.0383] <Simon Zünd>
+Just to be clear, multi line comments are `/* #sourceMappingUrl= */`? The spec never mentions these so they are implicitly disallowed anyway? I'm not opposed to calling it out explicitly though.
+
+[03:51:25.0394] <jkup>
+That was my guess. We don't mention either way right now, for some reason I thought Nic had some thoughts about what we can and can't say about the comment. I know we discussed last line of file which we decided *not* to specify, instead specifying the last occurence via https://github.com/tc39/source-map/blob/main/source-map.bs#L796
+
+[04:19:36.0384] <Nic>
+Multiline comments are indeed supported: https://tc39.es/source-map/#extraction-javascript
+
+[04:19:53.0739] <Nic>
+But removing them seems very risky, we would need first to make sure no tool actually generates them
+
+[04:20:16.0162] <jkup>
+I was thinking about replying to the post asking if they know which tool was generating them? I haven't seen the before
+
+[04:20:36.0504] <Nic>
+From that tweet:
+
+> nested sourcemap multiline comments
+
+If it's nested in a bundle, it's not a source map comment so the tool was _correctly_ removing it
+
+[04:21:42.0136] <Nic>
+i.e. in
+```js
+let modules = {
+  0: () => {
+    console.log("hi from mod a");
+    // #sourceMappingURL=./a.js.map
+  },
+  1: () => {
+    console.log("hi from mod b");
+    /* #sourceMappingURL=./b.js.map */
+  }
+}
+```
+
+there are no source map comments
+
+[04:22:47.0950] <jkup>
+You are saying that bundlers should remove sourceMappingUrl comments from individual files as it bundles them together?
+
+[04:24:37.0866] <Nic>
+They don't need to remove them, because "adding some code after the comment" already has the effect of making it not a source map comment
+
+[04:24:49.0435] <Nic>
+Bundlers removing them is equivalent to removing `/* hello! */`
+
+[04:24:52.0465] <Nic>
+It's not wrong
+
+[04:24:59.0857] <Nic>
+It's just useless, other than to save code size
+
+[04:25:59.0630] <Nic>
+Do you want me to reply to that tweet?
+
+[04:26:26.0299] <jkup>
+Sorry yeah if you don't mind. I'm not following but also distracted in this community event.
+
+[04:38:41.0111] <Simon Zünd>
+V8 does not support magic comments in multi line comments.
+
+[04:39:17.0673] <Simon Zünd>
+https://source.chromium.org/chromium/chromium/src/+/main:v8/src/parsing/scanner-inl.h;l=459-478;drc=e80189412946ddb08c948ff7a40c48273c69b23d
+
+[04:40:39.0998] <Nic>
+Oh well, that's good to know and probably means that nobody relies on it :)
+
+[04:42:20.0549] <Nic>
+I now remember that initially my PR only had `//`, and then _for some reason_ I updated the algorithm to include `/*`. I'd need to check in the meeting notes if we captured why
+
+[04:44:47.0387] <jkup>
+yeah i also cannot remember 
+
+[04:46:23.0003] <Nic>
+It seems like Firefox supports both: https://searchfox.org/mozilla-central/source/js/src/frontend/TokenStream.cpp#1961-1962
+
+[04:46:42.0749] <Simon Zünd>
+Just wanted to post the same link
+
+[04:46:56.0293] <Nic>
+But the comment says that the multiline form is `/* //# sourceMappingURL=... */` and not /*# sourceMappingURL=... */ 🤔
+
+[04:47:11.0068] <Nic>
+ * But the comment says that the multiline form is `/* //# sourceMappingURL=... */` and not `/*# sourceMappingURL=... */` 🤔
+
+[04:47:46.0973] <Simon Zünd>
+You'd probably have to check the test cases or trace the scanner code to figure out exactly what it supports
+
+[04:48:34.0405] <Simon Zünd>
+One more signal, I don't know of any bugs filed against DevTools where someone required support for `/* #sourceMappingURL=...*/`
+
+[04:48:50.0151] <Simon Zünd>
+ * One more signal, I don't know of any bugs filed against Chrome DevTools where someone required support for `/* #sourceMappingURL=...*/`
+
+[04:52:25.0184] <Nic>
+Firefox's scanner: https://searchfox.org/mozilla-central/source/js/src/frontend/TokenStream.cpp#3172
+
+It seems like it parses `/*# sourceMappingURL=... */`
+
+[04:54:08.0808] <Nic>
+For many tools it's easier to support multine comments, because it means that you need just a single regexp for both CSS and JS
+
+[04:57:26.0179] <Nic>
+Babel supports both btw
+
+[04:57:38.0231] <Nic>
+ * Babel supports both btw, when looking for a pre-existing source map
+
+[04:59:40.0304] <Nic>
+It seems like DuckDuckGo's build system uses multi-line comments, at least for `sourceURL`: https://github.com/duckduckgo/content-scope-scripts/blob/8da65a0fdf4fc9e61f38961a453975c238e32b53/scripts/utils/build.js#L102
+
+[05:01:47.0692] <Nic>
+Another one here: https://github.com/cobolab/jsfix/blob/bff0e763625a7901521036e9a17a58003f738010/build.js#L49
+
+[05:01:47.0795] <Simon Zünd>
+Their production site doesn't include the comments so I can't double check what DevTools is doing
+
+[05:02:02.0640] <Nic>
+But it's difficult to find examples, because there is a lot of noise from CSS
+
+[05:24:55.0227] <Simon Zünd>
+JSC also only supports single line comments: https://github.com/WebKit/WebKit/blob/main/Source/JavaScriptCore/parser/Lexer.cpp#L2560
+
+[05:30:54.0355] <Nic>
+TypeScript (this vscode?) also only supports single line: https://github.com/microsoft/TypeScript/blob/b845fd2434f255ba35b0bb143a65172c8985e467/src/compiler/sourcemap.ts#L365
+
+[09:19:15.0816] <Nic>
+Branch: https://tc39.es/source-map/2024/
+
+The Ecma General Assembly meeting will be on Dec 11th, so if we want to merge https://github.com/tc39/source-map/pull/122 (Jon is going to present is as "pending") we need to do it before October 11th.
+
+[11:18:30.0325] <littledan>
+Please also let the ExeCom know that we are planning on publishing a standard for source maps
+
+[11:19:23.0112] <Nic>
+What is the way to do so? Write to some mailing list?
+
+[11:23:47.0356] <littledan>
+You can send an email to e-cc@ecma-international.org but I don’t know if it will bounce from a non-member. If you cc Michael Saboff (chair of ExeCom) and some others at Ecma, it should get the message across.
+
+[14:58:08.0107] <Aki>
+Michael Saboff’s email msaboff@apple.com
+
+Also cc Samina. And me, I’m trying to lighten her load rn.
+
+
+2024-10-08
+[22:10:52.0878] <Devin Rousso>
+jkup if ive found a few errors in source map tests, what's the best way for me to communicate and/or fix them?
+
+[22:11:08.0391] <Nic>
+Either open an issue, or ping asumu :)
+
+[22:11:23.0037] <jkup>
+Filing issues https://github.com/tc39/source-map-tests would be great!
+
+[22:11:32.0821] <jkup>
+Yes or ping Asumu :P
+
+[22:14:51.0217] <Devin Rousso>
+ok ill file an issue
+
+[22:15:01.0647] <Devin Rousso>
+im also happy to submit a PR if that's easier
+
+[22:15:05.0664] <Devin Rousso>
+they're _really_ simple fixes
+
+[22:15:13.0270] <Nic>
+Oh then yes, please
+
+[22:15:17.0371] <jkup>
+Thank you and thanks for looking through! Totally up to you on PR / issue. We'd love any form of help
+
+[22:18:34.0616] <Aki>
+did y'all ever come to a conclusion on source map vs sourcemap vs source maps vs sourcemaps?
+
+[22:18:51.0832] <jkup>
+hahahh i think so, one second lemme find it
+
+[22:19:16.0490] <Nic>
+It was "source map", respecting the casing of the sentence it appears in
+
+[22:19:53.0777] <jkup>
+I was planning on adding Nic's comment to the spec somewhere https://github.com/tc39/source-map/pull/128#discussion_r1773032940
+
+[22:21:51.0053] <Nic>
+Is it normative, or meta-normative? :P
+
+[22:24:10.0347] <Devin Rousso>
+ah blargh i have to create a fork
+
+[22:24:18.0049] <Devin Rousso>
+darn i was hoping i could just create a branch 😅
+
+[22:26:19.0613] <Nic>
+Wait a sec
+
+[22:26:24.0059] <Nic>
+I can give you write access probably
+
+[22:27:05.0013] <Devin Rousso>
+<https://github.com/tc39/source-map-tests/pull/24> (fix a few incorrect URLs and invalid values)
+
+[22:27:11.0336] <Devin Rousso>
+is fine
+
+[22:27:16.0194] <Devin Rousso>
+creating a fork isn't that big of a deal 😛
+
+[22:27:23.0179] <Devin Rousso>
+i just dislike extra steps lol
+
+[22:27:29.0936] <jkup>
+> <@dcrousso:matrix.org> darn i was hoping i could just create a branch 😅
+
+What is your github? I can give you write access :)
+
+[22:27:36.0079] <Devin Rousso>
+@dcrousso
+
+[22:27:57.0150] <Devin Rousso>
+in the meantime, ive created the fork and PR
+
+[22:28:02.0202] <Devin Rousso>
+🎉
+
+[22:33:27.0762] <Devin Rousso>
+ * <https://github.com/dcrousso>
+
+[23:48:39.0799] <Devin Rousso>
+<https://github.com/tc39/source-map-tests/issues/25> (do we actually want to allow a nameIndex that's equal to names's size?)
+
+[23:48:52.0169] <Devin Rousso>
+ * https://github.com/tc39/source-map-tests/issues/25 (do we actually want to allow a `nameIndex` that's equal to `names`'s size?)
+
+[23:56:18.0540] <jkup>
+Refusing to allow myself to be swayed by Shu mentioning source maps in his JSSugar slide deck
+
+[23:58:05.0432] <jkup>
+(what I mean to say is I thought it was cool Shu mentioned source maps in his JSSugar slide deck!)
+
+[01:11:40.0222] <Devin Rousso>
+im happy to announce that i have some local changes which result in WebKit passing all source map tests 🎉
+
+[01:12:05.0319] <jkup>
+woowowow
+
+[01:13:20.0987] <Devin Rousso>
+there are a few tests i have questions about tho
+
+[01:13:26.0176] <Devin Rousso>
+likely will create issues for them tomorrow
+
+
+2024-10-09
+[18:52:55.0046] <Devin Rousso>
+<https://github.com/WebKit/WebKit/pull/34879> (Web Inspector: add error cases to match new source map spec)
+
+[23:24:51.0784] <Simon Zünd>
+Whats the plan for the TG4 meeting today given that folks are attending TC39 in Tokyo and the time is not great for that timezone.
+
+[23:25:27.0015] <ljharb>
+usually meetings are cancelled during plenary week
+
+[23:25:47.0279] <ljharb>
+ * usually meetings are cancelled during plenary week (the source maps meeting is no longer on the calendar)
+
+[23:26:51.0648] <Justin Ridgewell>
+I think we should cancel
+
+[23:26:54.0819] <Justin Ridgewell>
+Offline updates only
+
+[23:55:39.0680] <Simon Zünd>
+Apologies, I only saw the duplicated entry in my calendar and the "real" one has indeed been cancelled
+
+
+2024-10-10
+[20:57:46.0524] <jkup>
+Justin Ridgewell: can you help me explain Mark's security concern from lunch? I understand it at a high level but I'm struggling to come up with a code example testing our regex
+
+[21:12:46.0639] <Justin Ridgewell>
+Mark is concerned with a `//# sourceMappingUrl=…` comment being detected when it’s in fact a template string: ``` `\n//# sourceMappingUrl=… ` ```
+
+[21:14:12.0994] <Justin Ridgewell>
+* Mark is concerned with a `//# sourceMappingUrl=…` comment being detected when it’s in fact a template string: https://gist.github.com/jridgewell/40dc4e3f43928ecdc2c48b7d6b1c1798
+
+[21:21:24.0396] <Simon Zünd>
+Isn't this addressed in the spec?
+
+[21:21:54.0943] <ljharb>
+the concern was about the "without parsing" mode
+
+[21:37:48.0989] <jkup>
+Please correct me if I'm wrong here but Mark's concern seems to be:
+
+1. True with the current regex
+2. Impossible to fix with just a regular expression?
+3. Very likely has been true forever in IDEs and other "non parsing" source map users
+
+[21:38:40.0173] <jkup>
+Side note: Could we do something weird like specify that "If you don't parse for the magic comment, you can only fetch local or encoded source maps, not go out to the network"?
+
+[21:40:00.0985] <Richard Gibson>
+if it's only about template literals then it _can_ be fixed by something like a regular expression, but probably shouldn't be
+
+[21:40:14.0059] <Chris de Almeida>
+sorry to interrupt, but we are still good for this topic next?  (and after the break)
+
+[21:40:31.0383] <jkup>
+> <@softwarechris:matrix.org> sorry to interrupt, but we are still good for this topic next?  (and after the break)
+
+I think yes, but if it's ok, it may exceed the 5 minute limit?
+
+[21:40:37.0735] <Chris de Almeida>
+yeah
+
+[21:40:40.0505] <Chris de Almeida>
+not a problem
+
+[22:35:34.0471] <jkup>
+ok so, just chatting with Justin Ridgewell . I'm still not sure that tricking devtools into a network request for a sourceMappingURL in a template literal is any worse than just sticking a malicious URL in a normal sourceMappingURL but it seems like we could easily fix this case by changing our non-parser requirements to:
+
+1. Start at end of file
+2. While last line starts with "//#" and also line does not contain a "`"
+3. Check for comment, if not found, move up a line
+
+[22:39:19.0255] <Richard Gibson>
+that doesn't even work for https://tc39.es/source-map/2024/#example-5b7659a8 AFAICT
+
+[22:39:58.0170] <jkup>
+Since the last line contains a ` we would bail out in that case
+
+[22:41:05.0217] <Justin Ridgewell>
+Mark approves of our solution
+
+[22:42:24.0332] <Justin Ridgewell>
+He also exlpained his exploit case: in hardened JS the program could have locked down network access. But because dev tools is external to the program, it could be tricked into performing a fetch in an otherwise locked down environment
+
+[22:44:09.0165] <jkup>
+ahhhhh yes ok makes sense... we could add a note about this in the spec!
+
+[22:47:08.0419] <Justin Ridgewell>
+> <@gibson042:matrix.org> that doesn't even work for https://tc39.es/source-map/2024/#example-5b7659a8 AFAICT
+
+Mark’s proposed change makes that case not find a source map
+
+[22:47:12.0034] <Richard Gibson>
+note that the WHATWG URL spec will accept ``` ` ``` inside URLs like ```` https://example.com/`/ ``` : https://example.com/`/
+
+[22:47:27.0633] <Richard Gibson>
+ * note that the WHATWG URL spec will accept ````` inside URLs like \`\`\`\` https://example.com/````/ ``` : https://example.com/````/
+
+```
+https://example.com/`/
+```
+
+[22:47:27.0981] <Justin Ridgewell>
+Yes, but they are invalid in a base64 data URI
+
+[22:47:54.0946] <littledan>
+Can we weaken requirements for tools, or say we don’t have an answer?
+
+[22:48:04.0338] <Richard Gibson>
+ * note that the WHATWG URL spec will accept \` inside URLs like https://example.com/\`/
+
+```
+https://example.com/`/
+```
+
+[23:09:21.0281] <Justin Ridgewell>
+Mark accepts no normative changes, we’ll only state that
+1. Parsing is always preferred
+2. Non-parsing is non-normative, and has an explicit note that there is a bug
+3. A note that we will fix the bug in a future proposal
+
+[23:16:12.0773] <jkup>
+We are (conditionally) approved!! Thank you all so much for the help and flexibility and expertise this week. I love this group!
+
+[23:16:56.0115] <Nic>
+To clarify, the regex-based parsing remains (removing it would be normative!), but with a note that we will need to tweak it
+
+[23:17:05.0154] <jkup>
+Stressful but so glad for all the feedback from Mark/Justin/Nic/Richard and all! I feel like this week will lead to a much better TG4 specification.
+
+[23:20:17.0323] <Simon Zünd>
+Thank you everyone who was in Tokyo and pushed this forward :) Especially Jon for presenting :) Congrats everyone!
+
+[23:21:13.0080] <Chris de Almeida>
+👏👏👏👏👏👏👏
+
+[02:17:43.0489] <Nic>
+https://github.com/tc39/source-map/pull/137 please take a look :)
+
+[02:20:23.0563] <jkup>
+Do we want to say anything more specific about non parsing bad, parsing good 
+
+[02:20:35.0429] <jkup>
+Sorry for brevity on phone 
+
+[02:24:55.0391] <Nic>
+No -- if we encourage people to only do one thing, then tools that do the other thing would be more vulnerable to the problem because it's even more likely that checkers would miss it. We should instead make sure that checkers check both for now.
+
+Also, eventually the goal is to let tools keep using either approach, we just need to make sure that they lead to the same result.
+
+[02:26:07.0525] <jkup>
+Thank you 
+
+
+2024-10-18
+[13:03:40.0849] <Jan Olaf Martin>
+Semi-OT: Is there a matrix channel for the more general tooling group as well?
+
+[13:33:25.0343] <jkup>
+Not that I'm aware of, but if you find one I'd love to join!
+
+
+2024-10-22
+[03:23:26.0202] <jkup>
+Nic and I presented the TG4 specification to the ExeCom (Ecma Executive Committee) today and got their approval! We got a lot of editorial feedback and will need to address it before the Ecma GA at the end of the year. I wanted to share a comment Michael Saboff made:
+
+"I’d like to thank TG4 for how fast you’ve been able to bring something to standard. I know you all have been working very hard on this. This is something that is really needed for JavaScript."
+
+Thank you all so much for the amazing work on this so far! I'm so excited to see it as an official standard!
+
+[09:26:05.0244] <Jan Olaf Martin>
+> <@jkup:matrix.org> Not that I'm aware of, but if you find one I'd love to join!
+
+I "found" one in that I created https://matrix.to/#/#tc39-tools:matrix.org
+
+[15:25:51.0951] <Devin Rousso>
+> <@dcrousso:matrix.org> <https://github.com/WebKit/WebKit/pull/34879> (Web Inspector: add error cases to match new source map spec)
+
+FYI as of yesterday WebKit should be passing all of the basic source map tests 🎉
+
+
+2024-10-23
+[02:25:42.0411] <jkup>
+> <@dcrousso:matrix.org> FYI as of yesterday WebKit should be passing all of the basic source map tests 🎉
+
+This work is *so* appreciated. Thank you Devin Rousso!
+
+
+2024-10-24
+[07:01:39.0140] <jkup>
+Simon Zünd: is https://github.com/tc39/source-map/pull/122 ready to merge?
+
+
+2024-10-25
+[20:46:46.0322] <Simon Zünd>
+Yes from my side, unless there is more feedback from others?
+
+
+2024-10-29
+[10:50:29.0700] <Luca Forstner>
+Hello everybody :) 👋 I am back from being a lazy bum and wanted to pick up the Debug ID proposal again. I opened a few PRs to clarify a things and extend the proposal with learnings from using our (very hacky) polyfill.
+
+[10:51:54.0329] <Luca Forstner>
+One thing I was particularly interested in everybody's opinion about is this PR: https://github.com/tc39/source-map/pull/144
+
+It would limit quite heavily what we accept as Debug IDs format-wise, however it would simplify implementations a lot.
+
+[10:52:00.0944] <Luca Forstner>
+ * One thing I was particularly interested in everybody's opinion about is this PR: https://github.com/tc39/source-map/pull/144
+It would limit quite heavily what we accept as Debug IDs format-wise, however it would simplify implementations a lot.
+
+
+2024-10-30
+[03:49:21.0456] <jkup>
+> <@lforst:matrix.org> One thing I was particularly interested in everybody's opinion about is this PR: https://github.com/tc39/source-map/pull/144
+> It would limit quite heavily what we accept as Debug IDs format-wise, however it would simplify implementations a lot.
+
+Welcome back!!
+
+
+2024-10-31
+[03:24:10.0317] <Simon Zünd>
+I prepared some slides for the "Scopes" meeting later. 1) I'm proposing some minor additions to the "Scopes" proposal to enable stack trace processing, and 2) I'm spelling out the (more or less) exact algorithm how to actually apply the scope info to stack traces. I think this would be a great addition to the spec (non-normative) since it's very easy to do it wrong. Slides here: https://docs.google.com/presentation/d/1MUQ1F_KxrWRNReOhIKhSV7QYYNo6eqrxk1oP72MSrv0/edit?usp=sharing
+
+[03:29:27.0537] <Nic (back on Nov 7th)>
+Those slides look very useful to understand all the pieces :)
+
+[03:30:15.0755] <Simon Zünd>
+Yeah, it's basically a week or two of scribbling on notes and whiteboards condensed into a deck xD
+
+[09:03:25.0882] <jkup>
+Scopes meeting starting now! https://bloomberg.zoom.us/j/98319586084?pwd=Skwyejc3bDBMRnY5ZlBqaUp0VzFBQT09
+
+[10:51:39.0430] <jkup>
+I'm not sure what is going on with https://github.com/tc39/source-map/pull/140 but I am not able to merge it. It's stuck on "Hang in there while we check the branch’s status." - can anyone else merge it in?
+
+[10:53:13.0683] <Nic (back on Nov 7th)>
+I just tried "close and reopen" and now I cannot reopen 😅
+
+[10:54:17.0105] <jkup>
+"These commits are already merged"
+
+[10:54:19.0852] <jkup>
+when i hover on the button
+
+[10:55:49.0253] <Nic (back on Nov 7th)>
+It looks like they are
+
+[10:55:59.0638] <jkup>
+this is a new one for me, never seen this
+
+[10:56:37.0016] <Nic (back on Nov 7th)>
+Yeah me neither 😬
+

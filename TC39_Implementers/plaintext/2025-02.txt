@@ -1,0 +1,87 @@
+2025-02-12
+[10:17:32.0734] <ptomato>
+hi, test262 would appreciate some feedback on whether this requirement would potentially be a problem for your test262 runners: https://github.com/tc39/test262/pull/4398/commits/6ccad34e9b2e2119d39e889be48fd592ef07ef2e
+
+[10:52:49.0424] <shu>
+evaluating the scripts in order of inclusion is actually required currently by the v8 runner
+
+[10:54:05.0471] <shu>
+since these helper scripts define globals, the two reasonable options i see are either requiring they be evaluated in order, or that no helper script can assume any other helper script has run (e.g. can't use assert functions or anything)
+
+[11:23:26.0063] <ptomato>
+the interpreting instructions already do specify that `assert.js` and `sta.js` must be run first regardless of other helper scripts, so there are a few things including asserts that can be assumed to be present in helper scripts
+
+[11:27:38.0656] <ptomato>
+another reasonable option would be to allow helper scripts to import other helper scripts. but I don't see a reason to do that right now
+
+[11:36:02.0321] <bakkot>
+my runner does not support esm so I would like to avoid having the helpers depend on imports/exports
+
+[11:36:14.0466] <bakkot>
+the evaluation order requirement is fine for me
+
+[13:58:38.0891] <ptomato>
+by "import" I meant "fake import using `includes` in the helper frontmatter"; sorry, should've been clearer about that
+
+[13:58:41.0781] <shu>
+yes, but some helpers introduce their own special asserts
+
+[13:58:50.0342] <shu>
+as was the case with the SM-imported tests that surfaced this issue
+
+[14:05:44.0179] <ptomato>
+I see what you mean, yes that's right
+
+[14:10:20.0847] <bakkot>
+ah, gotcha. I want to avoid that because I don't read the frontmatter for the harness functions but it is certainly technically feasible if that becomes necessary
+
+[14:10:25.0462] <bakkot>
+* ah, gotcha. I want to avoid that because I don't read the frontmatter for the harness files but it is certainly technically feasible if that becomes necessary
+
+
+2025-02-17
+[09:40:52.0980] <ljharb>
+hey implementer folks. i've got someone in another venue raving about how sparse arrays *aren't* bad and slow etc. it'd be awesome if someone from each of the browsers could describe the perf characteristics of creating/accessing/mutating a sparse array in their engine, or ideally, point me to a blog post or something that explains them?
+
+[09:41:28.0618] <ljharb>
+* hey implementer folks. i've got someone in another venue raving about how sparse arrays _aren't_ bad and slow etc (which defies what i understand to be decades of best practice around avoiding them). 
+
+i want to know whatever the modern truth is, and it'd be awesome if someone from each of the browsers could describe the perf characteristics of creating/accessing/mutating a sparse array in their engine, or ideally, point me to a blog post or something that explains them?
+
+[12:36:13.0287] <snek>
+they aren't as evil as they used to be like 10 years ago, but they're still very much off the happy path, and you'll take a hit in performance for using them.
+
+[12:36:30.0151] <snek>
+* they aren't as evil as they used to be like 10 years ago, in V8 at least, but they're still very much off the happy path, and you'll take a hit in performance for using them.
+
+[12:52:59.0951] <ljharb>
+one of the arguments was that accessing elements was fast even if creation was slower
+
+[13:20:48.0158] <snek>
+hmm, you could say its fast in that the optimizer doesn't completely bail out for holey arrays, like they may have tended to do back in the day. but if an array is represented as holey that brings in some unavoidable overhead. around 15-20% compared to the same non-holey representation when i last benchmarked it.
+
+[13:21:59.0193] <snek>
+* hmm, you could say its fast in that the optimizer doesn't completely bail out for holey arrays, like they may have tended to do back in the day. but if an array is represented as holey that brings in some unavoidable overhead. around 15-20% compared to the same non-holey representation when i last benchmarked it. these things are much more granular these days though. it really comes down to like each "operation" (e.g. field accesss, methods, etc) and what things someone wrote out as optimizations for it.
+
+[13:23:51.0013] <snek>
+this still looks pretty accurate to me https://v8.dev/blog/elements-kinds, though i'm a bit behind on some of the more recent changes in v8 regarding the turboshaft rewrite.
+
+
+2025-02-18
+[11:52:17.0955] <snek>
+shu: if you set kMaxTypedArrayInHeap to 0, and allocate an empty buffer, it will use an empty on-heap buffer: https://source.chromium.org/chromium/chromium/src/+/main:v8/src/builtins/typed-array-createtypedarray.tq;l=95?q=typedarrayinitialize&ss=chromium
+
+which is not inherently bad ig, but it leads to a weird thing where an embedder using max=0 will find that some empty typedarrays have a non-null data pointer. i assume this isn't directly intentional but i'm curious, given the sensitivity of arraybuffer stuff, whether v8 would be accepting of CLs to change this.
+
+[11:56:52.0015] <shu>
+i don't know the implications of changing it. is it an important invariant in your embedding that max=0 implies null data ptr?
+
+[11:58:38.0183] <snek>
+its generally established in the node/node adjacent ecosystem that native addons see null pointers for empty buffers. we do have a workaround for it though: https://github.com/denoland/deno/blob/main/ext/ffi/ir.rs#L373-L381
+
+[11:59:03.0136] <shu>
+it's worth asking the question at least. i don't know the current reason for its being like that, or how important it is, off the top of my head
+
+[11:59:35.0538] <snek>
+kk, i'll poke around a bit more then. thanks
+

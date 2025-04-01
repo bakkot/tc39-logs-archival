@@ -1,0 +1,297 @@
+<!DOCTYPE html><html><head>
+  <title>TC39 General on 2023-01-26</title>
+  <link rel="stylesheet" href="../style.css">
+  <script>window.room = "TC39 General";</script><script src="../render-roomlist.js"></script>
+  <script src="../logs.js"></script>
+</head>
+<body><div class="wrapper">
+<div class="sidebar">
+<div class="title">TC39 General<br>2023-01-26<br><a href="plaintext/">plaintext logs</a></div>
+<div class="nav">
+<a href="2023-01-25" class="nav-link"><span>prev</span></a>
+<a href="2023-01-27" class="nav-link"><span style="float:right">next</span></a>
+</div>
+    <div class="all-rooms"><noscript>JavaScript is required to load the channel index, but you can go to <a href="../..">the static index</a> directly.</noscript></div>
+<div class="footer"><a href="https://github.com/bakkot/matrix-archive-bot">source on github</a></div>
+</div>
+<div class="rhs">
+<div class="rhs-header">
+<span id="error" style="color: red; display:none">error</span>
+
+<input type="text" id="query" size="25" placeholder="Search TC39 General">
+<a id="search-submit" class="button icon-link" title="Search">
+  <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M505 442.7L405.3 343c-4.5-4.5-10.6-7-17-7H372c27.6-35.3 44-79.7 44-128C416 93.1 322.9 0 208 0S0 93.1 0 208s93.1 208 208 208c48.3 0 92.7-16.4 128-44v16.3c0 6.4 2.5 12.5 7 17l99.7 99.7c9.4 9.4 24.6 9.4 33.9 0l28.3-28.3c9.4-9.4 9.4-24.6.1-34zM208 336c-70.7 0-128-57.2-128-128 0-70.7 57.2-128 128-128 70.7 0 128 57.2 128 128 0 70.7-57.2 128-128 128z"></path></svg>
+</a>
+</div>
+
+<div class="log"><table id="log-table"><tbody id="log-tbody">
+
+  <tr class="msg" id="L0"><td class="ts-cell"><a class="ts" href="#L0" alt="Wed Jan 25 2023 16:01:43 GMT-0800 (Pacific Standard Time)">00:01</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">Unfortunately that doesn't work, async generator functions will not reenter until all previous next calls settle</td></tr>
+  <tr class="msg" id="L1"><td class="ts-cell"><a class="ts" href="#L1" alt="Wed Jan 25 2023 16:04:44 GMT-0800 (Pacific Standard Time)">00:04</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell"><pre><code>async function* foo() {
+    yield new Promise(r =&gt; setTimeout(r, 1000));
+    console.log('reenter');
+}
+const it = foo();
+it.next();
+it.next();
+</code></pre>
+</td></tr>
+  <tr class="msg" id="L2"><td class="ts-cell"><a class="ts" href="#L2" alt="Wed Jan 25 2023 16:05:03 GMT-0800 (Pacific Standard Time)">00:05</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">the previous call settles in my example</td></tr>
+  <tr class="msg" id="L3"><td class="ts-cell"><a class="ts" href="#L3" alt="Wed Jan 25 2023 16:05:09 GMT-0800 (Pacific Standard Time)">00:05</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">The <code>reenter</code> won't log until the 1000ms is up</td></tr>
+  <tr class="msg" id="L4"><td class="ts-cell"><a class="ts" href="#L4" alt="Wed Jan 25 2023 16:05:15 GMT-0800 (Pacific Standard Time)">00:05</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">yes but it doesn't need to</td></tr>
+  <tr class="msg" id="L5"><td class="ts-cell"><a class="ts" href="#L5" alt="Wed Jan 25 2023 16:05:17 GMT-0800 (Pacific Standard Time)">00:05</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">my example still works</td></tr>
+  <tr class="msg" id="L6"><td class="ts-cell"><a class="ts" href="#L6" alt="Wed Jan 25 2023 16:06:07 GMT-0800 (Pacific Standard Time)">00:06</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell"><pre><code>async function* foo(){ yield 0; await sleep(1000); yield 1; }
+let it = foo().map(x =&gt; fetch(x));
+it.next();
+// almost immediately after this point, the promise returned from the first call to the underlying foo()'s `.next` settles
+// then the first call to `fetch` starts
+it.next() // so this can almost immediately kick off another call to the underlying foo()'s `next`, and have that actually hit the `sleep`
+</code></pre>
+</td></tr>
+  <tr class="msg" id="L7"><td class="ts-cell"><a class="ts" href="#L7" alt="Wed Jan 25 2023 16:08:57 GMT-0800 (Pacific Standard Time)">00:08</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell"><pre><code>async function* foo(){
+    yield 0;
+    console.log('reenter');
+    await sleep(1000);
+    yield 1;
+}
+let it = foo();
+it.next();
+it.next();
+console.log('end');
+</code></pre>
+<p>Logs <code>end</code> then <code>reenter</code>, the first yield doesn't settle the iterator until after a tick</p>
+</td></tr>
+  <tr class="msg" id="L8"><td class="ts-cell"><a class="ts" href="#L8" alt="Wed Jan 25 2023 16:09:10 GMT-0800 (Pacific Standard Time)">00:09</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">I think you're incorrect, and even if you're correct, you're example will start to fail again as soon as you chain your iterators with async functionality</td></tr>
+  <tr class="msg" id="L9"><td class="ts-cell"><a class="ts" href="#L9" alt="Wed Jan 25 2023 16:09:50 GMT-0800 (Pacific Standard Time)">00:09</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell"><pre><code>let it = foo()
+  .map(x =&gt; fetch(x))
+  .map(r =&gt; r.json());
+</code></pre>
+</td></tr>
+  <tr class="msg" id="L10"><td class="ts-cell"><a class="ts" href="#L10" alt="Wed Jan 25 2023 16:10:00 GMT-0800 (Pacific Standard Time)">00:10</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">not with the definition of <code>map</code> in the slides</td></tr>
+  <tr class="msg" id="L11"><td class="ts-cell"><a class="ts" href="#L11" alt="Wed Jan 25 2023 16:10:11 GMT-0800 (Pacific Standard Time)">00:10</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">I am pretty sure</td></tr>
+  <tr class="msg" id="L12"><td class="ts-cell"><a class="ts" href="#L12" alt="Wed Jan 25 2023 16:10:17 GMT-0800 (Pacific Standard Time)">00:10</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">but I will check after work and get back to you</td></tr>
+  <tr class="msg" id="L13"><td class="ts-cell"><a class="ts" href="#L13" alt="Wed Jan 25 2023 16:10:22 GMT-0800 (Pacific Standard Time)">00:10</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">(couple hours probably)</td></tr>
+  <tr class="msg" id="L14"><td class="ts-cell"><a class="ts" href="#L14" alt="Wed Jan 25 2023 16:12:22 GMT-0800 (Pacific Standard Time)">00:12</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">It depends on how the source iterator performs parallelization</td></tr>
+  <tr class="msg" id="L15"><td class="ts-cell"><a class="ts" href="#L15" alt="Wed Jan 25 2023 16:14:19 GMT-0800 (Pacific Standard Time)">00:14</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">pretty sure it does not</td></tr>
+  <tr class="msg" id="L16"><td class="ts-cell"><a class="ts" href="#L16" alt="Wed Jan 25 2023 16:15:33 GMT-0800 (Pacific Standard Time)">00:15</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">Oh you're right, the second <code>.map</code> will work in parallel with the first <code>.map</code></td></tr>
+  <tr class="msg" id="L17"><td class="ts-cell"><a class="ts" href="#L17" alt="Wed Jan 25 2023 16:16:03 GMT-0800 (Pacific Standard Time)">00:16</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">I'm recalling when I was writing <code>map</code> as an async-gen function itself, which means I was still hitting backpressure</td></tr>
+  <tr class="msg" id="L18"><td class="ts-cell"><a class="ts" href="#L18" alt="Wed Jan 25 2023 16:16:27 GMT-0800 (Pacific Standard Time)">00:16</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">So only the first iterator chained off a back-pressure iterator will be serial</td></tr>
+  <tr class="msg" id="L19"><td class="ts-cell"><a class="ts" href="#L19" alt="Wed Jan 25 2023 16:17:09 GMT-0800 (Pacific Standard Time)">00:17</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">We still hit the reentrancy issue with an async-gen function, which would be neat to ~solve~change</td></tr>
+  <tr class="msg" id="L20"><td class="ts-cell"><a class="ts" href="#L20" alt="Wed Jan 25 2023 19:04:21 GMT-0800 (Pacific Standard Time)">03:04</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell"><span class="nick-1">Justin Ridgewell</span>: yeah, and that's the problem with the current spec too: the async iterator helpers are implemented as async generators</td></tr>
+  <tr class="msg" id="L21"><td class="ts-cell"><a class="ts" href="#L21" alt="Wed Jan 25 2023 19:04:53 GMT-0800 (Pacific Standard Time)">03:04</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">here's code you can run today which demonstrates that the mapper from the slides can be parallel, both with itself and with the underlying generator <a href="https://gist.github.com/bakkot/a338838aee667517adb03edfa83aaed1">https://gist.github.com/bakkot/a338838aee667517adb03edfa83aaed1</a></td></tr>
+  <tr class="msg" id="L22"><td class="ts-cell"><a class="ts" href="#L22" alt="Wed Jan 25 2023 19:06:59 GMT-0800 (Pacific Standard Time)">03:06</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">and indeed the original generator can't be parallel with itself. I don't think there's anything we can do about that, though - the whole point of generators is that they're written as straight-line code, and you can't start executing the next line until the previous one finishes</td></tr>
+  <tr class="msg" id="L23"><td class="ts-cell"><a class="ts" href="#L23" alt="Wed Jan 25 2023 19:09:14 GMT-0800 (Pacific Standard Time)">03:09</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-16" title="@kriskowal:matrix.org">Kris Kowal</span>&gt;</div></td><td class="msg-cell">I think interleaving of async map iterators is expected behavior.</td></tr>
+  <tr class="msg" id="L24"><td class="ts-cell"><a class="ts" href="#L24" alt="Wed Jan 25 2023 19:09:44 GMT-0800 (Pacific Standard Time)">03:09</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell"><span class="nick-16">Kris Kowal</span>: what do you mean by interleaving?</td></tr>
+  <tr class="msg" id="L25"><td class="ts-cell"><a class="ts" href="#L25" alt="Wed Jan 25 2023 19:10:04 GMT-0800 (Pacific Standard Time)">03:10</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">just that you can be executing the mapper function in parallel with itself?</td></tr>
+  <tr class="msg" id="L26"><td class="ts-cell"><a class="ts" href="#L26" alt="Wed Jan 25 2023 19:10:20 GMT-0800 (Pacific Standard Time)">03:10</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">(assuming the resulting mapped thing is pumped multiple times)</td></tr>
+  <tr class="msg" id="L27"><td class="ts-cell"><a class="ts" href="#L27" alt="Wed Jan 25 2023 19:10:48 GMT-0800 (Pacific Standard Time)">03:10</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-16" title="@kriskowal:matrix.org">Kris Kowal</span>&gt;</div></td><td class="msg-cell">That effect for one, yes.</td></tr>
+  <tr class="msg" id="L28"><td class="ts-cell"><a class="ts" href="#L28" alt="Wed Jan 25 2023 19:11:45 GMT-0800 (Pacific Standard Time)">03:11</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell"><mx-reply><blockquote> and indeed the original generator can't be parallel with itself. I don't think there's anything we can do about that, though - the whole point of generators is that they're written as straight-line code, and you can't start executing the next line until the previous one finishes</blockquote></mx-reply>It's not just the running of the generators code, but the settlement of the <code>next()</code> promise external from the genrator that blocks</td></tr>
+  <tr class="msg" id="L29"><td class="ts-cell"><a class="ts" href="#L29" alt="Wed Jan 25 2023 19:11:53 GMT-0800 (Pacific Standard Time)">03:11</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-16" title="@kriskowal:matrix.org">Kris Kowal</span>&gt;</div></td><td class="msg-cell">But also map(xf).map(yf) would interleave turns of xf and yf.</td></tr>
+  <tr class="msg" id="L30"><td class="ts-cell"><a class="ts" href="#L30" alt="Wed Jan 25 2023 19:12:10 GMT-0800 (Pacific Standard Time)">03:12</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">Eg, I want to be able to return a <code>yield fetch()</code> and reenter without that fetch having settled</td></tr>
+  <tr class="msg" id="L31"><td class="ts-cell"><a class="ts" href="#L31" alt="Wed Jan 25 2023 19:12:18 GMT-0800 (Pacific Standard Time)">03:12</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell"><mx-reply><blockquote> It's not just the running of the generators code, but the settlement of the <code>next()</code> promise external from the genrator that blocks</blockquote></mx-reply>In the case that you specifically yield a promise, do you mean, or is there another case I'm not thinking of?</td></tr>
+  <tr class="msg" id="L32"><td class="ts-cell"><a class="ts" href="#L32" alt="Wed Jan 25 2023 19:12:20 GMT-0800 (Pacific Standard Time)">03:12</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">ah yeah</td></tr>
+  <tr class="msg" id="L33"><td class="ts-cell"><a class="ts" href="#L33" alt="Wed Jan 25 2023 19:12:42 GMT-0800 (Pacific Standard Time)">03:12</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">with this helper, you could do <code>yield { v: fetch() }</code> in your async generator and then <code>.map(box =&gt; box.v)</code> to get parallelism in the resulting thing (or rather the ability to be parallel assuming someone calls <code>.next</code> eagerly)</td></tr>
+  <tr class="msg" id="L34"><td class="ts-cell"><a class="ts" href="#L34" alt="Wed Jan 25 2023 19:12:55 GMT-0800 (Pacific Standard Time)">03:12</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">a little silly but works fine</td></tr>
+  <tr class="msg" id="L35"><td class="ts-cell"><a class="ts" href="#L35" alt="Wed Jan 25 2023 19:12:56 GMT-0800 (Pacific Standard Time)">03:12</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">... I think</td></tr>
+  <tr class="msg" id="L36"><td class="ts-cell"><a class="ts" href="#L36" alt="Wed Jan 25 2023 19:13:55 GMT-0800 (Pacific Standard Time)">03:13</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell"><mx-reply><blockquote> But also map(xf).map(yf) would interleave turns of xf and yf.</blockquote></mx-reply>Right, yeah. You get that with my proposed tweak also (again assuming someone calls <code>.next()</code> eagerly)</td></tr>
+  <tr class="msg" id="L37"><td class="ts-cell"><a class="ts" href="#L37" alt="Wed Jan 25 2023 19:14:09 GMT-0800 (Pacific Standard Time)">03:14</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-16" title="@kriskowal:matrix.org">Kris Kowal</span>&gt;</div></td><td class="msg-cell"><mx-reply><blockquote> Eg, I want to be able to return a <code>yield fetch()</code> and reenter without that fetch having settled</blockquote></mx-reply>I don’t have spare attention to dig, but I would find it very surprising if <code>yield fetch()</code> were equivalent to <code>yield await fetch()</code>.</td></tr>
+  <tr class="msg" id="L38"><td class="ts-cell"><a class="ts" href="#L38" alt="Wed Jan 25 2023 19:15:54 GMT-0800 (Pacific Standard Time)">03:15</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">They are, unfortunately</td></tr>
+  <tr class="msg" id="L39"><td class="ts-cell"><a class="ts" href="#L39" alt="Wed Jan 25 2023 19:16:05 GMT-0800 (Pacific Standard Time)">03:16</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell"><blockquote>
+<pre><code>async function* foo() {
+    yield new Promise(r =&gt; setTimeout(r, 1000));
+    console.log('reenter');
+}
+const it = foo();
+it.next();
+it.next();
+</code></pre>
+</blockquote>
+</td></tr>
+  <tr class="msg" id="L40"><td class="ts-cell"><a class="ts" href="#L40" alt="Wed Jan 25 2023 19:16:22 GMT-0800 (Pacific Standard Time)">03:16</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">^ That waits a full second before logging <code>reenter</code></td></tr>
+  <tr class="msg" id="L41"><td class="ts-cell"><a class="ts" href="#L41" alt="Wed Jan 25 2023 19:17:58 GMT-0800 (Pacific Standard Time)">03:17</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">My original map helper was something like <code>for await (const x of source) yield mapper(x)</code>, and if <code>mapper</code> has any async waiting, it blocks.</td></tr>
+  <tr class="msg" id="L42"><td class="ts-cell"><a class="ts" href="#L42" alt="Wed Jan 25 2023 19:18:13 GMT-0800 (Pacific Standard Time)">03:18</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">here's the slides where we decided that <code>yield</code> is <code>yield await</code> <a href="https://docs.google.com/presentation/d/1U6PivKbFO0YgoFlrYB82MtXf1ofCp1xSVOODOvranBM/edit#slide=id.g223fba4116_0_196">https://docs.google.com/presentation/d/1U6PivKbFO0YgoFlrYB82MtXf1ofCp1xSVOODOvranBM/edit#slide=id.g223fba4116_0_196</a></td></tr>
+  <tr class="msg" id="L43"><td class="ts-cell"><a class="ts" href="#L43" alt="Wed Jan 25 2023 19:19:00 GMT-0800 (Pacific Standard Time)">03:19</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">and notes <a href="https://github.com/tc39/notes/blob/55af84ac0ed7a250206849dddd628b2c1db2c9b1/meetings/2017-05/may-25.md#15iva-revisiting-async-generator-yield-behavior">https://github.com/tc39/notes/blob/55af84ac0ed7a250206849dddd628b2c1db2c9b1/meetings/2017-05/may-25.md#15iva-revisiting-async-generator-yield-behavior</a></td></tr>
+  <tr class="msg" id="L44"><td class="ts-cell"><a class="ts" href="#L44" alt="Wed Jan 25 2023 19:19:30 GMT-0800 (Pacific Standard Time)">03:19</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">😦 Before my time</td></tr>
+  <tr class="msg" id="L45"><td class="ts-cell"><a class="ts" href="#L45" alt="Wed Jan 25 2023 20:39:06 GMT-0800 (Pacific Standard Time)">04:39</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-16" title="@kriskowal:matrix.org">Kris Kowal</span>&gt;</div></td><td class="msg-cell">Ah, surprising but maybe for the best. In any case, “overdriving” (drawing concurrent promises from next()) a pipeline of async maps to get parallelism is useful, so glad that’ll work regardless.</td></tr>
+  <tr class="msg" id="L46"><td class="ts-cell"><a class="ts" href="#L46" alt="Wed Jan 25 2023 20:40:22 GMT-0800 (Pacific Standard Time)">04:40</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-16" title="@kriskowal:matrix.org">Kris Kowal</span>&gt;</div></td><td class="msg-cell"><p>In fact, the implicit <code>await</code> is doing me a big favor in:</p>
+<pre><code>function parallel(limit, process) {
+  function *workers() {
+    for (const worker of count(limit)) {
+      yield process(worker);
+    }
+  }
+  return Promise.all(workers());
+}
+</code></pre>
+</td></tr>
+  <tr class="msg" id="L47"><td class="ts-cell"><a class="ts" href="#L47" alt="Wed Jan 25 2023 20:44:27 GMT-0800 (Pacific Standard Time)">04:44</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-16" title="@kriskowal:matrix.org">Kris Kowal</span>&gt;</div></td><td class="msg-cell"><p>Out of which you can build bounded concurrency pretty easily (I’m taking the liberty of assuming the existence of AsyncIterator.from having not followed along particularly closely)</p>
+<pre><code>const parallelForEach = async (limit, values, process) =&gt;
+  parallel(limit, () =&gt; AsyncIterator.from(values).forEach(process));
+</code></pre>
+</td></tr>
+  <tr class="msg" id="L48"><td class="ts-cell"><a class="ts" href="#L48" alt="Wed Jan 25 2023 21:14:21 GMT-0800 (Pacific Standard Time)">05:14</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell"><mx-reply><blockquote> <p>In fact, the implicit <code>await</code> is doing me a big favor in:</p>
+<pre><code>function parallel(limit, process) {
+  function *workers() {
+    for (const worker of count(limit)) {
+      yield process(worker);
+    }
+  }
+  return Promise.all(workers());
+}
+</code></pre>
+</blockquote></mx-reply>There's no async iterator there and so no implicit <code>await</code>; did you mean a different thing?</td></tr>
+  <tr class="msg" id="L49"><td class="ts-cell"><a class="ts" href="#L49" alt="Wed Jan 25 2023 21:14:50 GMT-0800 (Pacific Standard Time)">05:14</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell"><mx-reply><blockquote> <p>Out of which you can build bounded concurrency pretty easily (I’m taking the liberty of assuming the existence of AsyncIterator.from having not followed along particularly closely)</p>
+<pre><code>AsyncIterator.prototype.parallelForEach = async (limit, values, process) =&gt;
+  parallel(limit, () =&gt; AsyncIterator.from(values).forEach(process));
+</code></pre>
+</blockquote></mx-reply><code>AsyncIterator.from</code> works and does the thing you want, yup, though your specification of <code>parallelForEach</code> is possibly confused - prototype-placed methods generally want to refer to <code>this</code></td></tr>
+  <tr class="msg" id="L50"><td class="ts-cell"><a class="ts" href="#L50" alt="Wed Jan 25 2023 21:15:51 GMT-0800 (Pacific Standard Time)">05:15</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-16" title="@kriskowal:matrix.org">Kris Kowal</span>&gt;</div></td><td class="msg-cell"><mx-reply><blockquote> <code>AsyncIterator.from</code> works and does the thing you want, yup, though your specification of <code>parallelForEach</code> is possibly confused - prototype-placed methods generally want to refer to <code>this</code></blockquote></mx-reply>Indeed, lost in translation. Local copy wasn’t framed as a prototype method.</td></tr>
+  <tr class="msg" id="L51"><td class="ts-cell"><a class="ts" href="#L51" alt="Wed Jan 25 2023 21:16:25 GMT-0800 (Pacific Standard Time)">05:16</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-16" title="@kriskowal:matrix.org">Kris Kowal</span>&gt;</div></td><td class="msg-cell"><mx-reply><blockquote> There's no async iterator there and so no implicit <code>await</code>; did you mean a different thing?</blockquote></mx-reply>Oh, indeed.</td></tr>
+  <tr class="msg" id="L52"><td class="ts-cell"><a class="ts" href="#L52" alt="Wed Jan 25 2023 21:38:57 GMT-0800 (Pacific Standard Time)">05:38</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell"><blockquote>
+<p>If you want the flexibility of not blocking on the async operation before continuing the async generator body, then just don't yield the value yet.</p>
+</blockquote>
+<p>🤔 That doesn't really make sense.</p>
+</td></tr>
+  <tr class="msg" id="L53"><td class="ts-cell"><a class="ts" href="#L53" alt="Wed Jan 25 2023 21:55:16 GMT-0800 (Pacific Standard Time)">05:55</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">I wonder how difficult it would be to change to Option 2, which would allow easy parallel processing</td></tr>
+  <tr class="msg" id="L54"><td class="ts-cell"><a class="ts" href="#L54" alt="Wed Jan 25 2023 21:58:40 GMT-0800 (Pacific Standard Time)">05:58</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell"><p>The only way to consume async iterables:</p>
+<ul>
+<li>Callers of <code>.next()</code> will await (they already had to, we're returning promises)</li>
+<li>for-await-of can be updated to await the inner value
+<ul>
+<li>Also call <code>.return()</code> if rejection happens</li>
+</ul>
+</li>
+</ul>
+</td></tr>
+  <tr class="msg" id="L55"><td class="ts-cell"><a class="ts" href="#L55" alt="Wed Jan 25 2023 21:59:14 GMT-0800 (Pacific Standard Time)">05:59</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">Surprisingly, I don't think there'll be a web-compat risk.</td></tr>
+  <tr class="msg" id="L56"><td class="ts-cell"><a class="ts" href="#L56" alt="Wed Jan 25 2023 22:02:05 GMT-0800 (Pacific Standard Time)">06:02</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell"><p>The ways to consume an async iterator:</p>
+<ul>
+<li>manual <code>.next()</code></li>
+<li><code>yield*</code> (which only works inside another async iterable)</li>
+<li><code>for-await-of</code></li>
+</ul>
+</td></tr>
+  <tr class="msg" id="L57"><td class="ts-cell"><a class="ts" href="#L57" alt="Wed Jan 25 2023 22:02:35 GMT-0800 (Pacific Standard Time)">06:02</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">I don't imagine manual <code>.next()</code> iteration is super common?</td></tr>
+  <tr class="msg" id="L58"><td class="ts-cell"><a class="ts" href="#L58" alt="Wed Jan 25 2023 22:03:11 GMT-0800 (Pacific Standard Time)">06:03</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">So the main way to consume an async iterable is to use <code>for-await-of</code>, which we can update to await the inner promise (and cleanup the iterator on rejections)</td></tr>
+  <tr class="msg" id="L59"><td class="ts-cell"><a class="ts" href="#L59" alt="Wed Jan 25 2023 22:04:07 GMT-0800 (Pacific Standard Time)">06:04</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">We can ignore <code>yield*</code>, because it's only available in other async iterators, because we still have an async iterator and that still needs to be consumed with <code>for-await-of</code>.</td></tr>
+  <tr class="msg" id="L60"><td class="ts-cell"><a class="ts" href="#L60" alt="Wed Jan 25 2023 22:06:59 GMT-0800 (Pacific Standard Time)">06:06</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell"><code>.next()</code> iteration could be updated to await the inner value, but not block on that settlement</td></tr>
+  <tr class="msg" id="L61"><td class="ts-cell"><a class="ts" href="#L61" alt="Wed Jan 25 2023 22:08:04 GMT-0800 (Pacific Standard Time)">06:08</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">Or maybe we need a <code>.nextRaw()</code> which won't unwrap the inner</td></tr>
+  <tr class="msg" id="L62"><td class="ts-cell"><a class="ts" href="#L62" alt="Wed Jan 25 2023 22:09:17 GMT-0800 (Pacific Standard Time)">06:09</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">the main web-compat risk is that <code>(async function*(){ try { yield Promise.reject(1) } catch (e) { console.log('caught'); } })().next()</code> prints <code>caught</code></td></tr>
+  <tr class="msg" id="L63"><td class="ts-cell"><a class="ts" href="#L63" alt="Wed Jan 25 2023 22:09:29 GMT-0800 (Pacific Standard Time)">06:09</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">i.e. yielding a rejected promise triggers <code>catch</code> handlers around the yield</td></tr>
+  <tr class="msg" id="L64"><td class="ts-cell"><a class="ts" href="#L64" alt="Wed Jan 25 2023 22:09:36 GMT-0800 (Pacific Standard Time)">06:09</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">changing that would be fraught at this point</td></tr>
+  <tr class="msg" id="L65"><td class="ts-cell"><a class="ts" href="#L65" alt="Wed Jan 25 2023 22:10:22 GMT-0800 (Pacific Standard Time)">06:10</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">A <code>.nextRaw()</code> then</td></tr>
+  <tr class="msg" id="L66"><td class="ts-cell"><a class="ts" href="#L66" alt="Wed Jan 25 2023 22:11:54 GMT-0800 (Pacific Standard Time)">06:11</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell"><mx-reply><blockquote> the main web-compat risk is that <code>(async function*(){ try { yield Promise.reject(1) } catch (e) { console.log('caught'); } })().next()</code> prints <code>caught</code></blockquote></mx-reply>Actually, how common is manual iteration?</td></tr>
+  <tr class="msg" id="L67"><td class="ts-cell"><a class="ts" href="#L67" alt="Wed Jan 25 2023 22:13:27 GMT-0800 (Pacific Standard Time)">06:13</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">sorry, it's not the <code>.next</code> that's relevant here</td></tr>
+  <tr class="msg" id="L68"><td class="ts-cell"><a class="ts" href="#L68" alt="Wed Jan 25 2023 22:13:35 GMT-0800 (Pacific Standard Time)">06:13</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">you'd get the same <code>caught</code> in a <code>for-await-of</code></td></tr>
+  <tr class="msg" id="L69"><td class="ts-cell"><a class="ts" href="#L69" alt="Wed Jan 25 2023 22:13:49 GMT-0800 (Pacific Standard Time)">06:13</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">the relevant bit is that the catch handler <em>inside the async generator</em> gets triggered</td></tr>
+  <tr class="msg" id="L70"><td class="ts-cell"><a class="ts" href="#L70" alt="Wed Jan 25 2023 22:14:39 GMT-0800 (Pacific Standard Time)">06:14</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">no idea how common manual iteration is though. my guess would be not especially but there's definitely times you want it, e.g. for queues and stuff</td></tr>
+  <tr class="msg" id="L71"><td class="ts-cell"><a class="ts" href="#L71" alt="Wed Jan 25 2023 22:37:22 GMT-0800 (Pacific Standard Time)">06:37</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell"><blockquote>
+<p>you'd get the same caught in a for-await-of<br>the relevant bit is that the catch handler inside the async generator gets triggered</p>
+</blockquote>
+<p>I would phrase this as "<code>.next()</code> will call <code>.error()</code> if promise rejects"</p>
+</td></tr>
+  <tr class="msg" id="L72"><td class="ts-cell"><a class="ts" href="#L72" alt="Wed Jan 25 2023 22:40:29 GMT-0800 (Pacific Standard Time)">06:40</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell"><p>Eg, the slides say:</p>
+<pre><code class="language-javascript">// Given:
+AsyncIterator.prototype = {
+  async next(v) {
+    return { value: await resumeWithValue(v), done }
+  }
+
+  async error(e) {
+    return { value: await resumeWithError(e), done }
+  }
+}
+
+// Input
+async function* foo() {
+    try {
+        yield Promise.reject(1);
+    } finally {
+        console.log(2);
+    }
+}
+
+// Output
+async function* foo() {
+    try {
+        yield await Promise.reject(1);
+    } finally {
+        console.log(2);
+    }
+}
+</code></pre>
+</td></tr>
+  <tr class="msg" id="L73"><td class="ts-cell"><a class="ts" href="#L73" alt="Wed Jan 25 2023 22:41:07 GMT-0800 (Pacific Standard Time)">06:41</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">I think we could unobservably change that to:</td></tr>
+  <tr class="msg" id="L74"><td class="ts-cell"><a class="ts" href="#L74" alt="Wed Jan 25 2023 22:42:12 GMT-0800 (Pacific Standard Time)">06:42</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell"><pre><code class="language-javascript">// Given:
+AsyncIterator.prototype = {
+  async next(v) {
+    try {
+      return { value: await resumeWithValue(v), done }
+    } catch (e) {
+      return { value: await resumeWithError(e), done }
+    }
+  }
+
+  async error(e) {
+    return { value: await resumeWithError(e), done }
+  }
+}
+
+// Input
+async function* foo() {
+    try {
+        yield Promise.reject(1);
+    } finally {
+        console.log(2);
+    }
+}
+
+// Output has no change
+</code></pre>
+</td></tr>
+  <tr class="msg" id="L75"><td class="ts-cell"><a class="ts" href="#L75" alt="Wed Jan 25 2023 22:43:57 GMT-0800 (Pacific Standard Time)">06:43</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell"><p>And if we can do that, why can't we do:</p>
+<pre><code class="language-javascript">// Given:
+AsyncIterator.prototype = {
+  async next(v) {
+    try {
+      return { value: await this.nextRaw(v).value, done }
+    } catch (e) {
+      return { value: await resumeWithError(e), done }
+    }
+  }
+
+  async nextRaw(v) {
+    return { value: resumeWithValue(v), done }
+  }
+
+  async error(e) {
+    return { value: await resumeWithError(e), done }
+  }
+}
+</code></pre>
+</td></tr>
+  <tr class="msg" id="L76"><td class="ts-cell"><a class="ts" href="#L76" alt="Thu Jan 26 2023 07:01:21 GMT-0800 (Pacific Standard Time)">15:01</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell"><mx-reply><blockquote> the main web-compat risk is that <code>(async function*(){ try { yield Promise.reject(1) } catch (e) { console.log('caught'); } })().next()</code> prints <code>caught</code></blockquote></mx-reply>That implicit <code>await</code> is actually surprising to me.</td></tr>
+  <tr class="msg" id="L77"><td class="ts-cell"><a class="ts" href="#L77" alt="Thu Jan 26 2023 07:05:14 GMT-0800 (Pacific Standard Time)">15:05</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell"><mx-reply><blockquote> no idea how common manual iteration is though. my guess would be not especially but there's definitely times you want it, e.g. for queues and stuff</blockquote></mx-reply>We do quite a bit of manual iteration, and it's error prone. I would expect that calling <code>.next()</code> would unwrap / await the inner promise. I don't see a reason to need <code>nextRaw()</code></td></tr>
+  <tr class="msg" id="L78"><td class="ts-cell"><a class="ts" href="#L78" alt="Thu Jan 26 2023 07:09:05 GMT-0800 (Pacific Standard Time)">15:09</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell">And yes making the <code>.next()</code> implementation trigger the equivalent <code>.throw(e)</code> logic on rejection during unwrapping would preserve the consumer behaviors (without needing to update <code>for-await-of</code>)</td></tr>
+  <tr class="msg" id="L79"><td class="ts-cell"><a class="ts" href="#L79" alt="Thu Jan 26 2023 07:11:12 GMT-0800 (Pacific Standard Time)">15:11</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell">tricky part is that on the producer side, the <code>throw()</code> continuation may come in when the generator has already moved on if the consumer called <code>.next()</code> without awaiting (manually iterated)</td></tr>
+  <tr class="msg" id="L80"><td class="ts-cell"><a class="ts" href="#L80" alt="Thu Jan 26 2023 08:19:29 GMT-0800 (Pacific Standard Time)">16:19</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">Having <code>.next</code> call <code>.throw</code> on the generator would be kind of weird - that would inject the throw completion into the async generator at a point unrelated to the place that produced the rejected promise.</td></tr>
+  <tr class="msg" id="L81"><td class="ts-cell"><a class="ts" href="#L81" alt="Thu Jan 26 2023 08:20:08 GMT-0800 (Pacific Standard Time)">16:20</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell"><mx-reply><blockquote> tricky part is that on the producer side, the <code>throw()</code> continuation may come in when the generator has already moved on if the consumer called <code>.next()</code> without awaiting (manually iterated)</blockquote></mx-reply>Which I guess is the thing you were saying here, yeah.</td></tr>
+  <tr class="msg" id="L82"><td class="ts-cell"><a class="ts" href="#L82" alt="Thu Jan 26 2023 08:23:49 GMT-0800 (Pacific Standard Time)">16:23</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell">I was just trying to analyze <span class="nick-1">Justin Ridgewell</span> suggestion above. In most cases it would behave the same, except for multiple un-awaited <code>.next()</code> calls</td></tr>
+  <tr class="msg" id="L83"><td class="ts-cell"><a class="ts" href="#L83" alt="Thu Jan 26 2023 08:25:26 GMT-0800 (Pacific Standard Time)">16:25</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell">Regardless of the approach, if we want to make generators not implicitly await, it will be a contract change on the producer side in case the consumer doesn't await itself</td></tr>
+  <tr class="msg" id="L84"><td class="ts-cell"><a class="ts" href="#L84" alt="Thu Jan 26 2023 08:27:01 GMT-0800 (Pacific Standard Time)">16:27</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell">And I don't think there's a way to make the producer opt-in somehow, besides foregoing generators of course</td></tr>
+  <tr class="msg" id="L85"><td class="ts-cell"><a class="ts" href="#L85" alt="Thu Jan 26 2023 08:28:21 GMT-0800 (Pacific Standard Time)">16:28</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">There is the hacky way using my tweak to async iterator helpers: replace <code>async gen*f(){ yield p; }</code> with <code>let f = () =&gt; (async gen*f(){ yield { v: p }; })().map(box =&gt; box.v)</code></td></tr>
+  <tr class="msg" id="L86"><td class="ts-cell"><a class="ts" href="#L86" alt="Thu Jan 26 2023 08:32:02 GMT-0800 (Pacific Standard Time)">16:32</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell">yeah true</td></tr>
+  <tr class="msg" id="L87"><td class="ts-cell"><a class="ts" href="#L87" alt="Thu Jan 26 2023 08:34:14 GMT-0800 (Pacific Standard Time)">16:34</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell"><p>ok I think that means not changing the generator semantics, and leaving it to the producer opting in these semantics through helpers.</p>
+<p>I assume the helper would call <code>.throw()</code> on the wrapped generator if it encounters a rejection ?</p>
+</td></tr>
+  <tr class="msg" id="L88"><td class="ts-cell"><a class="ts" href="#L88" alt="Thu Jan 26 2023 08:38:47 GMT-0800 (Pacific Standard Time)">16:38</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">No. Consider the case when you're not doing this box thing, just <code>.map(f)</code> - if <code>f</code> throws, that's not an error in the producer</td></tr>
+  <tr class="msg" id="L89"><td class="ts-cell"><a class="ts" href="#L89" alt="Thu Jan 26 2023 08:39:22 GMT-0800 (Pacific Standard Time)">16:39</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">If the mapper function throws then <code>.map</code> will call <code>.return</code> on the producer, in the same way that <code>for await (let item of iter) { throw 0 }</code> would call <code>.return</code> on the producer, of course</td></tr>
+  <tr class="msg" id="L90"><td class="ts-cell"><a class="ts" href="#L90" alt="Thu Jan 26 2023 08:39:37 GMT-0800 (Pacific Standard Time)">16:39</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">but right now nothing in the language calls <code>.throw</code>, and iterator helpers will not change that</td></tr>
+  <tr class="msg" id="L91"><td class="ts-cell"><a class="ts" href="#L91" alt="Thu Jan 26 2023 08:46:20 GMT-0800 (Pacific Standard Time)">16:46</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell">Oh right I always forget that <code>.throw()</code> is only called for <code>yield *</code> but not in <code>for await of</code></td></tr>
+  <tr class="msg" id="L92"><td class="ts-cell"><a class="ts" href="#L92" alt="Thu Jan 26 2023 08:50:24 GMT-0800 (Pacific Standard Time)">16:50</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell">Should <code>f</code> get access to the iterator as a 3rd argument like <code><a href="http://array.map">array.map</a>()</code> ?</td></tr>
+  <tr class="msg" id="L93"><td class="ts-cell"><a class="ts" href="#L93" alt="Thu Jan 26 2023 08:52:15 GMT-0800 (Pacific Standard Time)">16:52</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell">so that we can do <code>.map(async (box, i, iter) =&gt; { try { return await box.v } catch(e) { iter.throw(e); throw e; } })</code> ?</td></tr>
+  <tr class="msg" id="L94"><td class="ts-cell"><a class="ts" href="#L94" alt="Thu Jan 26 2023 08:53:22 GMT-0800 (Pacific Standard Time)">16:53</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell">wouldn't be very clean tho as the spec would still call <code>.return</code> after <code>.throw</code> being called by the mapper function ...</td></tr>
+  <tr class="msg" id="L95"><td class="ts-cell"><a class="ts" href="#L95" alt="Thu Jan 26 2023 08:54:36 GMT-0800 (Pacific Standard Time)">16:54</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell">Yeah, I think if the producer wants to handle rejected promises itself, it needs to await them</td></tr>
+
+</tbody></table></div></div></div>
+</body></html>

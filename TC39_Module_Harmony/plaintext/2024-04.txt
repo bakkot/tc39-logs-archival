@@ -1,0 +1,900 @@
+2024-04-02
+[20:50:55.0141] <sirisian>
+Jack Works: I am down a rabbit hole. Not sure if you remember: https://github.com/tc39/proposal-compartments/issues/11 Was your intention there to do a babel-like transform on a Javascript file?
+
+[20:55:42.0986] <sirisian>
+At a high level do any of these proposals allow one to create an import "preprocessor" that hooks all imports (and their import attributes), modify their source text, and output a module? (And then hook any new imports if applicable in that module recursively). Or is that out of scope for the proposals?
+
+[21:12:18.0225] <kriskowal>
+That is certainly within scope for a `Module` instance constructor with an `importHook`.
+
+[21:27:47.0632] <sirisian>
+Would this work for the "root" realm (not sure the term). Like in a node.js environment where an importHook could process everything? Or would you just create a ShadowRealm (or compartment?) and run the index file in a wrapper?
+
+[01:50:16.0770] <Jack Works>
+> <@sirisian:matrix.org> Jack Works: I am down a rabbit hole. Not sure if you remember: https://github.com/tc39/proposal-compartments/issues/11 Was your intention there to do a babel-like transform on a Javascript file?
+
+Yes. The old API allows us to run a text based hook before evaluation. This allows, for example, run TypeScript file by calling tsc to transform the source.
+
+
+2024-04-03
+[17:03:42.0839] <sirisian>
+Jack Works: Is this in new APIs/proposals already?
+
+[17:44:11.0339] <Jack Works>
+> <@sirisian:matrix.org> Jack Works: Is this in new APIs/proposals already?
+
+I cannot tell. maybe no
+
+[12:57:20.0291] <guybedford>
+Our usual call tomorrow overlaps with the Involvement in Standards discussion at the Node.js Collab Summit... I have a preference towards keeping our meeting especially with the upcoming progress in the Wasm CG and TC39 but wanted to see if many others here plan to go to the collab summit?
+
+[13:27:55.0884] <nicolo-ribaudo>
+I plan to prioritise our modules meeting
+
+[14:09:34.0057] <guybedford>
+ok, I will be attending the modules session just before but skipping the standards discussion, so will see you in the modules meeting, possibly a couple of minutes late if things run over a bit
+
+[14:45:42.0368] <littledan>
+I'd really love it if you all joined the Node Collab Summit session about modules tomorrow
+
+[14:45:58.0119] <littledan>
+The goal is to have more of a cross-over here
+
+[14:46:33.0359] <littledan>
+You can register for remote participation with this link: https://zoom.us/webinar/register/WN_3FJCCjgiRseMunHFhb8NoA#/registration
+
+[14:48:38.0701] <guybedford>
+littledan: the timing is just a bit unfortunate because of TC39 next week for Deferred evaluation and the ESM Integration going to the Wasm CG next week we do have a lot to discuss
+
+[14:49:28.0912] <littledan>
+Sorry I'm fine with skipping the general standards part, I'm talking more about the modules session
+
+[14:49:37.0566] <littledan>
+should we consider moving the modules session to enable participation?
+
+[14:49:45.0113] <guybedford>
+ohhh yes, I plan to be there for the modules session!
+
+[14:49:52.0324] <guybedford>
+it is right before our usual modules meeting
+
+[14:50:01.0711] <littledan>
+Good, so that time works out for you?
+
+[14:50:22.0119] <guybedford>
+yes, sorry I missed you were referring to the modules session, I will be there and I hope others will too!
+
+[14:51:10.0718] <littledan>
+also, if you have thoughts on what I should include in that session, it'd be great... honestly you'd be better to host it than me, guybedford 
+
+[14:53:02.0742] <guybedford>
+I always struggle to know how much to share longer term modules directions within the Node.js project, when there are very real immediate standards questions that are more pressing. I did previously present our modules work at last years collab summit, but it wasn't very well attended.
+
+[14:53:19.0151] <littledan>
+well, now people won't have a choice! it's single-track
+
+[14:53:49.0733] <littledan>
+I think many people were inspired by Joyee's recent work, and we can build off of that momentum
+
+[14:54:44.0572] <littledan>
+I was thinking of focusing on reviewing what we have, and what are the immediate future plans in both Node and TC39 (Stage 2+ TC39 proposals maybe), and then gather input as to what people want to happen in each place
+
+[14:58:30.0302] <guybedford>
+I think it sounds like you have a clear way to present it, I'm happy to share some thoughts on the current harmony efforts as I did previously. Also very interested to hear what people are interested in discussing.
+
+[15:01:00.0382] <kriskowal>
+The recent CJS imports ESM work has interesting parallels with deferred export. They both apply only to synchronous subgraphs, and imply that not-yet-evaluated transitive dependencies will execute in the same microtask.
+
+[15:01:25.0316] <kriskowal>
+ * The recent CJS imports ESM work has interesting parallels with deferred export. They both apply only to synchronous subgraphs, and imply that not-yet-evaluated transitive dependencies will execute in the same microtask. They both run ESM on the caller’s stack.
+
+[15:01:58.0641] <kriskowal>
+ * The recent CJS imports ESM work has interesting parallels with deferred export. They both apply only to synchronous subgraphs, and imply that not-yet-evaluated transitive dependencies will execute in the same microtask. They both run ESM on the caller’s stack. They’re both limited to exposing the namespace object and not destructured imports.
+
+[15:09:15.0327] <littledan>
+> <@kriskowal:aelf.land> The recent CJS imports ESM work has interesting parallels with deferred export. They both apply only to synchronous subgraphs, and imply that not-yet-evaluated transitive dependencies will execute in the same microtask. They both run ESM on the caller’s stack. They’re both limited to exposing the namespace object and not destructured imports.
+
+sure but they are also pretty different. The eagerly-execute-the-TLA stuff is actually pretty deliberate and important for import defer, and missing in CJS requires ESM. And import defer is a long-term solution, whereas CJS imports ESM is a "temporary" transition strategy.
+
+[15:09:46.0892] <littledan>
+they both relate to the theme "actually ESM has never been all that async, so we can do this important stuff"
+
+[15:12:11.0733] <guybedford>
+There's an interesting edge case with cycles - the ESM Evaluate function was actually never designed to be reentrant. With CJS importing ESM that effectively introduces reentrancy. And import defer is actually now fixing that reentrancy invariant to more clearly define what reentrancy is allowed (non cyclical).
+
+[15:13:05.0806] <guybedford>
+But it does unfortunately mean telling Joyee she can't have ESM - CJS cycles at all :P
+
+
+2024-04-04
+[07:15:43.0567] <littledan>
+Node collaborator summit module session starting now. Please join!
+
+
+2024-04-05
+[11:27:01.0326] <Rob Palmer>
+I invited Jake here because he has done a lot of work converting TypeScript to use ESM. There are still some challenges before TS can go "fully ESM". 
+
+Potentially Joyee/Guy/Nicolo may have some thoughts on this.
+
+[11:29:02.0632] <jakebailey>
+Hello 🙂
+
+[11:29:36.0289] <kriskowal>
+Greetings jakebailey, very interested in your perspective / grievances.
+
+[11:33:06.0028] <guybedford>
+Hi jakebailey Rob's mentioned some of your use cases, would be great to discuss further either here or in our weekly meetings if you'd like to join
+
+[11:43:37.0864] <jakebailey>
+More or less, the issue with switching TS to ESM is that TypeScript has conditional support for Node; we check if we're in Node (or Node-ish), then `require` stuff from Node if possible. This is good because the same bundle can be used for any use case. But, we can't do this in ESM without top-level await because this code can't be asynchronous (besides during load of the module), defeating the awesome "require ESM works" case that would allow us to move to ESM-only without breaking downstream CJS users. My thinking was that `import.meta.require` or a new `import.meta.importSync` or `import(..., { sync: true })` could be created to allow synchronous dynamic import of synchronously loadable ESM; as it stands, the only use of "synchronous ESM" seems to be require-ing ESM.
+
+[11:46:37.0679] <jakebailey>
+It's theoretically possible to do this with import mappings, but that has a bunch of bad knock-on effects for our build, plus the fact that it may exclude downstream consumers who polyfill or aren't actually Node
+
+[11:46:41.0566] <guybedford>
+This was one of the motivations for top-level await to make these workflows easier. I'm curious what the issue is with relying on it? import sync is a great discussion point, I suppose the important question there is whether or not you expect to synchronously load arbitrary modules in Node.js through this mechanism or just the builtin host APIs or already-loaded code
+
+[11:47:15.0331] <jakebailey>
+TLA prevents require of ESM, so we'd sooner stay CJS because most of the TS ecosystem is CJS.
+
+[11:47:36.0160] <guybedford>
+most tools these days support package imports conditions as well
+
+[11:47:56.0365] <jakebailey>
+This is all relating to Joyee's change to Node, which would typically mean that an ESM only project would be usable in CJS via require
+
+[11:48:19.0131] <guybedford>
+it sounds like your major pressure is on import sync then yes, in which case it would be interesting to hear what modules you expect the import to work for
+
+[11:49:22.0247] <kriskowal>
+Also curious how we would square this with TS-to-ESM on the web.
+
+[11:49:26.0080] <jakebailey>
+Well, for us, it's just like `require("fs")` and so on; but I think there's a more general question about "if there's now a very clear set of sync-loadable ESM code, isn't it nice for anyone to be able to load that sync too?"
+
+[11:50:18.0046] <kriskowal>
+Moddable XS also has a sync import but it only is expected to work for no-TLA subgraphs that have already been loaded.
+
+[11:50:20.0272] <jakebailey>
+And IIRC there are some ongoing module related proposals that also require sync ESM, and even a proposal to have a prologue to assert that
+
+[11:51:28.0160] <kriskowal>
+Yes, there is a proposal for asserting a no-TLA subgraph, and also a proposal (deferred export evaluation) that under the same circumstances synchronously export pre-loaded no-TLA subgraphs.
+
+[11:52:26.0632] <jakebailey>
+Yeah. So on one hand, I'd be happy with `import.meta.require` being re-proposed, especially now that Node has `import.meta.dirname` and such, but there's the more general solution too!
+
+[11:52:33.0898] <kriskowal>
+It’s not hard to imagine an `import.now` proposal that would work under the same limitations.
+
+[11:53:11.0386] <guybedford>
+this is a good discussion topic, I'd suggest we bring it up in our next meeting if you'd like to join
+
+[11:53:25.0272] <kriskowal>
+`import.meta.dirname`, `import.meta.filename`, `import.meta.resolve`, and `import.meta.require` are all difficult to generalize beyond host-specific bottlenecks for interoperability.
+
+[11:53:45.0671] <guybedford>
+The meeting is this one - https://www.google.com/calendar/event?eid=c2luNm9jcm4wbTJyNXNxY2JkbGZtdmdwZWNfMjAyNDA0MThUMTUwMDAwWiAzN2EyMTA3ZGZmMTUxOTNiNDJmZmZhMDkxYmM5OTkxNjU2OTVkNDNiN2U0ZjQzYjY1ZWFiMDkzZGEyNzU3YTNhQGc&ctz=America/Chicago
+
+[11:53:55.0466] <jakebailey>
+I'll add that to my calendar 🙂
+
+[11:54:02.0498] <kriskowal>
+But, `import.now` does generalize.
+
+[11:54:53.0293] <jakebailey>
+I also remember some oddies in Workers too where a sync import would be beneficial, though I'm leaving my sphere of knowledge 😄
+
+[11:56:13.0511] <guybedford>
+it's worth thinking carefully about what the real use cases are though
+
+[11:56:20.0560] <guybedford>
+as opposed to "it might be nice"
+
+[11:56:39.0184] <guybedford>
+there's a big distinction between host apis / a registry cache getter and full sync graph loading as well
+
+[11:57:01.0779] <guybedford>
+so if we want to solve the full sync graph loading problems (which are hard, because network), it's important to justify that
+
+[11:57:28.0519] <guybedford>
+hard in the sense of, how should it work and how should it error, not how should we syncify the network of course
+
+[11:58:13.0416] <jakebailey>
+ * I also remember some oddities in Workers too where a sync import would be beneficial, though I'm leaving my sphere of knowledge 😄
+
+[12:00:31.0816] <guybedford>
+there's definitely some interesting framings in which a sync import can work though, so it would be great to have a chance to discuss the use cases and viability
+
+
+2024-04-08
+[05:06:27.0324] <littledan>
+At the Node Collaborator Summit last week, there was interest in figuring out how to enable module mocking in ESM. Let's work with jakobjingleheimer on this!
+
+[05:12:28.0586] <nicolo-ribaudo>
+Hey, welcome!
+
+[05:15:33.0490] <naugtur>
+We got this question at WDI conference in Warsaw this Saturday too after a talk that showcased Node's builtin testing tools. It made me wonder if it'd be possible to implement some of the Module loading virtualization from the spec draft on top of Node loaders
+
+[05:33:58.0079] <jakobjingleheimer>
+Let's do iiiit 💃
+
+[09:45:16.0788] <guybedford>
+I've already invited Jakob to the modules meetings, look forward to working through the designs, it's a good time to get some help on this work too!
+
+[10:14:52.0362] <littledan>
+Can we also make sure to invite Vlad from vitest? I got in touch with him via their discord and he is interested.
+
+[10:19:01.0999] <littledan>
+talking about vova.dev
+
+[10:23:35.0350] <guybedford>
+I don't have the ability to add guests to the invite myself, but Chris and Yulia do
+
+[10:23:56.0578] <guybedford>
+The public meeting is at https://app.element.io/?pk_vid=9e58aecdf02c4fe916668987783ae8d2&updated=1.11.25#/room/#tc39-compartments:matrix.org/$VmuZa312WGIF5INEIM9ZTVIIzogxhYSaL34VgDJga0A
+
+[10:24:08.0270] <guybedford>
+although for some reason, it is coming up as this week, when the next one is next week
+
+[10:24:26.0519] <guybedford>
+I would recommend sending their emails to Chris to add them to the meeting (sorry Chris!)
+
+[10:30:16.0450] <Chris de Almeida>
+let's get calendaring sorted out after plenary 🙏
+
+
+2024-04-11
+[08:03:36.0218] <jakebailey>
+> <@guybedford:matrix.org> this is a good discussion topic, I'd suggest we bring it up in our next meeting if you'd like to join
+
+Nobody's here, after opening the agenda doc I guess I was supposed to have added something to the schedule?
+
+[08:06:06.0468] <jakebailey>
+That or TC39 is still happening and "next meeting" didn't mean next week 😄
+
+[08:09:24.0259] <nicolo-ribaudo>
+Whips sorry 😅
+
+[08:09:48.0383] <nicolo-ribaudo>
+Yes, TC39 is still happening 
+
+[08:10:07.0994] <jakebailey>
+I rushed out of bed for nothing! 😄 (oops)
+
+[08:10:18.0290] <ljharb>
+(TC39 meetings tend to all be cancelled during TC39 plenary week)
+
+[08:29:15.0060] <littledan>
+sorry, we'll try to update the calendar for accuracy in the future
+
+[08:29:26.0678] <jakebailey>
+No worries.
+
+[08:36:08.0376] <nicolo-ribaudo>
+Also btw, if you have something to talk about please make sure it's on the agenda! We usually consider meeting to be automatically cancelled if 12 hours before the agenda is empty, so that you don't have to wake up early just to discover that the meeting is cancelled
+
+[08:36:44.0517] <nicolo-ribaudo>
+Oh the agenda says "30 minutes"
+
+[08:37:02.0261] <nicolo-ribaudo>
+I always assumed it was something like "the evening before for the west coast" 😅
+
+[09:15:05.0679] <joyee>
+> <@jakebailey:matrix.org> Yeah. So on one hand, I'd be happy with `import.meta.require` being re-proposed, especially now that Node has `import.meta.dirname` and such, but there's the more general solution too!
+
+It seems to me what you need that is missing from the spec is the ability to do lazy resolution/more lenient resolution, so that you don't get an error by importing from an id that doesn't resolve
+
+[09:16:17.0829] <joyee>
+(Or maybe there can be an error, but one you can catch)
+
+[09:16:35.0475] <joyee>
+ * (Or maybe there can be an error, but one you can catch, though that's not necessarily good for perf)
+
+[09:17:23.0313] <jakebailey>
+It'd be at the top level, so there's nothing to catch. Technically speaking an import that is allowed to be there but not resolve and not error if not touched is fine, but my impression was that the deferred import proposal still errored on a failed import
+
+[09:17:29.0831] <littledan>
+> <@qzhang:igalia.com> It seems to me what you need that is missing from the spec is the ability to do lazy resolution/more lenient resolution, so that you don't get an error by importing from an id that doesn't resolve
+
+This is a good thread to pull on. browsers are also wondering whether we could let some other types of early errors to come later.
+
+[09:17:31.0343] <jakebailey>
+so, we'd end up breaking in browsers if we had `node:fs`
+
+[09:17:57.0813] <joyee>
+Yes, the import defer proposal is deferring evaluation, not resolution
+
+[09:18:31.0721] <littledan>
+WebAssembly started with eager validation, but later permitted lazy
+
+[09:18:53.0895] <jakebailey>
+But, at some level I think that the abiliy to conditionally require synchronously is a useful construct for some libraries who can't go async, and a sync import now seems like a possible thing
+
+[09:19:11.0297] <jakebailey>
+ * But, at some level I think that the abiliy to conditionally require synchronously is a useful construct for some libraries who can't go async, and a sync import now seems like a possible thing without being in CJS
+
+[09:19:39.0037] <joyee>
+But it does sound like a generally useful thing to have, for example for modules that want to work on both the browser and server side runtimes, otherwise, everyone just puts everything on the global
+
+[09:21:31.0156] <littledan>
+> <@qzhang:igalia.com> But it does sound like a generally useful thing to have, for example for modules that want to work on both the browser and server side runtimes, otherwise, everyone just puts everything on the global
+
+it's true, this is a sort of missing capability from CJS
+
+[09:21:35.0377] <joyee>
+CJS require() couples resolution + evaluation in one go. ESM import decouples them. In the use case we are talking about, the conditional part is resolution, which currently in ESM is only possible in dynamic import()
+
+[09:23:50.0270] <jakebailey>
+I guess I don't see those as separate for this use case, since I want the whole thing to be conditional; we precheck and only do this on a "node like" system
+
+[09:25:14.0188] <joyee>
+My understanding of the history of ESM is fairly limited, but I think the decoupling in ESM is part of the design (personally, I love it, because that unlocks things like module snapshot, and the coupling in CJS makes me sad). My guess is, making the resolution lazy/conditional/more leinient via syntax is still possible while preserving the decoupling in ESM (could be too naive, too)
+
+[09:25:29.0148] <joyee>
+ * My understanding of the history of ESM is fairly limited, but I think the decoupling in ESM is part of the design (personally, I love it, because that unlocks things like module snapshot and tree shaking, and the coupling in CJS makes me sad). My guess is, making the resolution lazy/conditional/more leinient via syntax is still possible while preserving the decoupling in ESM (could be too naive, too)
+
+[09:25:56.0247] <joyee>
+ * My understanding of the history of ESM is fairly limited, but I think the decoupling in ESM is part of the design (personally, I love it, because that unlocks things like module snapshot and tree shaking, and the coupling in CJS makes me sad). My guess is, making the resolution lazy/conditional/more leinient via syntax is still possible while preserving the decoupling in ESM (I could be too naive, too)
+
+[09:27:38.0177] <jakobjingleheimer>
+That's my understanding too 🙂
+
+[09:38:06.0663] <joyee>
+Or maybe, it doesn't need new syntax, just special, standardized import attributes across the platforms that allow weak imports, like what's described in https://lea.verou.me/blog/2020/11/the-case-for-weak-dependencies-in-js/, but also for `import`
+
+[09:39:19.0906] <joyee>
+(With the potential downside of, what happens if you need to support older versions of browsers/runtimes? 😵‍💫)
+
+[09:41:38.0217] <guybedford>
+jakebailey: Sorry for the meeting confusion - the modules meeting is currently every two weeks, with the next meeting next Thursday. It is still an unsolved mystery why the TC39 calendar isn't reflecting this publicly, while for those of us in the meeting it is reflecting the correct bi-weekly schedule.
+
+[09:42:39.0864] <joyee>
+```js
+import fs from "node:fs" with { weak: true };
+
+// 1. In Node.js or other runtimes with Node.js compat layer, fs is fs,
+// also applies to named exports for APIs that are supported.
+// 2. In runtimes that don't support it/browsers, fs is undefined..or a symbol? Or something else?
+```
+
+[09:42:47.0795] <guybedford>
+ * jakebailey: Sorry for the meeting confusion. I missed that the meeting was cancelled this week myself, and thought we were on a bi-weekly schedule for some reason!
+
+[09:46:42.0385] <jakebailey>
+The complexity here was more or less why I was re-proposing `import.meta.require` / `import.meta.importSync` or something, a la `import.meta.dirname` and so on which are Node specific constructs
+
+[09:48:06.0996] <jakebailey>
+With require(ESM), it really felt like we could finally make TypeScript be ESM without breaking the ecosystem, but then I realized that I couldn't without some way to conditionally handle node, so it became self defeating... Without resorting to import conditions anyway, which is where things get super frustrating internally for us
+
+[09:52:14.0839] <ljharb>
+conditional static imports is definitely something we need. there used to be a proposal but it doesn't seem to even be in the proposals table
+
+[09:53:52.0880] <jakobjingleheimer>
+Why?
+
+[09:54:59.0039] <ljharb>
+i'm not sure, i'll have to track that down
+
+[09:55:24.0622] <jakobjingleheimer>
+To be clear, i meant why do we need them?
+
+[09:56:04.0647] <joyee>
+There are some more pragmatic pros to `import.meta.require`, like being (significantly?) faster than `import cjs` on Node.js, or easier to feature detect. Cons are...one more thing on the `import.meta`? I think some consider that evil?
+
+[09:56:12.0098] <kriskowal>
+> <@qzhang:igalia.com> CJS require() couples resolution + evaluation in one go. ESM import decouples them. In the use case we are talking about, the conditional part is resolution, which currently in ESM is only possible in dynamic import()
+
+I think it’s useful to distinguish Node.js loader from abstract CJS loaders (which is a tent with Node.js, bundlers, and others). That makes it clear that the choice to couple resolution and evaluation is a Node.js-specific constraint. CJS and ESM were both designed to cover the web’s need to resolve specifiers for transitive dependencies before evaluation. CJS doesn’t even mandate that evaluation ever occur on the stack of require. I could buy the case for an `import.now` in the language (and `importNowHook` on virtual `Module` instances)
+
+[09:56:32.0055] <joyee>
+ * There are some more pragmatic pros to `import.meta.require`, like being (significantly?) faster than `import cjs` or `import builtin` on Node.js, or easier to feature detect. Cons are...one more thing on the `import.meta`? I think some consider that evil?
+
+[09:56:54.0226] <ljharb>
+ah! well, for one, platform-specific deps - like `node:fs` for example. you might want to sync-import a polyfill, but only when a feature test fails.
+
+[09:57:35.0586] <kriskowal>
+The Node.js case is interesting historically. Ryan Dahl was reluctant to embrace CommonJS. When I talked to Bryan Cantril about it in 2010, his take was that it didn’t matter, even though it ran against the “everything async” grain of the platform, because linking a dynamic library is never going to be async.
+
+[09:58:40.0447] <ljharb>
+or at least, you need it to be sync the vast majority of the time
+
+[09:59:01.0254] <kriskowal>
+In the CommonJS mailing list days, there was a great deal of talk about a `require.async` that would return a promise like dynamic import, but there wasn’t agreement on the design of promises yet.
+
+[10:00:57.0132] <kriskowal>
+One of the other pressures to make Node.js resolution synchronous was that the CJS loader doesn’t opportunistically discover the `package.json` tree, as the ESM does. Embracing the package tree is _interesting_ because resolution can be synchronous if you know every reachable path, and is analogous to having an import-map on the web.
+
+[10:02:05.0205] <kriskowal>
+History aside, I think we should have `import.now`, deferred exports, and with both of these, deferring resolution to conditional use is possible.
+
+[10:03:05.0500] <ljharb>
+node's ESM doesn't allow that tho, because of conditional exports, and because of subpath patterns
+
+[10:03:18.0525] <ljharb>
+ * node's ESM doesn't allow knowing every reachable path tho, because of conditional exports, and because of subpath patterns
+
+[10:03:38.0447] <ljharb>
+ * node's ESM doesn't allow knowing every reachable path tho, because of conditional exports, and because of subpath patterns (unless you include the filesystem and treat it as immutable, in which case CJS provides the exact same property)
+
+[10:03:57.0173] <joyee>
+What does `opportunistically discover the package.json tree` ?
+
+[10:04:00.0814] <joyee>
+ * What does `opportunistically discover the package.json tree`  mean?
+
+[10:12:38.0181] <kriskowal>
+I think I mis-inferred that changing `import.meta.resolve` from async to sync on both the web and in node meant that it no longer required sync I/O to answer for all paths.
+
+[10:14:17.0175] <kriskowal>
+On the web, the import-map makes it possible to answer for all specifiers without I/O. On Node.js, static resolution makes it sync I/O-free most of the time, but yeah, if Node.js _doesn’t_ locate every package reachable from a module before evaluating a module, it would have to fall through to sync I/O sometimes.
+
+[10:14:46.0245] <kriskowal>
+And of course the extension search path isn’t captured in `package.json` anyway, so yeee.
+
+[10:16:48.0770] <Richard Gibson>
+related: https://github.com/tc39/proposal-import-attributes/issues/153#issuecomment-1981354653
+```
+// Import config with type "wasm" if possible, otherwise with type "json".
+import '//test.local/config' with { type: "wasm" },
+       '//test.local/config' with { type: "json" }
+
+// Import an empty module if `0m` is valid syntax, otherwise import a BigDecimal polyfill.
+import '/empty.mjs' with { condition: { "validSyntax": "0m" } },
+       '/polyfills/BigDecimal.mjs'
+
+
+// Import CSS if possible, otherwise JS.
+import styles from './styles.css' with { type: "css" },
+                   './styles.mjs'
+```
+
+[10:16:57.0950] <Richard Gibson>
+ * related: https://github.com/tc39/proposal-import-attributes/issues/153#issuecomment-1981354653
+
+```
+// Import config with type "wasm" if possible, otherwise with type "json".
+import '//test.local/config' with { type: "wasm" },
+       '//test.local/config' with { type: "json" }
+
+// Import an empty module if `0m` is valid syntax, otherwise import a BigDecimal polyfill.
+import '/empty.mjs' with { condition: { "validSyntax": "0m" } },
+       '/polyfills/BigDecimal.mjs'
+
+// Import CSS if possible, otherwise JS.
+import styles from './styles.css' with { type: "css" },
+                   './styles.mjs'
+```
+
+[10:17:14.0888] <kriskowal>
+(follow-up on main thread)
+
+[10:20:23.0474] <joyee>
+Not quite sure if I am following but synchronicity of resolution in Node.js is more of an implementation detail that can be changed
+
+[10:21:28.0883] <joyee>
+For CJS and `require(esm)` it does synchronous I/O all the way, querying the nearest the package.json until it reaches the root directory
+
+[10:21:50.0138] <joyee>
+(That's actually faster than the async I/O a full `import esm` is doing)
+
+[10:22:34.0637] <kriskowal>
+Yeah, understood on the performance front. That was the grounds for implementing CJS with sync I/O on Node.js.
+
+[10:22:45.0747] <joyee>
+And the resolution result is also cached, so `import.meta.resolve` can just throw cache entries in there, or get cached entries
+
+[10:23:03.0473] <kriskowal>
+And I was mistaken that Node.js can avoid I/O for sync ESM. I hadn’t throught through all the cases.
+
+[10:23:49.0591] <joyee>
+If it's cached, then no I/O. If it isn't, at least some I/O is always needed to discover package.json, especially when people use `.js` then Node.js need to check `type` field
+
+[10:24:02.0770] <kriskowal>
+Right, I’d hoped (but was mistaken) that the `import.meta.resolve` memo could be proven to be complete before a module evaluates.
+
+[10:24:06.0360] <jakebailey>
+Largely though, isn't this unrelated? Like, node ESM stuff is now off-thread, and "looks" synchronous, but internally can be sync or async however it feels
+
+[10:24:20.0181] <joyee>
+Node.js ESM is not off thread
+
+[10:24:55.0081] <kriskowal>
+Blocking on off-thread work is synchronous from the JS point-of-view.
+
+[10:24:55.0127] <jakebailey>
+Hm, I guess I am misunderstanding about the work that went into making import.meta.resolve synchronous
+
+[10:25:17.0255] <kriskowal>
+What makes it synchronous is that it starves progress on the event loop until complete.
+
+[10:25:23.0580] <joyee>
+Only custom loaders are, and we are adding something that allows you to do it in-thread, because the off-thread thing is basically in-thread hooks + worker + block on Atomics.wait
+
+[10:25:54.0389] <joyee>
+ * Only custom loaders are, and we are proposing to add something that allows you to do it in-thread, because the off-thread thing is basically in-thread hooks + worker + block on Atomics.wait
+
+[10:26:40.0841] <joyee>
+Still it's only off thread when you customize the loader. It's in thread if you are not doing that
+
+[10:26:45.0650] <kriskowal>
+Deadlock enters the chat :|
+
+[10:27:06.0629] <joyee>
+Yes, the off thread hooks are suffering from deadlocks, another reason to provide in thread hooks
+
+[10:28:16.0257] <joyee>
+But then, the default ESM loader without customization is still in the same thread.
+
+[10:28:26.0085] <joyee>
+And no workers etc.
+
+[10:29:33.0066] <joyee>
+And default ESM loader + future in-thread hooks are also in the same thread. No locks, no worker, not even event loop ticks, everything is synchronous, until you deliberately throw something async in the graph (TLA, network imports, etc.)
+
+[10:32:03.0322] <jakobjingleheimer>
+Deadlock is happening in only 1 scenario that we know of, right joyee ?
+
+[10:32:32.0033] <joyee>
+Currently, yes, but I suspect not being able to control the worker can lead to more
+
+[10:33:34.0717] <joyee>
+And in-thread hooks can allow users to control the worker and work around it
+
+[10:36:23.0791] <kriskowal>
+Would Node.js be in a good position to exploit a `ModuleSource` constructor that has an internal slot with an immutable representation of a compiled module that can be safely shared, without locking, between threads?
+
+[10:36:31.0696] <joyee>
+> Hm, I guess I am misunderstanding about the work that went into making import.meta.resolve synchronous
+The ESM loader is doing unconditional async resolution but that is an implementation detail. It can be conditionally async (only when someone does network imports). That'll make `import.meta.resolve()` a lot more performant too
+
+[10:36:49.0132] <joyee>
+ * > Hm, I guess I am misunderstanding about the work that went into making import.meta.resolve synchronous
+
+The ESM loader is doing unconditional async resolution but that is an implementation detail. It can be conditionally async (only when someone does network imports). That'll make `import.meta.resolve()` a lot more performant too
+
+[10:37:09.0103] <joyee>
+> Hm, I guess I am misunderstanding about the work that went into making import.meta.resolve synchronous
+
+ * > Hm, I guess I am misunderstanding about the work that went into making import.meta.resolve synchronous
+
+The ESM loader is currently doing unconditional async resolution for `import esm` but that is an implementation detail. It can be conditionally async (only when someone does network imports). That'll make `import.meta.resolve()` a lot more performant too
+
+[10:37:56.0562] <joyee>
+(Which I suspect is part of why `require(esm)` is 1.2x faster than `import esm`, even, because `require(esm)` is doing a fully synchronous resolution)
+
+[10:45:58.0157] <joyee>
+For Node.js at least, which mostly deal with fs I/O, not network, synchronous I/O never shows up in the performance profile of loading any non-trivial app, encoding the UTF8 file content into a V8 string can be like 100x more expensive than I/O
+
+[10:46:31.0348] <joyee>
+ * For Node.js at least, which mostly deal with fs I/O, not network, synchronous I/O never shows up in the performance profile of loading any non-trivial app, encoding the UTF8 file content into a V8 string can be like 10x more expensive than I/O
+
+[10:51:30.0213] <joyee>
+> Would Node.js be in a good position to exploit a ModuleSource constructor that has an internal slot with an immutable representation of a compiled module that can be safely shared, without locking, between threads?
+
+From what I can tell, that looks like an abstraction of source code of source text module. I think that can be useful, but whether it needs to be sharable across threads would only matter to those who customize the ESM loader AND use off-thread hooks. For in-thread cases (default, or using in-thread hooks), it's something Node.js can already internally create (I think that's basically our ModuleWrap, or what's underneath `vm.SourceTextModule`)
+
+
+
+[10:51:58.0779] <joyee>
+> Would Node.js be in a good position to exploit a ModuleSource constructor that has an internal slot with an immutable representation of a compiled module that can be safely shared, without locking, between threads?
+
+ * > Would Node.js be in a good position to exploit a ModuleSource constructor that has an internal slot with an immutable representation of a compiled module that can be safely shared, without locking, between threads?
+
+From what I can tell, that looks like an abstraction of source code of source text module. I think that can be useful, but whether it needs to be sharable across threads would only matter to those who customize the ESM loader AND use off-thread hooks. For in-thread cases (default, or using in-thread hooks), it's something Node.js can already internally create (I think that's basically our `ModuleWrap`, or what's underneath `vm.SourceTextModule`)
+
+[10:53:05.0524] <joyee>
+> Would Node.js be in a good position to exploit a ModuleSource constructor that has an internal slot with an immutable representation of a compiled module that can be safely shared, without locking, between threads?
+
+ * > Would Node.js be in a good position to exploit a ModuleSource constructor that has an internal slot with an immutable representation of a compiled module that can be safely shared, without locking, between threads?
+
+From what I can tell, that looks like an abstraction of source code (+ origin and all?) of source text module. I think that can be useful, but whether it needs to be sharable across threads would only matter to those who customize the ESM loader AND use off-thread hooks. For in-thread cases (default, or using in-thread hooks), it's something Node.js can already internally create (I think that's basically our `ModuleWrap`, or what's underneath `vm.SourceTextModule`)
+
+[11:01:58.0873] <guybedford>
+since we're discussing Node.js here, it's worth mentioning we do want to avoid precluding network imports as being first-class in future though
+
+[11:03:50.0411] <joyee>
+That can just be conditionally async. You pay for the cost when you actually have network import in the graph. But no need to make everyone slow when there's none
+
+[11:04:44.0567] <joyee>
+ * That can just be conditionally async. You pay for the cost when you actually have network import in the graph. But no need to make everyone slow when there's nothing async in the graph
+
+[11:09:52.0418] <joyee>
+Actually with a cache layer, everything can be synchronous again with the cache even if you have network imports…
+
+[11:10:39.0496] <joyee>
+* Actually with a cache layer, everything can be synchronous again with the cache even if you have network imports…and you don’t need to pay for the async overhead if the conditional asynchronicity is enforced 
+
+[12:37:01.0353] <Jan Olaf Martin>
+> <@qzhang:igalia.com> For Node.js at least, which mostly deal with fs I/O, not network, synchronous I/O never shows up in the performance profile of loading any non-trivial app, encoding the UTF8 file content into a V8 string can be like 10x more expensive than I/O
+
+That may depend on the app. Sync I/O (or maybe rather the amount of stats) is causing seconds of slow down for some of our apps during startup. If I/O wouldn’t be a bottleneck, I assume bundling wouldn’t be such a big win in some setups.
+
+[12:37:53.0933] <Jan Olaf Martin>
+Cold startup times was a major reason why I pushed against the super I/O heavy CommonJS resolution style for ESM in node
+
+[12:39:10.0070] <joyee>
+> <@jkrems:matrix.org> That may depend on the app. Sync I/O (or maybe rather the amount of stats) is causing seconds of slow down for some of our apps during startup. If I/O wouldn’t be a bottleneck, I assume bundling wouldn’t be such a big win in some setups.
+
+I suspect you are talking about fs.read*, not actual syscall
+
+[12:40:19.0510] <joyee>
+Bundling is a win not because it avoids I/O, but because it avoids resolution (computation heavy)
+
+[12:42:20.0577] <joyee>
+And in Node.js most of the startup time is spent on compilation and……string encoding (which might mislead people into thinking I/O is slow - it’s actually the Node.js module loader using the fs API that also does the string encoding 😅)
+
+[12:42:26.0327] <Jan Olaf Martin>
+From our profiling, it was specifically the stat syscalls. I’ll happily yield that it might be edge cases because we run a lot of things on file systems that are backed my networks and can have cold caches. Adding x2/x3 the amount of disk cache entries that need to be warmed up isn’t free
+
+[12:42:50.0572] <Jan Olaf Martin>
+* From our profiling, it was specifically the stat syscalls. I’ll happily yield that it might be edge cases because we run a lot of things on file systems that are backed by network access and can have cold caches. Adding x2/x3 the amount of disk cache entries that need to be warmed up isn’t free
+
+[12:44:19.0561] <joyee>
+Doing it asynchronously can’t save you that, either, if the application still needs to wait for those calls to complete to do anything interesting 
+
+[12:45:16.0788] <Jan Olaf Martin>
+Doing it async means that the disk cache can be warmed in parallel which makes a huge difference in those scenarios. But I was mostly talking about the I/O cost in general, not specifically about sync vs async I/O. 
+
+[12:47:51.0803] <joyee>
+The syscall can still be done in parallel, just in native threads
+
+[12:48:31.0392] <joyee>
+But also I am sensing you are talking about CJS loading performance, not ESM in Node.js, because that’s already parallel 
+
+[12:49:20.0337] <Jan Olaf Martin>
+Yes, I’m talking about what I saw as a “lesson learned from CJS’ resolution system” when we made the ESM decisions
+
+[12:53:22.0777] <joyee>
+This is stat call which historically suffer from improper cache misses, so it could still be computation problems
+
+[12:57:27.0686] <joyee>
+Unless the graph structure you have invalidates cache in the module loader a lot, which sounds like the case if you are backing them with network access already. Most Node.js applications don’t do that, though.
+
+
+2024-04-14
+[18:04:34.0232] <sirisian>
+Someone asked similar questions as I did the other week. https://es.discourse.group/t/proposal-parser-augmentation-mechanism/2008 Basically creating custom loaders, but his post goes into querying parser capabilities also.
+
+
+2024-04-18
+[03:44:33.0762] <jakobjingleheimer>
+Anything i should read up on before today's meeting?
+
+[04:16:41.0468] <nicolo-ribaudo>
+There are different new people that are joining today for the first time, so I'd like to just hear from y'all 
+
+[04:17:30.0764] <nicolo-ribaudo>
+I see a "harmony spec layering update" topic (I think from Guy?), let me find some resources about it :)
+
+[04:29:08.0058] <nicolo-ribaudo>
+So, https://docs.google.com/presentation/d/1mZrAHHimtM_z_8fM9L3DUXFz5bjlJPxx8VrwsC68hmk/edit#slide=id.p is an overview (from one year ago, some things changed in the meanwhile) of all the proposals in the "module harmony" space.
+
+[04:30:51.0431] <nicolo-ribaudo>
+Or maybe "harmony spec layering update" means "how different specs layer together", i.e. how to update the HTML and Wasm specs for our proposals
+
+[05:17:47.0985] <jakobjingleheimer>
+Great, thanks!
+
+[06:56:19.0115] <Chengzhong Wu>
+> <@nicolo-ribaudo:matrix.org> Or maybe "harmony spec layering update" means "how different specs layer together", i.e. how to update the HTML and Wasm specs for our proposals
+
+I will miss the first half hour of the meeting today, would it be possible to discuss this topic in the second half?
+
+[08:02:37.0832] <nicolo-ribaudo>
+@jakobjingleheimer If you are planning to join, the meeting is now :)
+
+[08:02:45.0060] <nicolo-ribaudo>
+ * jakobjingleheimer:  If you are planning to join, the meeting is now :)
+
+[08:04:44.0216] <jakobjingleheimer>
+> <@nicolo-ribaudo:matrix.org> jakobjingleheimer:  If you are planning to join, the meeting is now :)
+
+Yes sorry headphones are refusing to connect
+
+[08:34:43.0030] <jakebailey>
+https://github.com/nodejs/modules/issues/130
+
+[08:34:55.0686] <jakebailey>
+(meeting chat isn't working for me, sorry)
+
+
+2024-04-19
+[10:00:07.0178] <jakebailey>
+I filed https://github.com/nodejs/node/issues/52599 which I hope sums up our discussion yesterday; please let me know if I got anything wrong!
+
+[13:04:22.0073] <kriskowal>
+Relevant here, naugtur has added `loadNow` and `importNowHook` to our `Compartment` shim and cleverly was able to use the same loader logic for both the sync and async drivers. This provides some support for an `import.now` that I think is coherent with Node.js doing a sync ESM import behind CJS require. https://github.com/endojs/endo/pull/2202
+
+[13:07:38.0005] <kriskowal>
+The motivations were similar. LavaMoat needed a way to fall through to a sync import for `.node` modules with computed module specifiers. Endo (the project surrounding our `ses` “Hardened JavaScript shim”) has a loader works a lot like a bundler and keeps CJS and ESM in the same graph. CJS relies on a “virtual module source” protocol as seen in the Compartments proposal.
+
+
+2024-04-20
+[17:23:11.0302] <guybedford>
+kriskowal: in virtualization use cases, I agree a sync import may well be useful, when it is possible to eagerly link everything and know that the graph is available
+
+[17:23:36.0179] <guybedford>
+the hard part is how we draw a distinction between that use case, and shelling out to the host import module dynamically hook which could do arbitrary work
+
+[17:23:45.0757] <guybedford>
+ * the hard part is how we draw a distinction between that use case, and shelling out to the host import module dynamically hook which could do arbitrary async work
+
+[17:25:08.0788] <guybedford>
+effectively it's a class of loaders (like Node.js) that know they can do sync imports, but to draw that line also means restricting host hook fallbacks, unless we can solve sync loading generally via something like an `await import.defer(module)` that runs first, before then doing the `import.now(module)`
+
+[17:25:50.0642] <kriskowal>
+Or `import.source`, as it were.
+
+[17:26:54.0167] <kriskowal>
+That’s effectively where we stand. We are falling back to the sync hook only under `import.now`, and `importNowHook` may throw but can’t return a promise.
+
+[17:27:15.0343] <kriskowal>
+Under `import`, you can never reach `importNowHook`.
+
+[17:27:48.0507] <guybedford>
+the concern of having a dedicated sync hook is similar to the issue Node.js has where you end up defining two hooks for the loader - the sync hook and the async hook
+
+[17:28:01.0988] <guybedford>
+this seems sub-optimal and prone to bugs if users have implementation differences
+
+[17:28:02.0425] <kriskowal>
+That is the case for us too.
+
+[17:28:29.0736] <kriskowal>
+It’s definitely not ideal, but ideal doesn’t seem to be available.
+
+[17:28:55.0388] <guybedford>
+I think it's possible to separate loading into two phases - an async phase that gets everything ready, and a sync phase that does the linking and execution (down to TLA)
+
+[17:29:14.0628] <guybedford>
+that does mean two graph walks, but that's what instantiate + exec is anyway
+
+[17:29:49.0434] <kriskowal>
+Eager to talk more about that. Sadly, the evening beckons.
+
+[17:29:57.0308] <guybedford>
+so a fully sync graph just means you're already in the second phase
+
+[17:30:24.0195] <guybedford>
+yeah we'll have more time to talk about it I'm sure
+
+
+2024-04-29
+[12:46:59.0879] <Francisco Tolmasky>
+I put this in TC39 delegates, but I think it might be more appropriate here: is the expectation that ShadowRealms should not share module graphs. That is to say, import { x } from "y", that x should have nothing in common from the same x imported from y in a parent realm -- but is the module resolution/caching/etc. also "reset" (or is that piece host dependent -- or does that potentially introduce a "side channel" for the ShadowRealm to determine if a module has been imported in the parent if it loads quickly)?
+
+[13:05:20.0345] <ljharb>
+if the cache is shared, then it wouldn't tell them about the parent, because it could have been loaded in a different shadowrealm
+
+[13:22:16.0694] <nicolo-ribaudo>
+They are two separate modules, similarly to what would happen if you load `"y"` in two different workers
+
+[13:22:37.0598] <nicolo-ribaudo>
+I'm not 100% sure that the proposal mandates that, but the HTML side of the modules algorithms does
+
+[13:23:18.0221] <nicolo-ribaudo>
+Specifically, the "module key" in ECMA-262 is (importer, specifier), and those two "y"s have different importers
+
+[13:23:52.0619] <nicolo-ribaudo>
+Oh actually, re-reading: yes, that introduces a timing side channel 
+
+[13:24:09.0632] <nicolo-ribaudo>
+The JS value is separate, but the module source might have been pre-cached
+
+[13:24:50.0171] <nicolo-ribaudo>
+To make shadowrealms safe however, you have to disable timers regardless of this
+
+[13:25:01.0592] <Francisco Tolmasky>
+is "importer" synonymous with "loader", or is an importer different than a loader (by loader I mean (https://whatwg.github.io/loader/), or JSModuleLoader in JavaScriptCore
+
+[13:25:31.0585] <nicolo-ribaudo>
+It's the module that contains the import 
+
+[13:26:03.0017] <Francisco Tolmasky>
+wait, but in that case moduleKey is different even in the same realm if two modules import the same thing, right?
+
+[13:26:39.0501] <Francisco Tolmasky>
+moduleKey is only ever the same if you literally import from the same module twice in the same file?
+
+[13:28:25.0914] <nicolo-ribaudo>
+Yes exactly, but hosts might use a normalised cache key for the web request 
+
+[13:28:36.0023] <nicolo-ribaudo>
+For example, HTML uses the resolved URL
+
+[13:28:42.0795] <Francisco Tolmasky>
+I see
+
+[13:29:17.0596] <nicolo-ribaudo>
+We can only require that the cache key is at least as granular as (importer, specifier), but not that it's less granular 
+
+[13:30:27.0828] <Francisco Tolmasky>
+I see, its just to gaurantee that splitting up your imports in a file doesn't have weird worse fetching side effects
+
+[13:31:30.0162] <Francisco Tolmasky>
+OK, so separately, the idea of @@translate in the whatwg loader spec, that is not at all surfaced from the importHook stuff, right? importHook is orthogonal to the fetch/resolve/translate steps defined there... Or like, only overlaps with resolve and fetch?
+
+[15:04:43.0417] <Francisco Tolmasky>
+Is there an official import.now proposal anywhere? I see references to it everywhere, but can't seem to find an actual place it's pinned down
+
+
+2024-04-30
+[18:01:56.0936] <kriskowal>
+I believe import.now is still at Stage i, as in imaginary
+
+[18:03:00.0013] <kriskowal>
+But it would be coherent with XS compartment.importNow, which does at least have an explainer
+
+[18:05:07.0409] <kriskowal>
+MetaMask and Agoric are implementing a Compartment importNowHook presently, which would be hooked by import.now if the specified module hasn’t previously loaded (importHook returns a Promise so is ineligible in that case)
+
+[20:50:15.0503] <jakebailey>
+I patched `createRequire` into `process` on Node and then converted TS to ESM; it looks like a TLA-free ESM TypeScript public API is quite possible: https://github.com/nodejs/node/issues/52599#issuecomment-2084323892
+
+[21:35:15.0449] <ljharb>
+why does it need to be assigned to process?
+
+[21:35:29.0315] <ljharb>
+ * why does it need to be assigned to process? (you can require, or import, `module`, as needed)
+
+[21:35:59.0096] <jakebailey>
+That was one of the options we talked about in the meeting; a goal is that the ESM can be loaded into the browser and not fail due to not being able to resolve node's builtin modules
+
+[21:36:10.0028] <jakebailey>
+or, other non-node runtimes
+
+[21:41:04.0486] <bakkot>
+(you can technically shim out the node modules with import maps, but that is a huge pain for several reasons)
+
+[21:41:59.0256] <jakebailey>
+Yep; that was one of the alternatives, use import maps and a node condition, but I was not sure how at all that would interplay with bundlers, runtimes like Bun, or how you import that from a browser without it breaking (I am not familiar with import maps in a browser at all...)
+
+[21:42:32.0258] <jakebailey>
+Bun has `improt.meta.require` which is effectively already what I want but I can understand why that's not very desirable 😄
+
+[21:42:37.0090] <jakebailey>
+ * Bun has `import.meta.require` which is effectively already what I want but I can understand why that's not very desirable 😄
+
+[21:46:56.0252] <ljharb>
+adding it to process would make it fail in the browser too tho, no?
+
+[21:47:25.0595] <ljharb>
+like, if you have to do a browser-specific transform or shim, why put it on `process` which doesn't exist in the browser?
+
+[21:47:33.0181] <jakebailey>
+Oh, this is me simulating the linked issue  proposal, i.e. node provides this
+
+[21:47:45.0866] <ljharb>
+sure, but node provides the node core module `module` too
+
+[21:47:47.0589] <jakebailey>
+Or similar method to get sync conditional import 
+
+[21:47:57.0338] <jakebailey>
+Yeah but I can't import that without import...
+
+[21:48:20.0037] <ljharb>
+ah ok, you want to provide `require` in ESM, but in browsers, there's no sync way to load things
+
+[21:48:41.0744] <ljharb>
+i mean, you could provide, in browsers, a `require` global, and that'd probably be "fine"
+
+[21:48:48.0337] <jakebailey>
+Right, but that's fine for us as that's only needed for node. That or import.now would do it too
+
+[21:49:04.0555] <ljharb>
+but the presence of a `process` global in browsers could break things if they're using it for env detection
+
+[21:49:51.0385] <jakebailey>
+The hack is just a hack to simulate having "any API" that does what we're looking for
+
+[21:50:28.0200] <jakebailey>
+We wouldn't modify process in our package at all, I'm just avoiding writing C++ to see what would happen 😅
+
+[21:55:27.0370] <jakebailey>
+Honestly, the most composable option overall feels like optional/weak imports, but the time horizon on that is dubious; you all would know better than me how to actually propose and drive that....
+

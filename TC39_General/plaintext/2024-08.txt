@@ -1,0 +1,539 @@
+2024-08-02
+[15:51:39.0997] <Andreu Botella>
+Hey, I just noticed that the spec text for resizable ArrayBuffers defines a host hook that defaults to *not* resizing the buffer, and the HTML spec was not updated to include an implementation
+
+[15:52:04.0640] <Andreu Botella>
+there was a PR to the HTML spec, but that only changed the structured cloning algorithm
+
+[15:52:22.0347] <Andreu Botella>
+I assume this is not intentional?
+
+
+2024-08-03
+[19:42:38.0613] <shu>
+> <@abotella:igalia.com> Hey, I just noticed that the spec text for resizable ArrayBuffers defines a host hook that defaults to *not* resizing the buffer, and the HTML spec was not updated to include an implementation
+
+you're talking about https://tc39.es/ecma262/#sec-hostresizearraybuffer? that's a hook for the host to override the default behavior that's defined in ecma262
+
+[19:43:08.0316] <shu>
+the main practical reason it exists is for wasm to throw when you try to resize wasm memories using values that are not multiples of the wasm page size
+
+[19:43:20.0038] <shu>
+unless a host has special resize behavior like that, the default implementation is the right one
+
+[19:44:17.0015] <Andreu Botella>
+oh, that's right, I definitely should've checked its caller more closely 🤦
+
+
+2024-08-06
+[08:01:36.0983] <Francisco Presencia>
+I created a small proposal:
+https://github.com/franciscop/import-meta-env
+
+Any thoughts? It's to standardize environment variables into `import.meta.env`, so that different runtimes/environments/etc can put them into a single place (inspired by Vite):
+
+```
+const myvar = import.meta.env.MY_VARIABLE;
+```
+
+If you think this could be valuable, I'll work then on writing a small polyfill and add some tests for the proposal!
+
+[09:17:32.0901] <bakkot>
+Francisco Presencia: that sort of thing doesn't really make sense in a generic JavaScript runtime, because many runtimes (e.g. the web) don't have a concept of "environment variables". that's really more of a server-specific thing, which is outside of the purview of TC39, but you could try wintercg. wintercg actually has a specific place to track `import.meta` properties: https://github.com/wintercg/import-meta-registry
+
+[09:23:47.0767] <Francisco Presencia>
+Ah that makes sense, thanks! I thought on the web as e.g. in React it makes sense to have an environment variable _for dev_, but you are right that once it's plain JS for web it doesn't make much sense to expect the e.g. browser to have environment variables! I'll update it for WinterCG, thanks!
+
+[09:26:47.0128] <Francisco Presencia>
+ * Ah that makes sense, thanks! I thought on the web as e.g. in React it makes sense to have an environment variable _for dev_, but you are right that once it's plain JS for web it doesn't make much sense to expect the e.g. browser to have environment variables! I'll update it for WinterCG, thanks! Update: [Added the PR to the WinterCG repo](https://github.com/wintercg/import-meta-registry/pull/5)!
+
+[09:26:55.0409] <Francisco Presencia>
+ * Ah that makes sense, thanks! I thought on the web as e.g. in React it makes sense to have an environment variable _for dev_, but you are right that once it's plain JS for web it doesn't make much sense to expect the e.g. browser to have environment variables! I'll update it for WinterCG, thanks!
+Update: [Added the PR to the WinterCG repo](https://github.com/wintercg/import-meta-registry/pull/5)!
+
+
+2024-08-07
+[18:05:21.0375] <ljharb>
+as i commented there, i think import.meta only makes sense for things that are specific to the ES module it’s used in, and env vars are globals
+
+[18:42:53.0643] <Meghan Denny>
+have there been proposals in the past for a seedable prng?
+
+[18:54:12.0160] <kriskowal>
+> <@meghanbun:matrix.org> have there been proposals in the past for a seedable prng?
+
+I like to think of all such proposals as `new Math`. But, in earnest there is TabAtkins‘s https://github.com/tc39/proposal-seeded-random
+
+[18:59:09.0135] <Meghan Denny>
+thanks!
+
+[09:05:02.0479] <nicolo-ribaudo>
+For anybody good ad grammar -- is this reading of the spec correct? https://github.com/tc39/test262/pull/4189
+
+Or is it invalid syntax because once we enter the MethodDefinition (which we can enter, because `get` is a valid first token for it) we don't backtrack?
+
+[09:16:45.0258] <nicolo-ribaudo>
+ * For anybody good at grammar -- is this reading of the spec correct? https://github.com/tc39/test262/pull/4189
+
+Or is it invalid syntax because once we enter the MethodDefinition (which we can enter, because `get` is a valid first token for it) we don't backtrack?
+
+[09:16:56.0964] <Michael Ficarra>
+the test looks correct to me
+
+[09:17:10.0245] <nicolo-ribaudo>
+Ok thanks!
+
+[09:19:28.0522] <Michael Ficarra>
+grammar alternatives in 262 are not ordered as they are in PEGs
+
+[09:21:13.0462] <nicolo-ribaudo>
+And here there is no ASI right? Because the offending token is `x` and not `async`:
+```js
+class B {
+    get
+    async x() {}
+}
+```
+
+[12:39:35.0399] <Michael Ficarra>
+correct, the offending token is `x` and it's not separate by a LineTerminator from `async`, so ASI does not occur and this fails to parse
+
+[13:08:59.0148] <littledan>
+> <@michaelficarra:matrix.org> grammar alternatives in 262 are not ordered as they are in PEGs
+
+except for Annex B regexps right?
+
+[13:09:09.0238] <littledan>
+or did that change?
+
+[13:10:02.0491] <littledan>
+> B.1.2 Regular Expressions Patterns
+> The syntax of 22.2.1 is modified and extended as follows. These changes introduce ambiguities that are broken by the ordering of grammar productions and by contextual information. When parsing using the following grammar, each alternative is considered only if previous production alternatives do not match.
+
+[13:10:06.0634] <Michael Ficarra>
+possibly, I don't often consider the RegExp grammar
+
+[13:10:26.0451] <Michael Ficarra>
+gross
+
+[13:10:34.0943] <littledan>
+(I'm not sure if thumbs-up is an appropriate emoji response here)
+
+[13:11:28.0896] <Michael Ficarra>
+I'm going to go back to not thinking much about Annex B
+
+[13:22:18.0365] <shu>
+B for Best
+
+[13:22:55.0326] <shu>
+or maybe B for ✨️B✨️eautiful
+
+[13:25:33.0712] <bakkot>
+https://github.com/tc39/ecma262/pull/2445 should eliminate the ordering, if we ever get it
+
+[13:44:50.0682] <jmdyck>
+Note that all of 2445's changes to the grammar are ready for review. I think the only reasons the PR is still in draft is that it needs to generalize the definition of lookahead-constraints somewhat.
+
+[13:44:59.0153] <jmdyck>
+ * Note that all of 2445's changes to the grammar are ready for review. I think the only reason the PR is still in draft is that it needs to generalize the definition of lookahead-constraints somewhat.
+
+[13:48:09.0080] <jmdyck>
+But there didn't seem to be much interest.
+
+
+2024-08-09
+[00:26:08.0349] <Andreu Botella>
+hey, I noticed that according to the spec, this code should throw because it's defined using a generator, and reentering a generator should throw:
+```js
+const array = [,,];
+const iterator = array.entries();
+Object.defineProperty(array, "0", {get: () => iterator.next()});
+console.log(iterator.next());
+```
+
+[00:26:14.0827] <Andreu Botella>
+but it seems like none of the major engines do that
+
+[00:26:37.0791] <Andreu Botella>
+ * hey, I noticed that according to the spec, this code should throw because array iterators are defined using a generator, and reentering a generator should throw:
+
+```js
+const array = [,,];
+const iterator = array.entries();
+Object.defineProperty(array, "0", {get: () => iterator.next()});
+console.log(iterator.next());
+```
+
+[03:07:05.0898] <snek>
+engine262 throws :)
+
+[05:04:30.0324] <bakkot>
+Andreu Botella: https://github.com/tc39/ecma262/issues/3136
+
+[05:04:37.0522] <bakkot>
+we haven't gotten around to fixing this but it's a known issue
+
+[05:04:43.0262] <bakkot>
+(with the spec, not with engines)
+
+
+2024-08-12
+[07:42:43.0932] <nicolo-ribaudo>
+Does anybody remember why we have a `[no LineTerminator here]` restriction in arrow functions, before `=>`? I don't think it's solving any ambiguity
+
+[08:31:27.0438] <jmdyck>
+That restriction was added to the ArrowFunction production in draft 24 of ES6 (roughly April 2014?), if that helps you find notes.
+
+[08:42:12.0723] <littledan>
+I think this was for consistency with async arrow functions
+
+[08:47:04.0226] <jmdyck>
+AsyncArrowFunctions were added in PR #692, a couple years later.
+
+[08:47:17.0313] <littledan>
+yeah but I think this future thing was anticipated
+
+[09:10:42.0014] <nicolo-ribaudo>
+> <@jmdyck:matrix.org> That restriction was added to the ArrowFunction production in draft 24 of ES6 (roughly April 2014?), if that helps you find notes.
+
+Thanks!
+
+[09:10:47.0210] <nicolo-ribaudo>
+> <@littledan:matrix.org> yeah but I think this future thing was anticipated
+
+async arrow functions also do not need that restriction, it was done just for consistency with the sync version
+
+[09:14:46.0147] <nicolo-ribaudo>
+> <@littledan:matrix.org> yeah but I think this future thing was anticipated
+
+ * async arrow functions also do not need that restriction, I believe it was done just for consistency with the sync version
+
+[09:20:42.0013] <nicolo-ribaudo>
+Looking at https://github.com/tc39/notes/blob/main/meetings/2014-01/jan-30.md#asyncawait it looks indeed like it was added to disambiguate this case:
+```js
+async (foo)
+=> bar
+```
+but that's not (and wasn't, at the time) ambiguous 🤔
+
+[09:21:36.0303] <nicolo-ribaudo>
+The reason I'm asking is because this rule adds some annoying complexity to Babel's code printer (for some reason more than the other no-LineTerminator-here restrictions), and I know that it's also being problematic for tools that do position-preserving type stripping
+
+[09:22:17.0207] <Andreu Botella>
+> <@nicolo-ribaudo:matrix.org> Looking at https://github.com/tc39/notes/blob/main/meetings/2014-01/jan-30.md#asyncawait it looks indeed like it was added to disambiguate this case:
+> ```js
+> async (foo)
+> => bar
+> ```
+> but that's not (and wasn't, at the time) ambiguous 🤔
+
+isn't `async` a valid identifier?
+
+[09:25:29.0963] <nicolo-ribaudo>
+> <@abotella:igalia.com> isn't `async` a valid identifier?
+
+Yes, and?
+
+[09:26:36.0139] <Andreu Botella>
+so isn't `async (foo)` ambiguous with calling an function called `async`?
+
+[09:27:43.0490] <nicolo-ribaudo>
+The `=>` after disambiguates it. Same for
+```js
+(foo)
+=> 2
+```
+`(foo)` could be its own expression, but then `=>` can disambiguate it
+
+[09:28:03.0731] <nicolo-ribaudo>
+ * The `=>` after disambiguates it. Same for
+
+```js
+(foo)
+=> 2
+```
+
+`(foo)` could be its own expression, but then `=>` disambiguates it
+
+[09:30:08.0301] <nicolo-ribaudo>
+Ok, it looks like the reason was for forward compatibility with this proposal: https://bterlson.github.io/headless-arrows/
+
+In the past 10 years nobody pushed for that proposal and even the proposal itself explains why it would be confusing due to async arrow functions, probably we don't need the restriction anymore
+
+[09:40:20.0715] <littledan>
+yeah, that's right, we were discussing headless arrow functions back then. And you don't even need async for that to be ambiguous, e.g., this is ambiguous:
+```js
+x
+=> y
+```
+
+[09:40:20.0807] <nicolo-ribaudo>
+(also, even without the restriction that proposal could still happen, same as we have prefix and infix `+`)
+
+[09:41:02.0614] <littledan>
+honestly I'd still like some kind of headless arrow functions to happen--they'd make signals more ergonomic! But I'd type them as `^y` instead
+
+[09:41:24.0265] <nicolo-ribaudo>
+`^` has the same ambiguity! :P
+
+```js
+X
+^y
+```
+
+[09:42:08.0121] <nicolo-ribaudo>
+Which I consider perfectly fine -- if somebody likes ASI they just have to learn to prefix lines starting with `^`/`=>` with a semicolon
+
+[09:43:40.0747] <littledan>
+right... it is fine
+
+[09:44:45.0863] <littledan>
+you don't usually want to do an ExpressionStatement with an arrow function anyway! not very useful
+
+[10:01:56.0929] <bakkot>
+oh jeeze I would prefer we not introduce yet another syntax for functions
+
+[11:56:42.0404] <littledan>
+don't worry I'm not actually pushing that (since it seems too unlikely that it'll get consensus)
+
+
+2024-08-13
+[22:32:17.0498] <Aapo Alasuutari>
+Functions are the salt of programming language, are they not? And salts come in many flavours. Hence, no bad can come from having more function syntaxes! Also preferably have them be subtly different in runtime behaviour. Maybe `^x` could inherit `this` from the caller again?
+
+[00:07:40.0115] <annevk>
+The http://ampl.com/REFS/abstracts.html#rounding reference in ECMA-262 is dead
+
+[00:08:44.0538] <annevk>
+(Noticed that after reading up on what it actually says about number -> string due to watching https://www.youtube.com/watch?v=w0WrRdW7eqg (well worth watching).)
+
+[01:53:06.0318] <snek>
+anyone know something like acorn-loose but for typescript and written in rust?
+
+[08:51:29.0190] <nicolo-ribaudo>
+CI in the ecma262 repo... builds node from source?? https://github.com/tc39/ecma262/actions/runs/10371824886/job/28713031096?pr=3057
+
+[09:05:19.0675] <snek>
+ljharb ^^ that only happens if a binary release is missing right?
+
+[09:06:04.0420] <snek>
+oh i see
+
+[09:06:06.0163] <snek>
+the download failed
+
+[09:06:11.0826] <snek>
+`curl: (92) HTTP/2 stream 0 was not closed cleanly: INTERNAL_ERROR (err 2)`
+
+[09:06:36.0149] <snek>
+it should probably only build from source if the status is actually 404 😄
+
+[09:12:45.0547] <nicolo-ribaudo>
+I'd rather have it retry for 30 mins before building from source
+
+[09:25:23.0440] <bakkot>
+incredible
+
+[09:25:26.0290] <bakkot>
+I am canceling this job
+
+[09:27:28.0744] <bakkot>
+I think I would want a special flag for "build from source" rather than that being the default
+
+[11:22:19.0509] <Justin Ridgewell>
+> <@devsnek:matrix.org> anyone know something like acorn-loose but for typescript and written in rust?
+
+SWC?
+
+[13:20:32.0982] <Ashley Claymore>
+Swc isn't error tolerant, at least I couldn't find a way to make it keep going 
+
+[13:36:29.0832] <ljharb>
+> <@bakkot:matrix.org> I think I would want a special flag for "build from source" rather than that being the default
+
+yeah that seems like better default behavior; the feature was added when requests to nodejs.org weren't nearly enough to cause errors other than "that binary doesn't exist"
+
+[14:33:21.0525] <canadahonk>
+aware this is likely non-conformant to spec details but is `Promise.try` roughly similar to an async function IIFE? ala `(cb, ...args) => (async function () { cb(...args); })()`
+
+[14:34:46.0240] <canadahonk>
+ * aware this is likely non-conformant to spec details but is `Promise.try` roughly similar to an async function IIFE? ala `(cb, ...args) => (async function () { return cb(...args); })()`
+
+[14:56:52.0864] <ljharb>
+roughly similar yes
+
+[14:57:21.0116] <ljharb>
+ * very similar yes
+
+[16:33:24.0934] <canadahonk>
+notes PR CI failed because Node failed to install? (cc ljharb) https://github.com/tc39/notes/actions/runs/10377020557/job/28734457622?pr=336
+
+[16:34:07.0813] <ljharb>
+ah i know what that is, i'll take care of it soon
+
+[16:34:50.0386] <canadahonk>
+cool, no rush, just wanted to make sure you knew
+
+[16:36:17.0335] <Michael Ficarra>
+our CI has been having... issues today
+
+
+2024-08-15
+[14:37:44.0452] <Chris de Almeida>
+what did we used to do in the dark ages before `Object.values()` ?
+
+[14:37:57.0920] <littledan>
+for-in?
+
+[14:45:55.0368] <ljharb>
+`Object.keys().map`
+
+[14:46:07.0395] <ljharb>
+for-in was for the much much darker days before Object.keys
+
+[14:54:13.0594] <shu>
+i yearn for the dark days
+
+[16:41:45.0347] <kriskowal>
+I remember the dark days. `for (var key of object) { if (hasOwnProperty.call(object, key) {`
+
+[16:41:59.0986] <kriskowal>
+ * I remember the dark days. `for (var key in object) { if (hasOwnProperty.call(object, key) {`
+
+[16:42:21.0112] <kriskowal>
+Bearing in mind, prototype.js may have run first.
+
+[16:43:38.0443] <kriskowal>
+Also, `for (var i = 0, l = array.length; i < l; i++) {`, which remains the faster pattern on XS, fwiw.
+
+
+2024-08-17
+[07:08:16.0144] <canadahonk>
+> <@kriskowal:aelf.land> Also, `for (var i = 0, l = array.length; i < l; i++) {`, which remains the faster pattern on XS, fwiw.
+
+`for..of` is fastest in my engine lol
+
+[09:15:33.0018] <kriskowal>
+> <@canadahonk:matrix.org> `for..of` is fastest in my engine lol
+
+I should check, that might be the case for XS. Just, there is no loop optimization around a constant guard in XS. 
+
+[12:18:00.0093] <Richard Gibson>
+I just tested `i < l` vs. `i < arr.length` vs. `for..of` over a 500k array of numbers across implementations on amd64 (excluding Hermes for lack of async function support that my tool currently requires):
+* GraalJS and SpiderMonkey and V8 all favor the first two forms about equally, and it's much faster than `for..of` (8x for V8, 5x for the other two)
+* in JSC, `i < l` is about 2.5x the speed of both `i < arr.length` and `for..of` (but the former is about 10% faster than the latter)
+* in XS, `i < l` is almost 50% faster than `i < arr.length`, which is almost 50% faster than `for..of`
+* in QuickJS, `for..of` is about 12% faster than `i < l` and 35% faster than `i < arr.length` (the only tested implementation that favors `for..of`)
+* in absolute terms, V8 is about 2 times faster than JSC, which is about two times faster than SM, which is almost 3 times faster than GraalJS, which is almost 10 times faster than QuickJS, which is almost 2 times faster than XS
+
+
+2024-08-18
+[12:21:26.0464] <Ashley Claymore>
+Do we think there is still room for getting the iterator version to have less overhead (in these simple cases), or have the majority of optimisations already been done?
+
+[13:22:32.0816] <bakkot>
+these questions are hard because there's different tiers and they don't necessarily kick in at the same times and conditions. it will probably always be the case that the initial tier is going to be slower. I don't know if the above tests were done in a way which allowed the higher tiers to kick in, and also of course you don't necessarily always care about the higher tiers
+
+[13:30:47.0849] <Richard Gibson>
+they were done with the goal of reaching higher tiers, and the browser-oriented implementations did bump twice
+
+
+2024-08-19
+[11:02:56.0924] <Michael Ficarra>
+the TC55 ballot failed?!
+
+[11:03:06.0750] <Michael Ficarra>
+@littledan:matrix.org do you have more details on that?
+
+[11:08:13.0580] <Aapo Alasuutari>
+Nevermind, not sure if the grapevine info is actually okay to share. Dan shall be the arbiter of that.
+
+[11:16:27.0673] <littledan>
+> <@michaelficarra:matrix.org> @littledan:matrix.org do you have more details on that?
+
+Yes, I will respond to the GA email soon. Sorry for the lack of communication here, I should've written to everyone earlier, but the rules around how to handle things when there's an active ballot are unclear.
+
+[11:17:27.0620] <littledan>
+Multiple big organizations felt uncomfortable with the combined Ecma + W3C IPR commitments, so we'll have to pursue this either entirely within W3C or entirely within Ecma, to enable them to participate without signing off on obht
+
+[11:17:38.0789] <littledan>
+ * Multiple big organizations felt uncomfortable with the combined Ecma + W3C IPR commitments, so we'll have to pursue this either entirely within W3C or entirely within Ecma, to enable them to participate without signing off on both
+
+[11:18:22.0614] <littledan>
+Even though these orgs have signed off on the IPR individually for both groups, it's a particular new signature per scoped effort, and it feels too uncomfortable to do this for both orgs at once for a single scope.
+
+[11:19:01.0889] <littledan>
+I would have withdrawn the ballot if rules allowed, and should've just emailed the GA before the vote closed to clarify that I don't want this to go through in this state anymore, due to the concerns raised.
+
+
+2024-08-20
+[19:20:20.0780] <Domenic>
+One of the top Google results for TC55 is https://x.com/littledan/status/1411367570855366656
+
+
+2024-08-25
+[23:18:33.0589] <Domenic>
+I think this is a Node.js bug: a Proxy with `get(target, property, receiver) { return Reflect.get(target, property, receiver); }` should not cause different behavior than one with no handlers. Even if that Proxy is being used as a global object. But I would love it if an ECMAScript expert was able to weigh in on the thread and confirm.
+
+[01:26:53.0560] <Rob Palmer>
+Where is the Node Proxy thread?
+
+[01:51:38.0690] <Domenic>
+Wow, sorry, totally forgot the actual link... https://github.com/nodejs/node/issues/54550
+
+[15:47:02.0795] <snek>
+> <@domenicdenicola:matrix.org> Wow, sorry, totally forgot the actual link... https://github.com/nodejs/node/issues/54550
+
+i also noticed the TypeError vs ReferenceError thing recently while implementing node:vm in deno and i believe it has to do with v8 interceptors more than proxies or js spec behavior
+
+[15:47:34.0763] <snek>
+i also found some bugs in v8 and those fixes might not have made it to versions of node you're using yet
+
+[15:47:41.0315] <snek>
+or any versions of node, they track upstream v8 a lot more slowly
+
+[16:08:28.0883] <snek>
+i guess more concretely, introducing an object environment record using `with` and the proxy in your issue does not behave strangely in v8, its only the vm code that uses interceptors that is weird.
+
+
+2024-08-26
+[10:39:43.0882] <Mathieu Hofman>
+> <@devsnek:matrix.org> i guess more concretely, introducing an object environment record using `with` and the proxy in your issue does not behave strangely in v8, its only the vm code that uses interceptors that is weird.
+
+Could you clarify the interaction of `with` and `Proxy` in v8? This could be relevant to the SES shim
+
+[10:47:14.0373] <snek>
+huh did you delete another message
+
+[10:47:23.0306] <snek>
+anyway it just behaves as you would expect based on the spec
+
+[10:48:06.0220] <snek>
+v8 interceptors don't really align with the spec though. some of them do have names that seem as though they match the MOP but they are called at the wrong time or in the wrong contexts. just generally confusing.
+
+[10:49:10.0583] <snek>
+ * anyway with+Proxy just behaves as you would expect based on the spec
+
+
+2024-08-29
+[10:12:22.0130] <sirisian>
+Was glancing at this post: https://es.discourse.group/t/omission-of-if-still-works-for-code-block/2125 There's no limitation with do expressions for doing myCondition && do { }, right?
+
+[10:49:23.0854] <Ashley Claymore>
+Works fine here: https://babeljs.io/repl#?browsers=defaults%2C%20not%20ie%2011%2C%20not%20ie_mob%2011&build=&builtIns=false&corejs=3.21&spec=false&loose=false&code_lz=C4JwrgpgBAZDUBMD2UDeAoKUBmSkAoBKAbkygCMBDEI0gX3SA&debug=false&forceAllTransforms=false&modules=false&shippedProposals=false&evaluate=false&fileSize=false&timeTravel=false&sourceType=module&lineWrap=true&presets=env&prettier=false&targets=&version=7.25.6&externalPlugins=%40babel%2Fplugin-syntax-do-expressions%407.24.7%2C%40babel%2Fplugin-proposal-do-expressions%407.24.7&assumptions=%7B%7D
+
+
+2024-08-30
+[12:10:24.0046] <snek>
+in implementations that model weakmaps as hidden fields on the keys, how do they in practice clean those up when the weakmap is no longer reachable?
+
+[12:48:25.0632] <bakkot>
+> <@devsnek:matrix.org> in implementations that model weakmaps as hidden fields on the keys, how do they in practice clean those up when the weakmap is no longer reachable?
+
+I believe chakra works or worked that way; you could check
+
+[13:23:06.0122] <Mathieu Hofman>
+> <@devsnek:matrix.org> in implementations that model weakmaps as hidden fields on the keys, how do they in practice clean those up when the weakmap is no longer reachable?
+
+From what I can tell, XS has a pointer from the key field back to the weak collection, and from the weak collection entry back to the key field, so that removal of either can remove the other. More specifically when doing the mark and sweep, the first pass mark the field on the key, then it checks the weak collection content, and if it's no longer reachable, it removes all the keys fields corresponding to the collection's entries: https://github.com/Moddable-OpenSource/moddable/blob/24e3e54fd3b66379c1f91ad92969c99f941ff4cf/xs/sources/xsMemory.c#L1595-L1609
+

@@ -1,0 +1,965 @@
+2023-08-01
+[20:48:08.0108] <ljharb>
+bakkot: bad news for your coercion proposal, some people like it https://twitter.com/wesbos/status/1686014875040956416
+
+[00:10:50.0710] <bakkot>
+ljharb: some people are incorrect
+
+[07:26:28.0110] <shu>
+this is someone who teaches beginner javascript, according to the twitter profile
+
+[07:59:09.0760] <Anthony Bullard>
+> <@shuyuguo:matrix.org> this is someone who teaches beginner javascript, according to the twitter profile
+
+He's one of the most popular and influential people in JS dev content targeted at beginners to early intermediate 
+
+[07:59:30.0359] <shu>
+alas
+
+[07:59:43.0955] <shu>
+teaching `at(0.1)` as a benefit seems not good to me
+
+[08:01:01.0336] <Anthony Bullard>
+Not going to argue that.  And does somewhat surprise me
+
+[08:01:28.0522] <Anthony Bullard>
+I haven't been in discussions on .at() so I was unaware of the coercion
+
+[08:02:18.0307] <shu>
+there were no discussions around coercion specifically at the time, the method follows the coercion precedence of other methods
+
+[08:02:31.0771] <Anthony Bullard>
+I wasn't aware it worked with other array methods either, hadn't tried in that in my 24 years of JavaScripting
+
+[08:02:46.0986] <shu>
+which is the point of bakkot's proposal. we've been operating on precedence grounds for decades, it's time to rethink that
+
+[08:02:48.0945] <Anthony Bullard>
+Never even occurred to me to try
+
+[08:02:53.0235] <shu>
+yeah
+
+[08:04:16.0715] <rkirsling>
+huh
+
+[08:04:41.0503] <rkirsling>
+yeah I can't say I've ever attempted to pass a non-integral number to `slice`, say
+
+[08:11:06.0271] <Anthony Bullard>
+Strangely enough it works. Had to open a terminal to prove it to myself
+
+[08:12:22.0999] <rkirsling>
+yeah.
+
+[08:13:58.0025] <rkirsling>
+the thing is that if `array[1.2]` were already valid, then you could argue that `array.at(1.2)` is a non-regression, or something
+
+[08:14:57.0605] <rkirsling>
+but given that `array[1.2]` is not in fact equivalent to `array[1]`, it definitely seems hard to consider the equivalence of `.at(1.2)` and `.at(1)` a good thing
+
+[08:15:03.0076] <rkirsling>
+I don't necessarily mean that we screwed up
+
+[08:15:11.0947] <rkirsling>
+but for educational materials...
+
+[08:15:18.0762] <rkirsling>
+😓
+
+[08:16:02.0335] <rkirsling>
+ * the thing is that if `array[1.2]` already worked like that, then you could argue that `array.at(1.2)` is a non-regression, or something
+
+[08:25:17.0180] <Anthony Bullard>
+`array[1.2]` won't error though, so it's a question of what the behavior should be for `.at()` if we don't want coercion.  There is a sort of coercion happening with `arr[1.2]` as well, and I don't think we would want to extend that to `.at(1.2)`
+
+[08:27:37.0770] <rkirsling>
+certainly, `at` isn't meant to string coerece
+
+[08:27:39.0499] <rkirsling>
+ * certainly, `at` isn't meant to string coerce
+
+[08:27:59.0816] <rkirsling>
+in that regard I guess an error could've been argued for
+
+[08:30:28.0385] <Anthony Bullard>
+My argument is that either way there is either a loss of backwards compat (nope) or a lack of symmetry between accessing an integer index or a decimal extension of said integer.
+
+[08:31:26.0345] <Anthony Bullard>
+I think the best case for sanity going forward would be a TypeError, but it would create more errata for devs leveraging previous knowledge 
+
+[08:55:46.0983] <rkirsling>
+I think it's probably too late to change though
+
+[09:41:29.0618] <bakkot>
+my hope is a TypeError (or RangeError) for this case for new methods
+
+[09:41:37.0788] <bakkot>
+to break with precedent because it's a bad precedent
+
+[09:41:57.0948] <bakkot>
+and yeah, the main cost is to devs who have already learned the existing rules
+
+[09:42:14.0148] <bakkot>
+but, even among people who know those rules, hopefully not too many actually rely on them in practice
+
+[10:04:35.0826] <Anthony Bullard>
+Do we have tools to find such usages in the corpus?
+
+[10:34:46.0049] <Chris de Almeida>
+> <@anthonybullard:matrix.org> Do we have tools to find such usages in the corpus?
+
+https://sourcegraph.com/search
+
+[10:35:12.0960] <Anthony Bullard>
+Lovely
+
+[10:35:52.0569] <Anthony Bullard>
+Given that JS is dynamic, it may be hard to really nail down usages outside of literal usages
+
+
+2023-08-03
+[20:17:08.0701] <HE Shi-Jun>
+I don't understand the highlighted part (double "link"), is that a typo?
+
+[20:58:42.0942] <rkirsling>
+it surely is
+
+[14:27:14.0404] <bakkot>
+has there been a proposal for a `Promise.prototype.settled()`? Implementation `function(){ return this.then(value => ({ status: 'fulfilled', value }), reason => ({ status: 'rejected', reason });)`
+
+[14:27:19.0874] <bakkot>
+like `allSettled` but for a single promise
+
+[14:27:27.0350] <bakkot>
+I seem to recall someone bringing this up but couldn't find it
+
+[14:44:26.0204] <ljharb>
+I haven’t seen any proposal for it being async - that seems perfectly reasonable to me. The past ones i recall are for something sync, which have obvious issues.
+
+[14:57:33.0859] <bakkot>
+I'm not sure what "sync" would even mean in this context
+
+[14:57:48.0250] <bakkot>
+unless you mean it would let you synchronously get the promise's status? yeah definitely not that
+
+
+2023-08-04
+[09:46:52.0453] <nicolo-ribaudo>
+Could finally start passing a parameter to its callback?
+
+[09:52:54.0973] <snek>
+but then we would need Promise.allFinallyed
+
+[10:03:34.0088] <bakkot>
+nicolo-ribaudo: probably; adding new parameters is rarely breaking. but what parameter are you thinking of?
+
+[10:27:49.0288] <Ashley Claymore>
+finally could be given the same as settled?
+
+[10:39:31.0708] <bakkot>
+Ashley Claymore: I can't parse your comment at all
+
+[10:39:34.0422] <bakkot>
+can you say that again but with more words
+
+[10:45:22.0869] <Rob Palmer>
+If your company has the space (or the funds to rent a venue) and desire to host a TC39 plenary meeting in 2024, please reach out to the Chairs 🙏
+
+- [Call for hosts](https://github.com/tc39/Reflector/issues/502) (2024 meeting planning)
+
+[11:02:16.0724] <Ashley Claymore>
+How about more code?
+`.finally(({status, value, reason}) => ... )`
+
+[11:06:30.0377] <bakkot>
+ah, yeah
+
+[11:06:40.0808] <bakkot>
+that's a thing we could do but wouldn't actually do the thing I want
+
+[11:07:00.0184] <bakkot>
+I guess you could do `.finally(x => x)` to get the thing you want
+
+[11:07:12.0842] <bakkot>
+ * I guess you could do `.finally(x => x)` to get the thing I want
+
+[11:07:16.0172] <bakkot>
+but that would be kind of odd
+
+[11:13:02.0000] <Ashley Claymore>
+> <@bakkot:matrix.org> I guess you could do `.finally(x => x)` to get the thing I want
+
+Finally ignores the return of the callback right? (Apart from waiting for it to resolve)
+
+[11:13:19.0207] <Ashley Claymore>
+and rejecting too I guess 
+
+[11:13:54.0156] <bakkot>
+yeah, true
+
+[11:13:57.0555] <Ashley Claymore>
+So that would be a difference between .settled and .finally, the first would allow a change in the resulting promise's resolved value 
+
+[11:14:21.0351] <bakkot>
+that comment I do not understand
+
+[11:14:29.0123] <bakkot>
+settled as I've proposed it doesn't take a callback
+
+[11:15:01.0839] <bakkot>
+so there's not anything to be making changes
+
+[11:15:23.0961] <Ashley Claymore>
+Ah right. I keep just merging a following .then thinking of it as a callback to settled 
+
+[11:15:54.0066] <Ashley Claymore>
+It's almost like it lates on a Friday and I'm off on holiday next week. Brain shutdown 
+
+[16:54:54.0003] <ljharb>
+we can't do that for `.finally()` because it wouldn't match a `finally` block, in which you don't have that info
+
+
+2023-08-05
+[23:59:59.0544] <Ashley Claymore>
+simple solution:
+
+```
+try {}
+finally ({ status, value, reason}) {}
+```
+
+😎
+
+
+2023-08-07
+[08:10:02.0606] <littledan>
+The TC39 community event on September 25th in Japan is confirmed. You can find details at https://github.com/tc39/Reflector/issues/499#issuecomment-1668039136
+
+[08:37:03.0306] <pzuraq>
+shu: when you have a moment, do you think you could look at the proposed change in https://github.com/tc39/proposal-decorators/issues/513 and let me know if you think it will cause issues with performance? I think there are options we could explore for working around it if so, but I think this would be the ideal behavior from a consistent-mental-model perspective
+
+
+2023-08-09
+[08:58:11.0597] <rbuckton>
+littledan: would it make sense to set up a matrix channel for TG4 discussions outside of the scheduled meetings? 
+
+[08:59:08.0032] <Chris de Almeida>
+#tc39-tg4:matrix.org 
+
+[09:00:13.0184] <rbuckton>
+Ah! Thanks
+
+[10:16:16.0235] <snek>
+is there a matrix client that makes threads good
+
+[10:41:36.0928] <rkirsling>
+> <@devsnek:matrix.org> is there a matrix client that makes threads good
+
+it's so vexing
+
+[10:42:08.0461] <rkirsling>
+it's like "how many times do I have to refresh this page before you'll be willing to tell me I don't have new messages"
+
+[10:42:24.0062] <rkirsling>
+I hate this site so much lol
+
+[11:25:05.0899] <shu>
+down with threads
+
+[12:16:07.0015] <Chris de Almeida>
+> <@devsnek:matrix.org> is there a matrix client that makes threads good
+
+Cinny displays them as if they were regular replies like this
+
+[12:40:24.0057] <Chris de Almeida>
+> <@shuyuguo:matrix.org> down with threads
+
+yet you started a thread the other day.  curious.
+
+[12:40:44.0511] <Chris de Almeida>
+maybe at Sept plenary we can ask for consensus to ban threads in TC39 rooms...  🌶️  
+does anyone _like_ threads?  I think one or two changes could redeem them and make them usable, but until that happens, they are annoying.  I keep finding myself semi-inadvertently starting them due to cognitive momentum from using them in slack and forgetting how annoying they are in element
+
+[12:58:05.0540] <Michael Ficarra>
+I *want* to like threads but they make a mess out of notifications
+
+[12:58:23.0006] <Michael Ficarra>
+but I definitely do want a way to ignore side conversations I don't care about, which is the point of threads
+
+[13:00:19.0780] <bakkot>
+IIRC slack/discord only count threads as "unread" for the purposes of the notification dot(s) when you've participated in them, which is the behavior I want
+
+[13:02:40.0237] <Chris de Almeida>
+slack behavior is that you don't get notified about any thread activity until and unless: 1. you've deliberately subscribed or 2. you've deliberately participated, e.g. replied in the thread
+
+it also helps that slack has a thread view, almost like a thread channel, rather than forcing you into the right sidebar only.  there was a time before that feature existed but that made threads more bearable in slack
+
+[13:03:01.0845] <Chris de Almeida>
+indeed... just look at this insane issue re: notifications/threads  https://github.com/vector-im/element-web/issues/24392
+
+[13:07:33.0411] <Chris de Almeida>
+oh, and in slack you can also unsubscribe to the thread notifications.  that's a big one too
+
+[13:07:56.0434] <Chris de Almeida>
+ * oh, and in slack you can also unsubscribe to a particular thread.  that's a big one too
+
+[13:28:59.0151] <shu>
+> <@softwarechris:matrix.org> yet you started a thread the other day.  curious.
+
+i did?
+
+[13:29:08.0317] <shu>
+what thread did i start
+
+[13:33:13.0648] <Chris de Almeida>
+> <@shuyuguo:matrix.org> what thread did i start
+
+I have falsely accused you..  I see now I started the thread by replying to my own message, and then you replied in the thread.  I didn't notice my message was split in two, so I thought your message was the one that began the thread.  🤦
+
+[13:33:30.0514] <shu>
+huzzah, i am exonerated
+
+[13:40:02.0084] <shu>
+i knew i was innocent all along because i actually do not know how to start new threads
+
+[13:57:02.0520] <ljharb>
+i love threads. i hate the notification issues. i don't think banning threads is justified by them.
+
+[14:18:14.0934] <Chris de Almeida>
+what client do you use?
+
+[14:32:58.0563] <shu>
+i don't know
+
+[14:33:01.0580] <shu>
+Matrix
+
+[15:07:11.0923] <ptomato>
++1 in favour of threads as well. would be nice if they worked properly, but I'd rather mark them read manually than scroll past all the side conversations
+
+[15:08:32.0192] <ptomato>
+BTW, I'd seen that tracking issue before; they basically identified the root cause as having moved threads out of beta too early. seems like they're working pretty hard on it; hopefully the usability fixes make it into a release soon
+
+
+2023-08-10
+[08:24:29.0259] <rkirsling>
+ohhhhh Kris was making an _Exxon_ joke
+
+[08:24:42.0411] <rkirsling>
+I had to sit with that one for a while there
+
+[08:45:17.0600] <shu>
+ooo
+
+[08:46:26.0293] <shu>
+wait, you think i am like an oil and gas company?
+
+[08:47:25.0912] <Kris Kowal>
+you are ironically very much unlike an oil and gas company in that you have been exonerated.
+
+[08:48:11.0038] <Kris Kowal>
+but there was definitely an exxon pun in my choice of reactji.
+
+[08:49:30.0086] <shu>
+well watch out seagulls
+
+[08:49:32.0495] <shu>
+never liked the bunch
+
+[09:24:42.0696] <Chris de Almeida>
+bad luck to kill a seabird
+
+[09:29:25.0635] <Jack Works>
+👀
+
+[10:08:58.0854] <shu>
+the seabirds don't need to die, only to suffer
+
+[14:48:49.0885] <Chris de Almeida>
+https://mailarchive.ietf.org/arch/msg/jsonpath/kuPW5d4Y6X6StVTs54T9tRvqxqk/
+
+[14:49:18.0296] <Chris de Almeida>
+shots fired in `JSONPath` last call review
+
+[14:54:07.0438] <Chris de Almeida>
+```
+I also object.
+
+This document is better than most IETF documents. I don't understand the
+GenArt review here, and I know more about JSON than most humans on earth.
+
+thanks,
+```
+🤣
+
+[14:54:22.0964] <shu>
+what's sayrer up to these days anyway
+
+[14:55:27.0875] <shu>
+i had assumed retired
+
+[14:55:50.0815] <Chris de Almeida>
+> <@shuyuguo:matrix.org> what's sayrer up to these days anyway
+
+getting 🌶️ on the `JSONPath` mailing list at the very least
+
+
+2023-08-11
+[14:04:30.0237] <Michael Ficarra>
+what's the delay with getting the July meeting notes published?
+
+[14:04:43.0682] <Michael Ficarra>
+I went looking for them today in the notes repo and was surprised they weren't there
+
+[15:07:21.0591] <Rob Palmer>
+We're working with our new secretary to figure out the best process going forward. Apologies for the delay. 
+
+[16:12:38.0286] <littledan>
+> <@michaelficarra:matrix.org> what's the delay with getting the July meeting notes published?
+
+We are working on getting the summaries done. Lots of people didn’t write summaries, and there weren’t really subsequent edits even after Samina sent out that request.
+
+[16:13:08.0513] <littledan>
+Trying to actually have summaries is a new challenge which we haven’t actually done before
+
+[16:14:00.0751] <littledan>
+If people could write good summaries and conclusions in the Google Docs, it would help a lot. Check Nicolo’s presentations for good examples.
+
+[16:14:49.0019] <littledan>
+A good summary includes some brief main points from the presentation and brief points of discussion. The conclusion is then what the committee decided as a whole. Lots of times, there was just a conclusion, and it was labeled a summary
+
+[16:15:45.0393] <littledan>
+While it would be ideal if presenters filled in summaries and conclusions, it would be Ok if other committee members filled thread in as well IMO.
+
+[16:16:02.0432] <littledan>
+* While it would be ideal if presenters filled in summaries and conclusions, it would be Ok if other committee members filled them in as well IMO.
+
+[16:19:44.0846] <littledan>
+I don’t really want to ping each person one by one or write the summaries (for topics that I didn’t present) myself, but this is the currently limiting factor for publishing the notes.
+
+[16:28:50.0297] <ljharb>
+can they not be published without the summaries, and the summaries added later?
+
+[16:31:34.0799] <ptomato>
+I saw Samina's email and checked that all my topics had summaries. please let me know if they are not written as a summary should be written
+
+
+2023-08-12
+[08:41:14.0928] <eemeli>
+Is there a reason why the JSON spec is not available as https://tc39.es/ecma404/? I keep on expecting to find it there.
+
+[10:32:25.0269] <snek>
+what are you talking about its right here https://gc.gy/159566524.png
+
+[10:32:41.0614] <snek>
+actually is anyone else seeing that ecma's website is down again? 508 resource limit is reached 
+
+[11:41:16.0884] <ljharb>
+> <@eemeli:mozilla.org> Is there a reason why the JSON spec is not available as https://tc39.es/ecma404/? I keep on expecting to find it there.
+
+because it’s only a pdf spec and nobody’s taken the time to convert it to ecmarkup
+
+[11:48:03.0591] <eemeli>
+Is there actually any place more appropriate than this channel for me to note that it would be nice if this thing existed? As is, there isn't a GH repo for JSON either.
+
+[12:02:27.0139] <snek>
+do you just want an html reference? or is there actual changes you want to make to json? cuz i feel like the latter is sort of purposely not a thing that happens
+
+[12:02:54.0453] <snek>
+ * do you just want an html reference? or are there actual changes you want to make to json? cuz i feel like the latter is sort of purposely not a thing that happens
+
+[12:05:06.0903] <eemeli>
+I do not want to make changes to JSON. I want an HTML reference that lets me link to specific sections of the spec.
+
+[12:06:05.0308] <snek>
+makes sense
+
+[12:07:23.0813] <snek>
+maybe https://github.com/tc39/Admin-and-Business could be good? i assume moving the source of truth for json from word doc to ecmarkup would need some process changes
+
+[12:08:35.0018] <bakkot>
+you can link to specific pages of a PDF
+
+[14:47:26.0298] <ljharb>
+eemeli: i've had that task on my backlog for awhile actually, just haven't had the time
+
+
+2023-08-13
+[15:06:23.0087] <ljharb>
+bakkot: the more i convert codebases to use iterator helpers, the more i dearly need .concat - that follow-on can't come fast enough
+
+[15:06:52.0430] <bakkot>
+if you have use cases that will help!
+
+[15:07:09.0257] <bakkot>
+I suspect the committee will not need much convincing but it's always good to collect them
+
+[15:10:28.0797] <ljharb>
+i mean, basically every time i have a chain of transformations that starts in an iterable, and i want to manually add in some hardcoded cases. concretely, in eslint-plugin-jsx-a11y, there's a few places where we need to hardcode specific aria role values, so we need to concat them onto the Set provided by an aria library as part of the transformation chain
+
+[15:11:07.0948] <ljharb>
+also, i build up arrays/iterators of test cases, and then i want to combine the different conceptual streams of test cases, i have to reify them each into an array before concatenating
+
+[15:12:20.0783] <ljharb>
+(so specifically, i need the ability to concatenate both single values as well as iterators of values)
+
+[15:12:45.0598] <ljharb>
+ * (so specifically, i need the ability to concatenate both single values as well as iterators of values, which is exactly where concat is most useful for arrays/scalars)
+
+[15:36:01.0046] <bakkot>
+ah, that specific behavior is... not one I would carry over if we can avoid it
+
+[15:36:17.0323] <bakkot>
+we'll see though
+
+[15:36:58.0370] <bakkot>
+it's a little trickier for iterators than for arrays because a lot more things are iterable than concat-spreadable
+
+[15:40:35.0030] <bakkot>
+my inclination would be to go with the same thing as Iterator.prototype.flatMap, i.e. iterable (except strings) or iterator, otherwise error
+
+[15:40:52.0565] <bakkot>
+so you'd have to `.concat([x])` to do a single item
+
+
+2023-08-14
+[22:56:16.0326] <ljharb>
+that's workable but gross, and it shouldn't be called concat in that case
+
+[00:09:01.0727] <bakkot>
+concat is the only name for this operation in every single language and every library
+
+[07:00:22.0013] <Justin Ridgewell>
+This is called [chain](https://doc.rust-lang.org/stable/std/iter/trait.Iterator.html#method.chain) in Rust, and is combined with [once](https://doc.rust-lang.org/stable/std/iter/fn.once.html) to create an iterator of a single value
+
+[07:52:26.0305] <Michael Ficarra>
+ljharb: You're in luck! I was already planning on starting work on this proposal today.
+
+[07:53:16.0810] <ljharb>
+> <@bakkot:matrix.org> concat is the only name for this operation in every single language and every library
+
+but concat in this language accepts a single thing or a list of things
+
+[07:55:56.0193] <Michael Ficarra>
+I am very much okay with the meaning of `concat` depending on the kind of thing it's applied to
+
+[07:58:19.0692] <Michael Ficarra>
+regardless, though, it's probably more important to match one of `Iterator.from` or `Iterator.prototype.flatMap`, which both reject primitives (though differ in their handling of strings)
+
+[10:52:57.0581] <TabAtkins>
+Yeah, so long as there's an easy way to lift a primitive into an iterable (via `once()` or something), then having `concat()` only accept iterables is fine with me. 
+
+[10:53:17.0968] <TabAtkins>
+It'll still probably commit the cardinal sin of Treating Strings Like Iterables tho, unless we explicitly guard against that.
+
+[10:55:48.0091] <ljharb>
+if it requires being an array than i'll probably just always `concat([].concat(item))` which would be annoying
+
+[10:56:04.0002] <nicolo-ribaudo>
+You can lift `x` into an iterable by doing `[x]`
+
+[11:18:43.0620] <bakkot>
+> <@tabatkins:matrix.org> It'll still probably commit the cardinal sin of Treating Strings Like Iterables tho, unless we explicitly guard against that.
+
+iterator flatmap explicitly guards against that, so concat would too
+
+[11:19:01.0295] <TabAtkins>
+Excellent.
+
+[11:20:16.0424] <bakkot>
+> <@ljharb:matrix.org> if it requires being an array than i'll probably just always `concat([].concat(item))` which would be annoying
+
+you'd only do that if you don't know whether or not `item` is an array, surely? which... I have a hard time imagining code where that comes up very much?
+
+[11:21:54.0446] <TabAtkins>
+yeah there's very, very little non-trivial stuff you can do with a value that could be an X *or* an array of Xs that doesn't require first establishing which it is. `Array#concat` allowing it is a weird historical quirk, most langs don't have that.
+
+[11:48:20.0587] <Michael Ficarra>
+> <@bakkot:matrix.org> iterator flatmap explicitly guards against that, so concat would too
+
+not necessarily; if we just make Iterator.from variadic, it will iterate strings
+
+[11:48:41.0124] <bakkot>
+that sounds like a good reason to do `concat` instead of making `Iterator.from` variadic
+
+[11:48:55.0667] <TabAtkins>
+Why would variadicity change this behavior.
+
+[11:49:13.0813] <Michael Ficarra>
+TabAtkins: it changes nothing, that's already the behaviour of iterator.from on a single argument
+
+[11:49:18.0741] <bakkot>
+`Iterator.from` does accept strings
+
+[11:49:32.0059] <bakkot>
+it's only specifically `flatMap` which doesn't
+
+[11:49:32.0253] <TabAtkins>
+Ah, ok, so the Sin has already been committed.
+
+[11:49:33.0533] <TabAtkins>
+Damn.
+
+[11:49:36.0813] <Michael Ficarra>
+Iterator.from and Iterator.prototype.flatMap are different in this respect
+
+[11:49:49.0103] <bakkot>
+(`Iterator.from` being an explicit coercion it makes a lot more sense there)
+
+[11:49:54.0094] <TabAtkins>
+wish I'd recognized that and complained loudly about it earlier
+
+[11:50:24.0349] <Michael Ficarra>
+but I think it's the right call for Iterator.from; whether we like it or not, strings *are* iterable
+
+[11:50:51.0725] <Michael Ficarra>
+Array.from shouldn't reject strings either
+
+[11:50:59.0693] <bakkot>
+it's important not to _implicitly_ treat strings as iterable, but explicitly is fine I think
+
+[11:51:04.0385] <bakkot>
+or, well
+
+[11:51:06.0527] <bakkot>
+given that they are iterable
+
+[11:51:08.0776] <TabAtkins>
+Since `[..."foo"]` works, I *guess*, ugh
+
+[11:51:12.0805] <bakkot>
+if they weren't, yes
+
+[11:51:19.0454] <Michael Ficarra>
+exactly
+
+[13:08:35.0267] <ljharb>
+> <@bakkot:matrix.org> you'd only do that if you don't know whether or not `item` is an array, surely? which... I have a hard time imagining code where that comes up very much?
+
+it comes up for me all the time
+
+[13:09:24.0190] <ljharb>
+and yes the original Sin is that strings are iterable
+
+[13:13:42.0554] <TabAtkins>
+> <@bakkot:matrix.org> it's important not to _implicitly_ treat strings as iterable, but explicitly is fine I think
+
+(Note that I still feel quite strongly that this is also a (lesser) sin; there is no Correct way to iterate a string and pretending there is just misleads authors. Giving strings well-named iterator-returning methods is the correct thing to do. But that ship sailed long ago for JS.)
+
+[13:15:36.0120] <bakkot>
+fully agreed
+
+[13:17:26.0009] <bakkot>
+> <@ljharb:matrix.org> it comes up for me all the time
+
+I believe you I just have a hard time imagining it
+
+[13:18:57.0994] <ljharb>
+> <@tabatkins:matrix.org> (Note that I still feel quite strongly that this is also a (lesser) sin; there is no Correct way to iterate a string and pretending there is just misleads authors. Giving strings well-named iterator-returning methods is the correct thing to do. But that ship sailed long ago for JS.)
+
+i still think we should add codeUnits and codePoints iterator methods, even tho it’s too late to remove the Symbol.iterator method ¯\_(ツ)_/¯ 
+
+[13:19:52.0278] <TabAtkins>
+And if all possible a `graphemeClusters` method, tho that does depend on Unicode version.
+
+[13:19:57.0514] <TabAtkins>
+ * And if at all possible a `graphemeClusters` method, tho that does depend on Unicode version.
+
+[13:20:46.0834] <bakkot>
+a `codePoints` iterator might be confusing given that `codePointAt` gives you a number
+
+[13:20:47.0552] <TabAtkins>
+but codeUnits and codePoints would def be Free(tm) since that's the two iteration methods we already expose.
+
+[13:20:52.0827] <bakkot>
+well, unless `codePoints` was an iterator of numbers
+
+[16:49:41.0253] <Michael Ficarra>
+ljharb: iterator sequencing proposal: https://github.com/michaelficarra/proposal-iterator-sequencing
+
+[16:59:22.0476] <ljharb>
+i really like `Iterator.of` combined with `concat` (if it works like [].concat) or another name ("with" might be nice?) if not
+
+[16:59:38.0245] <ljharb>
+then i can do `.with([1])` or i can do `.with(Iterator.of(1))` if i'm forced to do that
+
+
+2023-08-15
+[17:00:01.0884] <ljharb>
+(altho really, i'd keep using `[].concat` if there weren't any methods that took both an iterator and a non-iterator)
+
+[17:09:12.0190] <Michael Ficarra>
+stage 1 concerns 😜
+
+[17:10:22.0668] <Michael Ficarra>
+I'm kinda leaning toward a `Iterator.from` + `Iterator.prototype.flat` solution after doing this research
+
+[17:11:41.0793] <Michael Ficarra>
+that also solves the problem of TabAtkins being unhappy with our string handling (since `flat` would adopt `flatMap`'s string rejection)
+
+[17:12:49.0811] <TabAtkins>
+So just put them all in an array and flatten it as an iterator?
+
+[17:13:02.0583] <Michael Ficarra>
+put them all in an iterator and flatten it
+
+[17:13:13.0282] <Michael Ficarra>
+`Iterator.from(as, bs, cs).flat()`
+
+[17:13:22.0765] <Michael Ficarra>
+ * `Iterator.of(as, bs, cs).flat()`
+
+[17:13:36.0454] <Michael Ficarra>
+ * I'm kinda leaning toward a `Iterator.of` + `Iterator.prototype.flat` solution after doing this research
+
+[17:14:23.0822] <Michael Ficarra>
+sorry, I typo'd `Iterator.of` as `Iterator.from` since I'm so used to typing that from working on iterator helpers
+
+[19:30:39.0918] <ljharb>
+ooh i like that
+
+[19:31:08.0168] <ljharb>
+then i still get the semantics i want, but you weirdos that hate array concat's pre-symbol semantics are happy too
+
+[19:46:02.0166] <bakkot>
+if I understand correctly you would not get the semantics you want
+
+[19:46:17.0633] <bakkot>
+assuming iterator `flat` behaves like iterator `flatMap`
+
+[22:12:34.0456] <ljharb>
+ah, so the Iterator.of arguments would still have to be an iterator?
+
+[22:13:01.0984] <ljharb>
+separately, what about `.join()` so i don't have to make an array first?
+
+[22:27:30.0998] <bakkot>
+right, yes
+
+[22:27:33.0453] <bakkot>
+I do also want join
+
+[22:27:38.0679] <bakkot>
+that hopefully has less design space
+
+
+2023-08-17
+[20:20:20.0096] <bakkot>
+neat, import attributes in safari https://github.com/WebKit/WebKit/pull/16730
+
+
+2023-08-22
+[16:29:12.0964] <Michael Ficarra>
+any objections to me removing any constraints listed in host-defined AOs that just repeat the return type from the signature?
+
+[16:29:52.0820] <shu>
+none from me
+
+[16:34:56.0521] <Michael Ficarra>
+HostPromiseRejectionTracker is particularly egregious
+
+[16:45:44.0323] <Michael Ficarra>
+done: https://github.com/tc39/ecma262/pull/3153
+
+
+2023-08-23
+[00:02:20.0644] <rkirsling>
+this is interesting because I have colleagues that are interested in attending for the first time ever
+
+[00:02:39.0074] <rkirsling>
+so let me finally confirm about how that works :D
+
+[00:03:30.0048] <rkirsling>
+specifically, is there any expedited flow for somebody who's like "oh, I'd like to observe for a day"?
+
+[00:04:05.0933] <rkirsling>
+should they still do the same delegate registration as anybody else?
+
+[00:04:24.0055] <rkirsling>
+ * this is interesting because I actually have colleagues that are interested in attending, for the first time ever
+
+[00:51:41.0079] <Rob Palmer>
+If the person is part of a member company, onboarding them as a delegate is already expedited. TTJ (time to Jordan adding them to your GitHub team) is <24 hours. 
+
+[00:53:30.0139] <Rob Palmer>
+If you do not wish to make them a delegate, and it is accepted they will not speak in the meeting, then you can announce them as an observer on the Reflector post for the meeting, so that the chairs know they are meant to be there. You will be responsible for relaying entry details to them. 
+
+[00:53:57.0307] <Rob Palmer>
+Overall it is simplest to make them a delegate, if you are on the fence. 
+
+[01:29:03.0836] <rkirsling>
+cool, thanks
+
+[09:13:55.0193] <Michael Ficarra>
+oops, I just realised this isn't the editors channel 😳
+
+[11:16:47.0098] <shu>
+github question: is it possible to give someone access to a single branch in a repo?
+
+[11:40:59.0020] <Chris de Almeida>
+> <@shuyuguo:matrix.org> github question: is it possible to give someone access to a single branch in a repo?
+
+no
+
+[11:41:58.0128] <Chris de Almeida>
+you may be able to get close to that by using branch protection patterns, but that's not quite the same
+
+[11:42:37.0723] <shu>
+very well, they get to access everything then
+
+
+2023-08-31
+[17:33:06.0509] <Michael Ficarra>
+any Mozilla delegates want to present https://github.com/tc39/ecma262/pull/2233 as a needs-consensus PR at the upcoming meeting? dminor 
+
+[10:55:55.0723] <leobalter>
+Michael Ficarra: I like your stage extension proposal (the new stage before stage 3) and I wonder if you should include a bullet for the new stage: HTML integration to happen before Stage 3. This would meet exactly where ShadowRealms are right now and clear out a lot of bumps we faced.
+
+
+
+[10:56:15.0618] <leobalter>
+the bullet would be more specific to the Slide 7: https://docs.google.com/presentation/d/1HtcFY98qWy-LPJLawRIkYzhDEjuEeyArMiNXbCOFcrk/view#slide=id.g252bc9353ee_0_3049
+
+[12:19:33.0538] <Michael Ficarra>
+leobalter: I think that should probably be pursued as a follow-on. Currently, the only new entrance requirement is the sufficiency of the tests. I would rather get that part settled and then later, once we have the new stage as our foundation to build on, consider additional entrance requirements. I don't want any added complexity to potentially compromise and further delay this change.
+
+[12:25:07.0379] <leobalter>
+I have no blocking takes. I think the idea is valid, it has been raised and technically if a champion wants to go faster to Stage 3 they can get those items ready along with Stage 2. 
+
+I think the challenge is gonna be around "no flip-flopping". Perhaps the expectation of mitigating them is raised, but I wouldn't be surprised to continue (now less) implementation details coming up to change a few things.
+
+
+
+[12:38:13.0236] <Michael Ficarra>
+> but I wouldn't be surprised to continue (now less) implementation details coming up to change a few things.
+
+I don't know what this means
+
+[14:58:49.0837] <shu>
+iterator helpers has a web compat issue and chrome is unshipping for now: https://github.com/tc39/proposal-iterator-helpers/issues/286
+
+[15:01:46.0771] <bakkot>
+noooooooooooo
+
+[15:05:55.0216] <shu>
+the athletic is too big to not unship :(
+
+[15:06:59.0243] <Kris Kowal>
+I read that more as Vader meme than imperative, but yes.
+
+[15:07:37.0081] <Kris Kowal>
+Our sympathies, @bakkot. Here we go again.
+
+[15:09:13.0237] <shu>
+does anyone have a web dev contact at NYT?
+
+[15:09:22.0221] <shu>
+i'm asking internally as well more couldn't hurt
+
+[15:15:23.0819] <Luca Casonato>
+shu: is there data on if this impacts many other sites outside of the athletic?
+
+[15:15:51.0269] <shu>
+no additional data on my end, no
+
+[15:16:17.0035] <shu>
+i also don't know how we would get data outside of one-off reports of "this site doesn't work" like this one
+
+[15:16:59.0162] <shu>
+my hunch is that there's a lot of old regenerator runtime out there, but very unlikely that those sites _also_ freeze Iterator.prototype
+
+[15:17:19.0187] <shu>
+unless this airgap.js thing is industry standard for doing whatever it does, then we have a problem
+
+[15:17:23.0089] <shu>
+since it looks like a paid product
+
+[15:17:31.0677] <Kris Kowal>
+The two-year-old fix for regenerator runtime was motivated by users of SES.
+
+[15:18:04.0389] <shu>
+i could tell!
+
+[15:21:27.0446] <Kris Kowal>
+I’d say “run npm outdated more”, but I also have reason to assume Uber’s still running Node.js 0.10.36 in prod today and despair.
+
+[15:26:43.0160] <bakkot>
+theathetic is loading airgap.js from transcend's CDN - maybe we can get transcend to update their thing? though not totally clear what change would fix this
+
+[15:27:59.0083] <Kris Kowal>
+Regenerator Runtime gets injected by bundlers (I think Rollup) if the target language is set down toward es5.
+
+[15:28:51.0376] <nicolo-ribaudo>
+It's injected by Babel when compiling generators, but the version that's injected depends on what the user has in their package.json
+
+[15:28:57.0016] <Kris Kowal>
+So it’s safe to assume this can be fixed by a configuration change in the deployment of theathletic.
+
+[15:29:25.0736] <bakkot>
+what if we just `delete Iterator.prototype.constructor`
+
+[15:37:32.0088] <shu>
+> <@bakkot:matrix.org> what if we just `delete Iterator.prototype.constructor`
+
+it'd be nice if we didn't have to do that, but if either NYT cannot update theathletic.com, or if other cases crop up, then that's worth pursuing
+
+[15:37:48.0751] <shu>
+the former seems unlikely because NYT is a big property and have staff
+
+[15:39:23.0939] <shu>
+> <@bakkot:matrix.org> theathetic is loading airgap.js from transcend's CDN - maybe we can get transcend to update their thing? though not totally clear what change would fix this
+
+airgap.js very intentionally freezes all iterators and their prototypes, so i don't think there's a one-off fix for this outside of convincing them they shouldn't freeze iterators
+
+[15:39:29.0432] <shu>
+which sgtm, i don't know why they do this anyway
+
+[15:39:51.0040] <bakkot>
+what if we get airgap to `delete Iterator.prototype.constructor` before freezing anything
+
+[15:40:01.0918] <shu>
+ah, sure, that's a possible fix
+
+[15:40:32.0005] <bakkot>
+or they could replace it with a getter/setter pair if they want to preserve behavior
+
+[15:40:57.0598] <shu>
+117 goes stable in 3 business days, however, so i'm still unshipping
+
+[15:41:34.0672] <shu>
+if we can get Transcend to workaround perhaps we can fast-track shipping this later? idk, but i'm doing the conservative thing for now
+
+[15:53:43.0504] <Mathieu Hofman>
+We should just fix the override mistake ...
+
+[15:58:15.0786] <bakkot>
+I have gone ahead and `@`'d the CEO and CTO of transcend on the github thread
+
+[16:07:02.0473] <Michael Ficarra>
+bakkot: from https://github.com/transcend-io/airgap.js-types/commits/main, it appears that `@anotherminh` is active in the last few hours, consistently active on weekdays, and does work related to airgap-js
+
+[16:07:08.0392] <Michael Ficarra>
+you should give them a mention as well
+
+[16:09:01.0113] <bakkot>
+done
+
+[16:09:10.0002] <bakkot>
+assuming editing in someone's handle pings them, anyway
+
+[16:09:18.0283] <Michael Ficarra>
+I think it does
+
+[16:19:01.0692] <Mathieu Hofman>
+I don't think editing does ping
+
+[16:23:42.0961] <Mathieu Hofman>
+oh maybe it does these days: https://github.com/isaacs/github/issues/310
+
+[16:47:49.0182] <shu>
+oh hey someone from Transcend replied! if they transparently roll this up before i can get the unshipping merged for 117, then i'll let it stay shipped for 117
+
+[16:48:00.0551] <shu>
+ * oh hey someone from Transcend replied! if they transparently roll this out before i can get the unshipping merged for 117, then i'll let it stay shipped for 117
+

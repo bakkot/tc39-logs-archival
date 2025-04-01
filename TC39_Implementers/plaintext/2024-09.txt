@@ -1,0 +1,233 @@
+2024-09-02
+[16:23:44.0754] <ljharb>
+what's the perf of Object.hasOwn vs Object.prototype.hasOwnProperty.call? (re https://github.com/nodejs/node/pull/54710#issuecomment-2325374488 )
+
+
+2024-09-03
+[13:05:33.0395] <snek>
+> <@ljharb:matrix.org> what's the perf of Object.hasOwn vs Object.prototype.hasOwnProperty.call? (re https://github.com/nodejs/node/pull/54710#issuecomment-2325374488 )
+
+i agree with joyee's comment
+
+[13:05:42.0201] <snek>
+it could be improved though
+
+[13:14:15.0730] <ljharb>
+i'm sure it's accurate. but it doesn't make any sense to me why it'd be implemented in that way
+
+[13:14:26.0528] <shu>
+how would you implement it?
+
+[13:14:58.0590] <snek>
+i would imagine it was convenient at the time. generally v8 development goes like 1) implement thing correctly and then 2) optimize given the known working impl
+
+[14:42:43.0049] <canadahonk>
+fwiw I implemented it basically the same in my engine
+
+[16:04:51.0387] <ljharb>
+i would assume that whatever hasOwnProperty does to check that the object has the property is the same thing hasOwn would do
+
+[16:04:59.0000] <ljharb>
+as opposed to just wrapping hasOwnProperty
+
+[16:27:43.0095] <bakkot>
+then all of the various optimizations which look for hasOwnProperty would have to be updated to look for both hasOwn and hasOwnProperty
+
+[16:33:32.0653] <shu>
+> <@ljharb:matrix.org> i would assume that whatever hasOwnProperty does to check that the object has the property is the same thing hasOwn would do
+
+but why would this make hasOwn faster than hasOwnProperty?
+
+[16:42:24.0266] <ljharb>
+it wouldn't, it'd make it no slower
+
+[16:42:30.0569] <ljharb>
+ * it wouldn't, it'd make it "no slower"
+
+[16:43:37.0920] <shu>
+best to benchmark the current difference, i expect a few branches won't matter too much in practice if you think hasOwn is better stylistically
+
+[16:44:02.0592] <Justin Ridgewell>
+I don’t think the call is the slow part of the implementation?
+
+[16:44:16.0368] <Justin Ridgewell>
+It’s the extra checks done before the call
+
+[16:46:01.0206] <ljharb>
+node folks get very perf-sensitive
+
+[16:46:55.0752] <ljharb>
+so even the mere suggestion that hasOwn is slower caused the entire PR i linked to be abandoned.
+
+[16:47:17.0728] <shu>
+> <@jridgewell:matrix.org> It’s the extra checks done before the call
+
+i don't think those are expensive checks?
+
+[16:48:00.0657] <Justin Ridgewell>
+Definitely not expensive, but they’re extra work vs not doing the checks.
+
+[16:48:10.0870] <shu>
+well of course, the question is does it matter
+
+[16:48:25.0567] <bakkot>
+https://source.chromium.org/chromium/chromium/src/+/main:v8/src/builtins/builtins-object-gen.cc;l=690-717
+
+[16:48:27.0014] <Meghan Denny>
+fwiw mdn is recommending hasOwn over hasOwnProperty
+
+[16:48:27.0751] <Meghan Denny>
+https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/hasOwn
+
+[16:49:05.0777] <bakkot>
+ * https://source.chromium.org/chromium/chromium/src/+/main:v8/src/builtins/builtins-object-gen.cc;l=690-717 (oh I see it was already linked in the node thread, oops)
+
+[16:49:15.0665] <shu>
+if the goal is to use 'hasOwn' for whatever reason, and that reason needs to be traded off against possible performance regressions, either you are willing to quantify the regression or not
+
+[16:49:37.0407] <shu>
+if you are not willing to quantify the regression (and find out if it matters), that says to me the "whatever reason" for wanting to use `hasOwn` is already pretty weak
+
+[16:50:12.0340] <shu>
+and the thing you should do is to convince node maintainers that it's worth the price of finding out if it's slower in a way that matters, rather than VM optimizations
+
+[16:50:39.0932] <Justin Ridgewell>
+> <@shuyuguo:matrix.org> well of course, the question is does it matter
+
+Probably not, but the PR doesn’t improve the code. I think it’s be worth it if the code we’re doing `hasOwnProperty.call(obj, key)`, but node already has a devirtualized helper.
+
+[16:50:51.0687] <shu>
+right, that makes sense to me
+
+[16:50:54.0766] <ljharb>
+the issue is that that helper already has to do a bind
+
+[16:51:12.0308] <ljharb>
+so they were hoping to drop the bind/call/apply. but v8 does that internally for hasOwn, so it's probably a wash
+
+[16:51:27.0001] <shu>
+a .bind is very different than a .call/apply
+
+[16:51:46.0391] <shu>
+a .bind does an allocation, v8 does not internally do that?
+
+[16:51:53.0391] <shu>
+it just calls the builtin directly
+
+[16:52:41.0705] <ljharb>
+🤔
+
+[16:53:21.0775] <Justin Ridgewell>
+> <@meghanbun:matrix.org> fwiw mdn is recommending hasOwn over hasOwnProperty
+
+For regular devs, `Object.hasOwn` is a definite improvement and they shouldn’t worry about any performance change.
+
+[16:53:40.0651] <shu>
+like, the IsNullOrUndefined check is pretty cheap
+
+[16:54:10.0612] <shu>
+most of the cost i imagine is the actual builtin call
+
+[16:54:40.0447] <shu>
+but this is all moot -- if the reason is that it doesn't improve the code anyway
+
+
+2024-09-04
+[17:01:41.0813] <canadahonk>
+> <@ljharb:matrix.org> i would assume that whatever hasOwnProperty does to check that the object has the property is the same thing hasOwn would do
+
+yeah not sure about that, a bit strange
+
+[17:02:36.0584] <canadahonk>
+the two are basically identical per spec iirc
+
+[17:02:58.0473] <canadahonk>
+yeah (https://tc39.es/ecma262/#sec-object.hasown, https://tc39.es/ecma262/#sec-object.prototype.hasownproperty)
+
+[19:10:09.0413] <joyee>
+I think that’s just a very peculiar case of Node.js core where there isn’t much benefit to change existing code to use Object.hasOwn() - if the code was written from scratch it probably would’ve used ObjectHasOwn because why not, the perf difference doesn’t really matter. But then if the code has always been using ObjectPrototypeHasOwnProperty then you also get the why if you want to change it, and the usual reasons you give to user code doesn’t apply to Node.js core: you use it to prevent a prototype lookup, well but in Node.js core that is already prevented with the primordials machinery, what’s more the machinery is built into a snapshot so the bind was done in build time, not runtime. This doesn’t generalize to normal user code, and isn’t much motivation for the VM to do anything per-se. 
+
+[19:23:01.0835] <joyee>
+Also mass refactoring in Node.js core has a uncommon demotivating cost which is the LTS backport cost (imagine the conflicts this can cause when back porting the patch and any patch that touch related lines to v18, v20 and v22). This cost doesn’t generalize to uh…any software that doesn’t need to maintain three simultaneous LTS releases that will be alive for years. So it’s just an odd one out.
+
+[11:04:28.0847] <snek>
+i was going to update the code to be better and then i found there isn't even any optimization path for hasOwnProperty except for within for-in loops
+
+[11:04:39.0294] <snek>
+so its not like its a super fast operation anyway
+
+[11:05:15.0329] <snek>
+ * i was going to update the code to get rid of the call to hasOwnProperty and then i found there isn't even any optimization path for hasOwnProperty except for within for-in loops
+
+
+2024-09-05
+[12:31:28.0373] <snek>
+joyee: i was trying to understand the different approaches for injecting `__esModule` on `require(esm)` on your pr, and reading through it looked like they were all roughly the same performance? i'd like to just use a proxy if possible, but since you went with the wrapper module approach i wanted to double check it wouldn't be bad in some way i haven't seen mentioned.
+
+[13:26:59.0240] <joyee>
+The performance difference shows up when you are accessing properties from the returned result, which is relevant for bundled code because they always access it as `const loaded = require('esm');  loaded.prop` instead of caching `const {prop} = require('esm')` (in order to preserve live binding)
+
+[13:27:35.0785] <joyee>
+https://github.com/nodejs/node/pull/52166#issuecomment-2223998497
+
+[13:27:52.0118] <joyee>
+That's the type='access' benchmarks
+
+[13:29:23.0571] <joyee>
+For module loading per-se the difference is not too big, the difference lies in property access
+
+[13:31:06.0630] <joyee>
+There are some examples of the code emitted by the transpilers, who are what the `__esModule` thing is for https://github.com/nodejs/node/pull/52166#issuecomment-2145702846
+
+[13:34:04.0634] <joyee>
+It would be cool if non-enumerable exports are allowed though, the wrapper module makes `__esModule` enumerable, which is a bit annoying
+
+[13:37:52.0714] <joyee>
+ * For module loading per-se the difference is not too big, the difference lies in property access (or, from the faux-ESM user's POV, every access to named exports from another module)
+
+[13:40:21.0128] <joyee>
+ * For module loading per-se the difference is not too big, the difference lies in property access (or, from the faux-ESM user's POV, every access to named exports from another module)
+
+```js
+import { a } from 'esm';
+
+let b;
+for (let i = 0; i < 100; ++i) {
+  b += a;  // Every access to a goes through the Proxy now
+}
+```
+
+[13:43:06.0794] <snek>
+> <@qzhang:igalia.com> That's the type='access' benchmarks
+
+i seeee, ty
+
+[13:43:32.0736] <snek>
+yeah i was wishing while writing this that there was a host hook for initializing namespaces. but it would be kind of silly...
+
+[13:48:02.0418] <joyee>
+I think when faux-ESM becomes a past, we can just switch to Proxy, until them using the module wrapper would avoid risking making native ESM unattractive (because your faux-ESM user might see funny hot spots of all the Proxied named exports access from your module)
+
+[13:49:13.0793] <joyee>
+Or better, having non-enumerable exports, then `__esModule` is barely visible
+
+
+2024-09-09
+[08:05:58.0439] <snek>
+was it JSC that has the ability to lazily bootstrap objects when they're first accessed? 
+
+[08:08:32.0029] <mgaudet>
+snek: SpiderMonkey create prototypes lazily? (Which creates spec bugs so... ymmv)
+
+[08:08:42.0229] <mgaudet>
+ * snek: SpiderMonkey creates prototypes lazily? (Which creates spec bugs so... ymmv)
+
+[08:09:41.0719] <snek>
+ah spidermonkey ok
+
+[08:10:52.0520] <snek>
+this i guess https://github.com/mozilla-spidermonkey/spidermonkey-embedding-examples/blob/9ac8cccd365738bb13445e43d51d27ad8979ff0a/examples/resolve.cpp
+
+[09:15:59.0022] <mgaudet>
+Ah yes, that too
+

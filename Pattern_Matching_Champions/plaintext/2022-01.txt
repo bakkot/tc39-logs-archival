@@ -1,0 +1,452 @@
+2022-01-13
+[10:04:30.0081] <ljharb>
+what do we all think are the remaining blockers to seeking stage 2?
+
+[10:25:18.0033] <TabAtkins>
+I suspect nothing? We should try to close the remaining issues, and make sure the spec text is up to date, but that's it.
+
+[10:56:39.0490] <TabAtkins>
+The more I write and read examples, the more I think we could get away with dropping the () around the matcher, as long as we have the separator character. `when (${...})` is just a lot of wrappers, and I don't want to special-case top-level `${}` over other things.
+
+[10:57:18.0669] <TabAtkins>
+`when ({foo})` or `when([foo])` too, just too many wrapper chars. Gimme `when {foo}: ...` and `when [foo]: ...`
+
+[11:45:02.0702] <ljharb>
+so you want `when null` and `when /a/g` and `when 3` etc?
+
+[11:45:30.0744] <ljharb>
+i think that it's a _reasonable_ possibility, now that the pin operator has boundaries, in a way where it was unreasonable with `^`
+
+[11:45:49.0669] <ljharb>
+but i'm not sure it's better. the parens are a nice static delimiter to indicate the pattern
+
+[11:46:16.0314] <ljharb>
+i guess we still haven't figured out if there should be a separator before the RHS, and what it is?
+
+[12:26:11.0130] <TabAtkins>
+Yes, I'd want all of those, so long as we have the RHS separator.
+
+[12:26:32.0588] <TabAtkins>
+And yeah we haven't figured it out yet, but it looked like several champions were leaning towards `:` the last time we discussed this.
+
+[13:27:34.0137] <mpcsh>
+do we want to have one more champions call?
+
+[14:44:15.0286] <TabAtkins>
+yeah, would be useful. feels like we're in the home stretch of discussions to have between ourselves; once these are resolved all that's left is bugs or new concerns brought up by others in the committee
+
+
+2022-01-14
+[18:57:58.0697] <ljharb>
+How would the : separator, without parens, work with typescript?
+
+[22:06:12.0494] <ljharb>
+i guess `when ${x as y}: RHS as z` would be fine, since there's no `:` type declarations there
+
+[09:56:31.0259] <TabAtkins>
+Does TS use colons for something near that syntax space?
+
+[09:56:43.0308] <TabAtkins>
+I thought it used `->`
+
+[09:57:23.0246] <Jack Works>
+Neither : or -> used in ts as I can recall. 
+
+[10:05:31.0054] <TabAtkins>
+Ah, `:` is used in the same way it is in Python, to annotate a variable.
+
+[10:05:42.0511] <TabAtkins>
+Like `let obj: any = { x: 0 };`
+
+[10:06:34.0500] <TabAtkins>
+I recall yulia wanted us to avoid `->` for TS-adjacent reasons, but I don't remember the details of it. Was it to reserve the space for JS to potentially grow annotations?
+
+[10:07:39.0362] <TabAtkins>
+But yeah, `:` in pattern space would be just fine, it's wouldn't be capable of receiving an annotation.
+
+[10:08:30.0325] <TabAtkins>
+Tho hm, I suppose `when a: int: RHS` might be reasonable?
+
+[10:42:52.0231] <yulia>
+not terribly important now, if its an issue they can complain
+
+[10:43:08.0999] <yulia>
+> <@tabatkins:matrix.org> I recall yulia wanted us to avoid `->` for TS-adjacent reasons, but I don't remember the details of it. Was it to reserve the space for JS to potentially grow annotations?
+
+ * not terribly important now, if its an issue they can complain
+
+[10:43:32.0318] <TabAtkins>
+Oh nice, because `->` is my favorite of all the separators for this case.
+
+[10:44:53.0043] <TabAtkins>
+(If we do end up with problems, keeping with "parenthesized matcher, no separator" is fine with me, I just think (and iirc mpcsh also feels this way) that a separator is very good for readability, and if we have that we shouldn't need wrapper characters.)
+
+[12:10:13.0684] <rbuckton>
+TS doesn't use `->` for anything
+
+[12:14:55.0148] <rbuckton>
+It uses `:` for variable/field/parameter  declarations and return type annotations,  `<T>x` or `x as T` for casts and `f<T>` for generics
+
+[12:17:09.0672] <rbuckton>
+Also, `=>` is used for return type annotations in function and constructor types, but only when you're already in type-space
+
+[13:01:52.0373] <TabAtkins>
+Yeah `=>` is already a hard-reject from the possibilities, since it has different semantics than arrow function bodies.
+
+[14:24:41.0014] <mpcsh>
+> <@tabatkins:matrix.org> (If we do end up with problems, keeping with "parenthesized matcher, no separator" is fine with me, I just think (and iirc mpcsh also feels this way) that a separator is very good for readability, and if we have that we shouldn't need wrapper characters.)
+
+this is correct - I strongly prefer a separator but won't block the proposal if there's no feasible way to have one
+
+[14:25:06.0360] <mpcsh>
+do we want to try to meet before the upcoming plenary? I suppose we're past the stage advancement deadline so it doesn't really matter?
+
+[14:29:14.0078] <TabAtkins>
+It might be useful to claim a lightning-round slot to present current work, noting that we'll likely ask for Stage 2 at *next* meeting. In that case, yeah, getting a champion meeting in next week would be good.
+
+[14:29:26.0054] <TabAtkins>
+mpcsh: Would you like to doodle it, or should i?
+
+[14:54:34.0476] <TabAtkins>
+(Given the US holiday on Monday, I suggest we ask about WThF.)
+
+[14:56:14.0773] <mpcsh>
+> <@tabatkins:matrix.org> mpcsh: Would you like to doodle it, or should i?
+
+would you mind? I'm _very_ busy this week into next 🙂
+
+[14:57:05.0956] <TabAtkins>
+Will do
+
+
+2022-01-18
+[10:17:09.0034] <TabAtkins>
+Okay forgot to do it on Friday since I was already heading home when I sent my last message, but here's a doodle for a quick 1hr meeting sometime this week: https://doodle.com/poll/qeyiu5tfque6atzv?utm_source=poll&utm_medium=link
+
+[11:08:43.0226] <TabAtkins>
+I guess the main determiner here is gonna be between the EMEA friendly time (morning PST) or the APAC friendly time (afternoon PST). That's mainly just a tossup between yulia and HE Shi-Jun , right?
+
+[11:09:07.0482] <mpcsh>
+I think you mean Jack Works?
+
+[11:09:54.0893] <TabAtkins>
+Ah shoot, indeed.
+
+[11:09:59.0869] <TabAtkins>
+Sorry, Jack :(
+
+[14:16:41.0172] <mpcsh>
+also hey friends just an fyi that I've decided to use they/them pronouns only, going forward 💜
+
+[14:18:31.0598] <TabAtkins>
+welcome to the club!
+
+
+2022-01-19
+[16:52:03.0793] <TabAtkins>
+Looks like we can easily rule out tomorrow for the meeting. I'll give it another 18 hours before I call it for Thursday or Friday 4pm PST.
+
+
+2022-01-20
+[16:17:27.0710] <TabAtkins>
+All right, let's call it for Thursday, 4PM PST? That covers everyone who answered except (understandably) Yulia, but she was able to attend the previous meeting.
+
+[07:43:49.0604] <TabAtkins>
+Do we have a preferred vc tech? If not, https://meet.google.com/kvb-kzre-jqg
+
+[09:06:04.0796] <ljharb>
+zoom's the best one, but google's fine too
+
+[10:01:03.0944] <TabAtkins>
+I can't do Zoom on a work computer :D
+
+[10:01:16.0614] <TabAtkins>
+(i've previously taken our meetings from home)
+
+[10:10:44.0215] <ljharb>
+i can't do the zoom app on my work computer either, but i can do zoom web there. but also i do video calls on my ipad regardless, _except_ for work ones :-p
+
+[10:10:51.0762] <ljharb>
+ * i can't do the zoom app on my work computer either, but i can do zoom web there. but also i do video calls on my ipad regardless, _except_ for work ones :-p
+
+[10:46:48.0113] <TabAtkins>
+HackMD agenda for the meeting, feel free to review and log your opinions ahead of time: https://hackmd.io/@aZMW07qbQcuCFmPlAAwUNA/HyVREXDTK/edit
+
+
+2022-01-21
+[16:04:07.0199] <TabAtkins>
+Meeting happening now!
+
+[16:05:54.0768] <TabAtkins>
+@room ^^^
+
+[16:15:58.0948] <TabAtkins>
+Yo me and Ron are just going to decide everything ourselves.
+
+[16:20:20.0779] <rkirsling>
+oh geez what a convenient time too
+
+[16:20:43.0129] <rkirsling>
+and here I am, stuck in a much less interesting meeting
+
+[16:23:06.0184] <ljharb>
+oh crap sorry
+
+[16:23:07.0819] <ljharb>
+i'll be right there
+
+[17:04:28.0261] <ljharb>
+call kicked us out
+
+[17:04:44.0885] <ljharb>
+seems like we're good tho; we'll need the other champions to give their thoughts
+
+[17:04:49.0608] <TabAtkins>
+Ugh oh yeah, I did the meet form my personal account
+
+[17:04:59.0763] <TabAtkins>
+gotta remember to do it from work account so no time limit
+
+[17:05:21.0796] <TabAtkins>
+anyway we hit the end of the topic list, seems good, i'll finish writing up notes later tonight, gotta head home and make dinner now
+
+[19:52:50.0700] <Jack Works>
+Oh sorry I stay up until 5am and sleep over the meeting. What discussed on the meeting? (And I didn't see it on the tc39 meeting calendar either)
+
+[06:56:16.0454] <ljharb>
+we don’t usually put champion calls on there
+
+[06:56:31.0712] <ljharb>
+the hackmd linked above should cover it
+
+[10:49:22.0125] <TabAtkins>
+Yes, @room please review the "Notes" after each topic in https://hackmd.io/@aZMW07qbQcuCFmPlAAwUNA/HyVREXDTK ; I'll fold the conclusions into our issues (and close issues when relevant) on Monday.
+
+[10:52:14.0135] <TabAtkins>
+(That is, please speak up if you disagree with some of the conclusions, so I can leave those issues open and properly notate our thoughts as a group.)
+
+[10:53:50.0899] <TabAtkins>
+FYI Jack Works: It is somewhat rude to indicate availability such that we schedule the meeting around your timezone constraints, and then not show up; we could have instead done a morning meeting and had Yulia in. Please don't do that again.
+
+[14:20:09.0238] <rkirsling>
+comments:
+1. I actually don't hate that `strict` idea, might be an okay compromise given how JS is
+2. `default` seems fine but I don't think `none` feels intuitive at all
+3. the last conclusion is unclear. it's what Tab assumed, I hope?
+
+[14:23:20.0511] <rkirsling>
+(also please @-room the doodle next time, I evidently forgot Matrix existed after the holidays lol)
+
+
+2022-01-22
+[16:07:07.0359] <ljharb>
+i'm open to other suggestions :-) i reallllllly want a 4-letter option
+
+[16:07:28.0139] <ljharb>
+for 3, yes, it's that bindings are visible after they're declared
+
+[16:08:48.0943] <rkirsling>
+`alas`? 😛
+
+[16:14:26.0193] <ljharb>
+lol
+
+[16:14:43.0611] <ljharb>
+i do like `elsewhen` but it's not 4 letters
+
+[16:15:39.0931] <ljharb>
+```
+when (x) {…}
+when (y) {…}
+nope { … }
+```
+
+[16:17:50.0170] <rkirsling>
+go for a super old-school aesthetic with `nehw` 😆
+
+[16:19:11.0587] <rkirsling>
+(not that it's _closing_ the when, but whatever)
+
+[16:21:26.0269] <rkirsling>
+wacky idea: standalone `when` 
+
+[16:23:47.0703] <ljharb>
+lol, very bash
+
+[16:24:00.0143] <ljharb>
+oh hm, `when { … }`. that works but doesn't read right
+
+[16:26:51.0676] <rkirsling>
+yeah true. bit of a shame since the concept feels like it could work
+
+[16:29:15.0706] <rkirsling>
+`any`? unless you wanted exactly four (also maybe TS folks would be upset)
+
+[16:37:21.0853] <rkirsling>
+but I'm thinkin' it's useful if it still reads well when it's the _only_ branch
+
+[16:54:30.0067] <jschoi>
+Five letters? `other { … }`?
+
+[17:04:50.0548] <jschoi>
+(Short for `otherwise { … }`.)
+
+[17:05:27.0661] <jschoi>
+* (From `otherwise { … }`.)
+
+[20:04:57.0177] <rbuckton>
+`yet`
+
+[09:25:26.0453] <TabAtkins>
+> <@rkirsling:matrix.org> comments:
+> 1. I actually don't hate that `strict` idea, might be an okay compromise given how JS is
+> 2. `default` seems fine but I don't think `none` feels intuitive at all
+> 3. the last conclusion is unclear. it's what Tab assumed, I hope?
+
+No, it's what I *didn't* assume. We concluded that in `when (a & ${console.log(a)})`, it's fine for the console.log to see the `a` binding established immediately prior.
+
+[11:45:53.0102] <rbuckton>
+It makes sense to me, considering in  `const { a, b = a } = ...`, `b` can see `a`
+
+
+2022-01-23
+[18:39:34.0809] <rkirsling>
+ah alrighty
+
+[04:33:28.0638] <Jack Works>
+about sep, have we discussed about this?
+`when (_Pattern_) -> expression` + `when (_Pattern_) Block`
+
+[08:03:14.0059] <TabAtkins>
+We have, and our conclusion so far is that we'd prefer to lean on do-exprs for blocks and not special-case the syntax.
+
+[08:03:52.0665] <TabAtkins>
+(if we added blocks now, we'd just be tracking do-exprs exactly anyway, since each match arm has to produce a value)
+
+[08:22:50.0570] <ljharb>
+well, we *could* say that when match is in statement position, it’s RHS can be a block with normal block semantics. But that’s a refactoring hazard, and somewhat repeats the mistakes of functions.
+
+[08:27:59.0729] <Jack Works>
+> <@ljharb:matrix.org> well, we *could* say that when match is in statement position, it’s RHS can be a block with normal block semantics. But that’s a refactoring hazard, and somewhat repeats the mistakes of functions.
+
+I think it's acceptable to have this refactoring hazard. When a match statements is initially written in the statement position, it's intended to use as an statement, so it's completion value is highly likely are not going to be used.
+And it will become a syntax error therefore the developer can know it right after they changed their statements into the expression position.
+
+I think this kind of refactoring hazard is not a real hazard because it does not create implicit bug but an early error. 
+
+[08:29:16.0815] <ljharb>
+that's a fair point. but i still think it'd be confusing for people to have to think about statement vs expression position unnecessarily
+
+
+2022-01-24
+[01:17:18.0943] <Jack Works>
+devs are already think about statement vs expression position today. we have so many structures that only available in the statement form
+
+[08:46:07.0489] <ljharb>
+sure, but that doesn't mean that's a *good* thing or that we should increase it
+
+[10:18:38.0998] <TabAtkins>
+Yeah, I'm not particularly happy with a syntax difference between statement vs expression
+
+
+2022-01-25
+[17:13:09.0456] <TabAtkins>
+I was fiddling around with enum/ADT stuff and realized it wasn't hard to define custom matchers to be ADT-like, so I replaced our previous trivial custom matcher example with one based on Option: https://github.com/tc39/proposal-pattern-matching#custom-matcher-protocol-interpolations
+
+[17:13:37.0223] <TabAtkins>
+And then I realized that decorators should be able to help here as well:
+```js
+// A predefined ADT decorator
+const ADT = (mapper=()=>null) => (_, c) => {
+	if(c.kind == "method" && c.isStatic) {
+		c.addInitializer(function(){
+			// `this` is the class
+			const method = this[c.name];
+			method[Symbol.matcher] = (matchable) => {
+				if(matchable instanceof this && matchable._kind == method) {
+					return {matched: true, value:mapper(matchable)};
+				}
+				return {matched:false};
+			}
+		});
+	} else {
+		throw new Exception("only usable on static methods");
+	}
+}
+
+class Option {
+	constructor(val, kind) {
+		this.value = val;
+		this._kind = kind;
+	}
+
+	@ADT(x=>x.value)
+	static Some(val) {
+		return new Option(val, Option.Some);
+	}
+	
+	@ADT
+	static None() {
+		return new Option(null, Option.None);
+	}
+}
+
+match(result) {
+	when (${Option.Some} with val) -> console.log(val);
+	when (${Option.None}) -> console.log("none");
+}
+```
+
+
+2022-01-31
+[10:49:35.0465] <mpcsh>
+hey friends! I'm back, and my best friend, my brother, now lives three blocks from me. big moves happening 😎
+
+I'll be catching up on everything I missed today. sorry for the delay...
+
+[12:04:53.0986] <rbuckton>
+`new Option(null, Option.None)`. Heh, part of the point of Option is to avoid `null`
+
+[13:22:49.0239] <ljharb>
+tbh i'd expect `constructor(kind, val)`, and for a `kind` of `Option.None`, i'd expect `arguments.length > 1` to throw a TypeError.
+
+[13:23:05.0023] <ljharb>
+(because `null`, `undefined`, etc are all "Some" value)
+
+[13:58:45.0064] <mpcsh>
+> <@tabatkins:matrix.org> Yes, @room please review the "Notes" after each topic in https://hackmd.io/@aZMW07qbQcuCFmPlAAwUNA/HyVREXDTK ; I'll fold the conclusions into our issues (and close issues when relevant) on Monday.
+
+I had a chance to review the notes and I'm happy with all our conclusions. I will say rbuckton I'm strongly opposed to making length-check strictness consistent between tuples and arrays - it should be precisely the opposite, because the consistency should be with the conceptual basis of each data structure. an array is a collection of an arbitrary number of homogenous items; a tuple is a collection of a fixed number of heterogenous items. pattern semantics should fall along those lines
+
+[14:02:04.0508] <mpcsh>
+> <@tabatkins:matrix.org> I was fiddling around with enum/ADT stuff and realized it wasn't hard to define custom matchers to be ADT-like, so I replaced our previous trivial custom matcher example with one based on Option: https://github.com/tc39/proposal-pattern-matching#custom-matcher-protocol-interpolations
+
+love this! 🥳
+
+[14:02:35.0589] <TabAtkins>
+rbuckton: Right, the constructor pattern I used just needed *some* value. The null isn't exposed, it could be a 0 or false or undefined instead. It's the second arg that tells whether it's a None or Some.
+
+[14:03:15.0527] <TabAtkins>
+If I was doing this more securely I'd use a private symbol to make the `new Option()` constructor uncallable by outside code.
+
+[14:04:12.0186] <TabAtkins>
+I definitely could have just reversed the arg order tho, yeah.
+
+[14:11:29.0484] <rkirsling>
+well that seems like a bug there, now doesn't it, Matrix
+
+[14:11:45.0240] <rkirsling>
+(reply to @-room _is_ an @-room)
+
+[14:12:06.0885] <TabAtkins>
+Ah, indeed, I didn't even notice the notification had come from the quote
+
+[14:19:10.0611] <TabAtkins>
+Okay, swapped the order around in the README example, and hid the value behind a getter that throws for None. ^_^
+
+[14:28:20.0086] <TabAtkins>
+(I didn't enforce arguments.length checking, because I think it's reasonable to allow a generic invocation without requiring people to call it two separate ways.)
+
+[14:41:33.0551] <TabAtkins>
+And a similarly updated Decorators version: https://gist.github.com/tabatkins/d974137e9ab0272acb3e57cccde99300
+

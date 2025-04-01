@@ -1,0 +1,964 @@
+2025-01-01
+[01:03:40.0823] <Aapo Alasuutari>
+Now here's a spec question: Can GetBindingValue of Module Environment Record call user code?
+
+Inside the GetBindingValue AO when an indirect binding is accessed, the website thinks that the GetBindingValue call to get the value can call UC but the [[Get]] method of Module Namespace Exotic Objects does not think GetBindingValue can call UC.
+
+[07:35:34.0480] <bakkot>
+I don't believe so; that's probably a bug from when we were doing manual annotations
+
+[07:37:29.0196] <bakkot>
+GetBindingValue does sometimes invoke user code (because it can trigger getters) but in this case it's actually always invoking another module environment's GetBindingValue
+
+[10:08:31.0109] <Aapo Alasuutari>
+> <@bakkot:matrix.org> I don't believe so; that's probably a bug from when we were doing manual annotations
+
+So in effect, neither should have UC on them. Can I open a PR somewhere to fix that?
+
+[10:14:32.0775] <Aapo Alasuutari>
+Unrelated question: I'm kind of wondering about OrdinarySetWithOwnDescriptor's AO step 2.e.i: We've just called GetOwnProperty on Receiver for property P, and if we get undefined from that then we assert that Receiver does not have a property P: What is this for specifically? 
+
+
+2025-01-02
+[20:59:46.0073] <bakkot>
+sure, you just need to remove the `<emu-meta effects="user-code">` in the GetBindingValue definition for module environment records. note that sending any PR, even trivial ones, currently requires signing https://tc39.es/agreements/contributor/
+
+[21:00:20.0724] <bakkot>
+the repo is https://github.com/tc39/ecma262
+
+[21:02:07.0007] <bakkot>
+I don't understand the question, sorry. what do you mean by "what is this for"? It's for... informing the reader that getting `undefined` here implies that Receiver does not currently have a property P.
+
+[21:02:51.0249] <bakkot>
+all asserts are for informing the reader of something which it is helpful to know and is not necessarily obvious from the immediate context
+
+[13:22:51.0637] <Francisco Tolmasky>
+Is there a term for "non-callable objects" (in other words, objects that *don't* have anything in the [[Call]] slot, and thus return "object" from typeof)? I don't see anything in the ECMAScript spec that gives such objects a definitive name (such as "plain object" or "non-callable object" etc)
+
+[13:24:24.0413] <Francisco Tolmasky>
+I see "ordinary object", "exotic object", "standard object", and "built-in object", all of which could be callable or non-callable
+
+[13:30:20.0887] <jmdyck>
+I'm pretty sure there isn't such a term. You might say "an object that isn't a function [object]", but I don't think the spec even does that.
+
+[13:34:14.0509] <Francisco Tolmasky>
+unfortunate
+
+
+2025-01-03
+[21:53:47.0612] <ljharb>
+“Non-callable object” seems pretty straightforward tho
+
+[21:54:33.0841] <Eli Grey>
+is it possible to decorate the call slot of document.all?
+
+[03:34:28.0180] <jmdyck>
+What do you mean by "decorate a slot"? The ES spec doesn't use the term "decorate". The HTML spec does, but only when talking about Web IDL interfaces, not objects.
+
+[12:03:20.0919] <Michael Ficarra>
+I think the question might have been "can I use an HTMLDDA Object as the target of a Proxy whose handler implements `apply`?" and the answer to that is yes, you can
+
+[12:44:13.0772] <bakkot>
+technically you can but morally you should not
+
+[13:26:06.0417] <snek>
+when has that stopped us before 
+
+
+2025-01-04
+[17:40:54.0502] <Francisco Tolmasky>
+Is there anywhere the spells out the choice of when to use the term "instantiate" vs. "construct" vs. "create" vs. "make". From what I can tell they follow that "call order", with make being the lowest level "allocate", but its not clear to me when a construct should be an instantiate
+
+[17:45:00.0083] <jmdyck>
+You mean in operation names?
+
+[17:46:42.0247] <Francisco Tolmasky>
+Right
+
+[17:47:56.0095] <jmdyck>
+I don't think so.
+
+[17:48:09.0381] <Francisco Tolmasky>
+InstantiateOrdinaryFunction calls CreateOrdinaryFunction for example
+
+[17:48:31.0886] <Francisco Tolmasky>
+errr OrdinaryFunctionCreate*
+
+[17:49:20.0454] <Francisco Tolmasky>
+(There's also that weird Verb prefix/suffix tension, the Construct and Create like to be suffixes, Make and Instantiate like to be prefixes)
+
+[17:56:29.0996] <jmdyck>
+InstantiateFoo tends to operate on Parse Nodes (it's usually an SDO), whereas CreateFoo (or FooCreate) is usually building a specific kind of object.
+
+[17:57:25.0260] <jmdyck>
+Which is why you're likely to see `Instantiate` call `Create` but not vice versa.
+
+[18:01:16.0209] <jmdyck>
+`Construct` in an op name is normally closely associated with `[[Construct]]` semantics.
+
+[18:04:17.0093] <jmdyck>
+`Make` is kind of a wild card.
+
+[18:10:42.0215] <Francisco Tolmasky>
+gotcha
+
+
+2025-01-11
+[07:03:24.0787] <Aapo Alasuutari>
+> <@bakkot:matrix.org> I don't understand the question, sorry. what do you mean by "what is this for"? It's for... informing the reader that getting `undefined` here implies that Receiver does not currently have a property P.
+
+The question was because, to me, "get own property returned empty" means that such a property does not exist on the object. Hence asserting it right after seemed redundant, and made me think that maybe there's a deeper meaning here.
+
+From an implementation standpoint, we've been adding asserts into our engine code as either debug or runtime checks for now, to make sure we're correct. engine262 doesn't write the assert in this case at all (maybe it never does?), and a few other engines likewise skip the assert. Others do check that the property storage indeed does not have this property.
+
+For our engine such a check is mildly problematic, as how a given property might be stored depends on the object type and even on its usage. That logic is of course all encoded in the internal methods. So I wondered if skipping this check was ... I don't know, the spec somehow asserting a need to know about object property stores or how they work or something.
+
+[07:11:21.0396] <nicolo-ribaudo>
+Well the assertion is not observable, so you can do whatever you want regardless of what assertions are there.
+
+[07:11:37.0404] <nicolo-ribaudo>
+* Well the assertion is not observable (otherwise the spec would be wrong), so you can do whatever you want regardless of what assertions are there.
+
+[07:24:12.0931] <bakkot>
+> to me, "get own property returned empty" means that such a property does not exist on the object
+
+This is a thing you know only after becoming familiar with the language and the specification. There's no intrinsic reason this would have to be true of an arbitrary operation called [[GetOwnProperty]]; rather, it's something which we arrange to be true, and the point of the assert is to point it out to the reader who may not be already be familiar with the language and specification.
+
+[07:40:09.0658] <Aapo Alasuutari>
+Makes sense, thank you <3
+
+
+2025-01-23
+[17:54:19.0603] <Sacha Greif>
+I'm not sure if this is of interest to this group, but our next survey will focus on AI tools for web developement. Currently in the preview/feedback phase if you want to make some suggestions: https://github.com/Devographics/surveys/issues/278
+
+[20:43:49.0383] <Meghan Denny>
+make sure to have "do not use" options
+
+[21:55:13.0319] <ljharb>
+also "use but never want on by default"
+
+[13:46:01.0665] <ljharb>
+does anyone know of an available-by-default way to trigger a GC - any GC whatsoever as long as I can first make a weakref to it - so i can test `.deref` behavior?
+
+[13:46:33.0708] <ljharb>
+* does anyone know of an available-by-default way to trigger a GC - any GC whatsoever as long as I can first make a weakref to it - so i can test `.deref` behavior?
+
+if i make my tests spin for like 10-20 seconds, then i can make it happen, but obviously i'd rather not do that
+
+[13:56:47.0788] <Ashley Claymore>
+I've seen test262 harnesses create lots of array buffers to try and trigger memory pressure 
+
+[14:03:37.0743] <shu>
+ah but there's no guarantee that a GC will clear a weakref
+
+[14:03:48.0449] <shu>
+there is no ironclad way really
+
+[14:04:24.0380] <shu>
+also you want to trigger a GC async
+
+[14:04:42.0325] <shu>
+because on-stack roots with a JS stack can retain things in ways that are completely nonobvious at the JS source level
+
+[14:07:05.0002] <Ashley Claymore>
+`window.reload()`should work 
+
+[14:08:33.0006] <Chris de Almeida>
+ljharb: in what env?
+
+[14:09:04.0197] <ljharb>
+ideally in node and the 3 browsers, at least :-)
+
+[14:09:13.0064] <ljharb>
+async is totally fine, just ideally it doesn't sleep my tests so much
+
+[14:09:41.0677] <shu>
+this is also what i see in exploit chains that depend on a GC
+
+[14:09:43.0992] <ljharb>
+the way i do it now is:
+```
+			var holder = { x: {} };
+			var ref = new WeakRef(holder.x);
+			delete holder.x;
+			holder = null;
+			setTimeout(function () {
+				// assertion on ref.deref()
+			}, 20e3);
+```
+
+[14:09:56.0752] <Chris de Almeida>
+no finalizationregistry?
+
+[14:10:02.0190] <Chris de Almeida>
+node has:  
+
+https://nodejs.org/docs/v22.13.1/api/cli.html#--expose-gc
+
+[14:10:04.0389] <Ashley Claymore>
+> <@shuyuguo:matrix.org> this is also what i see in exploit chains that depend on a GC
+
+I promise it wasn't me 
+
+[14:10:28.0936] <ljharb>
+a finalization registry would be more efficient and reliable than a settimeout, true, but my tests would still have to pause until it was collected
+
+[14:10:32.0550] <shu>
+i don't hate on exploit writers, they're better than me
+
+[14:10:43.0362] <ljharb>
+* a finalization registry would be more efficient and reliable than a settimeout, true, but my tests would still have to pause until it was collected. node's expose-gc won't work because i don't want to have to use flags, and that won't work in browsers anyways
+
+[14:11:03.0767] <Ashley Claymore>
+rising tide
+
+[14:11:03.0908] <shu>
+ljharb: a portable way basically doesn't exist
+
+[14:11:11.0302] <shu>
+like, by design, it doesn't exist
+
+[14:11:18.0107] <Chris de Almeida>
+looks like you've gotta fork every browser, friend
+
+[14:11:21.0130] <ljharb>
+right
+
+[14:11:44.0792] <ljharb>
+it's fine if i have to do a different way for each engine :-p i just hoped there'd be some way to make it pretty likely it happens
+
+[14:12:25.0994] <Chris de Almeida>
+what sorcery are you doing this for anyway?
+
+[14:12:28.0323] <shu>
+i think allocating a lot of big-ish ArrayBuffers (but not so big that a single allocation will throw a RangeError) is a good high-likelihood way
+
+[14:13:12.0023] <Ashley Claymore>
+https://chromedevtools.github.io/devtools-protocol/tot/HeapProfiler/#method-collectGarbage if the test runner has access 
+
+[14:13:42.0338] <shu>
+any sustained allocation, really
+
+[14:14:15.0878] <shu>
+```
+    for (let i = 0; i < 10000; i++) {
+      let s = new String("AAAA" + Math.random());
+    }
+```
+
+[14:14:21.0010] <shu>
+i've seen that in some fuzz tests
+
+[14:17:17.0025] <shu>
+your sleep test i think is depending on "idle gc", which engines try to schedule a GC task when nothing else seems to be happening
+
+[14:19:32.0703] <ljharb>
+that was indeed the intent
+
+[14:19:39.0638] <ljharb>
+* that was indeed the intent, i hadn't thought about memory pressure
+
+
+2025-01-24
+[16:48:45.0463] <Richard Gibson>
+ljharb: I have a not-yet-committed version of what you're looking for; the ultimate fallback really is memory allocations. Simplified version:
+```
+const enqueueTask = callback => {
+  const id = setImmediate(callback);
+  return () => clearImmediate(id);
+};
+const gcWatches = new FinalizationRegistry(([callback, data]) => void callback(data));
+const whenCollected = (target, data = undefined) =>
+  new Promise(resolve => gcWatches.register(target, [resolve, data]));
+const watchGC = (target, data = undefined) => {
+  const p = whenCollected(target, data);
+  let retained = true;
+  p.then(() => { retained = false; });
+  // Return a new promise that waits for GC plus a turn (in case the GC promise
+  // of the new sentinel object fulfills before that of the target) and then
+  // fulfills with the then-current retention status of the target.
+  const isRetained = () => whenCollected({}).then().then(() => retained);
+  return { whenCollected, isRetained };
+};
+const forceCollectionP = (async () => {
+  let garbageScale = 2 ** 16;
+  const tryTriggerGC = () => void new Uint8Array(garbageScale);
+  const forceGC = async (patience = 1000) => {
+    const sentinelCollectedP = whenCollected({});
+
+    // Wait a turn to clear the stack, then add pressure in a sequence of prompt jobs.
+    await null;
+    let reject;
+    const pressureP = new Promise((...resolvers) => { reject = resolvers[1]; });
+    void pressureP.catch(() => {});
+    let jobCount = 0;
+    let abortNextJob = () => {};
+    const abort = () => {
+      abortNextJob();
+      reject();
+      patience = 0;
+    };
+    (function startNextJob() {
+      if (!(jobCount < patience)) return reject(Error(`failed to GC after ${jobCount} jobs`));
+      tryTriggerGC();
+      jobCount++;
+      abortNextJob = enqueueTask(startNextJob);
+    })();
+    await Promise.race([sentinelCollectedP, pressureP]);
+    abort();
+
+    // Try to tune garbageScale for forcing GC in one job.
+    if (jobCount > 1 && garbageScale > 0 && garbageScale < 2 ** 28) garbageScale *= 2;
+
+    return { jobCount };
+  };
+
+  // Run sanity checks before releasing the function.
+  await forceGC();
+  const weakmap = new WeakMap();
+  let { fastKeyWatch, slowKeyWatch, slowKey } = (() => {
+    const fastKey = {};
+    const slowKey = {};
+    weakmap.set(fastKey, 'fast-gc sanity check');
+    weakmap.set(slowKey, 'slow-gc sanity check');
+    const fastKeyWatch = watchGC(fastKey);
+    const slowKeyWatch = watchGC(slowKey);
+    return { fastKeyWatch, slowKeyWatch, slowKey };
+  })();
+  const fastKeyRetainedP = fastKeyWatch.isRetained();
+  const slowKeyRetainedP = slowKeyWatch.isRetained();
+  await forceGC();
+  const fastKeyRetained = await fastKeyRetainedP;
+  if (fastKeyRetained) throw Error('fast-gc key was not collected!');
+  const slowKeyRetained = await slowKeyRetainedP;
+  if (!slowKeyRetained) throw Error('slow-gc key was collected early!');
+  const slowKeyStillRetainedP = slowKeyWatch.isRetained();
+  slowKey = null;
+  await forceGC();
+  const slowKeyStillRetained = await slowKeyStillRetainedP;
+  if (slowKeyStillRetained) throw Error('slow-gc key was not collected!');
+
+  return forceGC;
+})();
+
+const forceGC = await forceCollectionP;
+```
+
+[16:54:30.0183] <Richard Gibson>
+* ljharb: I have a not-yet-committed version of what you're looking for; the ultimate fallback really is memory allocations. Simplified version:
+
+```js
+const enqueueTask = callback => {
+  const id = setImmediate(callback);
+  return () => clearImmediate(id);
+};
+const gcWatches = new FinalizationRegistry(([callback, data]) => void callback(data));
+const whenCollected = (target, data = undefined) =>
+  new Promise(resolve => gcWatches.register(target, [resolve, data]));
+const watchGC = (target, data = undefined) => {
+  const p = whenCollected(target, data);
+  let retained = true;
+  p.then(() => { retained = false; });
+  // Return a new promise that waits for GC plus a turn (in case the GC promise
+  // of the new sentinel object fulfills before that of the target) and then
+  // fulfills with the then-current retention status of the target.
+  const isRetained = () => whenCollected({}).then().then(() => retained);
+  return { whenCollected, isRetained };
+};
+const forceCollectionP = (async () => {
+  let garbageScale = 2 ** 16;
+  const tryTriggerGC = () => void new Uint8Array(garbageScale);
+  const forceGC = async (patience = 1000) => {
+    const sentinelCollectedP = whenCollected({});
+
+    // Wait a turn to clear the stack, then add pressure in a sequence of prompt jobs.
+    await null;
+    let reject;
+    const pressureP = new Promise((...resolvers) => { reject = resolvers[1]; });
+    void pressureP.catch(() => {});
+    let jobCount = 0;
+    let abortNextJob = () => {};
+    const abort = () => {
+      abortNextJob();
+      reject();
+      patience = 0;
+    };
+    (function startNextJob() {
+      if (!(jobCount < patience)) return reject(Error(`failed to GC after ${jobCount} jobs`));
+      tryTriggerGC();
+      jobCount++;
+      abortNextJob = enqueueTask(startNextJob);
+    })();
+    await Promise.race([sentinelCollectedP, pressureP]);
+    abort();
+
+    // Try to tune garbageScale for forcing GC in one job.
+    if (jobCount > 1 && garbageScale > 0 && garbageScale < 2 ** 28) garbageScale *= 2;
+
+    return { jobCount };
+  };
+
+  // Run sanity checks before releasing the function.
+  await forceGC();
+  const weakmap = new WeakMap();
+  let { fastKeyWatch, slowKeyWatch, slowKey } = (() => {
+    const fastKey = {};
+    const slowKey = {};
+    weakmap.set(fastKey, 'fast-gc sanity check');
+    weakmap.set(slowKey, 'slow-gc sanity check');
+    const fastKeyWatch = watchGC(fastKey);
+    const slowKeyWatch = watchGC(slowKey);
+    return { fastKeyWatch, slowKeyWatch, slowKey };
+  })();
+  const fastKeyRetainedP = fastKeyWatch.isRetained();
+  const slowKeyRetainedP = slowKeyWatch.isRetained();
+  await forceGC();
+  const fastKeyRetained = await fastKeyRetainedP;
+  if (fastKeyRetained) throw Error('fast-gc key was not collected!');
+  const slowKeyRetained = await slowKeyRetainedP;
+  if (!slowKeyRetained) throw Error('slow-gc key was collected early!');
+  const slowKeyStillRetainedP = slowKeyWatch.isRetained();
+  slowKey = null;
+  await forceGC();
+  const slowKeyStillRetained = await slowKeyStillRetainedP;
+  if (slowKeyStillRetained) throw Error('slow-gc key was not collected!');
+
+  return forceGC;
+})();
+
+const forceGC = await forceCollectionP;
+```
+
+[16:58:08.0475] <Richard Gibson>
+* ljharb: I have a not-yet-committed version of what you're looking for; the ultimate fallback really is memory allocations. Simplified version:
+
+```js
+const enqueueTask = callback => {
+  const id = setImmediate(callback);
+  return () => clearImmediate(id);
+};
+const gcWatches = new FinalizationRegistry(([callback, data]) => void callback(data));
+const whenCollected = (target, data = undefined) =>
+  new Promise(resolve => gcWatches.register(target, [resolve, data]));
+const watchGC = (target, data = undefined) => {
+  const collected = whenCollected(target, data);
+  let retained = true;
+  collected.then(() => { retained = false; });
+  // Return a new promise that waits for GC plus a turn (in case the GC promise
+  // of the new sentinel object fulfills before that of the target) and then
+  // fulfills with the then-current retention status of the target.
+  const isRetained = () => whenCollected({}).then().then(() => retained);
+  return { collected, isRetained };
+};
+const forceCollectionP = (async () => {
+  let garbageScale = 2 ** 16;
+  const tryTriggerGC = () => void new Uint8Array(garbageScale);
+  const forceGC = async (patience = 1000) => {
+    const sentinelCollectedP = whenCollected({});
+
+    // Wait a turn to clear the stack, then add pressure in a sequence of prompt jobs.
+    await null;
+    let reject;
+    const pressureP = new Promise((...resolvers) => { reject = resolvers[1]; });
+    void pressureP.catch(() => {});
+    let jobCount = 0;
+    let abortNextJob = () => {};
+    const abort = () => {
+      abortNextJob();
+      reject();
+      patience = 0;
+    };
+    (function startNextJob() {
+      if (!(jobCount < patience)) return reject(Error(`failed to GC after ${jobCount} jobs`));
+      tryTriggerGC();
+      jobCount++;
+      abortNextJob = enqueueTask(startNextJob);
+    })();
+    await Promise.race([sentinelCollectedP, pressureP]);
+    abort();
+
+    // Try to tune garbageScale for forcing GC in one job.
+    if (jobCount > 1 && garbageScale > 0 && garbageScale < 2 ** 28) garbageScale *= 2;
+
+    return { jobCount };
+  };
+
+  // Run sanity checks before releasing the function.
+  await forceGC();
+  const weakmap = new WeakMap();
+  let { fastKeyWatch, slowKeyWatch, slowKey } = (() => {
+    const fastKey = {};
+    const slowKey = {};
+    weakmap.set(fastKey, 'fast-gc sanity check');
+    weakmap.set(slowKey, 'slow-gc sanity check');
+    const fastKeyWatch = watchGC(fastKey);
+    const slowKeyWatch = watchGC(slowKey);
+    return { fastKeyWatch, slowKeyWatch, slowKey };
+  })();
+  const fastKeyRetainedP = fastKeyWatch.isRetained();
+  const slowKeyRetainedP = slowKeyWatch.isRetained();
+  await forceGC();
+  const fastKeyRetained = await fastKeyRetainedP;
+  if (fastKeyRetained) throw Error('fast-gc key was not collected!');
+  const slowKeyRetained = await slowKeyRetainedP;
+  if (!slowKeyRetained) throw Error('slow-gc key was collected early!');
+  const slowKeyStillRetainedP = slowKeyWatch.isRetained();
+  slowKey = null;
+  await forceGC();
+  const slowKeyStillRetained = await slowKeyStillRetainedP;
+  if (slowKeyStillRetained) throw Error('slow-gc key was not collected!');
+
+  return forceGC;
+})();
+
+const forceGC = await forceCollectionP;
+```
+
+[17:12:19.0239] <Richard Gibson>
+* ljharb: I have a not-yet-committed version of what you're looking for; the ultimate fallback really is memory allocations. Simplified version:
+
+```js
+const enqueueTask = callback => {
+  const id = setImmediate(callback);
+  return () => clearImmediate(id);
+};
+const gcWatches = new FinalizationRegistry(([callback, data]) => void callback(data));
+const whenCollected = (target, data = undefined) =>
+  new Promise(resolve => gcWatches.register(target, [resolve, data]));
+const watchGC = (target, data = undefined) => {
+  const collected = whenCollected(target, data);
+  let retained = true;
+  collected.then(() => { retained = false; });
+  // Return a new promise that waits for GC plus a turn (in case the GC promise
+  // of the new sentinel object fulfills before that of the target) and then
+  // fulfills with the then-current retention status of the target.
+  const isRetained = () => whenCollected({}).then().then(() => retained);
+  return { collected, isRetained };
+};
+const forceCollectionP = (async () => {
+  let garbageScale = 2 ** 16;
+  const tryTriggerGC = () => void new Uint8Array(garbageScale);
+  const forceGC = async (patience = 1000) => {
+    const sentinelCollectedP = whenCollected({});
+
+    // Wait a turn to clear the stack, then add pressure in a sequence of prompt jobs.
+    await null;
+    let reject;
+    const pressureP = new Promise((...resolvers) => { reject = resolvers[1]; });
+    void pressureP.catch(() => {});
+    let jobCount = 0;
+    let abortNextJob = () => {};
+    const abort = () => {
+      abortNextJob();
+      reject();
+      patience = 0;
+    };
+    (function startNextJob() {
+      if (!(jobCount < patience)) return reject(Error(`failed to GC after ${jobCount} jobs`));
+      tryTriggerGC();
+      jobCount++;
+      abortNextJob = enqueueTask(startNextJob);
+    })();
+    await Promise.race([sentinelCollectedP, pressureP]);
+    abort();
+
+    // Try to tune garbageScale for forcing GC in one job.
+    if (jobCount > 1 && garbageScale > 0 && garbageScale < 2 ** 28) garbageScale *= 2;
+
+    return { jobCount };
+  };
+
+  // Run sanity checks before releasing the function.
+  await forceGC();
+  const weakmap = new WeakMap();
+  let { fastKeyWatch, slowKeyWatch, slowKey } = (() => {
+    const fastKey = {};
+    const slowKey = {};
+    weakmap.set(fastKey, 'fast-gc sanity check');
+    weakmap.set(slowKey, 'slow-gc sanity check');
+    const fastKeyWatch = watchGC(fastKey);
+    const slowKeyWatch = watchGC(slowKey);
+    return { fastKeyWatch, slowKeyWatch, slowKey };
+  })();
+  const fastKeyRetainedP = fastKeyWatch.isRetained();
+  const slowKeyRetainedP = slowKeyWatch.isRetained();
+  await forceGC();
+  if (await fastKeyRetainedP) throw Error('fast-gc key was not collected!');
+  if (!(await slowKeyRetainedP)) throw Error('slow-gc key was collected early!');
+  const slowKeyStillRetainedP = slowKeyWatch.isRetained();
+  slowKey = null;
+  await forceGC();
+  if (await slowKeyStillRetainedP) throw Error('slow-gc key was not collected!');
+
+  return forceGC;
+})();
+
+const forceGC = await forceCollectionP;
+```
+
+[19:05:58.0770] <Domenic>
+Bikeshedding help requested for an error type that includes properties with how much X is available, versus how much X you requested: https://github.com/whatwg/webidl/issues/1463
+
+[07:32:07.0997] <Richard Gibson>
+* ljharb: I have a not-yet-committed version of what you're looking for; the ultimate fallback really is memory allocations. Simplified version:
+
+```js
+const enqueueTask = callback => {
+  const id = setTimeout(callback);
+  return () => clearTimeout(id);
+};
+const gcWatches = new FinalizationRegistry(([callback, data]) => void callback(data));
+const whenCollected = (target, data = undefined) =>
+  new Promise(resolve => gcWatches.register(target, [resolve, data]));
+const watchGC = (target, data = undefined) => {
+  const collected = whenCollected(target, data);
+  let retained = true;
+  collected.then(() => { retained = false; });
+  // Return a new promise that waits for GC plus a turn (in case the GC promise
+  // of the new sentinel object fulfills before that of the target) and then
+  // fulfills with the then-current retention status of the target.
+  const isRetained = () => whenCollected({}).then().then(() => retained);
+  return { collected, isRetained };
+};
+const forceCollectionP = (async () => {
+  let garbageScale = 2 ** 16;
+  const tryTriggerGC = () => void new Uint8Array(garbageScale);
+  const forceGC = async (patience = 1000) => {
+    const sentinelCollectedP = whenCollected({});
+
+    // Wait a turn to clear the stack, then add pressure in a sequence of prompt jobs.
+    await null;
+    let reject;
+    const pressureP = new Promise((...resolvers) => { reject = resolvers[1]; });
+    void pressureP.catch(() => {});
+    let jobCount = 0;
+    let abortNextJob = () => {};
+    const abort = () => {
+      abortNextJob();
+      reject();
+      patience = 0;
+    };
+    (function startNextJob() {
+      if (!(jobCount < patience)) return reject(Error(`failed to GC after ${jobCount} jobs`));
+      tryTriggerGC();
+      jobCount++;
+      abortNextJob = enqueueTask(startNextJob);
+    })();
+    await Promise.race([sentinelCollectedP, pressureP]);
+    abort();
+
+    // Try to tune garbageScale for forcing GC in one job.
+    if (jobCount > 1 && garbageScale > 0 && garbageScale < 2 ** 28) garbageScale *= 2;
+
+    return { jobCount };
+  };
+
+  // Run sanity checks before releasing the function.
+  await forceGC();
+  const weakmap = new WeakMap();
+  let { fastKeyWatch, slowKeyWatch, slowKey } = (() => {
+    const fastKey = {};
+    const slowKey = {};
+    weakmap.set(fastKey, 'fast-gc sanity check');
+    weakmap.set(slowKey, 'slow-gc sanity check');
+    const fastKeyWatch = watchGC(fastKey);
+    const slowKeyWatch = watchGC(slowKey);
+    return { fastKeyWatch, slowKeyWatch, slowKey };
+  })();
+  const fastKeyRetainedP = fastKeyWatch.isRetained();
+  const slowKeyRetainedP = slowKeyWatch.isRetained();
+  await forceGC();
+  if (await fastKeyRetainedP) throw Error('fast-gc key was not collected!');
+  if (!(await slowKeyRetainedP)) throw Error('slow-gc key was collected early!');
+  const slowKeyStillRetainedP = slowKeyWatch.isRetained();
+  slowKey = null;
+  await forceGC();
+  if (await slowKeyStillRetainedP) throw Error('slow-gc key was not collected!');
+
+  return forceGC;
+})();
+
+const forceGC = await forceCollectionP;
+```
+
+[08:39:09.0671] <Richard Gibson>
+* ljharb: I have a not-yet-committed version of what you're looking for; the ultimate fallback really is memory allocations. Simplified version:
+
+```js
+const enqueueTask = callback => {
+  const id = setTimeout(callback);
+  return () => clearTimeout(id);
+};
+const gcWatches = new FinalizationRegistry(([callback, data]) => void callback(data));
+const whenCollected = (target, data = undefined) =>
+  new Promise(resolve => gcWatches.register(target, [resolve, data]));
+const watchGC = (target, data = undefined) => {
+  const collected = whenCollected(target, data);
+  let retained = true;
+  collected.then(() => { retained = false; });
+  // Return a new promise that waits for GC plus a turn (in case the GC promise
+  // of the new sentinel object fulfills before that of the target) and then
+  // fulfills with the then-current retention status of the target.
+  const isRetained = () => whenCollected({}).then().then(() => retained);
+  return { collected, isRetained };
+};
+const forceCollectionP = (async () => {
+  let garbageScale = 2 ** 16;
+  const tryTriggerGC = () => void new Uint8Array(garbageScale);
+  const forceGC = async (patience = 1000) => {
+    const sentinelCollectedP = whenCollected({});
+
+    // Wait a turn to clear the stack, then add pressure in a sequence of prompt jobs.
+    await null;
+    let reject;
+    const pressureP = new Promise((...resolvers) => { reject = resolvers[1]; });
+    void pressureP.catch(() => {});
+    let jobCount = 0;
+    let abortNextJob = () => {};
+    const abort = () => {
+      abortNextJob();
+      reject();
+      patience = 0;
+    };
+    (function startNextJob() {
+      if (!(jobCount < patience)) return reject(Error(`failed to GC after ${jobCount} attempts`));
+      tryTriggerGC();
+      jobCount++;
+      abortNextJob = enqueueTask(startNextJob);
+    })();
+    await Promise.race([sentinelCollectedP, pressureP]);
+    abort();
+
+    // Try to tune garbageScale for forcing GC in one job.
+    if (jobCount > 1 && garbageScale > 0 && garbageScale < 2 ** 28) garbageScale *= 2;
+
+    return { jobCount };
+  };
+
+  // Run sanity checks before releasing the function.
+  await forceGC();
+  const weakmap = new WeakMap();
+  let { fastKeyWatch, slowKeyWatch, slowKey } = (() => {
+    const fastKey = {};
+    const slowKey = {};
+    weakmap.set(fastKey, 'fast-gc sanity check');
+    weakmap.set(slowKey, 'slow-gc sanity check');
+    const fastKeyWatch = watchGC(fastKey);
+    const slowKeyWatch = watchGC(slowKey);
+    return { fastKeyWatch, slowKeyWatch, slowKey };
+  })();
+  const fastKeyRetainedP = fastKeyWatch.isRetained();
+  const slowKeyRetainedP = slowKeyWatch.isRetained();
+  await forceGC();
+  if (await fastKeyRetainedP) throw Error('fast-gc key was not collected!');
+  if (!(await slowKeyRetainedP)) throw Error('slow-gc key was collected early!');
+  const slowKeyStillRetainedP = slowKeyWatch.isRetained();
+  slowKey = null;
+  await forceGC();
+  if (await slowKeyStillRetainedP) throw Error('slow-gc key was not collected!');
+
+  return forceGC;
+})();
+
+const forceGC = await forceCollectionP;
+```
+
+[12:29:53.0492] <Matthew Dean>
+Hi all!
+
+[12:30:00.0541] <Matthew Dean>
+How would one submit a proposal to TC39?
+
+[12:30:52.0349] <Michael Ficarra>
+https://github.com/tc39/ecma262/blob/main/CONTRIBUTING.md
+
+[12:32:13.0839] <Matthew Dean>
+🤔 I've been going through that, and I see that proposals are separate repos... but... you can't make a PR to submit a whole repo, can you? 
+
+[12:32:30.0189] <Matthew Dean>
+It's related to: https://github.com/matthew-dean/proposal-hash-comments
+
+[12:32:48.0158] <Michael Ficarra>
+yes, proposals are self-contained repos
+
+[12:32:55.0487] <Michael Ficarra>
+they don't become PRs until much later in the process
+
+[12:33:07.0479] <Matthew Dean>
+How would I move this under tc39 tho?
+
+[12:33:20.0883] <Matthew Dean>
+* How would I move this under tc39 though?
+
+[12:34:08.0439] <Michael Ficarra>
+from the CONTRIBUTING.md document,
+
+> If you have a new proposal you want to get into the language, you first need a TC39 "champion": a member of the committee who will make the case for the proposal at in-person TC39 meetings and help it move through the process. If you are a TC39 member, you can be a champion; otherwise, find a TC39 member to work with for this (e.g., through the TC39 discussion group or the Matrix chat room). Proposals may have multiple champions (a "champion group").
+
+[12:34:33.0246] <Matthew Dean>
+ah ok
+
+[12:34:43.0538] <Matthew Dean>
+So I have to find my champion a la Game of Thrones-style?
+
+[12:35:02.0904] <Michael Ficarra>
+so you'll need to convince at least one delegate that it's worthwhile, and once it has been presented, it will be moved within the TC39 org
+
+[12:35:09.0676] <Matthew Dean>
+got it
+
+[12:35:25.0903] <Michael Ficarra>
+not familiar with the GoT process, but you can find champions both on here or on Discourse
+
+[12:36:18.0453] <Michael Ficarra>
+Discourse is probably better since it's less synchronous and less ephemeral
+
+[12:36:22.0113] <Matthew Dean>
+The Game of Thrones was a dumb joke reference to an episode
+
+[12:38:57.0792] <Matthew Dean>
+But anyway, thanks for the help!
+
+[12:43:42.0545] <Michael Ficarra>
+no problem
+
+
+2025-01-27
+[09:06:30.0949] <Chris de Almeida>
+once you have a proposal repo and you want visibility, I'd encourage you to share it in both places 
+
+[09:08:10.0063] <Chris de Almeida>
+Matthew Dean: ☝️
+
+
+2025-01-28
+[09:04:14.0890] <bakkot>
+what are the odds we could get away with changing `String.prototype.indexOf` so that if you pass a regex it will actually use it instead of coercing to a string
+
+[09:04:28.0302] <bakkot>
+my feeling is unfortunately low
+
+[09:04:44.0148] <bakkot>
+(I'm thinking something like, if the argument is not primitive then look up `Symbol.exec` and use that instead of doing `.toString`)
+
+[09:05:09.0580] <bakkot>
+presumably someone is somehow relying on like `'foo/bar/baz'.indexOf(/bar/)` returning 3
+
+[09:06:42.0623] <Mathieu Hofman>
+> <@bakkot:matrix.org> presumably someone is somehow relying on like `'foo/bar/baz'.indexOf(/bar/)` returning 3
+
+Sounds like something that browsers can easily add a use counter for if you can convince them
+
+[09:07:16.0555] <bakkot>
+browsers could add a use counter for regexp arguments but it's hard to automatically tell if someone is relying on it working (or not working)
+
+[09:19:30.0374] <Michael Ficarra>
+well if they're not used at all, you don't have to worry about that
+
+[09:19:54.0907] <Michael Ficarra>
+unfortunately, I highly doubt that nobody is doing it
+
+[11:00:19.0803] <shu>
+my feeling is also the odds are not good
+
+[11:12:38.0294] <ljharb>
+if you need a regex with a string, isn't that already `String.prototype.search`?
+
+[11:26:51.0379] <bakkot>
+well, I want the offset argument instead of mutating the regex
+
+[11:27:00.0750] <bakkot>
+but yeah I guess
+
+[11:27:43.0812] <bakkot>
+much more likely we could get away with adding a second argument there
+
+[11:27:56.0803] <bakkot>
+I did forget that `String.prototype.search` exists
+
+[11:28:37.0598] <bakkot>
+oh actually `search` doens't even respect `lastIndex` so yeah it's not suitable at all currently
+
+[11:28:46.0500] <bakkot>
+but it could be made to take the second parameter
+
+[11:29:02.0924] <bakkot>
+... possibly, anyway
+
+[13:31:05.0120] <ljharb>
+yeah it is weird that it ignores lastIndex
+
+[13:57:12.0168] <bakkot>
+doesn't just ignore but actively mangles such that it throws if you try to pass a RegExp with a frozen nonzero lastIndex
+
+[13:57:14.0702] <bakkot>
+what a dumb language
+
+
+2025-01-29
+[17:46:05.0003] <Domenic>
+Honestly my instinct is that people passing regexps to indexof is nonzero but maybe low enough to be OK.
+
+On the other hand the benefits (vs. an overload or whatever) are maybe low enough that any nonzero usage would be enough to stop the proposal.
+
+[17:59:30.0570] <ljharb>
+it'd certainly be web compatible to, when lastIndex isn't 0 and setting it fails, just *respect* the lastIndex that's there - but basically nobody freezes regexes anyways
+
+[12:20:45.0156] <keithamus>
+Not exhaustive but https://github.com/search?q=%28language%3Ajavascript+OR+language%3Atypescript%29+%2FindexOf%5C%28%5C%2F%2F&type=code could provide some insight into code that does this.
+
+[13:11:34.0155] <ljharb>
+lots of those seem like tsdoc comments at least
+
+
+2025-01-30
+[13:47:00.0763] <Francisco Tolmasky>
+Do we have terminology for a template string with no substitutions? I see the syntax rule called NoSubstitutionTemplate, but that seems kind of incidental (and kind of awkward to use in documentation, but totally fine for a descriptive syntax name). 
+
+[13:49:48.0492] <Francisco Tolmasky>
+Something like "static template string", but want to make sure there isn't established names already. The spec itself doesn't really ever describe template strings at a high level (the way it, for example, primitive values), so the "high level feature" is sort of emergent from the evaluation rules. As such, there really aren't many places that talk about "template strings" in like paragraph form to look for examples.
+
+[14:06:13.0325] <jmdyck>
+incidental how?
+
+[14:09:07.0287] <jmdyck>
+Seems like exactly the terminology you're looking for. You could "prosify" it as 'no-substitution template'.
+
+[15:28:41.0979] <ljharb>
+there isn't a name that i'm aware of. i also don't say "template" by itself because i think that's a misnomer, i say "template literals" or something (i wish they'd been named "interpolation literals")
+
+
+2025-01-31
+[17:19:50.0988] <Francisco Tolmasky>
+RE:incidental, I just meant that the syntax production names seem primarily in service of the hypothetical target EBNF-like target description, in other words, implementation details. Rather than say, something meant to be treated as a "public facing" AST-like node name.  As a quick example, "TemplateSpan" doesn't seem to represent any true conceptual idea, but simply a "temp variable" that needs to be named so that it can referenced and hold on to "middles and tails but not head" -- the idea of a "template span" isn't discussed in any meaningful way, and I wouldn't from this document say that this is some terminology I "trust" or anything. In large part, I don't thin the syntax production names make any sort of "backwards compatibility" guarantee, and have changed in the past (Formals became FormalParametersList, etc.) As such, since NoSubstitutionTemplate like TemplateSpan only shows up in that context, I simply wanted to check if it was something that perhaps is a term that gets used when discussin/documenting/etc. and thus I would make a point of trying to be consistent with that terminology in the stuff I write vs. if there not really any strong standard I may consider something else if I feel that it might make more sense to the audience
+
+[17:21:35.0338] <Michael Ficarra>
+there's not really a strong convention and you should use whatever term you think communicates best to your target audience
+
+[20:16:23.0833] <ljharb>
+(also i don't think no-substitution backticks are common - most styleguides/eslint configs ban them and force you to either interpolate, or use single or double quotes)
+
+[20:23:04.0527] <bakkot>
+templates with no interpolations are very common in places which deal with multiline strings
+
+[20:24:46.0021] <bakkot>
+I don't think eslint has a rule which forces you to use single quotes for strings with linebreaks in (other than no-restricted-syntax I guess)
+
+[21:28:16.0819] <ljharb>
+true, line breaks would be the exception
+
+[21:31:43.0238] <ljharb>
+hmm, true - i see a combo of `prefer-template` and `no-template-curly-in-string`, and the `allowTemplateLiterals` option of `quotes`, i think, that might do it?
+
+[08:23:55.0665] <Aapo Alasuutari>
+> <@ljharb:matrix.org> it'd certainly be web compatible to, when lastIndex isn't 0 and setting it fails, just *respect* the lastIndex that's there - but basically nobody freezes regexes anyways
+
+Minor pet-peeve of mine that you can even set lastIndex to whatever you want and not just an integer. It is truly a silly language.
+
+[08:24:55.0144] <ljharb>
+i mean it’s a data property, not sure that’s where I’d draw the silly line personally
+
+[14:36:37.0493] <Meghan Denny>
+i also use no-substitution backtick strings when i know it will contain both ' and " since then i don't have to escape them
+

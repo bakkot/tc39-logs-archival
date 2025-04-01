@@ -1,0 +1,1037 @@
+2022-03-01
+[13:55:36.0472] <shu>
+building up giant regexps to pass to `String#replace` is unreasonably effective
+
+[13:55:43.0674] <shu>
+why even write compilers
+
+[14:07:21.0913] <bakkot>
+building up giant regexps to pass to String#replace _is_ writing compilers
+
+[14:08:27.0052] <shu>
+deep...
+
+[15:07:35.0458] <shu>
+bakkot: already using the new biblio to do https://github.com/whatwg/webidl/pull/1111, pretty nice
+
+[15:08:21.0236] <shu>
+let me open an issue for bikeshed to incorporate some kind of completion linting...
+
+
+2022-03-02
+[14:32:22.0741] <jmdyck>
+is there an editors' meeting?
+
+
+2022-03-03
+[16:02:17.0546] <ljharb>
+bakkot: looks like the biblio job failed https://github.com/tc39/ecma262/runs/5400126286?check_suite_focus=true
+
+[16:02:56.0530] <ljharb>
+i think it's missing the checkout action
+
+[16:03:13.0033] <ljharb>
+one sec, i'll put up a PR
+
+[16:04:00.0255] <bakkot>
+beat you to it: https://github.com/tc39/ecma262/pull/2679
+
+[16:04:38.0807] <bakkot>
+I wonder what sort of job _doesn't_ need the repo checked out, such that it is not the default behavior
+
+[16:04:50.0083] <ljharb>
+ha, ok - my change also avoids setup-node in favor of using the same setup as the rest of the actions
+
+[16:05:10.0887] <bakkot>
+setup-node is the standard thing, no?
+
+[16:05:27.0615] <bakkot>
+like the one github itself maintains
+
+[16:05:37.0067] <ljharb>
+yes
+
+[16:05:56.0484] <ljharb>
+not very well, tho :-)
+
+[16:06:20.0184] <bakkot>
+I think I'd prefer to stick to the standard thing absent some reason to switch
+
+[16:06:31.0585] <bakkot>
+I know this particular setup works for publish jobs, since it's what ecmarkup is already doing
+
+[16:07:05.0961] <ljharb>
+the main reason would be consistency with everything else in ecma262
+
+[16:07:08.0694] <ljharb>
+but sure
+
+[16:07:31.0371] <bakkot>
+We could change the others to match I guess
+
+[16:07:39.0235] <bakkot>
+what's the thing you like better about your version?
+
+[16:07:41.0750] <bakkot>
+ * what's the thing you like better about your version?
+
+[16:07:45.0687] <ljharb>
+sure. but then we might be stuck on an older node for 2 years like setup-node was
+
+[16:08:07.0456] <ljharb>
+the main thing i like is that it supports, via nvm, any node version we like, without any explicit maintenance
+
+[16:08:17.0200] <ljharb>
+setup-node requires an explicit change for it to support a new version of node
+
+[16:08:42.0578] <bakkot>
+ah, for our projects I think that is unlikely to end up mattering
+
+[16:08:43.0499] <ljharb>
+(it also abstracts away a bunch of stuff for older nodes that ofc doesn't apply here)
+
+[16:13:36.0790] <ljharb>
+https://www.npmjs.com/package/@tc39/ecma262-biblio
+
+[16:14:07.0522] <bakkot>
+wait, damn it: `Version 1.0.1`
+
+[16:14:18.0877] <bakkot>
+... the clone is shallow, isn't it
+
+[16:14:20.0454] <bakkot>
+argh
+
+[16:15:41.0069] <ljharb>
+oops, lol yes, it is
+
+[16:15:48.0136] <ljharb>
+unless you add a depth thing to the checkout action
+
+[16:16:08.0358] <ljharb>
+so, to use it, add `--load-biblio @tc39/ecma262-biblio` to my ecmarkup command, and also install the package?
+
+[16:16:13.0696] <bakkot>
+that is a reasonable default but not what I actually wanted
+
+[16:16:15.0371] <bakkot>
+indeed!
+
+[16:16:30.0739] <bakkot>
+you will need the latest (major) version of ecmarkup, ofc
+
+[16:18:45.0452] <bakkot>
+ljharb: https://github.com/tc39/ecma262/pull/2680
+
+[16:19:51.0289] <ljharb>
+I’m actually about to head out; ok if i land it in a few hours?
+
+[16:19:54.0815] <shu>
+my experience with any and every CI commit is a series of fixups with commit messages like
+
+[16:20:06.0519] <shu>
+"argh", "test", "test2", "maybe this works?"
+
+[16:20:24.0966] <bakkot>
+ljharb: yeah no rush
+
+[16:20:26.0717] <ljharb>
+yeah that’s why i suggested running a dry run on every PR :-p
+
+[16:20:42.0872] <bakkot>
+just needs to happen before the next commit lands, so that the build doesn't break
+
+[16:20:50.0480] <bakkot>
+ * just needs to happen before the next commit lands, so that the build doesn't break
+
+[16:21:03.0572] <bakkot>
+dry run wouldn't've caught this particular thing, alas
+
+[16:21:07.0794] <bakkot>
+but yeah would've caught the first one
+
+[16:21:22.0062] <bakkot>
+ * but yeah would've caught the first one
+
+[19:55:19.0610] <ljharb>
+nah it'd still have done a dry run with the wrong version number, and also a shallow checkout, so i think we'd have seen it
+
+[19:56:08.0788] <ljharb>
+ * nah it'd still have done a dry run with the wrong version number, and also a shallow checkout, so i think we'd have seen it
+
+[19:57:05.0623] <ljharb>
+Related: should we tweak it so it only publishes a new biblio when the lockfile or the spec changes?
+
+[20:01:31.0992] <ljharb>
+and we've got a v1.0.2251
+
+[20:10:25.0269] <bakkot>
+> Related: should we tweak it so it only publishes a new biblio when the lockfile or the spec changes?
+
+I thought about it but decided I was too lazy, given that versions are free
+
+[20:11:28.0980] <bakkot>
+biblio generation is deterministic, so it would just be a matter of generating it locally, fetching the most recently published one, and diffing the two
+
+[20:11:30.0192] <bakkot>
+but like
+
+[20:12:01.0657] <bakkot>
+I didn't really feel like it was necessary enough to be worth doing
+
+[21:37:27.0088] <ljharb>
+any proposal repos with both a lockfile and dependabot set up are gonna have a bad time :-p but they’re probably screwed even with that optimization, so ¯\\\_(ツ)_/¯ 
+
+[21:37:38.0014] <ljharb>
+* any proposal repos with both a lockfile and dependabot set up are gonna have a bad time :-p but they’re probably screwed even with that optimization, so ¯\\\_(ツ)_/¯ 
+
+
+2022-03-08
+[22:02:40.0802] <jmdyck>
+In the post-2547 spec, is implicit unwrapping (conversion from normal completion to non-completion value) not supposed to happen?
+
+[22:19:54.0697] <bakkot>
+indeed not
+
+[22:51:29.0452] <bakkot>
+that was the title of the pr, even
+
+[08:27:43.0692] <jmdyck>
+If you invoke an op that returns a Completion Record, and you don't mark it with `!`, `?`, or `Completion()`, is that an editorial error? Seems like that was one of the points of 2547, but I don't see it in the spec.
+
+[08:35:47.0042] <bakkot>
+Yes, but yeah it's not written down because it's still coherent to omit `Completion`
+
+[08:35:57.0447] <bakkot>
+ecmarkup enforces it for things other than internal/concrete methods
+
+[08:36:28.0979] <jmdyck>
+and Evaluation
+
+[08:36:40.0608] <bakkot>
+ah, yes, also that
+
+[08:36:46.0979] <bakkot>
+since it has its own invocation form
+
+[10:15:45.0612] <jmdyck>
+Is there a desire/intent to give Evaluation a conventional invocation form?
+
+[10:42:51.0331] <bakkot>
+Michael Ficarra wants that, I do not
+
+[10:52:10.0859] <shu>
+what would that form look like?
+
+[10:52:58.0954] <jmdyck>
+e.g. `Let _ref_ be Evaluation of |Expression|.`
+
+[10:53:15.0035] <jmdyck>
+regular SDO-invocation syntax
+
+[10:54:02.0177] <jmdyck>
+(you could use a different name for the op, but `Evaluation` appears to be what it's currently called.)
+
+[10:54:35.0466] <jmdyck>
+ * (you could use a different name for the op, but `Evaluation` appears to be what it's currently called.)
+
+[10:57:33.0373] <shu>
+pretty neutral
+
+[10:57:34.0781] <shu>
+i don't hate it
+
+[11:03:25.0868] <jmdyck>
+Okay, I was just curious.
+
+[11:03:48.0183] <jmdyck>
+The non-tangent is that I've found a class of editorial errors/bugs of the form:
+
+[11:04:18.0247] <jmdyck>
+```
+  1. Let _CR_ be the result of evaluation |Something|.
+  1. Let _notCR_ be ? GetValue(_CR_).
+  1. something involving _CR_ that assumes it isn't a Completion Record.
+```
+
+[11:06:05.0911] <jmdyck>
+E.g. https://tc39.es/ecma262/#sec-function-calls-runtime-semantics-evaluation
+
+[11:06:18.0823] <jmdyck>
+steps 4, 5, 6, 9
+
+[11:07:07.0975] <jmdyck>
+Steps 6 and 9 are handling `_ref_` as if it's been implicitly unwrapped.
+
+[11:15:28.0186] <jmdyck>
+I think putting a `?` before "the result of evaluating" would avoid the error and preserve semantics (because of what `? GetValue(_CR_)` does).
+
+[11:16:23.0427] <jmdyck>
+However, you can't just put `?` before *every* occurrence of "the result of evaluating", because they aren't all immediately followed by `? GetValue()`.
+
+[11:18:52.0158] <bakkot>
+offhand I think that for-of is the only place that does evaluation and does not immediately propagate errors
+
+[11:19:17.0868] <jmdyck>
+No, there are some others
+
+[11:21:39.0040] <jmdyck>
+E.g., in evaluation of a Block, you have to reset the the running execution context's LexicalEnvironment before returning the result of evaluating |StatementList|.
+
+[11:22:19.0128] <bakkot>
+oh, yeah
+
+[11:26:41.0402] <jmdyck>
+So I'm planning to submit a PR, not sure what it'll be yet.
+
+[11:28:08.0449] <jmdyck>
+but before i get much farther: any objection to putting `?` before "the result of evaluating"?
+
+[11:28:59.0040] <jmdyck>
+(It doesn't currently occur)
+
+[11:36:35.0039] <jmdyck>
+(Other places we don't immediately propagate abrupts from evaluation is [I think] anywhere that the evaluation is followed by a call to `UpdateEmpty`.)
+
+[11:38:18.0711] <jmdyck>
+ * (Other places we don't immediately propagate abrupts from evaluation is [I think] anywhere where that the evaluation is followed by a call to `UpdateEmpty`.)
+
+[11:38:42.0695] <jmdyck>
+ * (Other places we don't immediately propagate abrupts from evaluation is [I think] anywhere that the evaluation is followed by a call to `UpdateEmpty`.)
+
+[12:02:32.0071] <jmdyck>
+Also, how do you feel about putting `Completion()` around "the result of evaluating foo"?
+
+[15:32:07.0306] <Michael Ficarra>
+> <@jmdyck:matrix.org> Also, how do you feel about putting `Completion()` around "the result of evaluating foo"?
+
+see https://tc39.es/ecma262/#sec-implicit-normal-completion, it's already "clearly marked"
+
+[15:32:37.0867] <Michael Ficarra>
+> <@jmdyck:matrix.org> but before i get much farther: any objection to putting `?` before "the result of evaluating"?
+
+I'd want to see if we can make Evaluation a bit more of a regular AO first
+
+[15:36:31.0720] <shu>
+say more about "more regular"
+
+[15:36:44.0975] <shu>
+i still feel that it's helpful to not consolidate the definition sites
+
+[15:37:12.0477] <bakkot>
+> <@jmdyck:matrix.org> but before i get much farther: any objection to putting `?` before "the result of evaluating"?
+
+Right now the convention appears to be a `ReturnIfAbrupt` step
+
+[15:41:03.0309] <Michael Ficarra>
+shu: agreed on not consolidating definition, but regular SDO invocation, listing parameters the same, etc
+
+[15:41:31.0455] <shu>
+i am neutral to weakly supportive of that, though would like to actually read it for the readability gut check
+
+[15:54:07.0633] <bakkot>
+evaluation doesn't take arguments, so it would presumably just be
+
+> Let _result_ be Evaluation of |Thing|
+
+rather than the current
+
+> Let _result_ be the result of evaluating |Thing|
+
+[15:54:33.0568] <bakkot>
+except usually it would be `? Evaluation of |Thing|`, and I guess sometimes it would be `Completion(Evaluation of |Thing|)`
+
+
+2022-03-09
+[16:00:55.0568] <shu>
+either one reads fine to me
+
+[17:31:38.0971] <jmdyck>
+Michael Ficarra: re see https://tc39.es/ecma262/#sec-implicit-normal-completion saying it's already "clearly marked": yes, but only when returning from an algorithm. I'm talking about otherwise.
+
+[17:38:11.0891] <jmdyck>
+So... I wasn't proposing to change "the result of evaluating" to "Evaluation", but now it sounds like maybe I should.
+
+[17:39:26.0066] <jmdyck>
+@bakkot, earlier you said you didn't want a conventional invocation form for Evaluation
+
+[17:46:16.0487] <jmdyck>
+ * So... I wasn't proposing to change "the result of evaluating" to "Evaluation", but now I'm wondering if I should.
+
+[18:03:46.0453] <bakkot>
+that is a thing I said, yup
+
+[18:03:59.0983] <bakkot>
+I mean I am not strongly opposed if michael and shu both think it's better
+
+[18:04:21.0130] <bakkot>
+I just don't like change
+
+[18:04:38.0148] <jmdyck>
+@shu seemed fine either way
+
+[07:29:38.0466] <shu>
+indeed i am
+
+[08:48:50.0371] <Michael Ficarra>
+my general philosophy is to reduce special forms as much as possible without harming readability, so I'm all for it
+
+[08:54:41.0610] <Michael Ficarra>
+without that readability constraint, we could just express the whole thing in SKI calculus 😍
+
+[09:15:30.0666] <shu>
+god forbid you want people to read the thing you write
+
+[11:33:12.0004] <bakkot>
+we can talk about it at the editor call maybe
+
+
+2022-03-10
+[14:47:09.0334] <ljharb>
+woot
+```
+$ npm show @tc39/ecma262-biblio commit
+3ea6895e8ceb573a65be5b09ede9c67d5aa0aa3e
+```
+
+
+2022-03-11
+[16:28:37.0667] <ljharb>
+any objection, once we cut ES2022, to me setting a `dist-tag` on the biblio package that matches the year? that way it'll be easy for me moving forward to target the specific biblio for each edition, for es-abstract
+
+[16:31:15.0265] <shu>
+what does `dist-tag` do?
+
+[16:31:59.0081] <ljharb>
+"latest" is the default one, but you can set, say, "next" or "shu" or "es2022", and then `npm install foo@es2022`
+
+[16:32:07.0032] <ljharb>
+it's like a branch → commit, for npm - a movable pointer
+
+[16:32:17.0258] <ljharb>
+ * it's like a branch → commit, for npm - a movable pointer
+
+[16:32:21.0455] <shu>
+ah, that's the thing after the @?
+
+[16:32:28.0702] <ljharb>
+yes
+
+[16:32:47.0631] <shu>
+then sgtm, seems like we should mirror biblio releases to the yearly cuts
+
+[16:32:48.0442] <ljharb>
+it can be either a dist-tag, or a semver range, or a single version, or a URL - anything that can go in the RHS of `dependencies`
+
+[16:32:58.0870] <ljharb>
+biblio releases are done on every spec commit :-)
+
+[16:33:09.0469] <ljharb>
+which is great, so it's always up to date - i just want to be able to quickly target each yearly cut
+
+[16:33:18.0300] <shu>
+well sure, i mean the named releases should have the same-named tag on the biblio side
+
+[16:33:21.0793] <ljharb>
+awesome
+
+[16:33:42.0949] <shu>
+but i mean i don't use this stuff, please wait for kevin's thoughts
+
+[16:33:45.0593] <ljharb>
+it could be automated if we really wanted, but it's easy to do it manually once a year too
+
+[16:33:57.0640] <ljharb>
+nothing for me to do until 2022 is cut anyways :-)
+
+[16:34:02.0188] <shu>
+yeah the "once a year" thing argues for not automating
+
+[16:34:04.0319] <shu>
+until like... year 7
+
+[16:37:05.0175] <bakkot>
+fine by me
+
+[16:37:55.0964] <ljharb>
+also mind slapping the merge label on https://github.com/tc39/ecma262/pull/2690 ?
+
+[16:40:21.0070] <bakkot>
+done
+
+[16:40:29.0715] <ljharb>
+`require('@tc39/ecma262-biblio')['https://tc39.es/ecma262/'].filter(x => x.type === 'op').find(x => x.aoid === 'IsLessThan').signature` => 
+```
+{
+  parameters: [
+    {
+      name: '_x_',
+      type: { kind: 'opaque', type: 'an ECMAScript language value' }
+    },
+    {
+      name: '_y_',
+      type: { kind: 'opaque', type: 'an ECMAScript language value' }
+    },
+    { name: '_LeftFirst_', type: { kind: 'opaque', type: 'a Boolean' } }
+  ],
+  optionalParameters: [],
+  return: {
+    kind: 'completion',
+    completionType: 'mixed',
+    typeOfValueIfNormal: {
+      kind: 'union',
+      types: [
+        { kind: 'opaque', type: 'a Boolean' },
+        { kind: 'opaque', type: '*undefined*' }
+      ]
+    }
+  }
+}
+```
+
+verrrrrry niiiiice
+
+[16:40:57.0200] <bakkot>
+the `['https://tc39.es/ecma262/']` thing is dumb
+
+[16:41:00.0481] <ljharb>
+it is
+
+[16:41:01.0913] <bakkot>
+wish I'd fixed it before publishing
+
+[16:41:04.0642] <ljharb>
+lol
+
+[16:41:14.0836] <ljharb>
+could always bump to v2 :-p
+
+[16:41:21.0503] <bakkot>
+yeah...
+
+[16:41:23.0084] <bakkot>
+tempting...
+
+[16:41:30.0123] <ljharb>
+so now i just have to build an ES AO typechecker, yay
+
+[16:41:30.0544] <bakkot>
+before people start depending on it
+
+[16:41:32.0941] <ljharb>
+yup
+
+
+2022-03-14
+[14:45:47.0061] <bakkot>
+shu: michael pushed a commit to https://github.com/tc39/ecma262/pull/1713 with some editorial tweaks
+
+[14:45:49.0531] <bakkot>
+do you want to take a look?
+
+[14:45:52.0744] <bakkot>
+otherwise I think it's good to go
+
+
+2022-03-15
+[10:53:15.0642] <shu>
+was OOO yesterday, looking now
+
+[10:53:25.0913] <shu>
+the new stuff is all contained in https://github.com/tc39/ecma262/pull/1713/commits/efc369b2322287f3b946d6fdaa7811a381bd4164, yeah?
+
+[10:55:14.0367] <bakkot>
+yup
+
+[10:55:30.0181] <bakkot>
+other than the straightforward rebase changes which probably do not require review
+
+[11:11:06.0825] <shu>
+dfns are case sensitive, right?
+
+[11:13:45.0559] <bakkot>
+uhhh mostly yes?
+
+[11:13:58.0024] <bakkot>
+if you define a term with a lowercase letter it will also match with the first letter uppercased
+
+[11:14:10.0076] <bakkot>
+like if you define `example` then `Example` also matches
+
+[11:14:34.0146] <bakkot>
+but they case sensitive except for that behavior, yes
+
+[11:23:04.0583] <shu>
+i was wondering why Range got dfn'd and State didn't, presumably because State is way too common a word
+
+[11:28:27.0347] <bakkot>
+it's because michael complained about introducing a new term without dfn'ing it, even though the other terms in that section are not dfn'd
+
+[11:28:45.0683] <shu>
+that's not a good reason
+
+[11:29:19.0539] <bakkot>
+https://github.com/tc39/ecma262/pull/1713#discussion_r824268425
+
+[11:29:34.0948] <shu>
+though i can appreciate different philosophies around how to improve a section that is pretty divergent with the rest of the document
+
+[11:29:42.0843] <shu>
+one may be to fix things ad-hoc as we notice
+
+[11:29:55.0687] <shu>
+another one may be to minimize churn and do nothing until we can look at it holistically
+
+[11:30:00.0209] <bakkot>
+yeah
+
+[11:30:11.0774] <bakkot>
+I would have gone for consistency, personally, but also we want to refactor this section as soon as we get the two major regex PRs landed anyway so I don't really mind
+
+[11:30:18.0692] <shu>
+yeah
+
+[11:30:37.0543] <shu>
++1 to that, the fact that it's been on our radar for a while makes me not care so much
+
+[11:32:42.0280] <shu>
+stamped
+
+[13:02:44.0239] <Michael Ficarra>
+@shu somehow you leave feedback that I can't respond to
+
+[13:02:48.0237] <Michael Ficarra>
+also I don't know what you mean there
+
+[13:09:22.0313] <bakkot>
+Michael Ficarra: this is a weird github thing; that feedback is a reply to a comment you made and will show up also in that comment theread, where you can reply to it
+
+[13:21:41.0742] <Michael Ficarra>
+bakkot: I don't see it
+
+[13:26:50.0478] <bakkot>
+Michael Ficarra: https://github.com/tc39/ecma262/pull/1713#discussion_r824995616
+
+[13:35:26.0927] <shu>
+Michael Ficarra: i was asking why was math notation, e.g. `&lt;` changed to "less than or equal to" in prose
+
+[13:37:15.0779] <Michael Ficarra>
+oh, I explained that in https://github.com/tc39/ecma262/pull/1713#discussion_r824263540
+
+[13:38:43.0069] <Michael Ficarra>
+the part I was describing as not an accident there was the change from less-than to less-than-or-equal
+
+[13:39:01.0834] <Michael Ficarra>
+however, the change to prose also was not an accident
+
+[14:22:10.0674] <shu>
+and what was the reasoning for changing to prose?
+
+
+2022-03-16
+[17:56:32.0078] <Michael Ficarra>
+because the maths notation was used in a weird way, as I explained in that comment
+
+[11:17:28.0799] <jmdyck>
+Does the editors call observe daylight saving time?
+
+[11:19:06.0297] <shu>
+i assumed so, since we are all US timezone-based (2 Pacific, 1 Mountain)
+
+[11:27:34.0707] <jmdyck>
+Apparently (most of) Arizona doesn't observe DST.
+
+[11:30:00.0659] <jmdyck>
+Anyhow, the call is scheduled to start 3 hours from now?
+
+[11:43:37.0974] <shu>
+it is on my calendar, yes
+
+[11:43:57.0359] <shu>
+we should just consider the calendar the source of truth
+
+[12:49:19.0882] <jmdyck>
+(I can't see the calendar, so I have to ask.)
+
+[14:10:57.0412] <shu>
+oh really?
+
+[14:11:02.0839] <shu>
+is it a permissions thing?
+
+[14:15:43.0518] <jmdyck>
+I think it's visible only to delegates.
+
+[14:16:42.0759] <jmdyck>
+https://github.com/tc39/how-we-work/issues/94#issuecomment-1031730607 talks about making it public.
+
+[14:17:26.0090] <shu>
+i feel pretty confident that we should be able to get you invited expert status and access to the calendar
+
+[14:34:57.0266] <ljharb>
+i agree
+
+
+2022-03-17
+[19:25:05.0971] <jmdyck>
+dang, i noticed a bug in 1713. Pretty minor though, just the return type of CompilePattern.
+
+[19:34:44.0406] <bakkot>
+> <@jmdyck:matrix.org> dang, i noticed a bug in 1713. Pretty minor though, just the return type of CompilePattern.
+
+is it that the AC it returns should take a list of characters rather than a string?
+
+[19:35:01.0561] <jmdyck>
+yup
+
+[19:35:14.0987] <jmdyck>
+(modulo s/list/List/)
+
+[19:35:32.0344] <jmdyck>
+ * (modulo s/list/List/)
+
+[19:36:38.0579] <jmdyck>
+I can submit a PR, but I need to get through the other merges first.
+
+[20:15:15.0282] <jmdyck>
+https://github.com/tc39/ecma262/pull/2698
+
+
+2022-03-18
+[22:31:12.0926] <ljharb>
+ok so the intrinsic notation stuff. `%Array.prototype.forEach%`, for example, is straightforward. how does `%Map.prototype.size%` work, based on the current text? is it basically unspecified?
+
+[22:37:41.0646] <ljharb>
+if, as i assume, it's really only accounting for data properties, then how could we make it handle getters (and setters, not that we have any)? same question about `%Map.prototype[@@iterator]%` which i don't think the current text handles
+
+[22:39:19.0540] <ljharb>
+bakkot: separately, why is https://unpkg.com/browse/ecmarkup@10.0.2/js/ecmarkup.js a 0-byte file shipped with the package?
+
+[22:44:25.0835] <ljharb>
+bakkot also separately, it seems like `ecmarkup --verbose --load-biblio=@tc39/ecma262-biblio spec.emu index.html --strict` isn't autolinking an AO like `StringIndexOf`. is there something i'm missing?
+
+[22:44:58.0007] <ljharb>
+ * bakkot also separately, it seems like `ecmarkup --verbose --load-biblio=@tc39/ecma262-biblio spec.emu index.html --strict` isn't autolinking an AO like `StringIndexOf`. is there something i'm missing?
+
+[00:11:08.0127] <bakkot>
+ljharb: 'cause I haven't bothered removing it I guess
+
+[00:11:16.0921] <bakkot>
+it's been empty forever: https://github.com/tc39/ecmarkup/blob/323a97e0d688358bc2068b2424e355050a595214/js/ecmarkup.js
+
+[07:49:17.0719] <ljharb>
+lol k, weird
+
+[10:52:13.0039] <ljharb>
+it seems to me that 402 might be invalid, post 262 completion reform, unless it also does a completion reform update, since it relied on 262s implicit completion behavior. does that seem right?
+
+[10:57:00.0075] <bakkot>
+yup but there are many similar things
+
+[10:57:09.0099] <bakkot>
+I'll probably make a PR sometime soonish
+
+[14:53:04.0907] <ljharb>
+402 needs to cut their 2022 asap also
+
+[14:53:19.0997] <ljharb>
+so if those changes really should go into both specs' 2022, then "soonish" might need to be, like, in the next day or two
+
+[14:54:43.0450] <bakkot>
+I wasn't gonna worry about it tbh
+
+[14:54:54.0755] <bakkot>
+402 is readable as-is even though it's technically "wrong"
+
+[14:57:00.0672] <ljharb>
+alrighty
+
+[14:57:03.0865] <ljharb>
+any thoughts about my intrinsic notation question above?
+
+[14:57:55.0737] <bakkot>
+I think it's basically unspecified, yes
+
+[15:01:00.0383] <ljharb>
+any ideas how we could specify it? (or how it would be specified, it's not important whether it goes into the spec now, but i need it for the get intrinsic proposal)
+
+[15:01:26.0219] <ljharb>
+ * any ideas how we could specify it? (or how it would be specified, it's not important whether it goes into the spec now, but i need it for the get intrinsic proposal)
+
+[15:02:19.0669] <bakkot>
+we could just say that when the named property is an accessor the `%` notation expands to a Record `{ [[Getter]], [[Setter}} }`
+
+[15:09:44.0616] <jmdyck>
+So %Map.prototype.size%.[[Getter]] ?
+
+[15:11:01.0504] <bakkot>
+yup
+
+[15:12:19.0697] <jmdyck>
+In ecmaspeak, I use %Map.prototype.size:get%
+
+[15:14:23.0564] <jmdyck>
+and `%Map.prototype[@@iterator]%`, for the other example
+
+[15:16:44.0266] <jmdyck>
+ * In ecmaspeak, I use `%Map.prototype.size:get%`
+
+[15:41:59.0034] <ljharb>
+ooh, i like that, for getters/setters, that's great
+
+[15:43:02.0638] <ljharb>
+i'm not sure how to actually word it for symbols, but i imagine anything that allows `%some.object.chain[@@someWellKnownSymbolName]%` to work would be fine
+
+
+2022-03-19
+[10:24:25.0607] <bakkot>
+ljharb: I am going through ecmarkup's deps (mostly sparked by noticing it was using chalk v1, lol), and
+
+[10:24:32.0548] <bakkot>
+what does safe-publish-latest actually do?
+
+[10:24:40.0915] <bakkot>
+I don't know enough about how npm works to understand the description
+
+[10:25:32.0870] <ljharb>
+Makes sure if we publish a backport, that it’s not published as latest. Given that we don’t seem to ever do that with ecmarkup, it’d be fine to remove the dep and the prepublish scripts, but it also only runs once at publish time ¯\\\_(ツ)\_/¯ 
+
+[10:25:51.0481] <ljharb>
+i just reflexively add it to every package i maintain because the lack of it has caused painful problems in the past
+
+[10:26:05.0525] <bakkot>
+make sense
+
+[10:26:07.0630] <bakkot>
+I don't mind keeping it, I was just curious
+
+[10:27:47.0140] <bakkot>
+that said it is responsible for a distressingly high fraction of the (dev) dependency tree of ecmarkup, via inclusion of yargs
+
+[10:28:24.0118] <bakkot>
+someday, util.parseArgs
+
+[12:41:03.0928] <ljharb>
+definitely will use parseArgs once it’s stopped evolving
+
+
+2022-03-21
+[17:31:57.0557] <jmdyck>
+I'm wondering about Abstract Closures in a post-2547 spec. E.g. CreateListIteratorRecord defines a closure that uses `?`, so it can return an abrupt completion. So when it says `Return *undefined*`, should that  be `Return NormalCompletion(*undefined*)`?
+
+[17:32:47.0207] <jmdyck>
+Or should the closure have a return-type, so that the `NormalCompletion()` is implicit?
+
+[17:39:44.0995] <jmdyck>
+(Currently, we don't have a syntax to declare an AC's return-type. Closest is that CompilePattern's return-type is `an Abstract Closure that takes <X> and <Y> and returns a MatchResult`
+
+[17:40:13.0945] <jmdyck>
+ * (Currently, we don't have a syntax to declare an AC's return-type. Closest is that CompilePattern's return-type is `an Abstract Closure that takes <X> and <Y> and returns a MatchResult`)
+
+[10:19:18.0247] <Michael Ficarra>
+> <@jmdyck:matrix.org> I'm wondering about Abstract Closures in a post-2547 spec. E.g. CreateListIteratorRecord defines a closure that uses `?`, so it can return an abrupt completion. So when it says `Return *undefined*`, should that  be `Return NormalCompletion(*undefined*)`?
+
+Yeah I believe it should. I guess we should audit Completion Record usage in abstract closures.There's no provision for them to do automatic NormalCompletion wrapping right now.
+
+[10:35:28.0018] <shu>
+good catch, we should audit ACs for that
+
+[10:35:38.0561] <shu>
+possibly need to amend the AC creation language to talk about return types as well
+
+[11:13:06.0152] <jmdyck>
+Syntax possibilities: "... a new Abstract Closure with parameters <P> that captures <C> and returns <R>, performing the following steps when called:"
+
+[11:13:12.0485] <jmdyck>
+"... a new Abstract Closure with parameters <P> that captures <C>, returns <R>, and performs the following steps when called:"
+
+
+[11:15:35.0305] <jmdyck>
+"... a new Abstract Closure with parameters <P> that captures <C> and performs the following steps when called, returning <R>:"
+
+
+[11:26:33.0142] <jmdyck>
+Given that <R> might be something like "either a normal completion containing an ECMAScript language value, or a throw completion", I think I prefer (3), where you don't have to resume parsing the step after getting through <R>. But (1) and (2) wouldn't be *terrible* on that score. 
+
+[11:28:16.0823] <jmdyck>
+so another criterion might be more decisive.
+
+[11:30:03.0286] <jmdyck>
+ * Syntax possibilities:
+(1) "... a new Abstract Closure with parameters <P> that captures <C> and returns <R>, performing the following steps when called:"
+
+[11:30:20.0446] <jmdyck>
+ * (2) "... a new Abstract Closure with parameters <P> that captures <C>, returns <R>, and performs the following steps when called:"
+
+
+[11:30:26.0723] <jmdyck>
+ * (3) "... a new Abstract Closure with parameters <P> that captures <C> and performs the following steps when called, returning <R>:"
+
+
+[11:33:43.0506] <jmdyck>
+(2) sounds a bit odd to me, like it returns <R> and then performs these steps, which makes no sense.
+
+[11:57:10.0753] <shu>
+agreed, (2) sounds odder than (1) or (3)
+
+[11:57:15.0493] <shu>
+(3) is the most radical, but i kind of like it
+
+[11:57:20.0967] <shu>
+it reads naturally
+
+[11:57:35.0381] <shu>
+there's no real reason to have the return type be co-located next to the parameters or anything
+
+[13:10:18.0005] <Michael Ficarra>
+I prefer 1 or 2
+
+[13:11:00.0776] <Michael Ficarra>
+are you thinking that if we standardise a declaration of the return type for ACs that we can just add an automatic NormalCompletion provision?
+
+[13:11:29.0329] <jmdyck>
+Yup
+
+
+2022-03-23
+[14:37:27.0785] <jmdyck>
+Is there an editor call?
+
+[14:45:21.0262] <jmdyck>
+I tried to join but wasn't let in.
+
+[15:19:53.0157] <bakkot>
+jmdyck: there is but none of us can let you in, apologies
+
+[16:18:58.0986] <shu>
+https://github.com/tc39/ecma262/pull/2709
+
+
+2022-03-24
+[13:41:03.0992] <bakkot>
+ljharb: I snuck a fixup commit into https://github.com/tc39/ecma262/pull/2708
+
+[13:41:17.0796] <bakkot>
+should get merged into the first commit before landing
+
+
+2022-03-26
+[17:22:17.0438] <Michael Ficarra>
+shu or ljharb can you delete the editor call for next week from the calendar?
+
+[17:23:09.0278] <shu>
+done
+
+[17:23:50.0858] <shu>
+now i'm off, toodles
+
+[12:03:48.0331] <ljharb>
+https://github.com/tc39/ecma262/pull/2699 seems ready to land
+
+[13:33:55.0583] <bakkot>
+stamped
+
+
+2022-03-27
+[08:04:15.0371] <ljharb>
+https://github.com/tc39/ecma262/pull/2714
+
+[11:15:26.0270] <ljharb>
+@bakkot ok to label those two? I’m planning to try to cut the spec tonight, so it’s ready for tomorrow 
+
+[11:17:19.0468] <bakkot>
+I don't think they particularly need to get in to this version? but sure, I guess; stamped
+
+[11:17:33.0506] <bakkot>
+we can back them out if shu or michael object
+
+[11:51:43.0544] <ljharb>
+it's not a rush because it's non-normative, but they do have normative implications for es-abstract :-p so it helps me out to have them in
+
+[12:09:22.0229] <ljharb>
+ok to merge https://github.com/tc39/ecma262/pull/2709?
+
+[12:09:33.0501] <ljharb>
+or are there other 2022 things you want me to wait for
+
+
+2022-03-28
+[06:54:56.0271] <ljharb>
+also it seems like there's some linting errors in `main` of ecma262
+
+[07:07:05.0693] <bakkot>
+that should not be possible
+
+[07:07:20.0817] <bakkot>
+I don't see any?
+
+[07:14:02.0805] <ljharb>
+hm
+
+[07:14:25.0821] <ljharb>
+maybe i wasn't npm installed, one sec
+
+[07:14:32.0436] <bakkot>
+oh yeah probably
+
+[07:14:38.0092] <bakkot>
+we changed the rules in the latest version
+
+[07:14:52.0527] <bakkot>
+specifically https://github.com/tc39/ecma262/pull/2708
+
+[07:15:10.0754] <ljharb>
+yeah, that was most of the errors, and it seems like they're fine now
+
+[07:15:28.0850] <ljharb>
+let me make sure the 2022 build doesn't need an update :-)
+
+[07:18:41.0377] <ljharb>
+ok, it did; it's done
+
+[07:46:34.0600] <bakkot>
+shu / Michael Ficarra: can one of you give this report? my pattern is still asleep and I don't want to wake her
+
+[07:46:55.0664] <bakkot>
+I was intending to move my computer to somewhere it would be quieter but it turns out to be broken
+
+[07:47:07.0249] <shu>
+happy unless michael wants to
+
+[07:47:22.0086] <Michael Ficarra>
+@shu sure, I'll just do the CR slide I guess?
+
+[07:47:34.0131] <shu>
+sure we can tag-team
+
+[07:47:44.0834] <shu>
+anything special we want to say about cutting es22?
+
+[07:48:32.0372] <ljharb>
+just that the candidate is posted, on the repo and in the reflector, and we should approve it to start the optout period
+
+[08:23:46.0186] <Michael Ficarra>
+ljharb: the chairs want us to explicitly announce the 2022 cut and start of RF opt-out, would you like to do it since you've been managing that?
+
+[08:24:46.0295] <ljharb>
+sure
+
+
+2022-03-30
+[07:47:19.0265] <Michael Ficarra>
+ryzokuken: maybe we can reserve one of our upcoming editor calls to document some of our editorial philosophy while we discuss it with you (we've been meaning to do this anyway)
+
+[07:48:37.0830] <Michael Ficarra>
+ljharb: can you voice ryzokuken in this room?
+
+[09:35:09.0097] <ljharb>
+i can’t, it seems. maybe a chair?
+
+[09:50:24.0987] <shu>
+i can apparently, dunno why
+
+
+2022-03-31
+[12:30:45.0018] <bakkot>
+as a heads up, I'm changing the format of the published biblio: https://github.com/tc39/ecma262/pull/2718
+

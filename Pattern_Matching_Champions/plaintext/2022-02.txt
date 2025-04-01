@@ -1,0 +1,499 @@
+2022-02-01
+[11:47:40.0118] <TabAtkins>
+I'm applying all our resolutions right now, and I'm finally to the binding visibility one, and I have a question.
+
+[11:48:27.0374] <TabAtkins>
+So `&`/`|` is simple, as is array patterns; bindings from earlier patterns are visible to later patterns. But what about object matchers?
+
+[11:49:05.0595] <TabAtkins>
+Should `{a, b: ${console.log(a)}}` work? If so, I presume `{b: ${console.log(a)}, a}` wouldn't work? Or should neither work?
+
+[11:58:18.0205] <mpcsh>
+is both working an option?
+
+[11:59:20.0174] <TabAtkins>
+That seems impossible; `{a: ${console.log(b)||"a"}, b: ${console.log(a)||"b"}}` logs what, exactly?
+
+[11:59:31.0646] <mpcsh>
+yeah you're right
+
+[12:00:18.0327] <mpcsh>
+I'm gonna say we should match destructuring here:
+```js
+const x = {a: 1, b: 2};
+const {a, c = a} = x; // works
+const {d = b, b} = x; // doesn't work
+```
+
+[12:00:46.0396] <TabAtkins>
+that's my preference too, i just hadn't checked what worked yet
+
+[12:00:47.0203] <mpcsh>
+(I didn't know those semantics off the top of my head, just worked it out in the console)
+
+[12:00:48.0872] <mpcsh>
+ * (I didn't know those semantics off the top of my head, just worked it out in the console)
+
+[12:02:33.0015] <TabAtkins>
+Also I don't have a real opinion on this PR, someone else can merge it if they like: https://github.com/tc39/proposal-pattern-matching/pull/237
+
+[12:02:37.0062] <TabAtkins>
+ * Also I don't have a real opinion on this PR, someone else can merge it if they like: https://github.com/tc39/proposal-pattern-matching/pull/237
+
+[12:10:41.0580] <rbuckton>
+Axel Rauschmayer posted an example of `Option` using classes on twitter a few months ago that looked something like this:
+```js
+class Option {
+  static Some = class extends Option {
+    constructor(value) {
+      this.value = value;
+    }
+  };
+
+  static None = class extends Option {
+  };
+}
+```
+
+This effectively encodes the "kind" into the [[Prototype]] and allows you to test whether something is a `Some` or a `None` _and_ whether something is an `Option`
+
+[12:11:14.0968] <TabAtkins>
+oh woah, interesting
+
+[12:11:37.0637] <TabAtkins>
+that is *exceedingly* clever, phew
+
+[12:11:40.0081] <rbuckton>
+My hope is that an engine could optimize a native ADT to reduce polymorphic lookups against the "kind", which is something we don't get today.
+
+[12:13:40.0766] <rbuckton>
+> <@tabatkins:matrix.org> rbuckton: Right, the constructor pattern I used just needed *some* value. The null isn't exposed, it could be a 0 or false or undefined instead. It's the second arg that tells whether it's a None or Some.
+
+ * Axel Rauschmayer posted an example of `Option` using classes on twitter a few months ago that looked something like this:
+```js
+class Option {
+  static Some = class extends Option {
+    constructor(value) {
+      this.value = value;
+    }
+  };
+
+  static None = class extends Option {
+  };
+}
+```
+
+This effectively encodes the "kind" into the [[Prototype]] and allows you to test whether something is a `Some` or a `None` _and_ whether something is an `Option`
+
+[13:45:13.0322] <ljharb>
+i like axel's, it's simple. altho i'd do `this.#value = value;` and provide a getter to it rather than a public property.
+
+[13:47:49.0189] <TabAtkins>
+Okay, all open issues resolved; we're down to just the new issue opened today (which is pretty weird and I think we'll almost certainly reject, but we're giving the OP time to respond)
+
+[13:48:45.0354] <TabAtkins>
+ljharb: Well, if you're not trying to protect Nones from getting assigned, being able to assign to a Some is useful. Otherwise you're forced into using `.map()` to change the value.
+
+[13:49:23.0325] <ljharb>
+that seems ideal; immutable instances > > > mutable instances
+
+[13:49:52.0922] <TabAtkins>
+lol i'm not getting into that
+
+[13:49:55.0246] <ljharb>
+just like a Promise for x is always for x, an Option for x would always be for x
+
+[13:50:03.0881] <TabAtkins>
+it is certainly a decision that can be made, and not wrong
+
+[13:50:10.0045] <ljharb>
+iow, Options to me are synchronous Promises :-) (a different flavor of burrito)
+
+[13:50:14.0059] <ljharb>
+ * iow, Options to me are synchronous Promises :-)
+
+[13:50:24.0157] <ljharb>
+ * iow, Options to me are synchronous Promises :-) (a different flavor of burrito_
+
+[13:50:26.0004] <ljharb>
+ * iow, Options to me are synchronous Promises :-) (a different flavor of burrito)
+
+
+2022-02-02
+[16:00:44.0787] <rbuckton>
+> <@tabatkins:matrix.org> ljharb: Well, if you're not trying to protect Nones from getting assigned, being able to assign to a Some is useful. Otherwise you're forced into using `.map()` to change the value.
+
+A real ADT enum value would be shallowly immutable (at the very least), so the constructors would probably have an `Object.freeze(this)` at the end somewhere anyways.
+
+[16:01:11.0774] <ljharb>
+fair, that's another alternative. but frozen objects are weird and unidiomatic, so i wouldn't expect a builtin to do that
+
+
+2022-02-04
+[11:24:18.0657] <TabAtkins>
+Does the group feel good about going for Stage 2 at the March meeting? If so, I can start assembling slides. I think the only big thing that should be done before then is updated draft spec text.
+
+[11:24:36.0252] <TabAtkins>
+ljharb: You've done the spec text so far - do you think you can update it?
+
+[11:34:32.0944] <mpcsh>
++1 to going for stage 2 in march. I'd love to help w/ slides, presenting, & spec text 🙂
+
+[11:34:43.0291] <mpcsh>
+> <@tabatkins:matrix.org> Does the group feel good about going for Stage 2 at the March meeting? If so, I can start assembling slides. I think the only big thing that should be done before then is updated draft spec text.
+
+ * +1 to going for stage 2 in march. I'd love to help w/ slides, presenting, & spec text 🙂
+
+[12:19:49.0160] <ljharb>
+TabAtkins: lol i haven't done much; the spec text is largely an artifact from the previous incarnation of the proposal. i can try to bring it up to date tho.
+
+[12:20:05.0128] <ljharb>
++1 on going for stage 2; we only need "initial spec text" for that
+
+[12:21:37.0857] <TabAtkins>
+yeah, the spec text we have is just not remotely matching the proposal any more, and i think we need that ^_^
+
+[14:20:39.0557] <TabAtkins>
+First draft of slides up at https://docs.google.com/presentation/d/1sJoXU1ysK6eZn04pjnQ-1z6EetsVf9VfHeU0Ht8hiFQ/edit?usp=sharing, I *think* I correctly invited all the champions to have edit rights, but if you can't edit just let me know.
+
+
+2022-02-05
+[03:23:27.0012] <Jack Works>
+the underline does not match the code on my machine
+
+[03:24:04.0514] <Jack Works>
+ * the underline does not match the code on my machine
+
+[03:24:09.0325] <Jack Works>
+maybe it's my PC's problem
+
+[03:24:25.0127] <Jack Works>
+ * maybe it's my PC's problem
+
+[05:01:42.0296] <Jack Works>
+rest of the slides looks good
+
+[05:44:09.0711] <Jack Works>
+I have discussed the status quo proposal to a tech community (IM). They found the opt-in fall through is missing and we've suggest a new simple addon
+
+[05:46:44.0344] <Jack Works>
+```
+when (pattern1) if (cond1) |
+when (pattern2) if (cond2): expr
+```
+
+[05:48:27.0283] <Jack Works>
+This syntax (the `|` after the whole pattern) opt-in the fall through, and does not have the foot-gun like fall-through in switch. It allows write RHS once with different structures & guards.
+
+[05:49:14.0831] <Jack Works>
+```
+when (pattern1) if (cond1) | expr
+when (pattern2) if (cond2): expr
+```
+
+This is syntax error.
+
+[05:50:26.0102] <Jack Works>
+I have raised this opt-in fall through many times in the previous meetings but looks like not resolved. How do you guys think about this one?
+
+[05:52:51.0302] <Jack Works>
+ * ```
+when (pattern1) if (cond1) | expr // syntax error!!
+when (pattern2) if (cond2): expr
+```
+
+Fall through with code is not allowed.
+
+[14:32:04.0970] <ljharb>
+Fall-through is explicitly disallowed, because fallthrough is hugely undesirable.
+
+[14:33:51.0536] <ljharb>
+do you have a concrete non-contrived use case for what those two patterns and conditions would be?
+
+
+2022-02-06
+[17:47:51.0164] <Jack Works>
+> <@ljharb:matrix.org> Fall-through is explicitly disallowed, because fallthrough is hugely undesirable.
+
+I think only implicitly fall-through (like it is in switch) is undesirable.
+The form I proposed is explicitly opt-in and does not allow intermediate expressions, it can be treated as "| with two different patterns"
+
+[17:51:39.0630] <ljharb>
+Sure but you can do that already with an “or” in the pattern 
+
+[17:52:23.0622] <ljharb>
+in theory if each condition is needed and also only applies to each pattern, it could be helpful, but I’d love to see an actual example that needs that
+
+[17:52:34.0397] <ljharb>
+we shouldn’t be adding features merely for “in theory”
+
+[17:53:34.0171] <Jack Works>
+I agree it's likely can be expressed in the current proposal. (I replied to my friends, `you can extract the RHS to a function then you don't need to repeat twice in this case`)
+
+[17:54:50.0000] <Jack Works>
+maybe we can observe, if it becomes a common real world case, we can add it in the future.
+
+[17:55:01.0931] <Jack Works>
+let me add that to the _Possible Future Enhancements_ section. is that ok?
+
+
+2022-02-07
+[10:08:02.0284] <TabAtkins>
+Yeah, especially with the explicit separator now in place, we've got some freedom to explore syntax in the future as we determine it's needed.
+
+[10:13:56.0072] <TabAtkins>
+> <@jackworks:matrix.org> the underline does not match the code on my machine
+
+Weird, they no longer match the code on mine, either. I don't understand what happened. Fixed.
+
+[10:39:17.0249] <rkirsling>
+they were still busted when I looked just now (and version history indicated that they had never been modified); should be more or less fixed now
+
+[10:39:40.0565] <rkirsling>
+ * they were still busted when I looked just now (and version history indicated that they had never been modified); should be more or less fixed now
+
+[10:49:46.0780] <TabAtkins>
+okay they're back to busted on my machine, so i have to assume that this is a platform font difference somehow, despite these being web fonts :/
+
+[10:51:35.0343] <TabAtkins>
+yes, @ljharb changed them to the looks-busted-to-me version yesterday, more or less identical to what you just changed them to rkirsling , so I'm gonna switch them to drawn lines instead of text.
+
+[10:52:01.0075] <ljharb>
+hm?
+
+[10:52:20.0318] <ljharb>
+i added some missing spaces, and then i extended the brackets to match
+
+[10:52:42.0813] <ljharb>
+what part looks busted right now?
+
+[10:52:57.0068] <TabAtkins>
+Exactly, that broke them on my machine - the brackets look too long now ^_^
+
+[10:53:00.0712] <ljharb>
+(i also made all the curly quotes in code into straight quotes)
+
+[10:53:13.0990] <ljharb>
+do you have a windows machine, or a linux one?
+
+[10:53:15.0674] <ljharb>
+ * do you have a windows machine, or a linux one?
+
+[10:53:18.0563] <TabAtkins>
+linux
+
+[10:53:32.0537] <ljharb>
+ah, fonts are weird on linux. eg, here's what i see:
+
+[10:53:55.0538] <ljharb>
+ * ah, fonts are weird on linux. eg, here's what i see:
+
+[10:54:04.0898] <TabAtkins>
+i basically see the opposite of what Jack Works posted - rather than too short, they're too long. I presume Jack is seeing the version that looked good on my machine.
+
+[10:54:36.0467] <ljharb>
+right, which were too short for me also
+
+[10:54:50.0342] <ljharb>
+drawn lines seem like a better choice then
+
+[10:54:56.0255] <TabAtkins>
+anyway, apparently monospace with differnet font sizes aren't reliable, yeah
+
+[10:55:04.0456] <TabAtkins>
+fixing now
+
+[10:55:17.0591] <ljharb>
+other than my tiny edits tho, the only material comment i had was on &/| vs and/or
+
+[10:55:42.0249] <TabAtkins>
+yup, already swapped those in the slides and the README
+
+[10:56:41.0831] <TabAtkins>
+man what sort of rinkydink slides editor doesn't have brackets as a built-in shape
+
+[10:56:49.0997] <ljharb>
+ * (i also made all the curly quotes in code into straight quotes, ellipses into three-dots, etc)
+
+[11:07:28.0993] <TabAtkins>
+all right, does slide 2 look good to y'all now?
+
+[11:12:37.0599] <rkirsling>
+yeppers
+
+[11:12:39.0378] <rkirsling>
+that works
+
+[12:37:54.0936] <ljharb>
+The default matcher one looks weird because it’s two lines, but the length is good
+
+[13:21:02.0174] <mpcsh>
+I'd really like for us to standardize our terminology for the "anatomy" slide. we've used different names at different points for some of those things and I want to make sure we're really careful to present a unified vocabulary to the committee. I think whatever we decide now will be pretty sticky, so we should also be thinking about docs / teaching materials / tutorials that new devs will encounter in the wild
+
+[14:11:35.0571] <ljharb>
+which terms aren't consistent/ideal in your opinion in the slides?
+
+[14:17:16.0870] <mpcsh>
+"matcher" vs "pattern", "match clause" vs just "clause", "default matcher", that sort of thing
+
+[14:18:09.0178] <mpcsh>
+"ident pattern"
+
+[14:18:14.0764] <ljharb>
+ok
+
+[14:18:22.0509] <mpcsh>
+"custom matcher"
+
+[14:18:25.0035] <ljharb>
+so, a "pattern" is anything that's a literal pattern
+
+[14:18:31.0520] <ljharb>
+a "custom matcher" is the Symbol matcher protocol
+
+[14:18:52.0698] <ljharb>
+and a "matcher" is a pattern, or an expression (which may or may not have a custom matcher)
+
+[14:19:14.0334] <ljharb>
+the "match clause" includes the when, the if, and the RHS. "clause" by itself only works when you're already clearly talking about matching
+
+[14:19:29.0837] <ljharb>
+"default matcher" i usually call "the else", but obv that name won't work anymore :-p
+
+[14:20:13.0912] <mpcsh>
+right so in the past, we've not been so precise with some of those distinctions
+
+[14:20:43.0290] <mpcsh>
+e.g. our readme calls it an [ident_ifier_ _pattern_](https://github.com/tc39/proposal-pattern-matching/#identifier-pattern) vs an ident matcher
+
+[14:20:58.0377] <ljharb>
+ah true
+
+[14:21:07.0594] <ljharb>
+i think "ident matcher" is tab's idiom, probably from python
+
+[14:21:20.0215] <ljharb>
+i think we should avoid the word "ident", because nobody really uses that abbreviation in JS
+
+[14:21:42.0810] <ljharb>
+"identifier pattern" seems fine to me
+
+[14:22:03.0986] <mpcsh>
+I actually tried to scrub the word "matcher" from the readme because I was concerned about ambiguity
+
+[14:22:12.0410] <ljharb>
+that's reasonable too
+
+[14:22:26.0928] <ljharb>
+"ident matcher" is too broad anyways, because it's a pattern, and patterns are subsets of matchers
+
+[14:22:39.0245] <mpcsh>
+anyways idrc what the result is I just want to make sure we have a discussion about these terms so we can be internally and externally consistent
+
+[14:43:54.0749] <mpcsh>
+alright left a few comments on the slides, looking great though. thanks for all your hard work TabAtkins 💜
+
+
+2022-02-08
+[16:07:20.0991] <TabAtkins>
+Ident actually comes from my css experience 😅
+
+[16:08:08.0749] <TabAtkins>
+I think "pattern" should refer to anything in the when(); I may not be consistent right now
+
+[16:08:58.0141] <mpcsh>
+and then "matcher" refers to the whole of `when (pattern)`? do we _need_ that term? I'm worried about jargon overload for devs learning the feature
+
+[16:09:30.0202] <TabAtkins>
+Just to distinguish it from the guard, maybe. But maybe not
+
+[16:12:25.0589] <TabAtkins>
+But maybe that's just "the clause's pattern"
+
+[16:12:55.0578] <mpcsh>
+yeah I feel like we should err on the side of fewer new words
+
+[16:13:00.0263] <mpcsh>
+ * yeah I feel like we should err on the side of fewer new words
+
+[16:14:15.0047] <TabAtkins>
+Yeah I guess there's no need to distinguish the if() from the test inside of it, we can just say "the clause's guard" and it's clear from contract which chunk we mean
+
+[16:17:28.0927] <mpcsh>
+right I agree
+
+[09:12:38.0776] <ljharb>
+sgtm
+
+[09:49:13.0038] <TabAtkins>
+Slightly more radical possibility: what if we called the entire LHS the clause's guard, and talked about the pattern guard, the boolean guard, and the default guard? The RHS could then become the clause's value.
+
+[09:56:37.0843] <ljharb>
+that sounds confusing
+
+[09:57:02.0901] <ljharb>
+there's precedent from elixir iirc about only the "if" being called the guard
+
+[09:57:32.0051] <TabAtkins>
+Yeah, I know it's leaning slightly against precedent.
+
+[10:55:35.0838] <rkirsling>
+yeah I even refer to `if (blah) return;` as a guard sometimes
+
+[10:56:01.0831] <rkirsling>
+so that'd be nonsensical to me
+
+[11:16:31.0667] <rkirsling>
+ * yeah I even refer to `if (!isOkayToProceed) return;` as a guard sometimes
+
+[11:55:47.0226] <mpcsh>
+yeah +1 to Jordan and Ross's thoughts
+
+
+2022-02-10
+[04:33:44.0797] <Jack Works>
+> <@tabatkins:matrix.org> i basically see the opposite of what Jack Works posted - rather than too short, they're too long. I presume Jack is seeing the version that looked good on my machine.
+
+I suggest to make a screenshot and don't touch it 🤣
+
+[10:48:33.0715] <TabAtkins>
+Okay so based on discussion in the slide, maybe "the when" and "the if", then the LHS can be "the matcher" and `default` can be a "default matcher".
+
+[10:48:39.0210] <TabAtkins>
+the RHS would be the clause's value.
+
+[10:54:24.0399] <TabAtkins>
+yeah let me put those in the slide and see how people like it when it's all together
+
+[10:55:03.0077] <mpcsh>
+I've been pretty lukewarm about the term `matcher` but I think given the discussion in the slide it makes sense
+
+[10:57:06.0838] <TabAtkins>
+using "matcher" to just refer to the 'when' part didn't quite pull its weight, i agree, but I think it's worthwhile as a replacement for "the LHS of a match clause"
+
+[11:00:03.0513] <mpcsh>
+how long a timebox do we want for this presentation? 60 min?
+
+[11:02:58.0007] <ljharb>
+60m seems fine
+
+[11:09:33.0478] <TabAtkins>
+yup
+
+
+2022-02-11
+[18:56:00.0575] <Jack Works>
+Or matcher-matchee? 
+
+[21:50:36.0763] <ljharb>
+what would the “matchee” be, if not the thing we currently call the “matchable”?
+
+[21:50:45.0102] <ljharb>
+* what would the “matchee” be, if not the thing we currently call the “matchable”?
+
+[21:59:30.0443] <Jack Works>
+Nevermind 😆
+
+[09:45:57.0348] <TabAtkins>
+Yup, "X-ee" means "the thing getting X done to it"
+

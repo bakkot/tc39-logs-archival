@@ -1,0 +1,1992 @@
+2022-12-01
+[17:29:17.0431] <ljharb>
+tolmasky: what's the use case? it might be relevant for the get-intrinsic proposal :-)
+
+[22:07:17.0342] <sirisian>
+Is there a new cancelable promise proposal? Was going through and refreshing myself on proposals and noticed the last one was withdrawn recently.
+
+[22:32:39.0638] <Jessidhia>
+> <@kriskowal:matrix.org> To wit, if we renamed `module` to something like `moduleInstance`, it would also make sense to use `moduleInstace {}` as the introducer for module expressions.
+
+for some reason this started looking like an F# computation expression to me
+
+[22:39:09.0632] <Jessidhia>
+> <@ljharb:matrix.org> That’s not what they do, that’s what the modules are.
+
+IIUC, the objection you’re making here is more on the grounds of, for example, `import * as foo from './foo.css' with { type: 'css' }` having the capability of `foo` being a different module record than `import * as foo from './foo.css' with { type: 'cssmodule' }` despite the URLs being equal?
+
+[01:08:18.0102] <ljharb>
+Jessidhia: yes, exactly right - the spec for assertions forbids those from being a different module record.
+
+[02:48:33.0108] <Justin Ridgewell>
+We can enforce that at the bundler level as well
+
+[02:48:39.0988] <Justin Ridgewell>
+ * We can enforce that at the bundler level as well
+
+[07:06:43.0579] <tolmasky>
+If I change an intrinsic object (for example, Array.prototype), is it technically not "the" intrinsic anymore. Like if I do Array.prototype.cheese = 10, then in a hypothetical world where I did GetIntrinsic("Array").prototype (or GetIntrinsic("Array.prototype"), would I get back the object with the cheese property, or would it try to give me a "fresh" object?
+
+[09:16:37.0442] <ljharb>
+tolmasky: it is still the same intrinsic object. it has the same identity.
+
+[09:17:09.0641] <ljharb>
+"intrinsic" describes its state at the birth of the realm; the state doesn't matter after that
+
+
+2022-12-02
+[03:41:48.0293] <Mathieu Hofman>
+I believe Mark would say it's the primordial state
+
+[13:44:23.0192] <Rob Palmer>
+Ask for the polyfill! 
+
+[13:44:52.0176] <ljharb>
+haha i'll try. it does understand "in ES3 CJS format", at least
+
+[13:45:43.0440] <ljharb>
+nah, not good at all
+
+[13:46:02.0852] <ljharb>
+it seems to think `union` takes variadic args of 0-N sets :-/
+
+[13:56:38.0249] <bakkot>
+that one will actually produce the right answer, though it goes about it the wrong way
+
+[14:07:42.0940] <ljharb>
+right
+
+[14:07:50.0926] <ljharb>
+which is certainly a level of impressive
+
+
+2022-12-03
+[18:34:47.0314] <snek>
+it checks if union exists though, throw it out 🗑
+
+[19:55:11.0068] <sirisian>
+It's fun to ask ChatGPT: "What language feature from another language would you add to Javascript?" Fascinating how it can talk about anything.
+
+[20:46:50.0075] <Domenic>
+https://github.com/tc39/proposal-arraybuffer-transfer looks great, no notes!
+
+[08:12:49.0349] <tolmasky>
+rbuckton: parseH1 in ecmarkup seems to not be able to parse rest variables (which show up in the spec). I tried finding if they were handled somewhere else in ecmarkup, but couldn't seem to find it anywhere. Could you point me to where that's handled? https://runkit.com/tolmasky/parsing-in-ecmarkup-h1s
+
+[08:47:54.0128] <bakkot>
+tolmasky: it might well just not handle it; ecmarkup is generally pretty permissive with stuff it doesn't recognize, outside of a few contexts
+
+[08:48:05.0125] <bakkot>
+also I'm the current ecmarkup maintainer if you have questions about it
+
+[10:02:47.0559] <Andreu Botella>
+I was looking at the `ArrayBuffer.transfer` proposal, and it feels odd to have my only contribution to a JS engine at all so far listed as prior art for `get detached`
+
+[10:03:54.0214] <Andreu Botella>
+but yeah, I worked on that because it was needed for Deno to be able to implement web APIs like streams and `structuredClone`
+
+[10:04:54.0273] <Andreu Botella>
+and it was particularly necessary looking forwards to the resizable proposal, since at this point web APIs wouldn't be the only ones detaching buffers
+
+[11:56:10.0132] <tolmasky>
+bakkot ah my mistake! apologies for that. Is there some other part of the process I should look into that takes it and turns it in ( ... <var>values</var> ), because it seems to somehow go from "( ..._values_ )" to "<var>values</var>" at some point
+
+[13:36:56.0371] <Richard Gibson>
+> <@tolmasky:matrix.org> bakkot ah my mistake! apologies for that. Is there some other part of the process I should look into that takes it and turns it in ( ... <var>values</var> ), because it seems to somehow go from "( ..._values_ )" to "<var>values</var>" at some point
+
+I'm pretty sure the dots are just ignored, e.g.
+```
+$ printf '\n<emu-clause id="POC">\n<h1>POC ( ..._a_, ..._b_, ???_c_, !@#$%%^&-+=_d_ )</h1>\n</emu-clause>' | npx ecmarkup /dev/stdin /dev/stdout 2>/dev/null | sed -n 's/.*<emu-clause/<emu-clause/; /id="POC"/,$p'
+<emu-clause id="POC">
+<h1><span class="secnum">1</span> POC ( ...<var>a</var>, ...<var>b</var>, ???<var>c</var>, !@#$%^&amp;-+=<var>d</var> )</h1>
+</emu-clause></div></body>
+```
+
+
+2022-12-04
+[23:54:16.0442] <bakkot>
+yeah `_a_` is turned to `<var>a</var>` (by ecmarkdown, via emdTextNode) pretty much everywhere
+
+[23:55:08.0269] <bakkot>
+callsite is https://github.com/tc39/ecmarkup/blob/a004ca7d8e95452e680e284c9a4a86a0d31e9914/src/Spec.ts#L1982 I believe
+
+[11:24:05.0664] <Andreu Botella>
+I was wondering whether promise jobs and `Atomics.waitAsync` effectively require ECMAScript implementers to have an event loop, or if those requirements could in theory be fulfilled in other ways
+
+
+2022-12-05
+[00:31:11.0648] <annevk>
+Andreu Botella: yes, see https://tc39.es/ecma262/#sec-jobs
+
+[00:33:56.0239] <Andreu Botella>
+Hm, yeah, I guess the job requirements pretty much rule anything other than an event loop
+
+[06:15:53.0891] <littledan>
+Sure but still some people in TC39 spaces will not like to hear those words… so it is fine to have as a mental model but not how proposal spec text should be written.
+
+[06:17:24.0227] <littledan>
+The module map is a similar situation—the idempotency requirement on imports necessitates it exist at some level, but it is defined outside of Ecma-262.
+
+[10:09:04.0899] <tolmasky>
+Is there a stylistic/documentation reason that hasOwnProperty's argument is named "V", when (I think?) most other places that take a thing that is meant to be a property key (by that I mean, they immediately call ToPropertyKey() on it) use "P" instead (for example, defineProperty uses P, getOwnPropertyDescriptor, etc.)
+
+[10:09:40.0263] <tolmasky>
+Including, notably, hasOwn, which also uses "P" instead of "V"
+
+[10:10:50.0226] <bakkot>
+I don't know offhand, but probably not; parameter names are currently not particularly consistent and so I wouldn't suggest reading into them much
+
+[10:39:53.0557] <jmdyck>
+Object.p.hasOwnProperty was introduced in 3rd edition, where all Object.p.foo had at most one parameter, always named V regardless of its purpose. Object.{defineProperty,getOwnPropertyDescriptor} were added in 5th edition, along with other Object.foo functions. Some of these had more than one parameter, so I imagine a bit more thought went into choosing their names. So: 2 different kinds of consistency, at 2 different times, in 2 different sections. Historical accident, I'd say.
+
+[10:40:14.0898] <jmdyck>
+ * Object.p.hasOwnProperty was introduced in 3rd edition, where all Object.p.foo had at most one parameter, always named V regardless of its purpose.
+Object.{defineProperty,getOwnPropertyDescriptor} were added in 5th edition, along with other Object.foo functions. Some of these had more than one parameter, so I imagine a bit more thought went into choosing their names. So: 2 different kinds of consistency, at 2 different times, in 2 different sections. Historical accident, I'd say.
+
+[11:52:44.0912] <tolmasky>
+Would their be opposition to submitting changes that made it more consistent, specifically making them all P for example (for larger context, this is to make tooling I'm writing around this easier -- it would be nice to just be able to call everything "P" propertyKey or whatever, without needing to special case 3rd edition stuff with a bunch of manual overrides)
+
+[11:59:26.0236] <ptomato>
+I don't know if this is intentional editorial guidance, but I've seen single-letter parameter/variable names become much less common in additions from recent years
+
+[12:01:19.0488] <tolmasky>
+I certainly would be fine changing it to propertyKey or key or whatever too of course (I am already about to map all the P's to propertyKey, etc.)
+
+
+2022-12-06
+[20:56:08.0311] <Domenic>
+James M Snell: BTW I think it would be really cool if there were some sort of language feature (?) where we could give a BufferSource to platform APIs and say "please transfer this to yourself, I won't use it" and then they wouldn't need to do copies. It's hard to imagine how it would work though... there's nothing straightforward, like there is in languages with move semantics that parameters can declare themselves as having.
+
+[20:56:49.0901] <Domenic>
+I guess if we were starting from scratch maybe we'd design every BufferSource-taking API as transferring, and ask you to make a copy if you plan to use it later?
+
+[20:58:20.0512] <Domenic>
+But something like `new Response(body.take())` or `new Response(take body)` or something would be neat, where it's a call-site opt-in. I guess maybe `new Response(body.transfer())` (with https://github.com/tc39/proposal-arraybuffer-transfer) is possible for a highly-integrated platform + JS engine to recognize and optimize, but that's a hard lift.
+
+[21:10:01.0109] <James M Snell>
+Yeah definitely difficult. For apis like the Request and Response constructors we could probably get away with a new option that communicates the intent, e.g. `new Response(but, { transfer: true })`... but that's difficult to do consistently for all apis. 
+
+[21:10:23.0114] <James M Snell>
+* Yeah definitely difficult. For apis like the Request and Response constructors we could probably get away with a new option that communicates the intent, e.g. `new Response(buf, { transfer: true })`... but that's difficult to do consistently for all apis. 
+
+[21:12:56.0280] <James M Snell>
+I certainly wouldn't mind a language level take/move type construct tho
+
+[21:15:10.0716] <Domenic>
+Yeah and it feels unfortunate to have to program it in one-off for each API. Then you have to litigate whether that API's really in the fast-path or not, and that'll have different answers for web vs. server... this feels like an area where the language can come in and just say "now there's a global fast thing available" because it doesn't have to judge.
+
+[21:16:58.0908] <bakkot>
+I wonder how hard the `new Response(body.transfer())` pattern actually is to optimize
+
+[21:17:00.0891] <Domenic>
+I guess the most feasible path would be trying to hack on an engine to see how optimizable `new Response(body.transfer())` can be, and then whether that hack can be generalized, or if generalizing it would benefit from some annotation (ideally in IDL to do code-gen for all BufferSource cases)
+
+[21:17:41.0805] <Domenic>
+I think the difficulty is not as much technical as "codebase-organizational" in that the teams that implement `new Response()` are pretty far from the teams that implement the JS engine, and want to operate without too much interaction and intertwingling of code.
+
+[21:18:39.0920] <bakkot>
+I'm imagining an internal bit on array buffers which is like "this is not aliased anywhere", which could be checked by platform APIs
+
+[21:19:15.0467] <bakkot>
+So the JS engine people could be responsible for figuring out how to set that bit, and the platform people would just need to check it
+
+[21:19:24.0781] <bakkot>
+Don't actually know if that's at all feasible though.
+
+[21:19:36.0141] <Domenic>
+Yeah if you could pull that off it seems pretty reasonable.
+
+[00:45:21.0578] <Luca Casonato>
+> <@domenicdenicola:matrix.org> But something like `new Response(body.take())` or `new Response(take body)` or something would be neat, where it's a call-site opt-in. I guess maybe `new Response(body.transfer())` (with https://github.com/tc39/proposal-arraybuffer-transfer) is possible for a highly-integrated platform + JS engine to recognize and optimize, but that's a hard lift.
+
+Yeah - we’ve been thinking about this a lot for Deno. The least invasive solution we’ve been able to come up with so far is copy-on-write clones, but unfortunately V8 looks unlikely to implement these due to security concerns
+
+[00:47:05.0828] <Luca Casonato>
+> <@bakkot:matrix.org> I wonder how hard the `new Response(body.transfer())` pattern actually is to optimize
+
+I can’t speak for all runtimes, but for Deno this would maybe be a 100 LOC change after we’ve specified the behavior
+
+[00:47:23.0802] <Luca Casonato>
+It doesn’t seem very difficult
+
+[00:49:22.0460] <Luca Casonato>
+Oh actually I think I misunderstood - the idea for the optimization is to prevent the clone in `new Response` because they passed in buffer is “fresh” and not anymore accessible by any other JS? This would be much more difficult, maybe impossible at our current integration level with V8
+
+[00:52:24.0833] <Andreu Botella>
+Would it be that difficult? You could use the `BackingStore` as the "owned buffer".
+
+[00:53:34.0034] <Andreu Botella>
+The issue that we've been thinking about a lot for Deno is that there are a number of async APIs that take buffers, and those can lead to data races
+
+[07:40:45.0277] <shu>
+yes, that would be difficult for an API to tell its argument is in fact not aliased without some pretty deep VM support exposed at the API boundary, if there's no language equivalent to, like, rvalue references
+
+[07:41:28.0109] <shu>
+dynamic rvalue references also does not seem like a thing that anyone would want to implement
+
+[07:41:51.0242] <shu>
+well, i guess it doesn't have to be dynamic
+
+[07:42:01.0739] <littledan>
+can we just transition to refcounting? that makes alias detection easier.
+
+[07:42:37.0417] <shu>
+i hear refcounting is also faster
+
+[07:42:51.0117] <littledan>
+totally
+
+[07:59:36.0240] <bakkot>
+shu: hard to do precisely, but what about a conservative thing where it can say "not aliased" or "maybe aliased" and be precise enough for `new Response(body.transfer())` to be analyzed as "not aliased"
+
+[08:14:45.0093] <littledan>
+this is the kind of thing Swift uses to omit the refcounting operations. It just composes so beautifully.
+
+[08:15:08.0897] <littledan>
+Stage 1? 🥺
+
+[08:17:07.0552] <shu>
+bakkot: where do we track this bit, for every single argument?
+
+[08:26:28.0535] <bakkot>
+just for array buffers
+
+[08:27:46.0534] <shu>
+the "may aliased" analysis is a static one, no?
+
+[08:28:24.0797] <shu>
+like, once things are compiled to bytecode, how do i know if a virtual register store (in a register VM) or a stack push (in a stack VM) is an actual binding assignment or a temporary?
+
+[08:31:14.0923] <bakkot>
+the register store / stack push isn't aliasing in itself, presumably - it only becomes aliased once you read it off the stack (or `dup` etc). but I suppose updating all those ops so that they'd know to set the bit is expensive
+
+[08:43:02.0283] <shu>
+indeed, my point is i suspect to get that bit for ArrayBuffers you need to implement that bit for all data flow
+
+[08:43:06.0631] <shu>
+which is a tall ask
+
+[09:23:06.0204] <bakkot>
+yeah fair enough
+
+[09:33:44.0203] <tolmasky>
+Another nitpick about the spec that makes certain tooling difficult: sometimes camel case intrinsics are simply lowercased for their sections (such as sec-asycngeneratorfunction), but other times they are dash cased (such as sec-async-function)
+
+[09:34:45.0848] <Mathieu Hofman>
+I'm still of the opinion that Copy-on-Write is the least intrusive change for developers, and would provide performance improvements for existing programs that use array buffers.
+
+The current paradigm is that if you want to make sure the receiver of an arraybuffer doesn't change the data, or if as the receiver you want to use the data asynchronously insulating yourself from later changes by the caller, you simply do `ab.slice(0)` in both cases. If the implementation would keep the same memory backing store until either side attempts to write in it, all these use cases would now be zero copy unless they attempted to do the mutation this pattern is protecting against. No need for explicit transfer of ownership, which is somewhat a foreign concept in JavaScript.
+
+I can understand such a level of indirection is a complication for implementations, and the write guards would make optimizations more difficult, but I am wondering if we're weighting the potential improvements for users correctly related to the implementation's concerns.
+
+[09:59:04.0093] <shu>
+Mathieu Hofman: my characterization is "security risk" and not just "complication"
+
+[09:59:13.0562] <shu>
+like, a direct security risk instead of security risk arising from more complexity
+
+[09:59:52.0529] <shu>
+and in that light, i stand by that increasing likelihood of browser users not being exploited is the correct tradeoff
+
+[10:00:46.0760] <shu>
+V8 has CoW optimization for regular arrays, for instance, which aren't used as an attack vector as much
+
+[10:01:17.0339] <shu>
+i would also contend transfer of ownership is not at all a foreign concept in JS, because detaching obviously exists?
+
+[10:01:23.0331] <Mathieu Hofman>
+I don't understand what is fundamentally a security risk about copy on write? I understand it's possible for optimizations to be buggy and miss the update in backing memory, but that stems from an implementation complexity
+
+[10:02:15.0420] <Mathieu Hofman>
+detaching doesn't exist in JS itself, it only happens when integrating with host APIs
+
+[10:02:19.0415] <shu>
+Mathieu Hofman: it is as i described here: https://github.com/tc39/proposal-arraybuffer-transfer#if-performance-is-the-goal-why-add-new-methods-instead-of-implementing-copy-on-write-cow-as-a-transparent-optimization
+
+[10:05:12.0731] <Mathieu Hofman>
+I read that, and understood the it as an implementation choice, which is impacting the usability by end users.
+
+[10:05:42.0968] <shu>
+if your rebuttal is "bugs are an implementation problem", the response is that there are bugs we have seen crop up over and over to an extent that we consider other mitigations necessary than just "be really correct"
+
+[10:05:55.0534] <shu>
+because, you know, engineers aren't perfect
+
+[10:06:33.0020] <shu>
+i can't help but feel that reducing that motivation to "implementation choices should never impact usability of end users" is naive
+
+[10:07:17.0582] <Mathieu Hofman>
+I think I was just asking if there was a way to estimate the performance improvement CoW would bring to existing programs, so that it can be weighted against the implementation complexity it'd require
+
+[10:07:54.0505] <shu>
+i don't know how one would estimate that except by doing the implementation
+
+[10:07:56.0289] <Mathieu Hofman>
+I'm not asking to strictly put the need of end users above the needs of implementation
+
+[10:10:34.0626] <shu>
+should the risk calculus change in the future (like, we figure out another mitigation that is even better and less constraining of APIs), having a transfer method certainly doesn't preclude CoW optimizations
+
+[10:11:41.0207] <Mathieu Hofman>
+fair
+
+[10:12:30.0242] <shu>
+for this point, i contend it doesn't serve us well to not consider hosts in language design, and further, transferables are a well established part of the ecosystem
+
+[10:12:51.0467] <shu>
+> <@mhofman:matrix.org> detaching doesn't exist in JS itself, it only happens when integrating with host APIs
+
+ * for this point, i contend it doesn't serve us well to not consider hosts in language design, and further, transferables are a well established part of the ecosystem
+
+[10:14:45.0766] <Mathieu Hofman>
+but I don't see how transfer solves all the use cases. As the discussion goes above, as the receiver of an array buffer, how can I guarantee I have exclusive access to the buffer, besides myself calling `.transfer()`, which would be a breaking change for existing APIs, and hard to express would happen in the API contract (besides as mentioned, an explicit `transfer` option). As I said, transfer is not a concept core to the JS language
+
+[10:16:23.0603] <Mathieu Hofman>
+What other parts of the ecosystem besides structured cloning have a concept of transfer of ownership ?
+
+[10:21:40.0088] <Mathieu Hofman>
+I am wondering if we should also add a way to make the target buffer "read-only" when transferring, and a way to test whether the AB is read-only.
+
+[10:24:58.0618] <Mathieu Hofman>
+I believe Jack Works started exploring that in https://github.com/tc39/proposal-limited-arraybuffer
+
+[10:46:19.0928] <jmdyck>
+> <@tolmasky:matrix.org> Another nitpick about the spec that makes certain tooling difficult: sometimes camel case intrinsics are simply lowercased for their sections (such as sec-asycngeneratorfunction), but other times they are dash cased (such as sec-async-function)
+
+It sounds like you're talking about the `id` attribute of `<emu-clause>` elements. It's true that the mapping from section-title to section-id isn't entirely consistent, but how does that make tooling difficult? Can't the tool just get the title-to-id mapping (e.g. from a biblio file) and remember it? Also, your example is odd, because there's no section with `id="sec-async-function"`.
+
+[10:47:28.0027] <tolmasky>
+sec-async-function-.*
+
+[10:49:40.0000] <tolmasky>
+I go intrinsics table -> `sec-${transform(intrinsic_name)-*` to grab all the methods/etc., the actual selector is now `sec-${intrinsic_name.toLowercase()` or `sec-get-${intrinsic_name.toLowerCase()}` or `sec-${dashcase(intrinsic_name)}` or `sec-get-${dashcase(intrinsic_name)`
+
+[10:50:26.0611] <tolmasky>
+Unfortunately the biblio seems to be missing certain things, I am just trying to get every intrinsic (not just top level ones, so like, Array.whatever.whatever), along with its parameters, etc. in a structured format)
+
+[10:50:37.0368] <tolmasky>
+the above seems to grab everything
+
+[10:51:11.0017] <jmdyck>
+The table is only the "well known" intrinsics, not every intrinsic.
+
+[10:52:41.0079] <tolmasky>
+right, thats why I then climb the rest of the spec
+
+[10:53:06.0608] <tolmasky>
+not sure if that is what you mean, or just wanted me to correct my statement to say "I want to grab all the well known intrinsics", either way, sure
+
+[10:55:45.0585] <jmdyck>
+okay, so if you're crawling the rest of the spec anyway, you could pick up the id for each intrinsic in the process. I.e., you don't really need the well-known intrinsics table? 
+
+[10:59:08.0698] <tolmasky>
+I climb the spec to find all the intrinsics, then i want to find their definitions, hence needing to create the id. so, if I want to find what the parameters of AsyncFunction, then I have to go to sec-asyncfunction-constructor or whatever, hence the need to generate these things. I already find them all, I was just commenting that I noticed this. It's not a super big deal and would just remove 2 lines. If there's opposition to standardizing around lowercasing or dashcasing its certainly not *preventing* me from doing anything
+
+[10:59:54.0901] <shu>
+> <@mhofman:matrix.org> I am wondering if we should also add a way to make the target buffer "read-only" when transferring, and a way to test whether the AB is read-only.
+
+what's the argument for making it the same API?
+
+[11:00:01.0817] <shu>
+i'm open to the idea of RO buffers
+
+[11:00:43.0942] <shu>
+> <@mhofman:matrix.org> What other parts of the ecosystem besides structured cloning have a concept of transfer of ownership ?
+
+just structured clone afaik, but that's a pretty core part of the ecosystem
+
+[11:04:27.0939] <jmdyck>
+tolmasky: I don't understand how you can find all the intrinsics *without* finding their definitions.
+
+[11:07:02.0320] <tolmasky>
+I'm putting the code online so I can show you, one sec
+
+[11:09:18.0268] <shu>
+> <@mhofman:matrix.org> but I don't see how transfer solves all the use cases. As the discussion goes above, as the receiver of an array buffer, how can I guarantee I have exclusive access to the buffer, besides myself calling `.transfer()`, which would be a breaking change for existing APIs, and hard to express would happen in the API contract (besides as mentioned, an explicit `transfer` option). As I said, transfer is not a concept core to the JS language
+
+i don't quite see it that way, i think the transfer semantics is a core concept to the JS language, and the discussion above is about the scalability challenges of the status quo of expressing move-semantics APIs, which is a separate options bag or overloads (like the transfer list in structured cloning) or something
+
+[11:10:13.0084] <shu>
+having a language level affordance like `take` doesn't really answer the question of the API design, like the fast-path slow-path thing
+
+[11:10:33.0149] <shu>
+do you have overloads for all existing buffersource-taking APIs? do all future APIs need to have both overloads? those still need to be answered
+
+[11:12:20.0743] <shu>
+CoW comes at it at a different angle, but is not ideal in its own way since you can still end up with a copy, and i think is an independent optimization that shouldn't be depended to motivate move semantics in either direction
+
+[11:19:40.0739] <Justin Ridgewell>
+Here's an updated gist that we discussed in module meeting: https://gist.github.com/jridgewell/fa9754e38299d1f067e8aa8ac9ae336e
+
+[11:20:48.0007] <Justin Ridgewell>
+The way that I think about all features we add is  "how would I write this today", and this is how I would write `module` keyword today
+
+[11:29:58.0762] <Justin Ridgewell>
+If we were to switch to `as ‘foo’`, it solves my main concern (how do we do runtime reflections using a single syntax, eg `as ‘text’` or `as ‘buffer’`
+
+[11:32:33.0270] <Justin Ridgewell>
+But we’re likely to see conflicts, eg next’s as ‘image’ would include the intrinsic width/height of the original image, and an asset url usable in an `<img src>`. I imagine other frameworks might want the aspect ratio, or another optional value. Maybe they just want a data url (AMP needed that)
+
+[11:32:54.0443] <Justin Ridgewell>
+* But we’re likely to see conflicts, eg next’s as ‘image’` would include the intrinsic width/height of the original image, and an asset url usable in `. I imagine other frameworks might want the aspect ratio, or another optional value. Maybe they just want a data url (AMP needed that)
+
+[11:33:46.0790] <Justin Ridgewell>
+* But we’re likely to see conflicts, eg next’s `as ‘image’` would include the intrinsic width/height of the original image, and an asset url usable in. I imagine other frameworks might want the aspect ratio, or another optional value. Maybe they just want a data url (AMP needed that)
+
+[11:34:21.0576] <Justin Ridgewell>
+* But we’re likely to see conflicts, eg next’s as ‘image’ would include the intrinsic width/height of the original image, and an asset url usable in an `<img src>`. I imagine other frameworks might want the aspect ratio, or another optional value. Maybe they just want a data url (AMP needed that)
+
+[12:27:26.0253] <Mathieu Hofman>
+> <@shuyuguo:matrix.org> what's the argument for making it the same API?
+
+avoid some of the pitfalls of `Object.freeze` which if replicated would allow anyone with access to the ArrayBuffer to make read-only in place, potentially violating the expectations of the sharer. However since this is also a concern I have for transfer as well, aka if just holding an arraybuffer should give you the authority to detach it, maybe that ship has sailed?
+
+[12:28:35.0839] <Mathieu Hofman>
+> <@shuyuguo:matrix.org> just structured clone afaik, but that's a pretty core part of the ecosystem
+
+Yeah structured cloning is very web specific, and I don't know of any generic user libraries which deals with such concepts at their interface
+
+[12:33:36.0180] <Mathieu Hofman>
+I think in general JS has a concept of access through possession of object references, but in my opinion, the language itself does not have a built-in notion of ownership, and by extension of transfer of such ownership. We may introduce some notion of ownership with resource management, but that'd be somewhat tied with the concept of scope. The semantics of that proposal make it unlikely for these managed resources to be shared further than the owner, and I don't think transfer of ownership will mix.
+
+[12:34:39.0457] <tolmasky>
+jmdyck: Here: https://runkit.com/tolmasky/extracting-intrinsic-objects-from-ecmascript-specification --  I am not aware of an easier way of doing this. I found it pretty difficult to navigate biblio successfully. (shouldn't really be necessary to make your way through this, but here is parseSignature if it matters: https://runkit-packages.com/14.x.x/1670358356466/@reified/ecma262/tools/update-intrinsics/parse-signature.js )
+
+[12:36:03.0541] <tolmasky>
+Anyways, the only reason I asked about the consistency of the IDs is that it would allow me to avoid testing so many permutations (line 33). But again, it's not *actually* a big deal, I was moreso curious if there was a reason for it, and if not, maybe I would in my free time do a PR making them consistent
+
+[12:37:58.0486] <Mathieu Hofman>
+The same way programmers share object references and can spread it to capture the (shallow) state of that object, I see CoW as optimizing the same pattern for byte arrays, where you shared the data, and expressing that you're interested in capturing the state of that data.
+
+[12:40:51.0065] <Mathieu Hofman>
+Which is why I suggested readonly array buffers as an alternative, where you explicitly create an immutable copy, which can be relied upon. If Records and Tuples catch on, this would roughly be the equivalent for bytes (which raises the question whether those have any links)
+
+[12:43:00.0862] <Mathieu Hofman>
+We could probably argue that "read-only" array buffers may need to be non-transferable, so that they are really immutable, aka they will keep working.
+
+[12:46:04.0312] <bakkot>
+tolmasky: no reason for the inconsistency in IDs, just different authors writing different parts and not doing exactly the same things
+
+[12:46:28.0753] <bakkot>
+wouldn't say no to a PR making them consistent if you feel like doing it, though mind that we'd need oldids on everything to keep old links working
+
+[12:46:55.0253] <tolmasky>
+If I did a PR to make them consistent, would that be useful, or are we afraid of breaking links or something
+
+[12:47:21.0668] <tolmasky>
+kind of makes no difference to me since we want to run this on every iteration of the spec, so we'll need this code forever either way, but just curious
+
+[12:50:05.0106] <bakkot>
+if you put oldids links won't break, so no particular risk
+
+[12:50:26.0528] <bakkot>
+I don't know if anyone else has ever been affected about the inconsistency, though, so I don't know if it's necessarily _useful_ per se
+
+[14:30:11.0828] <shu>
+Mathieu Hofman: as for web specificity, i point you to the other champions of the proposal coming from node
+
+[14:30:26.0859] <shu>
+structured clone may be have originated from the web, but it is a core part of the ecosystem
+
+[14:31:04.0180] <shu>
+CoW and RO TAs are orthogonal and i am supportive of exploring them independently
+
+[14:31:49.0408] <shu>
+"The semantics of that proposal make it unlikely for these managed resources to be shared further than the owner, and I don't think transfer of ownership will mix." <- i don't understand this
+
+[14:32:12.0707] <shu>
+oh "that proposal" is referring to resource management, i see
+
+[14:32:33.0307] <shu>
+i mean i also disagree? DisposableStacks have a move?
+
+[14:33:33.0542] <shu>
+i agree that there's no built-in notion of ownership in the formal sense, but there's certainly a sense of "i'm going to neuter the object"
+
+[14:34:03.0411] <Mathieu Hofman>
+I think the use case for move is mainly for moving a set of resource ownership from a constructor scope to the constructed object. I don't see it as aimed to move ownership to a 3rd party
+
+[14:34:42.0108] <shu>
+it's the same use case as the buffer one, no?
+
+[14:34:51.0338] <shu>
+i mean the buffer reader isn't an unknown 3p
+
+[14:35:29.0812] <shu>
+that is -- if the disagreement is with how widely applicable the notion of "ownership" is in the transfer proposal, i contend it is exactly as widely applicable as DisposableStack's
+
+[14:36:20.0486] <shu>
+like this isn't designed to enable native APIs to take ownership, that _does_ require more work
+
+[14:38:56.0581] <Mathieu Hofman>
+I dunno about the reader API specifically, but having written a decent amount of code dealing with node streams, it never seemed clear to me what the expected semantics of passing array buffers around were. It seems that the receiver often assumes the producer will no longer mutate the buffer, but that is far from being enforced / checked or even explicit.
+
+[14:39:59.0320] <Mathieu Hofman>
+And I think maybe that's where read-only stream would at least make those semantics more explicit.
+
+[14:40:19.0382] <shu>
+i confess i don't know what the immediate disagreement is
+
+[14:41:29.0300] <Mathieu Hofman>
+Regarding structured cloned I guess we'll have to disagree how relevant it is to the ecosystem. One particular web API used in node for roughly the same use case (worker rpc) does not make it a strong precedent in my mind for a widely used pattern.
+
+[14:42:16.0052] <shu>
+well, what's your position on the proposal? the closest i can make out is perhaps that you think it is mutually exclusive with CoW optimizations and RO buffers
+
+[14:45:11.0332] <Mathieu Hofman>
+I think all I'm trying to say is that I don't believe transfer sufficiently solves all the use cases related to the expression of "ownership intent" for array buffers, and that defensive code does need more tools. Currently defensive code uses `slice` but if we can't optimize that, I'd like the transfer proposal to try and tackle more fully the ergonomics of passing array buffers around.
+
+[14:45:22.0592] <shu>
+i see
+
+[14:45:52.0356] <shu>
+thank you, noted, and i will ponder it. i would love some dynamic notion of ownership
+
+[14:45:58.0905] <Mathieu Hofman>
+I think I agree that CoW would be an orthogonal optimization.
+
+[14:46:09.0065] <shu>
+i think ownership is very important for shared memory work as well
+
+[14:46:41.0129] <Mathieu Hofman>
+* I think all I'm trying to say is that I don't believe transfer sufficiently solves all the use cases related to the expression of "ownership intent" for array buffers, and that defensive code does need more tools. Currently defensive code uses `slice` but if we can't optimize that, I'd like the transfer proposal to try and tackle more fully the ergonomics of passing array buffers around.
+
+[14:50:33.0055] <Domenic>
+ReadableStream as implemented in the web/Node/Deno/etc. has transfer semantics
+
+[14:51:32.0228] <littledan>
+Yeah I am confused by this whole discussion 
+
+[14:57:28.0345] <Domenic>
+Let me try to generalize my original "proposals" into a problem statement. 
+
+There are a lot of BufferSource-accepting APIs that cannot deal with mutations after accepting the value. They have two choices today: clone or transfer. Transfer is a bit of a risky choice for API authors. If we could somehow make it the caller's choice which semantics are done, that would lead to a lot more efficiently. And, opting in to the efficient "don't copy" path should be automatic, or at least extremely easy to opt in to, for API authors. In particular, it should be something doable from any code generator like Web IDL, so that every BufferSource-accepting API can generate a prelude that handles this.
+
+[15:00:05.0112] <littledan>
+Oh yeah the Wasm JS API has some unfortunate cloning, for example. And I was always confused why it wasn’t transfer.
+
+[15:00:43.0496] <Kris Kowal>
+I for one am also on team zero-copy, by whatever means necessary.
+
+[15:00:50.0109] <Mathieu Hofman>
+So a more relevant example would be `WritableStreamDefaultWriter.write()`? It's not clear what would happen if you pass a chunk to that API and mutate the array buffer before the promise resolves.
+
+[15:01:04.0243] <Mathieu Hofman>
+* So a more relanvant example would be `WritableStreamDefaultWriter.write()`? It's not clear what would happen if you pass a chunk to that API and mutate the array buffer before the promise resolves.
+
+[15:01:24.0563] <Mathieu Hofman>
+* So a more relevant example would be `WritableStreamDefaultWriter.write()`? It's not clear what would happen if you pass a chunk to that API and mutate the array buffer before the promise resolves.
+
+[15:01:51.0460] <Domenic>
+Here is a strawperson with lots of objectionable properties, but hopefully it communicates the idea. There is a new argument-passing syntax, `f(take arg)`. This sets a bit on `arg` and also puts `arg` into a TDZ-like state, so the caller can't use it. API authors can then do something like `function f(arg) { if (!isBitSet(arg) { arg = arg.slice(); } ... }`.
+
+[15:02:29.0528] <Domenic>
+> <@mhofman:matrix.org> So a more relevant example would be `WritableStreamDefaultWriter.write()`? It's not clear what would happen if you pass a chunk to that API and mutate the array buffer before the promise resolves.
+
+WritableStream is not yet zero-copy friendly. ReadableStream is the relevant example here. https://streams.spec.whatwg.org/#byob-reader-prototype
+
+[15:02:42.0820] <Kris Kowal>
+This is also a description of linear types, fwiw.
+
+[15:03:27.0739] <Mathieu Hofman>
+Wouldn't that `take` only impact the binding? What if the array buffer had been assigned to another variable?
+
+[15:03:36.0111] <Domenic>
+Yes, that doesn't really work
+
+[15:04:26.0566] <Domenic>
+I guess you want `take` to do something more directly related to ArrayBuffer transferring
+
+[15:05:03.0770] <Mathieu Hofman>
+It seems what tou want is transferring the buffer temporarily and transferring it back. Or somehow put it in an "exclusive use" mode
+
+[15:05:05.0829] <Domenic>
+Such that
+
+```js
+const ab = getArrrayBuffer();
+f(take ab);
+
+function f(abArg) {
+  console.assert(abArg !== ab);
+}
+```
+
+which is weird, but whatever.
+
+[15:05:12.0182] <Mathieu Hofman>
+* It seems what you want is transferring the buffer temporarily and transferring it back. Or somehow put it in an "exclusive use" mode
+
+[15:05:27.0247] <Domenic>
+I don't think transferring it back is necessary in a majority of cases. But it would be a fun bonus.
+
+[15:05:34.0028] <Domenic>
+Presumably this is a well-researched area in programming language design.
+
+[15:05:44.0189] <Domenic>
+So I feel pretty silly just spouting strawpeople around.
+
+[15:06:21.0485] <Mathieu Hofman>
+Is it for reference types though? I can see this kind of flow analysis with value types.
+
+[15:06:35.0128] <littledan>
+I think this is the ancient linear types vs copy on write dilemma. Rust and Swift take opposite defaults here.
+
+[15:07:16.0002] <littledan>
+I don’t know how this stuff can be added to languages later—that is the real research problem here
+
+[15:07:39.0761] <Domenic>
+It feels like if you scoped it to ArrayBuffers and made some compromises, it might be doable?
+
+[15:07:50.0138] <Domenic>
+(e.g., no transferring back)
+
+[15:08:01.0765] <littledan>
+? I am willing to believe it but I can’t picture it yet
+
+[15:08:16.0816] <Andreu Botella>
+In the case of Deno, there are APIs like `async Deno.writeFile(path, buffer)` which don't currently clone or detach the buffer, and therefore have latent memory soundness or data race bugs
+
+[15:08:27.0102] <Andreu Botella>
+I don't think such APIs can be changed to detach the buffer without breakage
+
+[15:08:30.0482] <littledan>
+In Swift and Rust, this stuff is really core to how variables work in the first place
+
+[15:09:58.0234] <littledan>
+Swift is actually working on adding linear types now to help you avoid unintentional copying
+
+[15:10:18.0066] <littledan>
+But it is a huge change to the model of everything 
+
+[15:31:11.0085] <Kris Kowal>
+> <@domenicdenicola:matrix.org> (e.g., no transferring back)
+
+Linear types takes this stance. They take the stronger stance that a variable may only be written once (TDZ) and can only be read once (your post-TDZ)
+
+[15:32:39.0238] <Kris Kowal>
+It makes for programs that can be represented with wire diagrams, and made parallel trivially, which is nifty. But, would weird to bolt post-TDZ onto JavaScript in its old age.
+
+[15:33:36.0380] <Kris Kowal>
+But doing that kind of stuff with revokable object APIs as a matter of analogy to linear types seems like fair game to me.
+
+[15:35:22.0620] <Kris Kowal>
+But as littledan said and Mathieu Hofman is arguing, this is indeed the age old conversation about linear types versus CoW and both can be made to work.
+
+[15:37:19.0113] <Kris Kowal>
+I think I’m more sympathetic at the moment to the “whatever WebGL needs” is the fixed point in this design, regardless of my preference for CoW just in terms of developer ergonomics.
+
+[15:37:58.0825] <Kris Kowal>
+So…does WebGL require transfer and detach semantics for TypedArrays?
+
+[15:39:42.0223] <Mathieu Hofman>
+I think we should take the example of piping in user land from a readable stream to a writable stream, and make that work with a single reusable buffer using zero copies besides into and out of that buffer, while guaranteeing the userland cannot do the wrong thing (aka ask the reader to write in the buffer before the writer is done reading out of the buffer)
+
+[15:40:26.0504] <Kris Kowal>
+That would be outrageously cool.
+
+[15:42:24.0709] <Mathieu Hofman>
+What kind of "exclusive use" mode do we need to add to array buffer to make this possible? Then I'd still ask to compare that added complexity with the equivalent flow if the program could assume copy on write to similarly perform "zero copy" piping.
+
+[15:42:45.0975] <Kris Kowal>
+Concretely, how do we employ TypedArrays for such a thing? Wouldn’t that require Read/Write/Opaque views into encapsulated buffers?
+
+[15:43:32.0467] <Mathieu Hofman>
+I don't believe typed arrays help here if you can get at an underlying mutable array buffer 
+
+[15:43:45.0121] <Kris Kowal>
+That’s my intuition.
+
+[15:46:14.0946] <Kris Kowal>
+So, your notion is to add a level of indirection between ArrayBuffer and its underlying storage, then guarding it with either RO/WO/O modes or CoW with a userspace write barrier.
+
+[15:47:25.0327] <Kris Kowal>
+Strike prior, implementations already have this detachment concept, so that level of indirection clearly exists.
+
+[15:47:52.0885] <Kris Kowal>
+I will now walk away slowly.
+
+[15:50:00.0054] <Mathieu Hofman>
+Right there is already a detachment guard, maybe we'd introduce a way to lock the ab into read-only mode, preventing any writes, then release it?
+
+[15:51:19.0280] <Mathieu Hofman>
+That'd allow the receiver to claim the lock and release it once done, guaranteeing no mutation can occur on the AB while being read.
+
+[15:52:02.0189] <Mathieu Hofman>
+I dunno, I haven't thought this through, just spinning ideas here
+
+[15:53:06.0546] <Kris Kowal>
+I’m imagining `const ab2 = ab1.take()` (per Domenic’s `take` aparatus) would be the key. That would permanently detach `ab1`, leaving`ab2` for the receiver to read/write.
+
+[15:53:28.0020] <Kris Kowal>
+ * I’m imagining `const ab2 = ab1.take()` (per Domenic’s `take` aparatus) would be the key. That would permanently detach `ab1`, leaving`ab2` for the receiver to read/write.
+
+[15:53:48.0885] <Kris Kowal>
+The trouble…
+
+[15:53:59.0407] <Mathieu Hofman>
+I don't think you need to detach or even duplicate the buffer
+
+[15:54:12.0653] <Kris Kowal>
+is that interferes with the sender if they went on to read or write `ab1`. CoW would make that safe.
+
+[15:56:51.0529] <Kris Kowal>
+But I think I read coherent murmurings about CoW being a pain to implement because the old view retains the underlying buffer possibly a long time.
+
+[15:56:56.0806] <Mathieu Hofman>
+Correct, it's still not backwards compatible and requires the sender to respect these semantics.  I don't think anything besides CoW would be non-breaking. At first I thought that we could have the sender put the buffer in RO mode, but there is no way to guarantee it wouldn't keep a copy of the capability to release the lock.
+
+[15:58:16.0403] <Kris Kowal>
+It’d be a shame if CoW effectively forced copies to be made behind the scenes depending on GC timing.
+
+[15:59:24.0080] <Kris Kowal>
+Then zero-alloc becomes a puppet show. Did I or did I not dispose of my reference to the buffer in a timely enough fashion? Is it even possible to guarantee?
+
+
+2022-12-07
+[16:00:10.0493] <Mathieu Hofman>
+I just don't think there is a way in JS to express linear types, which would pretty much be required for any sender opt-in of exclusive use 
+
+[16:00:36.0424] <Kris Kowal>
+True.
+
+[16:01:00.0864] <Kris Kowal>
+Are you arguing that detachment is a composition hazard we shouldn’t tolerate?
+
+[16:01:45.0363] <Mathieu Hofman>
+Ah you'd need to add an explicit "detach" for CoW to make sense, so that the program can express release of the copy before GC can figure that out
+
+[16:02:48.0156] <Kris Kowal>
+And the sender and receiver would need separate views so the sender’s detachment doesn’t break the receiver.
+
+[16:02:51.0787] <Mathieu Hofman>
+> <@kriskowal:matrix.org> Are you arguing that detachment is a composition hazard we shouldn’t tolerate?
+
+Correct. The sender would need to somehow opt-in it expect the receiver to temporarily claim a lock 
+
+[16:02:54.0708] <Kris Kowal>
+Thus `take()`
+
+[16:03:11.0947] <Kris Kowal>
+Or rather, `give()`
+
+[16:03:38.0061] <Kris Kowal>
+Or rather, `transfer()`? I think I see where this is headed.
+
+[16:03:55.0004] <Mathieu Hofman>
+> <@kriskowal:matrix.org> And the sender and receiver would need separate views so the sender’s detachment doesn’t break the receiver.
+
+If by view you mean the array buffer, then there's already an API for that: `slice()`
+
+[16:04:14.0971] <Kris Kowal>
+Fair.
+
+[16:04:15.0505] <Mathieu Hofman>
+(for CoW)
+
+[16:04:46.0865] <Mathieu Hofman>
+Sorry I'm jumping back and forth between the 2 approaches.
+
+[16:05:29.0617] <Mathieu Hofman>
+Anyway, it seems that CoW is not the way, but I really don't know how to solve all uses cases without it.
+
+[16:06:47.0234] <Kris Kowal>
+> <@mhofman:matrix.org> Sorry I'm jumping back and forth between the 2 approaches.
+
+Yeah, I got lost with `slice()` for CoW because it doesn’t express detachment to the original.
+
+[16:20:44.0893] <Mathieu Hofman>
+Ok to summarize:
+
+For CoW, you'd do: `writer.write(ab);` with `async write (ab) { const copy = ab.slice(0); try { await doWrite(copy); } finally { copy.detach() } }`
+
+For explicit take you'd have to do something like: `write.write(ab.getTaker())` with `async write (taker) { const [ab, release] = taker(); try { await doWrite(ab); } finally { release(); } }`
+
+`taker()` could only be called once (throws after) and returns both the ab and a `release` function, which once called restore the state of the original array buffer instance. I guess we could imagine different modes for the taker. For example readonly would yield a readonly buffer and put the original buffer in read-only mode, which means they could be the same object. A write mode would yield a mutable buffer, putting the original buffer in read-only mode?
+
+There's always the risk that the receiver to which you provide the taker will never call release.
+
+[16:22:55.0100] <Mathieu Hofman>
+That's the only pattern I can imagine right now providing for the explicit/opt-in and guaranteed transfer of use, while still allowing the buffer to be reused.
+
+[17:27:05.0124] <Domenic>
+I think the two-stage getTaker/take pattern works. It could be implemented today if you don't care about releasing it back.
+
+[17:37:50.0102] <Domenic>
+https://gist.github.com/domenic/a9343fa787ba54b4ba3a60882c49cc32#file-zero-copy-mjs
+
+[17:45:30.0760] <Domenic>
+I just fixed a crucial bug, please reload :)
+
+[17:46:18.0777] <Mathieu Hofman>
+You'd still need a mechanism to guarantee the uniqueness of a taker for a given array buffer, and for the take to guarantee the original array buffer gets detached (at least temporarily). For these reasons it cannot currently be done in userland
+
+[17:46:35.0315] <Domenic>
+transfer() is that mechanism
+
+[17:46:55.0660] <Domenic>
+Or `structuredClone(ab, { transfer: [ab] })` if you want it literally today
+
+[17:47:17.0188] <Mathieu Hofman>
+Oh that's the refresh needed, yes
+
+[17:47:36.0273] <Mathieu Hofman>
+yeah if we give up on the reusable aspect, transfer would do
+
+[17:48:58.0481] <Mathieu Hofman>
+technically we'd still need some kind of brand check to ensure the taker function is actually the thing that implements the right transfer semantics
+
+[17:49:12.0436] <Mathieu Hofman>
+oh `takeOrCopy` does that
+
+[17:49:43.0359] <Domenic>
+Yeah this needs to be reimplemented in C++ or non-idiomatic first-running JS to actually give the guarantee it claims.
+
+[17:50:35.0296] <Mathieu Hofman>
+right, I had read too quickly and missed the `take()` was actually done through `takeOrCopy` which brand checks the taker
+
+[17:51:18.0377] <Mathieu Hofman>
+of course that assumes `ArrayBufferTaker.takeOrCopy` is the original, but that's the same constraint for every other JS API
+
+[17:53:07.0173] <Mathieu Hofman>
+I think we should still look at a release pattern, which would require changes to the AB internals, as to keep the re-use use cases
+
+[17:55:20.0539] <Domenic>
+Streams would definitely use that. Right now users have to do
+
+```js
+const { value: newUint8Array } = reader.read(inputUint8Array);
+```
+
+where `newUint8Array.buffer !== inputUint8Array.buffer` but they point to the same backing memory. If people didn't have to juggle multiple variables for the same backing memory, that would be nicer.
+
+[17:56:06.0879] <Domenic>
+(`inputUint8Array.buffer` gets detached, with `newUint8Array.buffer` pointing to the same memory, with data read into it from the stream.)
+
+[18:00:36.0686] <Mathieu Hofman>
+ha I didn't realize the reader did a double transfer
+
+[18:01:37.0135] <Mathieu Hofman>
+honestly I haven't had the opportunity to use the Web streams API yet, but that makes sense to implement the exclusivity guarantees
+
+[18:01:58.0575] <Mathieu Hofman>
+ * honestly I haven't had the opportunity to use the Web streams API yet, but that makes sense to implement the exclusivity guarantees
+
+[20:26:03.0829] <jmdyck>
+If I go to a PR's discussion page and see an entry saying "jmdyck started a review" and then "Pending" (because apparently I never submitted it), how do I do anything with it now (e.g., submit, cancel, modify)?
+
+[20:29:33.0213] <jmdyck>
+Never mind, it looks like I can Delete individual comments.
+
+[01:03:57.0876] <annevk>
+Domenic: it would be nice if that gist had a sentence or two about why it's not as simple as detaching the input
+
+[02:37:32.0540] <Domenic>
+Done
+
+[06:54:26.0057] <Justin Ridgewell>
+Wait, do Web APIs that process the buffer sync also make slices of the buffer?
+
+[06:54:40.0118] <Justin Ridgewell>
+Is it only APIs that hold on to the buffer past the current execution?
+
+[06:58:47.0367] <annevk>
+Justin Ridgewell: it depends, if the processing happens in a method call a copy is typically made if the API has [AllowShared] or if the API needs to manipulate the buffer for some reason
+
+[06:59:56.0855] <annevk>
+Justin Ridgewell: I recommend looking at Encoding and Fetch for some representative examples
+
+[07:38:38.0495] <littledan>
+There could be an even fancier version of this: many APIs just need a read-only view of the buffer, and only to borrow it for a limited amount of time. We could allow others to also take a simultaneous read-only view as well, or even to do direct read operations if we want to get super fancy.
+
+[08:18:05.0841] <Mathieu Hofman>
+One issue is that a take of a read-only version in this case shouldn't allow to detach the array buffer, as it'd prevent the sender to get it back
+
+[08:18:16.0565] <Mathieu Hofman>
+ * One issue is that a take of a read-only version in this case shouldn't allow to detach the array buffer, as it'd prevent the sender to get it back
+
+[08:25:48.0558] <James M Snell>
+I definitely like the idea of this API. I think I'd prefer to generalize it a bit so it's not tied specifically to ArrayBuffer/ArrayBuffer views only. If a generic concept of a "transferable" object were introduced to in the language (of which only ArrayBuffer and TypedArrays would initially be included), then this taker api would work with any transferable that is introduced later or by any objects that other specifications separately define as transferable (https://html.spec.whatwg.org/multipage/structured-data.html#transferable). 
+
+To modify Domenic s example a bit.. it would be something like... `const holder = new TransferableHolder(anyTransferable); const thing = holder.take();`
+
+The question then becomes what objects are Transferables? We can introduce two new well-known Symbols to address that and the relevant use cases: `Symbol.transfer` and `Symbol.clone`.
+
+[08:44:45.0108] <littledan>
+I think more things are transferrable/shareable within an Agent than between Agents
+
+[08:44:57.0788] <littledan>
+the Symbol approach is a lot easier if it's within the same memory space
+
+[08:45:09.0311] <littledan>
+ * the Symbol approach is a lot easier if it's within the same Agent
+
+[12:49:01.0703] <tolmasky>
+From a terminology perspective, given a well-known intrinsic object "%name%", if the spec references "%name.a.b%", it that ALSO considered to be a "well-known intrinsic object" (just like %name%), or it *just* an "intrinsic object"? 
+
+[12:49:31.0693] <bakkot>
+Is there an observable difference?
+
+[12:51:04.0752] <tolmasky>
+I guess that is part of my question, they *also* are unique per realm, but *don't* show up in the well-known intrinsic objects table, so if I were to make an "exploded table" of all the referenced items, just want to know whether to refer to them as well-known or not. Perhaps, for example, there is an observable difference somewhere else in the spec that I haven't put together
+
+[12:57:59.0816] <ljharb>
+tolmasky: technically only the things in the table are well-known, but because of the way the notation is specified now, that distinction doesn't make a difference anymore
+
+[12:58:11.0721] <ljharb>
+i'd just call them all "intrinsics"
+
+[12:59:36.0038] <tolmasky>
+Gotcha, so just to clarify then, "intrinsics" are "built-ins" referenced in the spec. If there is a built-in in the particular engine that is not referenced in the spec (but otherwise behaves identically, unique copy per realm, etc. etc.), it is *not* an intrinsic
+
+[12:59:54.0515] <tolmasky>
+In other words well-known-intrinsic=intrinsic, but intrinsic!=built-in
+
+[12:59:55.0997] <ljharb>
+what'd you have in mind as an example of one that's not?
+
+[13:00:07.0242] <ljharb>
+every intrinsic is indeed built in
+
+[13:00:17.0533] <tolmasky>
+but not all built-ins are intrinsic is what i mean
+
+[13:00:35.0574] <tolmasky>
+like, if I just write a custom engine and make available global.Francisco = { }, its built-in but not intrinsic
+
+[13:01:34.0074] <tolmasky>
+Or, if Function.prototype happens to have some custom added property in my custom engine, it also is not intrinsic, despite being built in, and getting a fresh copy in every realm
+
+[13:04:21.0539] <tolmasky>
+In other words, is "intrinsicness" meant to represent any properties beyond built-inness, like a "ECMA seal of official spec approval" vs. just "its a thing thats around at the beginning, that gets a custom copy in every realm"
+
+[13:39:32.0496] <Kris Kowal>
+I usually take “intrinsic” to be short for “intrinsic to a realm”.
+
+[13:40:13.0415] <Kris Kowal>
+MarkM begs a distinction between intrinsics and his own invention of “primordial” that I cannot explain, but the distinction might be germane here.
+
+[14:07:21.0964] <ljharb>
+tolmasky: i would just say those are different kinds of intrinsics - one's a language intrinsic, and the other is a platform intrinsic
+
+[14:08:03.0721] <tolmasky>
+gotcha
+
+[14:08:47.0288] <tolmasky>
+and, not to complicate this further, but intrinsics *can* be values, in the case of the well-known Symbols, which are not "Objects"
+
+[14:09:07.0499] <ljharb>
+of course, `Number.MAX_SAFE_INTEGER` is an intrinsic
+
+[14:10:04.0785] <tolmasky>
+but, there isnt a different "copy" of MAX_SAFE_INTEGER across realms (they all have value identity), however, there *are* different copies of the well-known symbols per realm, realm1.Symbol.iterator !== realm2.Symbol.iterator (or ARE they value identical?)
+
+[14:13:04.0732] <tolmasky>
+I guess it is the same in every realm
+
+[14:37:16.0428] <ljharb>
+correct, they're the same in every realm
+
+[14:37:25.0714] <ljharb>
+ * correct, they're the same in every realm
+
+[15:34:03.0725] <jmdyck>
+there are built-ins that aren't intrinsic, but they're a bit obscure
+
+[15:36:26.0555] <jmdyck>
+If you look for explicit calls to CreateBuiltinFunction (i.e., not the generalized one in CreateIntrinsics), those are creating built-in functions that aren't intrinsics.
+
+[15:47:36.0535] <jmdyck>
+The spec normally only uses "intrinsic" to refer to objects, but `Number.MAX_SAFE_INTEGER` is a Number value, so I don't think the spec supports calling it an intrinsic. But I don't think it matters much if you want to call it one.
+
+
+2022-12-08
+[16:00:09.0002] <sirisian>
+bakkot: , Grammar/engine question on an idea I've had in my issues for ages. Related to this issue: https://github.com/sirisian/ecmascript-types/issues/79 Basically say an engine is aware of types, could it handle transferring the type to argument expressions. f(a:uint64){} and you called f(2\*\*63); The engine when parsing would choose the overload (in this case there's only one function) and propagate the type, so it's like f(uint64(2)\*\*uint64(63)).
+
+[16:00:37.0868] <sirisian>
+ * bakkot: , Grammar/engine question on an idea I've had in my issues for ages. Related to this issue: https://github.com/sirisian/ecmascript-types/issues/79 Basically say an engine is aware of types, could it handle transferring the type to argument expressions. f(a:uint64){} and you called f(2\*\*63); The engine when parsing would choose the overload (in this case there's only one function) and propagate the type, so it's like f(uint64(2)\*\*uint64(63)).
+
+[16:03:22.0442] <jmdyck>
+@tolmasky: I don't think the spec really says whether or not your `global.Francisco = { }` qualifies as an intrinsic. Personally, I'd call it one, I think.
+
+[16:04:01.0370] <jmdyck>
+ * @tolmasky: I don't think the spec really says whether or not your `global.Francisco = { }` qualifies as an intrinsic. Personally, I'd call it one, I think.
+
+[16:07:19.0738] <jmdyck>
+See also https://github.com/tc39/ecma262/issues/1540 and the https://github.com/tc39/how-we-work/pull/64 that it links to.
+
+[16:08:47.0334] <bakkot>
+sirisian: a number of programming languages use the type of the position to determine the type of literals in that position, yes
+
+[16:09:20.0625] <sirisian>
+Which languages?
+
+[16:11:06.0007] <bakkot>
+offhand, C++?
+
+[16:11:06.0928] <jmdyck>
+tolmasky: Also https://github.com/tc39/ecma262/issues/2608
+
+[16:11:12.0742] <bakkot>
+though I guess that's not _quite_ how it works in C++
+
+[16:11:29.0918] <bakkot>
+it just has implicit conversions
+
+[16:11:36.0415] <bakkot>
+but it amounts to much the same thing
+
+[16:12:43.0243] <bakkot>
+Rust, also
+
+[16:13:35.0903] <bakkot>
+https://doc.rust-lang.org/reference/expressions/literal-expr.html#integer-literal-expressions
+
+[16:13:49.0124] <bakkot>
+> If the token has no suffix, the expression's type is determined by type inference:
+> If an integer type can be uniquely determined from the surrounding program context, the expression has that type
+
+[16:14:37.0259] <sirisian>
+Yeah, but you can't type a 100 digit number. The maximum literal it has is i128 and u128 suffixes?
+
+[16:15:22.0666] <bakkot>
+It is true that Rust's integer types are bounded; I don't understand what relevance that has to anything?
+
+[16:15:40.0431] <bakkot>
+The example you gave also had a bounded integer type
+
+[16:16:51.0944] <sirisian>
+yes, for the basic one. Inside of the issue I wanted this to work seamlessly for BigInt as well.
+
+[16:17:30.0053] <sirisian>
+Essentially a system where suffixes are never necessary. (Though some might find them simpler than casting?)
+
+[16:18:12.0227] <bakkot>
+I'm still not clear on what the relevance of integer types in Rust being bounded is.
+
+[16:18:21.0129] <bakkot>
+As it says, "If an integer type can be uniquely determined from the surrounding program context, the expression has that type"
+
+[16:18:40.0085] <bakkot>
+it's not based on how long the integer literal is, it's based on _the surrounding program context_
+
+[16:19:09.0960] <bakkot>
+so in principle they could have a BigInt type, and if you wrote `let x: BigInt = 0`, then that `0` would unambiguously be a bigint 0, so that's how it would be intepreted
+
+[16:28:20.0742] <sirisian>
+bakkot: I just meant Rust doesn't have a bigint literal format: https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=43ea23caef0c68e25e5d7dbc23c07953 It says "integer literal is too large". In my proposal I'd want it to just work. (also I've never used rust, so ignore the other error)
+
+[16:29:23.0224] <sirisian>
+ * bakkot: I just meant Rust doesn't have a bigint literal format: https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=43ea23caef0c68e25e5d7dbc23c07953 It says "integer literal is too large". In my proposal I'd want it to just work. (also I've never used rust, so ignore the other error)
+
+[16:31:01.0964] <sirisian>
+Yeah, ChatGPT uses parse_bytes to write this. It can code Rust better than me already.
+
+[16:32:33.0220] <bakkot>
+Yeah that's not a fundamental limitation, that's just because rust does not have BigInts built in
+
+[16:32:45.0792] <bakkot>
+they could have if they wanted to, it's not a fundamental limitation
+
+[16:33:36.0404] <bakkot>
+There is nothing that makes `let x: u64 = 0` any easier to infer than `let x: BigInt = 0` would be
+
+[16:34:21.0039] <sirisian>
+Gotcha. Okay that's promising then. Thank you. This is really easy btw if I'm not the one implementing anything.
+
+[16:35:04.0003] <bakkot>
+to be clear I should emphasize that engines are almost certainly not going to have built-in type checking, ever
+
+[16:35:54.0851] <sirisian>
+yeah, this has turned into more a thought experiment for me to unwind lately while watching TV.
+
+[16:35:59.0705] <bakkot>
+gotcha
+
+[16:36:22.0360] <bakkot>
+yeah looking at how other languages do type inference will probably be interesting to you then
+
+[16:37:47.0507] <sirisian>
+Yeah, was researching other languages the other day and found out Swift has return type overloads. Was thinking it would be too difficult or weird for a language to have those. https://github.com/sirisian/ecmascript-types/issues/78
+
+[16:39:23.0855] <sirisian>
+(Though you can do something similar in a weird way in C++ that I never thought of)
+
+[17:08:01.0600] <shu>
+Richard Gibson: hm we should've put https://github.com/tc39/proposal-json-parse-with-source/issues/39 and https://github.com/tc39/proposal-json-parse-with-source/issues/35 on the agenda. the current draft spec can't be implemented
+
+[17:08:19.0142] <Richard Gibson>
+yep, I'm commenting now
+
+[17:08:35.0912] <Richard Gibson>
+and will have a normative fix for discussion in January
+
+[17:08:43.0456] <Richard Gibson>
+ * and will have a normative fix for discussion in January
+
+[17:09:13.0704] <shu>
+excellent, thank you
+
+[17:10:28.0843] <Richard Gibson>
+> <@kriskowal:matrix.org> MarkM begs a distinction between intrinsics and his own invention of “primordial” that I cannot explain, but the distinction might be germane here.
+
+Kris Kowal tolmasky: https://github.com/tc39/how-we-work/blob/main/terminology.md#primordial
+
+[05:12:08.0061] <tolmasky>
+It's somewhat strange, because that definition refers to intrinsics as *values*, whereas above it was stated that Number.MAX_SAFE_INTEGER was an intrinsic, implying that there is kind of a dual definition, where it kind of also refers to *keypaths*. That is to say, clearly the %Array% function itself is a intrinsic, like if I were making a Map of intrinsics to their "names", but it would be weird to say the number 4 is also an intrinsic, just because %Uint32Array.prototype.BYTES_PER_ELEMENT% holds a 4.
+
+[05:25:55.0580] <Richard Gibson>
+that's an interesting distinction, but I think the claim that Number.MAX_SAFE_INTEGER is an intrinsic is just technically inaccurate. _%Number%_ is an intrinsic object, and its primordial state includes a property named "MAX_SAFE_INTEGER" (that cannot be altered or removed, unlike e.g. its property named "parseInt").
+
+[05:31:41.0953] <tolmasky>
+Right, so under that model, the *value* contained by both Array and Array.prototype.constructor, is the same intrinsic object, and the "Array" property contained by the global object, and the property key path "prototype.constructor" are primordial states of the global object and the Array intrinsic respectively
+
+[05:32:45.0987] <tolmasky>
+and there is no like specific terminology to refer to such a state (to clarify the reason for these question, i would just like to label things in an object viewer, so if it is "unaltered original and/or built-in thing, it might be highlighted blue for example)
+
+[05:36:57.0483] <Richard Gibson>
+isn't "primordial" that term?
+
+[05:37:08.0708] <jmdyck>
+%Array% and %Array.prototype.constructor% are the same, but Array and Array.prototype.constructor aren't necessarily the same, because the latter is Writable.
+
+[05:37:31.0820] <Richard Gibson>
+(as an adjective)
+
+[05:39:14.0018] <Richard Gibson>
+generalizing the "required to exist before any ECMAScript code runs" detail into a description of not just values, but also the state of their properties
+
+[05:45:04.0680] <jmdyck>
+The spec doesn't define/use "primordial", and terminology.md only defines it as a noun. You could use it as an adjective with the meaning that tolmasky is asking about, and people might get the right idea, but you'd want to define it to be sure.
+
+[05:45:53.0755] <Richard Gibson>
+agreed. But informally, we definitely reference "primordial state".
+
+[05:49:24.0062] <jmdyck>
+Yup, but note then that "primordial object" would mean something different from how terminology.md defines "primordial" (noun).
+
+[05:52:49.0923] <jmdyck>
+(An intrinsic that is inaccessible to ECMAScript code would be part of the informal "primordial state", but it wouldn't be "a primordial" according to the terminology.md definition.)
+
+[06:07:35.0112] <Richard Gibson>
+I suppose "initial state" is more clear anyway
+
+[06:09:15.0423] <jmdyck>
+Yeah, probably.
+
+[06:23:48.0509] <tolmasky>
+The live version of the spec on https://tc39.es/ecma262/ seems to not have a corresponding tagged version on github (the tags only go up to es2022, but the spec that is live online says ECMAScript 2023, and defines itself as the most accurate and up-to-date version, but I don't know how to find that on github since there doesn't even appear to be an es2023 candidate tag, is it just whatever is currently the main branch?)
+
+[06:24:30.0529] <jmdyck>
+yup
+
+[06:26:34.0744] <tolmasky>
+so the tag represents the "final" state of the version at the end of the year, and es20XX is a moving target throughout the year?
+
+[06:28:16.0542] <jmdyck>
+the es2023 tag won't exist until mid-2023, I think, when a version is cut for official approval by Ecma
+
+[06:29:56.0519] <jmdyck>
+es2022 tag is what was approved in July-ish of this year, I believe.
+
+[06:31:08.0735] <jmdyck>
+The online spec calls itself ES  2023, but note that it also says "Draft".
+
+[06:54:54.0278] <tolmasky>
+Gotcha
+
+[06:55:36.0218] <tolmasky>
+OK, one more weird terminology question, within *Records*, [[whatever]] are *not* "internal slots", but rather "fields". That is to say, descriptor.[[Value]] is not an internal slot access, but a "field access"?
+
+[07:02:46.0223] <ryzokuken>
+Yes
+
+[07:14:43.0632] <jmdyck>
+The `[[Foo]]` notation is used for various purposes in the spec: a field of a Record, an internal slot/method of an object, an attribute of a property, the [[Description]] of a Symbol. 
+
+[09:02:31.0938] <ljharb>
+> <@gibson042:matrix.org> that's an interesting distinction, but I think the claim that Number.MAX_SAFE_INTEGER is an intrinsic is just technically inaccurate. _%Number%_ is an intrinsic object, and its primordial state includes a property named "MAX_SAFE_INTEGER" (that cannot be altered or removed, unlike e.g. its property named "parseInt").
+
+I think that an intrinsic is indeed a *value* combined with a primordial key path, which means `Number.MAX_SAFE_INTEGER` is an intrinsic, but 4 alone isn't
+
+[09:02:51.0673] <ljharb>
+the intrinsics syntax in the spec (`%a.b.c%`) works for any value
+
+[09:04:44.0957] <Kris Kowal>
+That’ll be a more useful distinction when your get-intrinsics proposal reaches fruition.
+
+[09:08:27.0094] <Andreu Botella>
+I've been looking at the ShadowRealm HTML integration PR. Is it intentional that `setTimeout` is not exposed in the realm?
+
+[09:36:12.0725] <Mathieu Hofman>
+caridy is working on giving guidelines to implementations regarding which host API make sense to expose in ShadowRealm. A relevant issue is: https://github.com/whatwg/webidl/issues/1119
+
+We actually discussed this in the SES meeting yesterday. I don't see a reason why setTimeout couldn't be exposed, but there may be complications when the argument is a string that needs to be evaluated.
+
+[09:38:40.0330] <Justin Ridgewell>
+Is there a matrix chat for module harmony discussions?
+
+[09:38:59.0389] <Justin Ridgewell>
+Have feedback from my team (which I could give here if there's not a dedicated channel)
+
+[09:39:17.0021] <Kris Kowal>
+#tc39-compartments:matrix.org is the place.
+
+[09:39:23.0065] <Justin Ridgewell>
+Thanks!
+
+[09:53:43.0295] <jmdyck>
+> I think that an intrinsic is indeed a _value_ combined with a primordial key path,
+
+
+[09:53:47.0934] <jmdyck>
+ * > I think that an intrinsic is indeed a _value_ combined with a primordial key path,
+
+
+[09:55:44.0106] <jmdyck>
+ * > I think that an intrinsic is indeed a _value_ combined with a primordial key path,
+
+That suggests that when a single value is accessible by two different 'paths', those are two different intrinsics, because the *combinations* are different. But I'm pretty sure the spec doesn't want us to think that.
+
+[10:00:20.0934] <Andreu Botella>
+> <@mhofman:matrix.org> caridy is working on giving guidelines to implementations regarding which host API make sense to expose in ShadowRealm. A relevant issue is: https://github.com/whatwg/webidl/issues/1119
+> 
+> We actually discussed this in the SES meeting yesterday. I don't see a reason why setTimeout couldn't be exposed, but there may be complications when the argument is a string that needs to be evaluated.
+
+AFAIK `[Exposed=*]` works for interfaces, but not for methods defined in the global interface, as is the case for `setTimeout`
+
+[10:01:36.0396] <Andreu Botella>
+The HTML integration PR currently defines the `self` property algorithmically, which is something done with WebIDL for `WindowOrWorkerGlobalScope`
+
+[10:03:07.0697] <Andreu Botella>
+I guess the fact that this is methods of the global interface rather than entire exposed interface doesn't matter for SES purposes, but it might need some additional refactoring of the HTML PR
+
+[10:03:39.0292] <Andreu Botella>
+ * I guess the fact that this is methods of the global interface rather than entire exposed interface doesn't matter for SES purposes, but it might need some additional refactoring of the HTML PR
+
+[10:18:12.0478] <Mathieu Hofman>
+from my point of view, they're properties of the globalObject. As long as they're configurable without exotic behavior (aka actually deletable), I don't really care how they got there
+
+[10:18:46.0512] <Mathieu Hofman>
+ * from my point of view, they're properties of the globalObject. As long as they're configurable without exotic behavior (aka actually deletable), I don't really care how they got there
+
+[10:19:29.0486] <jmdyck>
+But there are lots of intrinsic objects that aren't properties of the global object.
+
+[10:37:25.0210] <Andreu Botella>
+> <@mhofman:matrix.org> from my point of view, they're properties of the globalObject. As long as they're configurable without exotic behavior (aka actually deletable), I don't really care how they got there
+
+Sure. I was just pointing out that `setTimeout` is out of scope for the linked PR.
+
+[10:39:20.0384] <Mathieu Hofman>
+> <@jmdyck:matrix.org> But there are lots of intrinsic objects that aren't properties of the global object.
+
+Sorry my comment was in relation to ShadowRealm, not in regard to the intrinsic thread
+
+[10:39:36.0234] <littledan>
+> <@abotella:igalia.com> AFAIK `[Exposed=*]` works for interfaces, but not for methods defined in the global interface, as is the case for `setTimeout`
+
+Yeah we'll need to figure out a way to fix that... maybe ms2ger would have ideas.
+
+[10:40:28.0968] <jmdyck>
+> Sorry my comment was in relation to ShadowRealm, not in regard to the intrinsic thread
+
+Ah, my mistake.
+
+
+2022-12-09
+[23:50:21.0476] <annevk>
+`[Exposed]` works on methods, but only to constrain. So the solution would be to move `setTimeout` to an `AllTheGlobals` mixin that has `[Exposed=*]` and is included by `Window`, `WorkerGlobalScope`, etc.
+
+[23:50:36.0647] <annevk>
+ * `[Exposed]` works on methods, but only to constrain. So the solution would be to move `setTimeout` to an `AllTheGlobals` mixin that has `[Exposed=*]` and is included by `Window`, `WorkerGlobalScope`, etc.
+
+[07:41:33.0819] <tolmasky>
+Is there a term that means symbols + objects (+ functions, although thats implied by objects). Like there's primitives vs. objects, I'm wondering if theres a concise way to say "symbols and objects"
+
+[07:45:08.0610] <nicolo-ribaudo>
+In the R&T proposal we say "unforgeable values": you cannot recreate them
+
+[07:45:25.0303] <nicolo-ribaudo>
+However, it does not include Symbol.for symbols 
+
+[07:45:56.0680] <nicolo-ribaudo>
+* In the R&T proposal we say "unforgeable values": you cannot recreate them unless you already hold a reference to them 
+
+[07:46:22.0915] <tolmasky>
+interesting
+
+[08:16:11.0800] <bakkot>
+tolmasky: "value with identity" https://tc39.es/ecma262/multipage/notational-conventions.html#sec-identity
+
+[08:17:11.0780] <bakkot>
+though that also covers spec-internal values, but outside the context of the spec that's probably fine
+
+[09:09:27.0336] <ljharb>
+ftr i'm not a fan of using "identity" in that way, but that's what the editors chose. i'd just say "symbols and objects" personally (outside the spec)
+
+[09:09:36.0552] <ljharb>
+ * ftr i'm not a fan of using "identity" in that way, but that's what the editors chose. i'd just say "symbols and objects" personally (outside the spec)
+
+[10:01:43.0322] <TabAtkins>
+"reference types" is how I refer to them to myself
+
+[10:01:54.0731] <TabAtkins>
+vs value types
+
+[10:02:06.0227] <TabAtkins>
+and i'm *certain* i'm making, like, some c++ people cringe for that
+
+[10:31:26.0382] <tolmasky>
+haha
+
+[10:31:33.0151] <tolmasky>
+chatgpt suggested reference types
+
+[10:51:53.0768] <ljharb>
+lol yeah, they are kind of "reference values" but so many people mistakenly think JS is pass by reference that i think the word "reference" would cause way more confusion than it'd clear up
+
+[11:59:17.0761] <Mathieu Hofman>
+Yeah reference types is too confusing given that unique symbols are a primitive with unforgeable identity, but registered symbols (the same type) do have a forgeable identity.
+
+[12:00:07.0679] <Mathieu Hofman>
+We should find a good name as I expect unique symbols to not stay the only special case of unforgeable values.
+
+[12:00:56.0998] <Mathieu Hofman>
+(aka we'll ultimately get some kind of composite identity, whether that's records/tuples as currently proposed or a separate proposal)
+
+[12:07:09.0909] <TabAtkins>
+"ocap types"
+
+[13:10:44.0062] <Mathieu Hofman>
+lol, that would probably be too obscure for most people ;)
+
+
+2022-12-12
+[11:32:36.0695] <shu>
+o'cap, child of cap
+
+[14:07:58.0331] <Kris Kowal>
+see also “fitzfuzzer” and “mcmalloc”
+
+[14:08:39.0961] <Kris Kowal>
+oh: mkdir, child of dir
+
+
+2022-12-13
+[11:05:38.0434] <littledan>
+If anyone is trying to get into the Records and Tuples call, the zoom link changed; DM me for the new one
+
+
+2022-12-16
+[22:38:22.0047] <sirisian>
+I know this is a very very old topic. Whatever happens to const parameters? function f(const a){}. I might need that as an assumption to one of my ideas, but was it not possible? It seems straightforward, but I feel like I'm missing some technical issue perhaps that stopped it from being put in when const was.
+
+[22:39:43.0056] <Jack Works>
+I sometimes like it, but it really isn't easy to encourage people to use it. 
+
+[22:41:05.0303] <sirisian>
+ * I know this is a very very old topic. Whatever happened to const parameters? function f(const a){}. I might need that as an assumption to one of my ideas, but was it not possible? It seems straightforward, but I feel like I'm missing some technical issue perhaps that stopped it from being put in when const was.
+
+[07:46:21.0338] <jmdyck>
+It's been 2 weeks since the TC39 meeting, time for Notes to be published?
+
+[10:49:13.0555] <nicolo-ribaudo>
+Question about Annex B.3.4 (https://tc39.es/ecma262/#sec-variablestatements-in-catch-blocks):
+
+Why does the text before the note only modify `var`, while the text after the note also modifies `function`?
+
+[10:49:21.0925] <nicolo-ribaudo>
+ * Question about [Annex B.3.4](https://tc39.es/ecma262/#sec-variablestatements-in-catch-blocks):
+
+Why does the text before the note only modify `var`, while the text after the note also modifies `function`?
+
+[10:49:34.0735] <nicolo-ribaudo>
+ * Question about Annex B.3.4 (https://tc39.es/ecma262/#sec-variablestatements-in-catch-blocks):
+
+Why does the text before the note only modify `var`, while the text after the note also modifies `function`?
+
+[11:15:27.0731] <littledan>
+sorry can you use a content warning for such questions?
+
+[11:16:02.0282] <nicolo-ribaudo>
+I was seriously considering doing it 😬
+
+[11:19:07.0146] <shu>
+i don't understand the question
+
+[11:23:08.0277] <shu>
+oh i think maybe i understand the question
+
+[11:24:00.0478] <nicolo-ribaudo>
+Is that section only changing the semantics for function declarations in eval, or also outside of eval?
+
+[11:26:15.0760] <shu>
+i think in practice it's for both
+
+[11:26:29.0089] <shu>
+wouldn't function declarations outside of direct evals already be covered by LexicallyDeclaredNames?
+
+[11:27:06.0414] <shu>
+but function declarations inside direct evals need special handling because top-level function declarations in direct evals only introduce var bindings in the outside scope in B.3.2 semantics anyway... or something like that?
+
+[11:30:20.0173] <nicolo-ribaudo>
+Oh because 11.b of functions in eval ("If replacing the FunctionDeclaration f with a VariableStatement that has F as a BindingIdentifier would not produce any Early Errors for body, then") never produces an early error, so it's different from non-eval functions...
+
+[11:30:23.0476] <nicolo-ribaudo>
+Thank you!
+
+[11:32:27.0010] <bakkot>
+the fact that b.3.2 (formerly b.3.3) semantics are specified with "as if" has caused no end of pain
+
+[11:32:27.0310] <shu>
+i still have a big bone to pick with specifying any semantics as counterfactuals
+
+[11:32:29.0153] <shu>
+terribly confusing
+
+[11:32:40.0979] <bakkot>
+in both chrome and FF (but not JSC) `try {} catch (e) { function e(){} }` is in fact an error
+
+[11:32:54.0297] <bakkot>
+and I am genuinely unclear on whether that's correct per spec
+
+[11:33:00.0970] <bakkot>
+ * and I am genuinely unclear on whether that's correct per spec
+
+[11:33:12.0165] <shu>
+i think the spirit of it is correct
+
+[11:33:12.0225] <bakkot>
+ * in both chrome and FF (but not JSC) `try {} catch (e) { function e(){} }` is in fact an error
+
+[11:33:59.0217] <shu>
+anyways i hope for safari to 1) grow its market share a lot and 2) never implement annex B FiB semantics correctly
+
+[11:34:04.0129] <shu>
+in a few years we rip it out
+
+[11:34:09.0787] <bakkot>
+I guess it's correct because of the "also occurs in the LexicallyDeclaredNames of Block." rule actually, yeah
+
+[11:34:28.0855] <bakkot>
+it's an error not because of the synthetic b.3.2 `var` binding but because of the normal lexically scoped binding
+
+[11:34:37.0213] <shu>
+yes
+
+[11:35:16.0974] <shu>
+we should ask if ESMeta folks model the Annex B counterfactuals
+
+[11:35:42.0230] <shu>
+first, develop a possible-worlds interpretation of the universe according to ecma262
+
+[11:37:17.0486] <bakkot>
+if anyone who has not yet burned out their entire brain thinking about this stuff would like to do so, https://github.com/tc39/ecma262/issues/2019 and https://github.com/tc39/ecma262/issues/913 are still open I think
+
+[11:39:13.0738] <shu>
+i recommend that if you are not already an annex B FiB abyss gazer, please do not start
+
+[11:39:22.0761] <shu>
+go play video games or anything really
+
+[11:39:53.0860] <nicolo-ribaudo>
+Go play outside
+
+[12:50:37.0705] <jmdyck>
+shu: ISTR that esmeta ignores Annex B. (Can't find an explicit statement to that effect though.)
+
+
+2022-12-17
+[19:14:12.0220] <snek>
+does anyone know if its legal to duplicate bcp 47 language tags
+
+[19:15:40.0598] <snek>
+chrome supports it and firefox doesn't
+
+[19:19:39.0330] <snek>
+actually weirdly firefox doesn't like it but spidermonkey cli is fine with it
+
+[19:51:13.0362] <rkirsling>
+<del>no you have to pay royalties for each one</del>
+
+[00:13:08.0785] <sirisian>
+So I kind of get "Only the construct being decorated may be changed in its contents", but has anyone pointed out how awkward it makes this example: https://github.com/tc39/proposal-decorators#access-and-metadata-sidechanneling In this example, "injectable" only exists because field decorators don't know their class. That example is basically how all serialization libraries work and seems like an example you'd want to keep as elegant as possible.
+
+[05:41:11.0543] <Mathieu Hofman>
+The awkwardness is why https://github.com/tc39/proposal-decorator-metadata exists
+
+[07:39:55.0497] <ryzokuken>
+> <@devsnek:matrix.org> does anyone know if its legal to duplicate bcp 47 language tags
+
+I think yes
+
+[07:40:03.0682] <ryzokuken>
+But the last one wins
+
+[07:40:21.0276] <snek>
+last one does not win in any engine I tried
+
+[07:46:50.0405] <ryzokuken>
+Wait, does the first win then?
+
+[07:52:03.0438] <snek>
+so it would seem
+
+[07:52:13.0370] <snek>
+I havent tried more than two though 
+
+[07:52:26.0655] <snek>
+could be middle wins
+
+[07:56:42.0784] <ryzokuken>
+> <@devsnek:matrix.org> so it would seem
+
+Hm, I'll have to recheck that we use those exact semantics for the timestamp draft
+
+[07:56:52.0938] <ryzokuken>
+For consistency 
+
+[07:57:22.0539] <snek>
+> <@usharma:igalia.com> Hm, I'll have to recheck that we use those exact semantics for the timestamp draft
+
+I mean... do whatever the actual spec says to do
+
+[07:57:31.0033] <snek>
+unless it doesn't say
+
+[07:57:36.0614] <snek>
+in which case do last wins
+
+
+2022-12-18
+[21:39:36.0465] <Richard Gibson>
+> <@devsnek:matrix.org> does anyone know if its legal to duplicate bcp 47 language tags
+
+I'm assuming you're referring to duplicating _subtags_ (cf. [RFC 5646 § 2.1](https://www.rfc-editor.org/rfc/rfc5646.html#section-2.1)), in which case the answer is "it depends". Duplication never violates _syntactic_ well-formedness, but duplicate language variant subtags and duplicate singleton subtags are always rejected per [IsStructurallyValidLanguageTag](https://tc39.es/ecma402/#sec-isstructurallyvalidlanguagetag) and UTS #35 [§ 3.2](https://unicode.org/reports/tr35/#Unicode_locale_identifier) and [§ 3.4](https://unicode.org/reports/tr35/#unicode_variant_subtag_validity). Duplicate UTS #35 "u" extension attribute and keyword subtags are permitted by ECMA-402, but [UnicodeExtensionComponents](https://tc39.es/ecma402/#sec-unicode-extension-components) ensures that only the first instance of any given attribute or keyword key in a locale identifier is preserved.
+
+[21:40:52.0318] <Richard Gibson>
+> <@devsnek:matrix.org> does anyone know if its legal to duplicate bcp 47 language tags
+
+ * I'm assuming you're referring to duplicating _subtags_ (cf. [RFC 5646 § 2.1](https://www.rfc-editor.org/rfc/rfc5646.html#section-2.1)), in which case the answer is "it depends". Duplication never violates _syntactic_ well-formedness, but duplicate **language variant** subtags and duplicate **singleton** subtags are always rejected per [IsStructurallyValidLanguageTag](https://tc39.es/ecma402/#sec-isstructurallyvalidlanguagetag) and UTS #35 [§ 3.2](https://unicode.org/reports/tr35/#Unicode_locale_identifier) and [§ 3.4](https://unicode.org/reports/tr35/#unicode_variant_subtag_validity). Duplicate UTS #35 "u" extension attribute and keyword subtags are permitted by ECMA-402, but [UnicodeExtensionComponents](https://tc39.es/ecma402/#sec-unicode-extension-components) ensures that only the first instance of any given attribute or keyword key in a locale identifier is preserved.
+
+[21:41:24.0297] <snek>
+interesting 
+
+[21:41:54.0636] <snek>
+so an engine shouldn't throw on something like `en-US-u-hc-h23-hc-h11`
+
+[21:42:04.0245] <snek>
+* so an engine shouldn't throw on something like `en-US-u-hc-h23-hc-h11`
+
+[21:42:13.0790] <snek>
+it should just consider it as if the 2nd one doesn't exist 
+
+[23:16:21.0191] <sirisian>
+> <@mhofman:matrix.org> The awkwardness is why https://github.com/tc39/proposal-decorator-metadata exists
+
+Oh so that's where metadata went. That doesn't even give you a reference to the class. They just have a metdataKey. Strange.
+
+[23:28:14.0531] <littledan>
+> <@sirisian:matrix.org> Oh so that's where metadata went. That doesn't even give you a reference to the class. They just have a metdataKey. Strange.
+
+Yes this limitation is very much the point. Would it hurt your application?
+
+[23:29:48.0357] <sirisian>
+No, the metadataKey is sufficient for serialization tasks, which are the use cases I've been looking at.
+
+[23:33:14.0235] <littledan>
+It might help the proposal authors advance if you document your use case, eg in an issue
+
+[23:34:12.0560] <sirisian>
+I've been writing examples introducing template generics though, and having access to the class is useful. Was hoping that proposal would give me ideas. Sadly C++ doesn't have such concepts either.
+
+[23:36:36.0706] <littledan>
+One reason the class is hidden is because, if it were exposed, you would be seeing a partially initialized class, and the engine would be forced to be modifying it step by step as opposed to building it based on the result of that operation. ES6 computed property names don’t see the class either, similarly.
+
+[23:39:17.0366] <sirisian>
+Not sure I fully understand. What happens if you call a static function in the class in the decorator? Does it not exist?
+
+[23:44:34.0278] <sirisian>
+It does make sense for the computed property. I get that one. I never considered when decorators run. I thought it was like after the properties were defined.
+
+
+2022-12-19
+[20:54:12.0330] <rkirsling>
+`async function f() { print(x); } f()` doesn't throw? 👀
+
+[20:54:42.0127] <rkirsling>
+I mean it does in V8 but that's seeming like an engine bug
+
+[20:54:49.0214] <rkirsling>
+ * I mean it does in V8 but that's seeming like an engine bug
+
+[21:01:30.0938] <bakkot>
+rkirsling: why do you expect it to throw?
+
+[21:01:42.0828] <bakkot>
+it returns a rejected promise but that's a different thing
+
+[21:01:57.0561] <bakkot>
+I guess more generally: what is the behavior you're seeing and why is it surprising
+
+[21:04:01.0194] <rkirsling>
+ohh there's a rejected promise
+
+[21:05:51.0720] <rkirsling>
+V8 might not be wrong then, it's just the only one that threw on an unhandled rejection
+
+[21:10:31.0787] <rkirsling>
+ * V8 shouldn't be wrong then, it's just the only one that threw on an unhandled rejection
+
+[21:11:24.0917] <rkirsling>
+the problem I'm actually trying to solve is rather different but it's making me question everything I thought I knew about async functions
+
+[06:48:30.0102] <littledan>
+> <@sirisian:matrix.org> Not sure I fully understand. What happens if you call a static function in the class in the decorator? Does it not exist?
+
+The decorator is just a function call at runtime, but if the decorator expression references the class, it is in TDZ. So the case is analogous, just driven to its extreme for decorators since it also affects the protocol.
+
+
+2022-12-22
+[11:07:21.0355] <snek>
+I just realized you can't use r&t for react deps arrays cuz you can't have objects in them
+
+[11:07:23.0299] <snek>
+so annoying 
+
+[11:07:32.0929] <snek>
+* I just realized you can't use r&t for react deps arrays cuz you can't have objects in them
+
+[11:08:40.0629] <littledan>
+well... the symbol-as-weakmap-key with a sidetable could be a way through
+
+[11:08:49.0430] <littledan>
+(and not all deps arrays have objects)
+
+[11:10:00.0069] <snek>
+I'm just tired of every fun idea I have for r&t coming with sadness about 30s later when I remember objects exist 
+
+[11:11:07.0063] <littledan>
+well... we tried the Box thing but folks were against it... now I guess lots of people are against equality as well, which is another thing which would make them difficult for React deps arrays...
+
+[11:12:23.0687] <littledan>
+This blog post explores R&T for React deps arrays (but counts on the equality overloading) https://sebastienlorber.com/records-and-tuples-for-react
+
+[12:30:43.0186] <ljharb>
+as primitives you'd be able to pass them into react hooks dep arrays. as objects, react would have to update to support them
+
+[12:31:04.0140] <ljharb>
+i'm still not sure what the point is of them if they don't have value equality tbh
+
+[12:37:48.0340] <littledan>
+Well, React could go and make that update to support them; that's one option
+
+[15:36:02.0425] <Ashley Claymore>
+> <@devsnek:matrix.org> I just realized you can't use r&t for react deps arrays cuz you can't have objects in them
+
+What would be the advantage there (if it did work)?
+
+[15:39:32.0687] <Ashley Claymore>
+Or is this about using them within react dep arrays, which I definitely see value in https://twitter.com/acutmore/status/1256539594092433409
+
+
+2022-12-23
+[17:42:34.0158] <Mathieu Hofman>
+I am still suspicious of any R&T use cases that are drop-in replacement of objects but with deep immutability and/or equality semantics. In both cases the fact that the structure has to be deeply immutable, aka no objects directly contained, makes me believe that the code will have to be aware the value is a R/T and handle it explicitly.
+
+[17:48:24.0835] <Mathieu Hofman>
+And by extension I suppose I don't fully understand the use cases motivating implicit equality semantics. I do agree it would be much better DX though.
+
+[17:52:23.0920] <Mathieu Hofman>
+I am all for a way to deeply compare R&T and I actually believe we'll need a way to also easily compare the structure of a R&T ignoring the unique symbols it contains. This is where I still wish we had Box as it would have not conflated the type of unique symbols contained in a R/T.
+
+[07:22:05.0553] <littledan>
+For people who want R&T to be something else: If you could write some kind of very high-level gist explaining your suggestion, that would be extremely helpful.
+
+
+2022-12-24
+[20:43:34.0580] <ljharb>
+> <@mhofman:matrix.org> I am still suspicious of any R&T use cases that are drop-in replacement of objects but with deep immutability and/or equality semantics. In both cases the fact that the structure has to be deeply immutable, aka no objects directly contained, makes me believe that the code will have to be aware the value is a R/T and handle it explicitly.
+
+i'm not sure why - the vast majority of code doesn't mutate objects in my experience, so for that code it would Just Work to pass an R&T into them
+
+[21:28:19.0911] <Mathieu Hofman>
+Because some things by definition cannot be inside R&T, like functions or class instances. If you take the often cited examples of options bag or react props, R&T would could only be used in a subset of cases. That is why I said R&T are not a drop-in replacement for an immutable object. Not having Box makes them particularly unfit for the above examples as now a coordination Map needs to be used as well alongside.
+
+[09:14:20.0016] <ljharb>
+In react they wouldn’t be the props object - which has to remain an object so it can contain functions - they’d be the props themselves, which are quite often primitives and lists of primitives
+
+[09:14:40.0802] <ljharb>
+* In react they wouldn’t be the props object - which has to remain an object so it can contain functions - they’d be the props themselves, which are quite often primitives and lists of primitives
+
+
+2022-12-25
+[16:25:38.0884] <Mathieu Hofman>
+I suppose what I'm asking is which use cases benefit to have deep immutable and/or seamless deep equality in the form of a drop-in replacement of an object/array. It sounds like the react prop object itself is not one of them. I'd argue that option bags themselves are not either.
+
+In my opinion, either we need to find a way to safely include regular objects and functions in R&T, or we need to accept R&T are not drop-in/transparent replacements and that nested access needs to be explicit.
+
+Similarly, I don't know which use cases benefit from a seamless === deep equality.
+
+To be clear, what I'm the most interested in is a way to have immutable, inert (guaranteed not to trigger user code like proxies or getters), and recognizible object-like structures that can contain nested functions and class instances (mutable exits).
+I would prefer for DX if access to the latter was seamless (dot access, destructure, etc) but would be ok requiring an explicit operation, preferably standardized a-la Box.
+I don't care about === equality of these structures, but having a way to explicitly compare shape (excluding of these mutable exits) would be preferable, as well as a somewhat efficient way to get the entries (path, values) of these mutable exits.
+
+
+2022-12-27
+[05:49:07.0297] <Ashley Claymore>
+I see the current R&T specification as the result of exploring what it looks like to include composite types within the set of types that work with the existing equality procedures in the language:  `===`, `==`, `Object.is`, `switch(){}`, `indexOf`, `Array contains`, `Map has`, `Set has`, and validation checks within `Object.defineProperty`.
+The benefit of that is compatibility with existing libraries, and so people can keep using the APIs they are either already familiar with, or already likely to learn at some point.
+
+[05:49:34.0496] <Ashley Claymore>
+ * I see the current R&T specification as the result of exploring what it looks like to include composite types within the set of types that work with the existing equality procedures in the language:  `===`, `==`, `Object.is`, `switch(){}`, `indexOf`, `Array contains`, `Map has`, `Set has`, and validation checks within `Object.defineProperty`.
+The benefit of that is compatibility with existing libraries, and so people can keep using the APIs they are either already familiar with, or already likely to learn at some point.
+
+[05:54:58.0298] <Ashley Claymore>
+As mentioned in the last plenary, the R&T champions are taking the feedback received for the current spec and exploring alternatives designs so we can compare and contrast. Echoing Dan's request, if there are alternative ideas for how R&T could work if a high-level gist could be written up and/or a GH issue raised that would be super helpful for us to reference in our chats.
+
+
+2022-12-29
+[07:12:50.0997] <tolmasky>
+It is intentional that doing promise.then() removes it from the unhandled promise rejection handlers list, yeah?
+
+[07:13:03.0741] <tolmasky>
+(as in, literally, passing nothing in for either fulfilled or rejected)
+
+[07:42:27.0617] <Ashley Claymore>
+I presume the promise returned from that .then is added to the unhandled promise rejection list though?
+
+[07:47:54.0168] <tolmasky>
+Correct
+
+[07:48:53.0312] <tolmasky>
+https://runkit.com/tolmasky/promise-rejection-with-empty-then
+
+[07:57:07.0575] <Kris Kowal>
+Probably worth mentioning here: a better way to observe unhandled rejections would be to show promises with unhandled rejections and then hide them when they’re handled, rather than showing them only when we can prove they won’t ever be handled (finalization) or jumping to the conclusion that they won’t be handled if the handler isn’t registered in the turn of creation. It’s similarly useful to show and hide _pending_ promises, since they can also participate in data-lock cycles. Q provides hooks for these events, for which I’d prototyped a browser debugger extension many years ago. I very much wish I’d had the capacity to carry that over the line!
+
+[07:58:22.0164] <bakkot>
+unhandled promise rejections in browsers are surfaced to code, not just to the debugger
+
+[07:58:29.0033] <Kris Kowal>
+It’s analogously interesting to visualize async iterators as pending promises that produce intermediate events. Those events have frequencies.
+
+[07:58:36.0992] <bakkot>
+and you certainly don't want to surface to code "here are all of the currently-unhandled promises"
+
+[07:58:54.0798] <Kris Kowal>
+Agreed.
+
+[08:00:37.0262] <Kris Kowal>
+And it’s not problematic to surface unhandled rejections after finalization. Browsers are fine there.
+
+[08:01:53.0282] <tolmasky>
+So, my actual use case was trying to find a non-mutative way of identifying "true" Promise objects (a Promise.isPromise analog to Array.isArray). %Promise.prototype.then%.apply(object) is *almost* satisfactory since it throws if the object isn't a Promise... but has side-effects if it *is* a Promise unfortunately. (For example, I think you can safely use %Map.prototype.get%.apply(object) to identify "true" Map objects).
+
+[08:02:34.0149] <Kris Kowal>
+Paging @ljharb, knower of all brand checks.
+
+[08:04:16.0519] <ljharb>
+tolmasky: there’s no way to do that without potentially invoking user code, so Promise.resolve(x) === x is usually the way
+
+[08:05:05.0328] <ljharb>
+I’d have to check, but i think that only invokes a getter for .then - so since that’s very rare to exist, it works in practice
+
+[08:05:45.0522] <tolmasky>
+Gotcha, We currently we just drop down to C++ in v8 to check, but wanted to confirm there's not "safe" way in JS
+
+[08:05:54.0545] <ljharb>
+only a “safe enough” way
+
+[08:06:28.0029] <tolmasky>
+To confirm in that case, as far as I can tell its possible with everything except Promise and Error (Number/Boolean/Symbol/String/Date can use C.prototype.toString and check for throw, RegExp.prototype.exec and check for throw, Map and Set can use C.prototype.has and check for throw).
+
+[08:06:39.0649] <ljharb>
+i suppose you could explore descriptors and see if it has no own then, and a [[Prototype]] that’s Promise.prototype, but that invokes a proxy trap
+
+[08:07:13.0852] <ljharb>
+Promise has the brand checks but no non-side-effect way to check it; and error sadly has no way to do the brand check, yes. Yet.
+
+[08:07:29.0057] <Kris Kowal>
+Ask about TypedArrays. 🍿
+
+[08:07:40.0661] <ljharb>
+afaik i have those covered
+
+[08:07:46.0117] <Kris Kowal>
+You do!
+
+[08:07:50.0624] <tolmasky>
+Oh, yeah? They're doable?
+
+[08:08:28.0831] <ljharb>
+https://npmjs.com/which-typed-array, https://npmjs.com/typed-array-length, https://npmjs.com/is-typed-array. I’d love to learn about caveats I’m unaware of.
+
+[08:08:53.0071] <tolmasky>
+excellent
+
+[08:21:31.0491] <Jack Works>
+But why can't depends on @@toStringTag? It's 2022
+
+[08:39:18.0411] <tolmasky>
+because anyone can change that?
+
+[08:41:30.0365] <Jack Works>
+Oh
+
+[09:58:02.0439] <ljharb>
+also anyone can fake it
+
+[09:58:14.0027] <ljharb>
+toStringTag is useless as anything but a debugging hint
+
+[09:58:21.0964] <ljharb>
+now, if it'd been a brand-checking getter…
+
+[09:58:47.0964] <ljharb>
+but unfortunately that idea didn't occur to me in the pre-ES6 meeting (one of my first) when I tried to get toStringTag withdrawn from ES6
+
+[10:03:45.0509] <tolmasky>
+Is there any reason not to add brand-checking across the board, either through X.isX on everything, or [@@brand] or something?
+
+[10:15:56.0575] <bakkot>
+personally I am not a fan of adding more reflection unless there is some particular reason to want it
+
+[10:33:37.0134] <ljharb>
+tolmasky: i'd love that, but ^ it's hard to convince folks that's compelling on its own
+
+[10:34:19.0190] <tolmasky>
+What is necessary for "compelling"? We've been using a non-portable node C++ addon for 5 years because this doesn't exist, does that count as a compelling reason?
+
+[10:34:31.0486] <tolmasky>
+Which incidentally is of course non-portable and thus won't work in, for example, bun
+
+[10:34:57.0399] <tolmasky>
+So we're now having to maintain a v8 C++ and a bun/zig addon...
+
+[10:43:53.0234] <bakkot>
+Use cases from people not on the committee, for one thing
+
+[10:44:39.0864] <bakkot>
+we all do all sorts of unusual things; the language should be designed for more typical users
+
+[10:47:12.0224] <bakkot>
+but if you have an example of the thing you need it for, that's something we could talk about
+
+[10:56:54.0989] <tolmasky>
+So if I leave the committee it has a higher chance of getting in ;) ?
+
+[11:41:02.0778] <bakkot>
+by "people not on the committee" I mean "people who are not doing extremely unusual things with the language", not literally being on the committee
+
+
+2022-12-30
+[13:26:32.0161] <snek>
+is it valid to just do a multiplication here? https://gc.gy/140140589.png
+
+[13:26:58.0259] <snek>
+i thought it should be `Z(epochMilliseconds) * 10^6`
+
+[13:27:17.0693] <snek>
+or subscript Z or whatever it is
+
+[13:29:51.0715] <Kris Kowal>
+ℤ in set notation usually just means “every possible integer (not just the ones expressible in a word on your architecture)”
+
+[13:30:42.0448] <Kris Kowal>
+Which is meaningful here because epoch nanoseconds overflow i32, whereas millis do not.
+
+[13:30:42.0890] <snek>
+ℤ(x) in the spec means "the BigInt value of x"
+
+[13:30:54.0409] <Kris Kowal>
+That’s a fun twist.
+
+[13:31:44.0384] <bakkot>
+BigInt does also theoretically represent every possible integer, which is why we use the notation
+
+[13:31:58.0269] <bakkot>
+anyway yes it's valid
+
+[13:32:38.0505] <snek>
+cool
+
+[13:32:56.0420] <bakkot>
+they're both BigInts so it works
+
+[13:33:01.0966] <bakkot>
+> When applied to BigInts, the operators refer to the usual mathematical operations applied to the mathematical value of the BigInt.
+
+
+2022-12-31
+[17:39:13.0613] <Jack Works>
+> <@tolmasky:matrix.org> What is necessary for "compelling"? We've been using a non-portable node C++ addon for 5 years because this doesn't exist, does that count as a compelling reason?
+
+You need it so strongly and you need a hack in the engine to do that? That's a bit strange 
+
+[18:11:22.0623] <Randy Luecke>
+> <@jackworks:matrix.org> You need it so strongly and you need a hack in the engine to do that? That's a bit strange
+
+Tolmasky (and I) work on a product where one of the major features is showing users their output values in a nice inspectable way. Basically any native object type (RegExp, Error, Promise, BooleanObject, NumberObject, etc) created in a different realm would be hard to identify without asking V8. You can see the high level problem here: https://runkit.com/me1000/63af94f29458cb00082a18e8
+
+Browsers don't have node's vm module of course, but realms exist in browsers too (iframes, windows, workers) and you can pass values between them, to say nothing of the ShadowRealm proposal. 
+
+[18:13:24.0275] <Kris Kowal>
+It would be nice in general if a host program could inspect a guest program without effecting observable side-effects.
+
+[18:26:47.0168] <tolmasky>
+Jack Works: I also wouldn't call it a hack to use public APIs of the engine to get this information. It is of course less ideal than being able to do it in language, especially considering that it seems to be more an accident of history which native objects can and can't be identified, especially considering almost all *can* be, with only seeming exceptions being Promise and Errors. I'd consider it "hackier" that this information is "leaked" by the language spec through various techniques (such as calling Boolean.prototype.toString(object) and detecting whether that throws an error), vs. the underlying engine's simple isBooleanObject() method). The fact that Array.isArray had to be introduced points to general utility here.
+
+[18:29:19.0797] <tolmasky>
+And to Kris Kowal 's point, its actually the case that Error and Promise *can* be identified, just not without triggering side effects (as mentioned above Promise.prototype.then.apply(object) can almost be used, but it changes the isHandled state, and structuredClone(object) instanceof Error can also *almost* be used, except structuredClone calls getters of the object and can thus change various things in the process)
+
+[18:41:36.0446] <tolmasky>
+I'd go so far as to argue that if you believe there is utility in "instanceof BuiltInType", then it should follow that a brand check is equally useful since "instanceof BuiltInType" immediately introduces the possibility of a bug if the object comes from another realm (a frequent occurrence in browsers where you have multiple window objects) -- this was the reason that Array.isArray was added in the first place, because "instanceof Array" would fail in those circumstances. Well... "instanceof Error", "instanceof RegExp", etc. etc. *still* fail under those circumstances. Not sure why individual cases need to be made for each of them. It is if nothing else very useful for making the simplest "in language" debug tools, like you find in code sandbox-type applications (of which there are many many, everything from the built-in consoles in browsers, to codesandbox.com, to runkit, etc. etc.), all of which regularly deal with the state of js objects in a separate frame (and thus realm).
+
+[22:57:18.0078] <ljharb>
+btw can someone explain to me why `Object.assign(new Float32Array(1), [2147483647])[0]` produces `2147483648`? 2147483647 is a 31 bit number so it doesn't *seem* like it'd be an overflow thing. (i'm sure the answer is "floating point" but id love a better explanation)
+
+[22:58:55.0425] <snek>
+just because an integer occupies n bits doesn't mean a float with that many bits can represent it
+
+[22:59:33.0104] <snek>
+for example, many integers greater than 2^53 in our float64s
+
+[23:00:53.0616] <ljharb>
+ok, so it's not overflow exactly, it's just a gap that float32 can't represent?
+
+[23:01:06.0955] <ljharb>
+ * ok, so it's not overflow exactly, it's just a gap that float64 can't represent?
+
+[23:01:22.0806] <ljharb>
+ * ok, so it's not overflow exactly, it's just a gap that float32 can't represent?
+
+[23:01:26.0761] <snek>
+I would assume, I don't have any intuition of what values are representable by 32 bit floats
+
+[23:01:33.0766] <ljharb>
+hmm, ok
+
+[23:02:44.0905] <snek>
+there are ways to validate that. for example you could convert the underlying buffer to Uint32, and increment it by 1 at a time to see what values come out in the float32
+
+[23:05:23.0954] <ljharb>
+thanks, that makes sense
+
+[23:05:33.0536] <ljharb>
+2147483646 seems to be not representable either :-)
+
+[23:09:58.0398] <bakkot>
+ljharb: max safe integer for 32-bit floats is 2**24
+
+[23:10:05.0978] <ljharb>
+aha, thanks
+
+[23:10:07.0112] <bakkot>
+https://en.wikipedia.org/wiki/Single-precision_floating-point_format#Precision_limitations_on_integer_values
+
+[12:02:26.0263] <Kris Kowal>
+Yeah, floating point can express only as many integers as fit in the mantissa portion. Single precision floats are criminally smol. The neat thing about floats though is that they get one free bit of mantissa since the first bit is guaranteed to be 1! The microcontroller just always shifts it off when incrementing the mantissa. An optimization only possible in base 2.
+

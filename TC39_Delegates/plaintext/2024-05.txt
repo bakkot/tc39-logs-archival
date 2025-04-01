@@ -1,0 +1,697 @@
+2024-05-03
+[01:36:35.0790] <Rob Palmer>
+Hongbo is suggesting the iterator protocol has a high performance overhead (25x perf loss).  Do we know if this is cost is effectively mandated in the spec, or is this just a unfulfilled optimization opportunity in engines?
+
+https://www.moonbitlang.com/blog/js-support#benchmark-code-execution-speed-exceeds-javascript-by-25-times
+
+[02:35:57.0697] <rbuckton>
+My hope is that engines could optimize Array iteration, but I'm not sure about other cases
+
+[02:45:57.0326] <rbuckton>
+With something like iterator helpers, engines could theoretically optimize some parts of iteration knowing the shapes of the inputs and the whole of the graph of iteration operations. It's no small task, though, as it requires verifying that no intermediate steps are observable (proxies, user-defined iterators, patched methods, etc.). 
+
+[07:59:25.0036] <littledan>
+Engines brought up the overhead of the iteration protocol at the most recent TC39 meeting, as a source of hesitation for the pattern matching proposal's semantics
+
+[08:00:16.0499] <littledan>
+engines *sometimes* can reduce or eliminate the overhead in particular cases (e.g., for-of loops over Arrays, as long as you didn't mess with Array.prototype too much) but these optimizations are fragile and difficult to generalize
+
+[08:00:47.0160] <littledan>
+I think if we were to do the iteration protocol today, we'd do it differently. But at this point, it'd be expensive to have multiple iteration protocols...
+
+[08:01:10.0893] <bakkot>
+see some discussion earlier: https://matrixlogs.bakkot.com/TC39_Delegates/2024-04-25#L21
+
+[08:02:18.0535] <bakkot>
+that said there is a lot of room for optimizing iterators, in many cases without much in the way of performance cliffs
+
+[08:02:36.0702] <bakkot>
+it's just a lot of work
+
+[08:09:20.0345] <bakkot>
+(also it is extremely unlikely to ever be as fast as a bare loop, even with a huge amount of work)
+
+[08:16:24.0663] <bakkot>
+if we are interested in making iterator helpers faster, something we _could_ do is make all the `{ next, done }` pairs yielded by a given call to an iterator helper be the same object
+
+[08:16:54.0739] <bakkot>
+ * if we are interested in making iterator helpers faster, something we _could_ do is make all the `{ value, done }` pairs yielded by a given call to an iterator helper be the same object
+
+[08:18:50.0345] <bakkot>
+so like
+
+```js
+function map(fn) {
+  let result = { value, done }; // probably with those properties being non-configurable
+  let underlying = this;
+  return {
+    next() {
+      let { value, done } = underlying.next();
+      if (!done) value = fn(value);
+      result.value = value;
+      result.done = done;
+      return result;
+    }
+  }
+}
+```
+
+[08:19:06.0588] <bakkot>
+this would avoid most of the overhead and no one would ever notice
+
+[08:19:14.0911] <bakkot>
+but it is, as littledan indicates, conceptually quite gross
+
+[08:46:42.0117] <mgaudet>
+> <@robpalme:matrix.org> Hongbo is suggesting the iterator protocol has a high performance overhead (25x perf loss).  Do we know if this is cost is effectively mandated in the spec, or is this just a unfulfilled optimization opportunity in engines?
+> 
+> https://www.moonbitlang.com/blog/js-support#benchmark-code-execution-speed-exceeds-javascript-by-25-times
+
+Both? The iterator protocol imposes a lot of complexity; some of that complexity can be optimized through heroic work in JS engines (and has been!)... but the heroics mean that it's costly to do, particularly in any generalizable fashion. 
+
+I haven't looked at Iterator Helpers in a long while, but I'll bet they could certainly have more optimization applied over time, but I suspect a similar story applies: Could we make them faster? Sure, but that work displaces other work, and so we need to see it as important enough. 
+
+[08:56:27.0036] <bakkot>
+by coincidence I just read an article which  touches on performance of array destructuring, which is the same problem https://www.figma.com/blog/figmas-journey-to-typescript-compiling-away-our-custom-programming-language/#performance-issues-with-array-destructuring
+
+[10:07:20.0884] <shu>
+down with iteration protocol
+
+[10:16:10.0365] <littledan>
+if only we said "iterables can't contain undefined", then we would have .next() simply return undefined when it's done. Problem solved!
+
+[10:16:33.0963] <shu>
+> <@bakkot:matrix.org> if we are interested in making iterator helpers faster, something we _could_ do is make all the `{ value, done }` pairs yielded by a given call to an iterator helper be the same object
+
+i feel like how you react to this is like "inside you are two wolves"
+
+[10:30:57.0781] <bakkot>
+ * if we are interested in making iterator helpers faster, something we _could_ do (along the lines of Keith's suggestion I linked above) is make all the `{ value, done }` pairs yielded by a given call to an iterator helper be the same object
+
+[10:50:18.0281] <littledan>
+is this like, inside you there are two iterator results, one is the object x, and the other is also x, you are x ?
+
+[11:21:54.0209] <Chris de Almeida>
+savaged again by copy-by-reference!
+
+[11:31:59.0801] <ljharb>
+JS is always pass by value, though :-)
+
+[11:41:33.0411] <Chris de Almeida>
+tfw reference is value
+
+
+2024-05-04
+[17:54:05.0643] <snek>
+this moonbit thing is interesting https://github.com/moonbitlang/moonbit-docs
+
+[17:54:13.0252] <snek>
+they really bury their docs though
+
+[17:54:29.0112] <snek>
+""docs""
+
+[11:04:32.0967] <bakkot>
+anyone have further feedback on https://github.com/tc39/proposal-regex-escaping/pull/77? otherwise I think it's ready to go cc ljharb 
+
+
+2024-05-05
+[10:37:49.0245] <keith_miller>
+It could even have just been a `Symbol.done` sentinel value
+
+
+2024-05-09
+[06:17:48.0525] <Aki>
+I opened a PR for Notes! And added a basic-ass summary!
+
+
+2024-05-10
+[22:38:06.0428] <bakkot>
+couple people in this random reddit thread assuming that `x?.y = z` is legal, if anyone wants to pick that proposal up https://old.reddit.com/r/programming/comments/1cmccyh/i_built_an_opensource_library_to_automatically/l30559c/
+
+[00:22:02.0361] <Rob Palmer>
+Did it get explicitly dropped?
+
+[00:23:20.0090] <bakkot>
+from the original proposal, kinda: https://github.com/tc39/proposal-optional-chaining/issues/18#issuecomment-343926065
+
+[00:23:38.0196] <bakkot>
+since then I have heard people express interest but I don't think there's anything concrete
+
+[00:26:57.0654] <Rob Palmer>
+Oh that was years ago in the original Optional Chaining. A new effort started about a year ago to do this as a standalone proposal. 
+
+[00:28:19.0751] <Rob Palmer>
+https://github.com/tc39/proposal-optional-chaining-assignment
+
+Updated 4 months ago. 
+
+[00:28:44.0483] <bakkot>
+oh neat
+
+[00:28:47.0541] <bakkot>
+I have no recollection of this
+
+[00:29:07.0602] <bakkot>
+so I guess cc nicolo-ribaudo as champion, evidence from the wild that people expect this to exist ^
+
+[00:39:12.0115] <nicolo-ribaudo>
+Thanks, it's not the first time I see people assuming that it exists (that's why I brought it up) — I didn't work on the stage 1 feedback because I had higher priority stuff to do, but I'll see if I can find some time
+
+[00:39:23.0377] <nicolo-ribaudo>
+(and I'd be happy to add a co-champion)
+
+
+2024-05-11
+[18:34:17.0498] <shu>
+ljharb: i would appreciate it if you do not speak for browsers' motivations in issues. you can quote things or summarize we say, but please don't present a position, especially on "browsers" as a whole, as matter of fact
+
+[18:34:26.0905] <shu>
+ * ljharb: i would appreciate it if you do not speak for browsers' motivations in issues. you can quote things or summarize what we say, but please don't present a position, especially on "browsers" as a whole, as matter of fact
+
+[19:08:19.0609] <ljharb>
+fair, I’ll edit my comment 
+
+[19:08:56.0874] <ljharb>
+can you link me? It’s not easily findable rn
+
+[20:03:11.0710] <ljharb>
+ * k, updated to not speak as absolutely, but if my summary of your position is incorrect a clarification would be helpful.
+
+[20:29:28.0898] <shu>
+> <@ljharb:matrix.org> fair, I’ll edit my comment
+
+thank you
+
+[20:30:09.0894] <ljharb>
+lmk if you’d like it modified more
+
+
+2024-05-14
+[12:19:41.0637] <Michael Ficarra>
+can we get a Helsinki room created?
+
+
+2024-05-15
+[11:10:48.0749] <Rob Palmer>
+Of course.  The [TC39 in Helsinki room](https://matrix.to/#/!eYtJlOBqHCxsUknCCE:matrix.org?via=matrix.org&via=mozilla.org) for in-person coordination (e.g. "who wants to find a karaeoke bar?", "how do I travel from the airport?") is now created.  Ask a chair to invite you if you have not already received an invite.
+
+[11:11:07.0390] <Rob Palmer>
+ * Of course.  The [TC39 in Helsinki room](https://matrix.to/#/!eYtJlOBqHCxsUknCCE:matrix.org?via=matrix.org&via=mozilla.org) for in-person coordination (e.g. "who wants to find a karaoke bar?", "how do I travel from the airport?") is now created.  Ask a chair to invite you if you have not already received an invite.
+
+
+2024-05-17
+[14:31:38.0198] <shu>
+rbuckton: (or anyone else who is a grammar expert): i don't understand the `await using` cover grammar
+
+[14:32:28.0479] <shu>
+the stage 3 spec draft has this:
+
+[14:33:17.0892] <shu>
+CoverAwaitExpressionAndAwaitUsingDeclarationHead and AwaitExpression are exactly the same. how can you refine a grammar with the same grammar?
+
+[14:38:26.0988] <shu>
+the intention must've been that `await using x` in StatementItemList position is parsed in its entire 3 tokens by AwaitUsingDeclaration instead of the first 2 tokens by AwaitExpression, but i don't think you can express that by having a cover grammar for the first two tokens only
+
+[14:38:31.0387] <shu>
+i don't know how else to express this though
+
+[14:39:01.0242] <shu>
+or wait, is that how cover grammars work?
+
+[14:42:31.0272] <rbuckton>
+It works the same way as `CoverCallExpressionAndAsyncArrowHead`, which refines to `CallMemberExpression` (which is identical)
+
+[14:46:50.0299] <rbuckton>
+The difference is that you can parse the cover in places you can't parse AwaitExpression on its own, such as `await using x`. `await using` isn't a legal AwaitExpression if an identifier follows it on the same line, but its parse can be reused for AwaitUsingDeclaration
+
+[14:48:01.0138] <rbuckton>
+Just like `async(x)` is a valid call expression as long as it's not followed by a `=>`
+
+[14:48:12.0114] <rbuckton>
+ * Just like `async(x)` is a valid call expression as long as it's not followed by a `=>` (or any other illegal token)
+
+[14:48:20.0009] <shu>
+oh huh, i see
+
+[14:49:42.0176] <rbuckton>
+The cover is essentially eagerly parsing out the syntax. Some covers allow more tokens than what any single refinement might use, but that isn't always the case.
+
+[14:51:15.0002] <shu>
+i'm trying to understand why this can't be expressed as AwaitUsingDeclaration: `await` [ntl] `using` [ntl] BindingList without a cover
+
+[14:57:55.0817] <shu>
+it's still the case that there's no valid parse of that sequence of tokens with an AwaitExpression
+
+[15:00:16.0196] <rbuckton>
+Given the source text `await using x = y`, you have two potential parses for `await using`: An _ExpressionStatement_ containing an _AwaitExpresion_, or a _LexicalDeclaration_ containing an _AwaitUsingDeclaration_. You have to consider both parses as equally viable until they are not. For _ExpressionStatement_, you descend through _Expression_ to parse `await using`, but _ExpressionStatement_ must end in a `;`. Since `x` is not `;`, it's not a valid _ExpressionStatement_. For _LexicalDeclaration_, you can parse `await using` followed by an identifier and that matches an _AwaitUsingDeclaration_.
+It's only after both of these potential parses fails that ASI is considered, and a `;` would only be inserted after `await using` if there was a line terminator before the `x`. 
+
+[15:01:06.0949] <rbuckton>
+Given the source
+```
+await using
+x = y
+```
+The same process occurs, except the NLT restriction means AwaitUsingDeclaration isn't a valid parse in that case
+
+[15:04:38.0820] <shu>
+ah, it's ASI
+
+[15:04:39.0501] <shu>
+got it
+
+[15:04:40.0566] <rbuckton>
+ * Given the source text `await using x = y`, you have two potential parses for `await using`: An _ExpressionStatement_ containing an _AwaitExpresion_, or a _LexicalDeclaration_ containing an _AwaitUsingDeclaration_. You have to consider both parses as equally viable until they are not. For _ExpressionStatement_, you descend through _Expression_ to parse `await using`, but _ExpressionStatement_ must end in a `;`. Since `x` is not `;`, it's not a valid _ExpressionStatement_. For _LexicalDeclaration_, you can parse `await using` followed by an identifier and that matches an _AwaitUsingDeclaration_.
+It's only after both of these potential parses fail that ASI is considered, and a `;` would only be inserted after `await using` if there was a line terminator before the `x`.
+
+[15:04:50.0648] <shu>
+well that's also fucking terrible
+
+[15:06:27.0285] <rbuckton>
+In TypeScript I just do two token lookahead. If I'm on `await` and the next token is `using`, I check that the token that follows it is not an Identifier on the same line.
+
+[15:08:32.0939] <rbuckton>
+We try to say that ECMA262 is LR(1), but we have a single two-token lookahead with `` [ lookahead != `let` `[` ] `` for _ExpressionStatement_ that violates that. 
+
+[15:10:43.0845] <rbuckton>
+Maybe we could have done the same for AwaitExpression (i.e., `` `await` [lookahead != `using` Identifier] UnaryExpression ``), but I don't think we want _more_ two-token lookahead.
+
+[15:11:14.0078] <rbuckton>
+ * Maybe we could have done the same for AwaitExpression (i.e., ```await` [lookahead != `using` Identifier] UnaryExpression``), but I don't think we want _more_ two-token lookahead in ECMA262.
+
+[15:17:15.0357] <shu>
+well
+
+[15:17:29.0759] <shu>
+it seems likely an implementation will use two-token lookahead to implement this cover
+
+[15:17:35.0267] <shu>
+why obscure reality?
+
+
+2024-05-18
+[17:08:53.0917] <rbuckton>
+ * Maybe we could have done the same for AwaitExpression (i.e., `` `await` [lookahead != `using` Identifier] UnaryExpression `` ), but I don't think we want _more_ two-token lookahead in ECMA262.
+
+[17:13:52.0614] <rbuckton>
+The LR(1) goal/requirement predates my involvement at TC39 and has been strongly held by many delegates for well over a decade. I can't speak to their reasoning.
+
+[17:21:23.0637] <Michael Ficarra>
+"many" is a strong word
+
+[10:10:27.0938] <snek>
+do we have a process for changing who you are a delegate for? or is it just offboard and then onboard
+
+[10:12:08.0086] <snek>
+oh nvm i see there's a github issue template, neat
+
+
+2024-05-20
+[22:24:57.0034] <ljharb>
+congrats on your new job?
+
+[11:11:43.0040] <snek>
+ty :)
+
+[11:37:31.0021] <Ashley Claymore>
+Deno! Very cool. Congrats 🥳 
+
+
+2024-05-21
+[17:01:51.0841] <Justin Ridgewell>
+There’s a transfer template
+
+[13:56:26.0014] <shu>
+YieldExpression and AwaitExpressions are disallowed in the Initializer of FieldDefinitions, right? where is that checked for? i think i'm missing something
+
+[13:56:58.0235] <shu>
+the grammar is passing along [?Yield, ?Await] and i don't see a special Early Error for it
+
+[14:10:30.0119] <bakkot>
+hmm
+
+[14:10:36.0322] <bakkot>
+yeah it should probably not be passed through to the rhs
+
+[14:10:46.0670] <bakkot>
+at least for non-static fields; not sure about static
+
+[14:59:19.0671] <shu>
+implementations don't accept either await or yield in both member and `static` AFAICT
+
+[15:18:57.0266] <Richard Gibson>
+heh, JSC allows it
+```
+$ eshost -h JavaScriptCore -sx 'const iter = (function*(){ return (class { static foo = yield }).foo; })(); iter.next(); print(JSON.stringify(iter.next(42)));'
+#### JavaScriptCore
+{"done":true}
+```
+
+[15:19:14.0871] <shu>
+sick
+
+[15:19:21.0822] <shu>
+does it allow it for member fields?
+
+[15:19:23.0126] <Richard Gibson>
+ * heh, JSC allows it
+
+```
+$ eshost -h JavaScriptCore -sx '
+  const iter = (function*(){ return (class { static foo = yield }).foo; })(); 
+  iter.next();
+  print(JSON.stringify(iter.next(42)));
+'
+#### JavaScriptCore
+{"done":true}
+```
+
+[15:19:25.0953] <Richard Gibson>
+yes
+
+[15:19:31.0502] <shu>
+that's cursed
+
+[15:21:39.0645] <Richard Gibson>
+ * yes:
+```
+eshost -h JavaScriptCore -sx '
+  const iter = (function*(){ return (new class { foo = yield }).foo; })();
+  iter.next();
+  print(JSON.stringify(iter.next(42)));
+'
+#### JavaScriptCore
+{"done":true}
+```
+
+[15:23:23.0083] <kriskowal>
+I really want to say I have production code that uses this behavior to detect JSC specifically.
+
+[15:28:06.0076] <bakkot>
+mm... allows it syntatically but doesn't appear to actually hit the `yield
+
+[15:28:09.0381] <bakkot>
+ * mm... allows it syntatically but doesn't appear to actually hit the `yield`
+
+[15:28:20.0826] <Richard Gibson>
+I know, right?
+
+[15:28:26.0196] <bakkot>
+the first `iter.next()` is already `done: true`
+
+[15:29:23.0909] <kriskowal>
+Aye, one would expect {value: 42, done: true} if it got into the class.
+
+[15:29:40.0685] <kriskowal>
+Very strange.
+
+[15:32:17.0745] <shu>
+classes are haunted
+
+[15:32:22.0505] <shu>
+i'll file an issue
+
+[15:32:39.0448] <TabAtkins>
+[loads pistol, climbs back in the compiler]
+
+[15:33:37.0727] <bakkot>
+there is no imaginable trace which prints `x` and `z` but not `y` here
+
+[15:37:25.0473] <TabAtkins>
+and yet
+
+[15:47:42.0135] <shu>
+and why is class static blocks +Await?
+
+[15:53:04.0497] <rbuckton>
+To treat `await` as a keyword and and ban it. 
+
+[15:53:09.0152] <bakkot>
+that one does have an explicit error I am almost certain
+
+[15:53:45.0163] <rbuckton>
+* To treat 
+await as a keyword and then ban it.
+
+[15:53:50.0364] <Richard Gibson>
+I do think the spec may be messed up here, because [|PrimaryExpression|](https://tc39.es/ecma262/multipage/ecmascript-language-expressions.html#prod-PrimaryExpression) propagates [?Yield, ?Await] to |ClassExpression|, which propagates them to |FieldDefinition|, which propagates them to |Initializer|, which propagates them to |AssignmentExpression|, which can expand to |YieldExpression| with [+Yield] and to |AwaitExpression| with [+Await] (and likewise [|StatementList|](https://tc39.es/ecma262/multipage/ecmascript-language-statements-and-declarations.html#prod-StatementList) to |ClassDeclaration|). The engines that reject source like `function* f(){ class C { static foo = yield }; }` are treating the initializer as containing an identifier that is reserved in strict mode code, rather than as containing a yield expression. It seems that only JSC and engine262 parse per spec, although in evaluation JSC acts like the above and engine262 dies with an assertion failure:
+```
+$ eshost -h JavaScriptCore,engine262 -sx 'const iter = (function* f(){ return (class C { static foo = yield }).foo; })(); try { print(JSON.stringify(iter.next("A"))); print(JSON.stringify(iter.next("B"))); } catch (err) { print(err); }'
+#### engine262
+
+AssertError: genContext.Generator !== undefined
+
+#### JavaScriptCore
+{"done":true}
+{"done":true}
+```
+
+[15:54:12.0147] <rbuckton>
+* To treat `await` as a keyword and then ban it.
+
+[15:55:30.0953] <bakkot>
+you need to propagate the flags through to `FieldDefinition` because the LHS can be a computed property name and it does get those flags
+
+[15:55:37.0746] <bakkot>
+but it shouldn't go through to the `Initializer`
+
+[15:55:41.0375] <Richard Gibson>
+ * I do think the spec may be messed up here, because [|PrimaryExpression|](https://tc39.es/ecma262/multipage/ecmascript-language-expressions.html#prod-PrimaryExpression) propagates \[?Yield, ?Await\] to |ClassExpression|, which propagates them to |FieldDefinition|, which propagates them to |Initializer|, which propagates them to |AssignmentExpression|, which can expand to |YieldExpression| with \[+Yield\] and to |AwaitExpression| with \[+Await\] (and likewise [|StatementList|](https://tc39.es/ecma262/multipage/ecmascript-language-statements-and-declarations.html#prod-StatementList) to |ClassDeclaration|). The engines that reject source like `function* f(){ class C { static foo = yield }; }` are treating the initializer as containing an _identifier_ that is reserved in strict mode code, rather than as containing a yield expression. It seems that only JSC and engine262 parse per spec, although in evaluation JSC acts like the above and engine262 dies with an assertion failure:
+
+```
+$ eshost -h JavaScriptCore,engine262 -sx '
+  const iter = (function* f(){ return (class C { static foo = yield }).foo; })();
+  try {
+    print(JSON.stringify(iter.next("A")));
+    print(JSON.stringify(iter.next("B")));
+  } catch (err) { print(err); }
+'
+#### engine262
+
+AssertError: genContext.Generator !== undefined
+
+#### JavaScriptCore
+{"done":true}
+{"done":true}
+```
+
+[15:57:06.0752] <Richard Gibson>
+I agree
+
+[15:57:09.0804] <bakkot>
+> <@bakkot:matrix.org> that one does have an explicit error I am almost certain
+
+yeah https://tc39.es/ecma262/multipage/ecmascript-language-functions-and-classes.html#sec-class-definitions-static-semantics-early-errors
+
+> It is a Syntax Error if |ClassStaticBlockStatementList| Contains `await` is true.
+
+
+[15:57:55.0656] <shu>
+oh good
+
+[15:58:04.0199] <shu>
+whew
+
+[15:58:22.0733] <Richard Gibson>
+but that's only in `static { … }` blocks
+
+[15:58:29.0515] <bakkot>
+right
+
+[16:02:57.0861] <shu>
+https://github.com/tc39/ecma262/issues/3333
+
+[16:03:17.0557] <Richard Gibson>
+ * I do think the spec may be messed up here, because [|PrimaryExpression|](https://tc39.es/ecma262/multipage/ecmascript-language-expressions.html#prod-PrimaryExpression) propagates \[?Yield, ?Await\] to |ClassExpression|, which propagates them to |FieldDefinition|, which propagates them to |Initializer|, which propagates them to |AssignmentExpression|, which can expand to |YieldExpression| with \[+Yield\] and to |AwaitExpression| with \[+Await\] (and likewise [|StatementList|](https://tc39.es/ecma262/multipage/ecmascript-language-statements-and-declarations.html#prod-StatementList) to |ClassDeclaration|). The engines that reject source like `function* f(){ class C { static foo = yield }; }` are treating the initializer as containing an _identifier_ that is reserved in strict mode code, rather than as containing a yield expression. It seems that only JSC parses per spec, although in evaluation it acts like the above (and engine262 dies with an assertion failure):
+
+```
+$ eshost -h JavaScriptCore,engine262 -sx '
+  print("START");
+  const iter = (function* f(){ return (class C { static foo = yield }).foo; })();
+  try {
+    print(JSON.stringify(iter.next("A")));
+    print(JSON.stringify(iter.next("B")));
+  } catch (err) { print(err); }
+'
+#### engine262
+
+AssertError: genContext.Generator !== undefined
+
+#### JavaScriptCore
+START
+{"done":true}
+{"done":true}
+```
+
+[16:06:02.0230] <Justin Ridgewell>
+I know we discussed this in plenary, I remember going though a bunch of trouble to fix this in Babel’s transform
+
+[16:06:38.0404] <Justin Ridgewell>
+Did we just get the spec text wrong?
+
+[16:06:52.0620] <bakkot>
+oh hey https://github.com/tc39/ecma262/issues/2437
+
+[16:07:02.0255] <shu>
+dang
+
+[16:07:22.0977] <shu>
+2021!!
+
+[16:07:52.0562] <shu>
+> <@jridgewell:matrix.org> I know we discussed this in plenary, I remember going though a bunch of trouble to fix this in Babel’s transform
+
+there is a _possible_ behavior for `static` fields. did we have consensus to disallow suspends in static field initializers as well? i don't recall
+
+[16:08:42.0773] <Justin Ridgewell>
+I can’t remember if it we discussed instance or static or both
+
+
+2024-05-22
+[10:55:25.0600] <mgaudet>
+If one was interested in spelunking through history, ES6 era, where would one be looking for discussions? The Harmony wiki (http://web.archive.org/web/20161123164855/http://wiki.ecmascript.org/doku.php)?
+
+[10:59:38.0823] <bakkot>
+tc39 notes: https://github.com/tc39/notes and esdiscuss: https://esdiscuss.org/
+
+[11:00:32.0568] <Chris de Almeida>
+> <@mgaudet:mozilla.org> If one was interested in spelunking through history, ES6 era, where would one be looking for discussions? The Harmony wiki (http://web.archive.org/web/20161123164855/http://wiki.ecmascript.org/doku.php)?
+
+https://dl.acm.org/doi/10.1145/3386327
+https://esdiscuss.org/
+https://github.com/tc39/archives
+https://github.com/tc39/notes/tree/main/meetings
+
+
+
+2024-05-24
+[23:52:57.0795] <nicolo-ribaudo>
+How would you feel about tracking stage 2.7 reviewers in the tc39/proposals repo?
+
+[10:57:49.0521] <shu>
+i would prefer to feel as little as possible
+
+
+2024-05-28
+[09:04:09.0332] <Michael Ficarra>
+wait so we've done all this trust types work and we don't even know if the CSP folks want to use it yet? https://github.com/w3c/webappsec-csp/pull/665
+
+[10:27:27.0152] <littledan>
+> <@michaelficarra:matrix.org> wait so we've done all this trust types work and we don't even know if the CSP folks want to use it yet? https://github.com/w3c/webappsec-csp/pull/665
+
+What do you mean, we don't know if CSP folks want to use it?
+
+[10:27:56.0612] <littledan>
+I think we want to be in the middle of the spec process, not just consulted at the end
+
+[10:28:07.0094] <littledan>
+this stuff is pretty important for security, so it makes sense that we spend time on it
+
+[10:28:15.0292] <Michael Ficarra>
+> This new keyword allows enabling eval only when trusted types are enforced. Such that in browsers that don't support trusted types no eval is allowed, unlike with unsafe-eval. This is a draft PR to gather feedback on this idea, this concept was brought up at previous WebAppSec WG meetings.
+
+[10:29:13.0766] <Michael Ficarra>
+it makes it sound like we don't even know if CSP wants the feature, yet we've already done a bunch of work in our spec
+
+[10:29:35.0895] <Michael Ficarra>
+the requests for a position from Mozilla/Webkit were opened today
+
+[10:29:42.0983] <Michael Ficarra>
+don't you think we should've gotten that buy-in earlier?
+
+[10:30:34.0568] <littledan>
+yeah IMO it's OK for us to delay landing these kinds of patches until those standards positions happen, but in general TT has been developed together with those two groups, conversations are ongoing and we should be part of them during, not afterwards
+
+[10:30:56.0838] <littledan>
+we could get consensus on the patch in advance and land it once we really know that it will be useful for them
+
+[10:32:33.0962] <littledan>
+the issue tracker clearly shows people from Mozilla and WebKit actively involved in these issues. The standards position is for sort of broadening outreach and finalizing a conclusion
+
+[10:45:28.0455] <Justin Ridgewell>
+> <@michaelficarra:matrix.org> wait so we've done all this trust types work and we don't even know if the CSP folks want to use it yet? https://github.com/w3c/webappsec-csp/pull/665
+
+It reads to me that this isn’t necessary for TT, it just makes enabling it more secure for legacy browsers that don’t support TT.
+
+[10:49:53.0610] <nicolo-ribaudo>
+Exactly -- if you use `unsafe-eval` with TT, browsers that know about TT will only allow TT to be used in `eval()`, and reject random strings. In older browsers, it will fallback to the previous `unsafe-eval` behavior. This has already buy-in as part of the original TT.
+
+The new standard position request is to allow using `trusted-eval` as an alternative to `unsafe-eval`, so that the fallback in old browsers can be "block everything" rather than "allow everything"
+
+[10:53:42.0855] <Michael Ficarra>
+thanks for the explanation @nicolo-ribaudo:matrix.org
+
+
+2024-05-29
+[14:44:32.0928] <bakkot>
+reminder that deadline to add things to the agenda for the coming meeting is in two days (!!)
+
+
+2024-05-30
+[17:19:09.0621] <keith_miller>
+What do people think the web compatibility story is likely to be for making bound functions no longer have a configurable `.prototype` property? Possible? Incompatible?
+
+[21:29:04.0840] <snek>
+i don't think i've ever seen code touching the prototype field of a bound function
+
+[00:33:43.0971] <Mathieu Hofman>
+> <@keith_miller:matrix.org> What do people think the web compatibility story is likely to be for making bound functions no longer have a configurable `.prototype` property? Possible? Incompatible?
+
+I actually have some code relying on that prototype property. Might be able to update.
+
+[00:41:26.0302] <Mathieu Hofman>
+Actually no we're good, we redefine the prototype property, and don't rely on one being present
+
+[07:28:53.0835] <littledan>
+I guess you're asking about making the property non-configurable, rather than removing it, right? this seems complicated to assess the web compatibility...
+
+[07:28:57.0007] <littledan>
+what's the motivation?
+
+[08:00:50.0282] <littledan>
+Is there anything further that people would like to discuss about Signals in TC39? I don't have any big updates yet, but could go further into explanations of certain details or any questions that people have.
+
+[08:06:15.0921] <ljharb>
+> <@keith_miller:matrix.org> What do people think the web compatibility story is likely to be for making bound functions no longer have a configurable `.prototype` property? Possible? Incompatible?
+
+es5-shim code may conflict with changing that, as well as npmjs.com/function-bind, but i haven’t dug into anything to look
+
+[10:17:02.0874] <rbuckton>
+Are any other runtimes working on implementations of RegExp Modifiers? It's now shipping in Chrome and Edge, though both use the same implementation in V8. I saw that SpiderMonkey now has a tracking issue, but cannot find one yet for JSC. 
+
+[10:35:20.0408] <shu>
+i may be misremembering but i thought JSC was first to ship
+
+[10:36:53.0300] <iain>
+SM imports irregexp, so under the covers it's mostly the same implementation as Chrome and Edge.
+
+[11:59:07.0802] <rbuckton>
+For SpiderMonkey I found https://bugzilla.mozilla.org/show_bug.cgi?id=1899813, which was only opened 3 hours ago
+
+[12:01:57.0080] <rbuckton>
+I haven't yet found a tracking bug for JSC.
+
+[12:37:27.0020] <keith_miller>
+http://npmjs.com/function-bind doesn't even seem to reference "defineProperty" so I think that would be fine. Ditto for https://github.com/es-shims/es5-shim/blob/5930e4ac2c4fce44866a000b2ea9704c349f5cf5/es5-shim.js#L241 but maybe I'm looking at the wrong thing?
+
+[12:44:13.0088] <keith_miller>
+I don't think there's a JSC bug and I 95% sure we don't implement it
+
+[12:44:26.0322] <keith_miller>
+ * I don't think there's a JSC bug for RegExp Modifiers and I 95% sure we don't implement it
+
+[13:25:02.0581] <ljharb>
+yeah it might just be that it’ll retroactively make their bind fakeage wrong? which would depend on the overall compatibility of it
+
+[14:02:51.0313] <shu>
+i thought michael loved regexp
+
+[15:00:10.0036] <keith_miller>
+Don't we all love RegExp?
+
+
+2024-05-31
+[12:54:13.0263] <Mathieu Hofman>
+Making the `prototype` property of bound functions non-configurable would definitely break what we're doing in https://github.com/endojs/endo/blob/master/packages/ses/src/tame-symbol-constructor.js. Switching to `bind` was actually partially motivated by this. We used to use an arrow function, but Hermes had a weird bug where it added a non-configurable prototype to arrow functions. Plus bind has more correct semantics regarding pass-through of construct behavior anyway.
+

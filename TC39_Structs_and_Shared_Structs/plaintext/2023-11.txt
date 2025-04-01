@@ -1,0 +1,271 @@
+2023-11-16
+[13:32:59.0632] <rbuckton>
+shu: I spoke with Luis and we both concur that `using` is preferred in the long term. For context, these are my primary concerns regarding a callback-based API:
+
+- Since the addition of `async`/`await`, many JS programmers seem to be moving away from CPS for asynchronous code in new projects.
+- Callback based APIs violate Tennent's Correspondence Principle, requiring complex rewrites of statements to introduce the callback when refactoring existing code and making things like `for` loops harder to reason over.
+- An auto-locking callback API assumes no composition of locking mechanisms, such as building a SharedMutex that supports lock promotion, or holding a lock on a mutex longer than the scope of a single function call. 
+- While its feasible to build a rudimentary non-callback wrapper for the callback API, such a wrapper will not release its lock if the worker thread terminates abruptly, such as due to an exception or a call to `worker.terminate()`. With an object-based lock, it is feasible to write a callback-based wrapper that does not suffer from this limitation.
+- Object-based locks are more flexible in terms of advanced scenarios, such as implementing a "scoped lock" that can lock multiple mutexes at once with a deadlock prevention algorithm (callback-based API is far more complicated and produces an arbitrarily deep call stack), or locks that are only conditionally taken (i.e., to avoid re-acquiring a lock in a recursive algorithm).
+
+[13:33:56.0343] <rbuckton>
+Regarding the TCP issue, consider something as simple as a for loop with continue, break, and return:
+ 
+```js
+// non-locking code
+outer: for (const back of queues) {
+  for (const msg of queue.getMessages()) {
+    if (msg.stop) return msg.result;
+    if (msg.exitQueue) break outer; 
+    if (!msg.accept()) continue;
+    processMessage(msg);
+  }
+}
+// add lock using callback-based API
+outer: for (const back of queues) {
+  for (const msg of queue.getMessages()) {
+    const result = Mutex.lock(mut, () => {
+      if (msg.stop) return { op: "return", value: msg.result };
+      if (msg.exitQueue) return { op: "break_outer" }; 
+      if (!msg.accept()) return;
+      processMessage(msg);
+    });
+    if (result?.op === "return") return result.return;
+    if (result?.op === "break_outer") break outer;
+  }
+}
+// add lock via `using`:
+outer: for (const back of queues) {
+  for (const msg of queue.getMessages()) {
+    using lck = new UniqueLock(mut);
+    if (msg.stop) return msg.result;
+    if (msg.exitQueue) break outer; 
+    if (!msg.accept()) continue;
+    processMessage(msg);
+  }
+}
+```
+
+[13:35:28.0870] <rbuckton>
+And a rough sketch of a `UniqueLock` API might look like:
+
+```js
+class UniqueLock {
+  constructor(mutex?: Atomics.Mutex, t?: "lock" | "defer-lock" | "try-to-lock" | "adopt-lock");
+  static lockAsync(mutex: Atomics.Mutex): Promise<UniqueLock>;
+  get mutex(): Atomics.Mutex | undefined;
+  get ownsLock(): boolean;
+  tryLock(timeout?: number): boolean;
+  lock(): void;
+  lockAsync(): Promise<boolean>;
+  unlock(): void;
+  release(): void;
+  [Symbol.dispose](): void;
+}
+```
+
+with usage like
+```js
+// sync lock
+{
+  using lck = new UniqueLock(mut);
+  ...
+}
+
+// async lock (option 1)
+{
+  using lck = await UniqueLock.lockAsync(mut);
+  ...
+}
+ 
+// async lock (option 2)
+{
+  using lck = new UniqueLock(mut, "defer-lock");
+  await lck.lockAsync();
+}
+```
+
+[13:45:48.0747] <shu>
+i see, thanks
+
+[13:45:53.0446] <shu>
+i can live with this
+
+[13:46:32.0283] <shu>
+rbuckton: Mutex then would be this opaque thing, no prototype methods, nothing?
+
+[13:47:20.0327] <shu>
+my only quibble with the sketch is i would've figured `tryLock` and `lock` and friends would be on Mutex, with `UniqueLock` just providing a `Symbol.dispose`
+
+[13:47:27.0221] <shu>
+like what you do in C++
+
+[13:50:35.0294] <rbuckton>
+C++ `std::unique_lock` has a similar API.
+
+[13:51:01.0261] <rbuckton>
+`std::scoped_lock` has no methods, but also locks multiple mutexes at once
+
+[13:53:37.0574] <rbuckton>
+And sometimes you need need to hand off a lock to something else, or perform programmatic checks. For example:
+
+```js
+using lck = new UniqueLock(mut, "try-to-lock");
+if (lck.ownsLock) {
+  // fast path
+}
+else {
+  lck.lock(); // blocks
+  // slow path
+}
+```
+
+[13:54:13.0970] <rbuckton>
+ * And sometimes you need need to hand off a lock to something else, or perform programmatic checks. For example:
+
+```js
+using lck = new UniqueLock(mut, "try-to-lock");
+if (lck.ownsLock) {
+  // fast path
+}
+else {
+  // slow path, may include calls to `wait` for conditions, etc.
+  lck.lock(); // blocks
+}
+```
+
+[13:54:34.0594] <rbuckton>
+And yes, `mutex` could just be opaque.
+
+[13:55:16.0045] <shu>
+why start with that and not mutex_guard?
+
+[13:55:36.0775] <rbuckton>
+`UniqueLock` could also accept user-defined lockables if you need to build more complex coordination primitives for your use case.
+
+[13:55:46.0077] <shu>
+(again, the minimal thing). i don't want to lead with things like deadlock avoidance for sequencing locks, like unique_locks are often used for
+
+[13:55:57.0563] <rbuckton>
+Because `UniqueLock` is the most flexible as a building block.
+
+[13:56:33.0129] <rbuckton>
+IIRC, `unique_lock` doesn't provide deadlock avoidance. That's the job of `scoped_lock`. And I can build `scoped_lock` on top of `unique_lock` if I need too
+
+[13:56:44.0275] <shu>
+ah perhaps i'm confusing the two
+
+[13:56:44.0992] <shu>
+okay
+
+[13:56:47.0117] <rbuckton>
+See https://github.com/microsoft/TypeScript/blob/shared-struct-test/src/compiler/threading/scopedLock.ts
+
+[13:56:56.0735] <rbuckton>
+And https://github.com/microsoft/TypeScript/blob/shared-struct-test/src/compiler/threading/uniqueLock.ts
+
+[13:57:22.0335] <shu>
+i think deadlock avoidance definitely runs afoul of not minimal, but i see that this doesn't have that, that seems fine
+
+[13:58:30.0556] <rbuckton>
+Both of those use an object-based wrapper for `Mutext` to avoid callbacks, but potentially runs afoul of bullet #4 above (assuming the callback-based approach currently releases the mutex if it is held when the worker is abruptly terminated)
+
+[13:59:18.0946] <rbuckton>
+`UniqueLock` gives you the minimal functionality and flexibility necessary to build more complex things.
+
+[14:00:06.0649] <shu>
+what's the 4th bullet? thread termination?
+
+[14:00:10.0898] <rbuckton>
+And only really exposes `lock`, `tryLock`, and `unlock`
+
+[14:00:12.0500] <rbuckton>
+Yeah
+
+[14:00:57.0782] <shu>
+yeah that's kind of tricky
+
+[14:01:27.0960] <shu>
+it'd be nice to automatically release but... that has cost
+
+[14:02:16.0717] <rbuckton>
+Even if there isn't automatic release, the object wrapper incurs more overhead since it needs both a `Mutext` and another boolean field.
+
+[14:03:15.0666] <shu>
+`Worker.terminate()` is odd
+
+[14:03:24.0410] <shu>
+bb in an hour
+
+[15:18:28.0293] <shu>
+back
+
+[15:18:42.0895] <shu>
+okay, so, i see Web Locks makes an attempt to release an agent's held locks upon termination
+
+[15:19:06.0330] <shu>
+if we aspire to do the same, that means keeping a list, ugh
+
+[15:25:39.0534] <shu>
+i guess each execution context can keep a stack of currently held mutexes, that, upon termination execution, get unlocked
+
+
+2023-11-17
+[12:30:16.0726] <rbuckton>
+@shu: We've been having a discussion on the enum proposal that Jack Works presented awhile back, and one of my goals for enums is that enum values will be shareable in some form. The basic premise is that an `enum` could have enum members that are either Number, BigInt, String, Symbol, or an immutable tagged data structure (for ADT enums). Numbers and strings won't be problematic, since those can already be stored in a shared struct, and I plan to ensure that the data structure for ADT enums will be shareable in some way (possibly defined internally as a shared struct).
+Do you expect that shared structs will also be able to store BigInt and Symbol values? If not all BigInt values, would limiting it to only 64-bit integers be viable? If not all Symbol values, would it be feasible to support only Symbols originateing from an `enum` (or a `shared enum`)?
+
+For additional context, enums might look something like:
+```
+enum Color of Number { Red, Blue, Green }
+Color.Red; // 0
+Color.Blue; // 1
+
+enum Flags of BigInt {
+  None = 0n,
+  Flag0 = 1n << 0,
+  // ...
+  Flag63 = 1n << 63,
+}
+Flags.Flag0; // 1n
+
+enum Result of String { Ok, BadInput }
+Result.Ok; // "Ok"
+
+enum Choices of Symbol { None, First, Second }
+Choices.First; // Symbol("Choices.First")
+
+enum Option of ADT {
+  Some(value),
+  None
+}
+Option.Some(1); // an Option.Some object with a 'value' property of '1'
+Option.None; // TBD: either a Symbol or a special object like Option.Some
+```
+
+[13:12:34.0741] <shu>
+rbuckton: i think bigints and symbols ought to be shareable, but i need to think more about symbols obviously
+
+[14:04:34.0016] <rbuckton>
+I can't think of any reason why they shouldn't be, other than the GC complexity you discussed in the last working session
+
+[14:05:41.0315] <Mathieu Hofman>
+how are symbols more complex than shared structs? they both have a unique identity
+
+[14:08:30.0109] <Mathieu Hofman>
+oh silly me, the engine would need to recognize which have been shared and which haven't, to know which need to participate in agent wide gc
+
+[14:08:38.0729] <Mathieu Hofman>
+ * oh silly me, the engine would need to recognize which have been shared and which haven't, to know which need to participate in agent-cluster wide gc
+
+[15:34:30.0491] <snek>
+if symbols are immediate values with off-heap descriptions then you don't need to gc them :P
+
+
+2023-11-18
+[16:38:55.0212] <Mathieu Hofman>
+I'm not sure I follow. Unique Symbols have a unique identity, and since they can be used as WM keys now, it would be surprising for them (or any objects associated to them) to not be GCed
+
+[16:41:24.0356] <Mathieu Hofman>
+I agree that in a world without symbols as WM keys, you wouldn't have needed to collect them. Moddable was actually doing that in XS by simply having all symbols have a unique index.
+

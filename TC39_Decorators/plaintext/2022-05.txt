@@ -1,0 +1,534 @@
+2022-05-02
+[10:39:56.0420] <legendecas>
+> <@legendecas:matrix.org> That will be great. I'd be happy to volunteer to work on test262 :D
+
+Just submitted the initial setup https://github.com/tc39/test262/pull/3512
+
+
+2022-05-04
+[10:43:05.0879] <rbuckton>
+I was looking at the outline for parameter decorators mentioned here: https://github.com/tc39/proposal-decorators/blob/master/EXTENSIONS.md#parameter-decorators-and-annotations, and was thinking about the shape of the context object. I think there are a few things we could add aside from `kind`:
+
+```ts
+interface ParameterDecoratorContext {
+  kind: "parameter";
+  index: number; // ordinal position of parameter
+  name?: string; // name if an Identifier, `undefined` if a binding pattern
+  rest: boolean; // indicates a rest parameter (i.e., `...`)
+  parent:
+    | {
+        kind: "function";
+        name?: string;
+      }
+    | {
+        kind: "method" | "getter" | "setter";
+        name: string | symbol;
+        private: boolean;
+        static: boolean;
+        parent: // may be other parents in the future such as `struct`, `object`, etc.
+          | {
+              kind: "class";
+              name?: string;
+            }
+      };
+  // phase: "function" runs initializers at the start of the function body
+  addInitializer(cb: () => unknown, phase?: "class" | "static" | "instance" | "function"): void;
+}
+```
+The above also incorporates the parent context idea from https://github.com/tc39/proposal-decorators/issues/466
+
+[10:46:08.0407] <rbuckton>
+TS parameter decorators get the parameter index which is necessary for DI, RTTI, and RTTC, so that seems a minimum requirement for a parameter context.
+
+[11:41:33.0595] <Mathieu Hofman>
+index and a way to get the context / add an initializer to the method/function so that the parameter and function/method decorators can cooperate would be my requirements
+
+[16:35:41.0406] <rbuckton>
+I imagine "add an initializer" would match the behavior already proposed in EXTENSIONS.md and be somewhat similar to fields.
+
+[16:36:37.0717] <rbuckton>
+We might need to bifurcate `ParameterDecoratorContext` into `kind: "parameter"` and `kind: "rest-parameter"` (as opposed to a `rest: boolean` property on the context), because rest parameters can't have initializers.
+
+[16:38:17.0794] <rbuckton>
+I'm not sure what you mean by "get the context" however. Would that be similar to the opaque metadata context object proposal?
+
+[16:40:11.0987] <Mathieu Hofman>
+But you should still be able to add an initializer to the function/method definition, no? so it'd just be a runtime error to add an initializer to the rest param?
+
+[16:40:23.0484] <Mathieu Hofman>
+ * But you should still be able to add an initializer to the function/method definition, no? so it'd just be a runtime error to add an initializer to the rest param?
+
+[16:41:21.0830] <Mathieu Hofman>
+Right, I was referring to the opaque metadata, be able to reference the opaque object of the function/method
+
+[16:44:36.0905] <Mathieu Hofman>
+As I mentioned, I'm mostly interested in runtime checks, and would want to be able to express things like
+
+```
+const foo = (@string name, @array(number) ...values) => {}
+```
+
+[16:54:51.0806] <Mathieu Hofman>
+But also be able to add runtime metadata so that I can do things like:
+```
+import { remotable, awaited } from 'rpc-lib';
+
+const foo = remotable({
+  foo: (@awaited thing) => {
+    if (myCollection.has(thing)) {
+      ...
+    } else {
+      ...
+    }
+  }
+});
+```
+
+Where the `remotable` helper (which could be written as an object literal decorator) would be able to get the annotations for the `foo` method on the object it received, and (to really simplify) build a new object with a new `foo` method that will implicitly await on the first argument.
+
+
+
+2022-05-05
+[17:01:40.0373] <Mathieu Hofman>
+So in the first case of runtime checks, I need the param decorator to be able to modify the function in such a way that param validation can run when the function is invoked (hopefully without requiring to decorate the function itself).
+
+[17:01:41.0842] <Mathieu Hofman>
+And in the second case, I need to annotate the object literal's method parameters in such a way that a related helper can read the annotations starting from the object itself
+
+[18:33:50.0974] <rbuckton>
+> <@mhofman:matrix.org> But you should still be able to add an initializer to the function/method definition, no? so it'd just be a runtime error to add an initializer to the rest param?
+
+`addInitializer` (normal and rest params) would be for adding initializers in general, while returning an initializer would be for piping through the passed argument (non rest params). So `addInitializer` would probably be what you would use in this case. 
+
+[18:38:51.0551] <rbuckton>
+In other words, you'd write the `string` decorator above like this:
+
+```js
+const string = (_, { index, addInitializer }) => {
+  addInitializer((...args) => {
+    if (typeof args[index] !== "string") throw new TypeError();
+  });
+};
+```
+
+[18:39:10.0564] <rbuckton>
+* In other words, you'd write the decorators above like this:
+
+```js
+const string = (_, { index, addInitializer }) => {
+  addInitializer((...args) => {
+    if (typeof args[index] !== "string") throw new TypeError();
+  });
+};
+```
+
+[18:39:52.0769] <rbuckton>
+* In other words, you'd write the `string` decorator above like this:
+
+```js
+const string = (_, { index, addInitializer }) => {
+  addInitializer((...args) => {
+    if (typeof args[index] !== "string") throw new TypeError();
+  });
+};
+```
+
+[18:41:29.0869] <Mathieu Hofman>
+Well and probably return the value if valid, right ?
+
+[18:41:57.0544] <Mathieu Hofman>
+oh I see this is an init on the method
+
+[18:42:28.0787] <Mathieu Hofman>
+How would a validator that coerces work in this pattern?
+
+[18:42:48.0385] <rbuckton>
+> <@mhofman:matrix.org> But also be able to add runtime metadata so that I can do things like:
+> ```
+> import { remotable, awaited } from 'rpc-lib';
+> 
+> const foo = remotable({
+>   foo: (@awaited thing) => {
+>     if (myCollection.has(thing)) {
+>       ...
+>     } else {
+>       ...
+>     }
+>   }
+> });
+> ```
+> 
+> Where the `remotable` helper (which could be written as an object literal decorator) would be able to get the annotations for the `foo` method on the object it received, and (to really simplify) build a new object with a new `foo` method that will implicitly await on the first argument.
+> 
+
+Not sure where I stand on object literal decorators since theres `f({})` and `{} |> f(%)` 
+
+[18:43:42.0713] <rbuckton>
+If pipe was F#, we could have added a backpipe as well like `f <| { }`
+
+[18:43:43.0884] <Mathieu Hofman>
+> Not sure where I stand on object literal decorators since theres f({}) and {} |> f(%)
+
+Yup, that's why I excluded it. But I do want to make sure that one way or another I can get at the annotations
+
+[18:43:53.0789] <Mathieu Hofman>
+ * > Not sure where I stand on object literal decorators since theres f({}) and {} |> f(%)
+
+Yup, that's why I excluded it. But I do want to make sure that one way or another I can get at the annotations
+
+[18:45:01.0808] <rbuckton>
+Js-choi had thoughts about block decorators as a way to do comprehensions, similar to F#
+
+[18:47:20.0848] <rbuckton>
+* Js-choi had thoughts about block decorators as a way to do comprehensions, similar to F# computation expressions
+
+[18:47:39.0917] <rbuckton>
+https://docs.microsoft.com/en-us/dotnet/fsharp/language-reference/computation-expressions
+
+[18:51:45.0487] <rbuckton>
+Something like
+```js
+const q = @query do {
+  for (const x of ar) {
+    if (x > 1) yield x;
+  }
+};
+```
+
+
+[18:52:32.0782] <rbuckton>
+Except F# computation expressions can add keywords. Not sure if I'd support that
+
+
+2022-05-06
+[08:25:09.0844] <jschoi>
+Well, they wouldn’t add keywords so much as override the semantics of several existing keywords (like `yield`, `await`, `return`) within the decorated blocks. But yeah!
+
+[08:25:16.0309] <jschoi>
+> <@rbuckton:matrix.org> Except F# computation expressions can add keywords. Not sure if I'd support that
+
+ * Well, they wouldn’t add keywords so much as override the behavior of several existing keywords (like `yield`, `await`, `return`) within the decorated blocks. But yeah!
+
+[08:25:56.0344] <jschoi>
+ * Well, they wouldn’t add keywords so much as override the semantics of several existing keywords (like `yield`, `await`, `return`) within the decorated blocks. But yeah!
+
+[08:28:27.0775] <Mathieu Hofman>
+Interesting. Just within that context tho, right? Not nested calls for example.
+
+[08:34:58.0855] <jschoi>
+> <@mhofman:matrix.org> Interesting. Just within that context tho, right? Not nested calls for example.
+
+Yes, that’s right.
+
+I was rewriting a plan in https://gist.github.com/js-choi/854ccbc34787c697ea1f8458d6a1d660, but it was in the middle of a rewrite (most of the stuff is hidden in the Scratchpad’s <details> element at the end), then I lost the bandwidth to work on it. 
+
+[08:35:44.0681] <jschoi>
+One big thing that blocked me was the unresolved question on whether `do` expressions will use implicit-result block semantics (`return` works on the outer function), explicit-result block semantics (same except the final statement is the final evaluation result), or IIFE semantics (`return` is required and works on the inner function). Context blocks / decorated blocks would *have* to use IIFE semantics, so if `do` blocks do not go with IIFE semantics then they can’t use the `do` keyword.
+
+[08:36:27.0925] <jschoi>
+The papers in http://tomasp.net/academic/papers/computation-zoo/ give a nice overview of the general ideas from the F# perspective (although they use a little of the usual higher-level FP jargon that we definitely would avoid).
+
+[08:37:08.0520] <jschoi>
+ * The papers in http://tomasp.net/academic/papers/computation-zoo/ give a nice overview of the general ideas from the F# perspective, although they use some of the usual higher-level FP jargon that we definitely would avoid.
+
+[08:37:29.0577] <jschoi>
+ * The papers in http://tomasp.net/academic/papers/computation-zoo/ give a nice overview of the general ideas from the F# perspective (although they use a little of the usual higher-level FP jargon that we definitely would avoid).
+
+[09:09:01.0703] <rbuckton>
+> <@jschoi:matrix.org> Well, they wouldn’t add keywords so much as override the semantics of several existing keywords (like `yield`, `await`, `return`) within the decorated blocks. But yeah!
+
+F# computations did both, and can also leverage a type system to acquire an AST for an expression to do tree rewrites to convert a local computation  expression into a remotely executed operation (such as in a SQL database).
+
+[09:10:03.0201] <rbuckton>
+> <@jschoi:matrix.org> One big thing that blocked me was the unresolved question on whether `do` expressions will use implicit-result block semantics (`return` works on the outer function), explicit-result block semantics (same except the final statement is the final evaluation result), or IIFE semantics (`return` is required and works on the inner function). Context blocks / decorated blocks would *have* to use IIFE semantics, so if `do` blocks do not go with IIFE semantics then they can’t use the `do` keyword.
+
+I've always been concerned that `do` expressions don't have an explicit return from the block, even if it's not `return` per se.
+
+[09:12:10.0541] <rbuckton>
+I was playing around with what this might look like:
+
+```ts
+// given:
+//
+//  @expr do {
+//      console.log("a");
+//      yield 1;
+//      console.log("b");
+//  }
+//
+// translates to:
+//
+expr.run(
+    expr.delay(() => {
+        console.log("a");
+        return expr.combine(
+            expr.yield(1),
+            expr.delay(() => {
+                console.log("b");
+                return expr.zero();
+            })
+        );
+    })
+);
+```
+
+[09:12:26.0767] <rbuckton>
+ * I was playing around with what this might look like:
+
+```ts
+// given:
+//
+//  @expr do {
+//      console.log("a");
+//      yield 1;
+//      console.log("b");
+//  }
+//
+// translates to:
+//
+expr.run(
+    expr.delay(() => {
+        console.log("a");
+        return expr.combine(
+            expr.yield(1),
+            expr.delay(() => {
+                console.log("b");
+                return expr.zero();
+            })
+        );
+    })
+);
+```
+
+[10:14:10.0736] <jschoi>
+Yeah, pretty much like that. 
+
+Userland would be able to do async do blocks and beyond with a unified syntax. Though they would use `do` only if do blocks use IIFEs; that’s why the Gist uses `@context in { … }`.
+
+[10:14:59.0189] <jschoi>
+* Yeah, pretty much like that. 
+
+Userland would be able to do async do blocks and beyond with a unified syntax. Though they would use `do` only if do blocks use IIFEs; that’s why the Gist uses `@context in { … }`.
+
+[10:15:20.0733] <jschoi>
+> <@rbuckton:matrix.org> F# computations did both, and can also leverage a type system to acquire an AST for an expression to do tree rewrites to convert a local computation  expression into a remotely executed operation (such as in a SQL database).
+
+Someday we might have a JS AST in the language itself that the context block could use at runtime—all without needing a full macro system. But that would be a future-compatible extension. 
+
+[10:15:37.0645] <jschoi>
+I know you want those LINQ blocks, haha. 
+
+[10:16:43.0520] <jschoi>
+* > <@rbuckton:matrix.org> F# computations did both, and can also leverage a type system to acquire an AST for an expression to do tree rewrites to convert a local computation  expression into a remotely executed operation (such as in a SQL database).
+
+Someday we might have a JS AST in the language itself that the context block could use at runtime—all without needing a full macro system. But that would be a future-compatible extension. 
+
+[12:34:40.0843] <rbuckton>
+> <@jschoi:matrix.org> I know you want those LINQ blocks, haha.
+
+I don't know. F# computation expressions don't feel as fluid to me as FLWOS syntax, and the ability to introduce arbitrary "keywords" inside such a block isn't great for static analysis. That said, being able to add a `distinct` or `count` in a F# query expression is an improvement over C#'s LINQ syntax
+
+[12:35:17.0489] <rbuckton>
+> <@jschoi:matrix.org> I know you want those LINQ blocks, haha.
+
+ * I don't know. F# computation expressions don't feel as fluid to me as FLWOR/FLWOS syntax, and the ability to introduce arbitrary "keywords" inside such a block isn't great for static analysis. That said, being able to add a `distinct` or `count` in a F# query expression is an improvement over C#'s LINQ syntax
+
+
+2022-05-07
+[12:29:15.0029] <jschoi>
+> <@rbuckton:matrix.org> I don't know. F# computation expressions don't feel as fluid to me as FLWOR/FLWOS syntax, and the ability to introduce arbitrary "keywords" inside such a block isn't great for static analysis. That said, being able to add a `distinct` or `count` in a F# query expression is an improvement over C#'s LINQ syntax
+
+With regards to static analysis, I don’t think there would be a fundamental problem with static analysis of context blocks beyond having to analyze decorated constructs in general. As long as the analyzer knows the identity of a decorator, then it knows the types of the callbacks that are involved in its decorated constructs. 
+
+But it’s true that F# computation expressions are slightly more verbose than bespoke LINQ FLOWR/FLOWS syntax. That’s the price of its being generic. 
+
+[12:35:50.0887] <rbuckton>
+> <@jschoi:matrix.org> With regards to static analysis, I don’t think there would be a fundamental problem with static analysis of context blocks beyond having to analyze decorated constructs in general. As long as the analyzer knows the identity of a decorator, then it knows the types of the callbacks that are involved in its decorated constructs. 
+> 
+> But it’s true that F# computation expressions are slightly more verbose than bespoke LINQ FLOWR/FLOWS syntax. That’s the price of its being generic.
+
+It depends to what level you want to support F#-style computations. F# allows custom keywords using a `[<CustomOperation("name")>]` attribute and you can specify options in that attribute that affect parsing, such as `AllowIntoPattern`, `IsLikeJoin`, `MaintainsVariableSpace`, `JoinConditionWord`, etc. Since JS decorators are evaluated at runtime, the engine becomes limited in what static analysis it can do for compilation.
+
+[12:39:46.0167] <rbuckton>
+i.e., in F# you can do:
+
+```f#
+query {
+  for student in db.Student do
+  groupBy student.Age into g
+  select (g.Key, g.Count())
+}
+```
+
+Which handles `into` based on whether `AllowIntoPattern` is set on the `groupBy` method of the builder.
+
+Or
+
+```f#
+query {
+  for student in db.Student do
+  join selection in db.CourseSelection
+    on (student.StudentID = selection.StudentID)
+  select (student, selection)
+}
+```
+
+Which parses `on` as the `join` condition because it's specified by `JoinConditionWord`.
+
+[12:40:15.0753] <rbuckton>
+ * i.e., in F# you can do:
+
+```f#
+query {
+  for student in db.Student do
+  groupBy student.Age into g
+  select (g.Key, g.Count())
+}
+```
+
+Which handles `into` based on whether `AllowIntoPattern` is set on the `groupBy` method of the builder.
+
+Or
+
+```f#
+query {
+  for student in db.Student do
+  join selection in db.CourseSelection
+    on (student.StudentID = selection.StudentID)
+  select (student, selection)
+}
+```
+
+Which parses `on` as the `join` condition because it's specified by `JoinConditionWord`.
+
+[12:44:48.0351] <rbuckton>
+F# made this much more customizable than C#, which has explicit syntax for `group`, `join`, `into`, `on`, `select`, etc. To do this in JS could mean parsing arbitrary patterns of identifiers and expressions and then enforcing them after the fact:
+
+```
+CoverComputationJoinLikeStatement:
+  Identifier BindingIdentifier `in` LeftHandSideExpression Identifier LeftHandSideExpression
+```
+Where the first _Identifier_ has to match a custom operation keyword, and the 2nd _Identifier_ has to match that operation's `JoinConditionWord`. Its a level of complexity that I think many would balk at
+
+[12:51:14.0256] <rbuckton>
+Plus I'm not sure this would fit well with existing JS expressions/statements...
+```js
+@query do {
+  for (const student of db.Student) {
+    join (const selection of db.Selection on student.studentId === selection.studentId) {
+      select #[student, selection];
+    }
+  }
+}
+
+// or
+@query do {
+  for (const student of db.Student)
+  join (const selection of db.Selection on student.studentId === selection.studentId)
+  select #[student, selection]
+}
+```
+
+[13:18:52.0756] <jschoi>
+> <@rbuckton:matrix.org> F# made this much more customizable than C#, which has explicit syntax for `group`, `join`, `into`, `on`, `select`, etc. To do this in JS could mean parsing arbitrary patterns of identifiers and expressions and then enforcing them after the fact:
+> 
+> ```
+> CoverComputationJoinLikeStatement:
+>   Identifier BindingIdentifier `in` LeftHandSideExpression Identifier LeftHandSideExpression
+> ```
+> Where the first _Identifier_ has to match a custom operation keyword, and the 2nd _Identifier_ has to match that operation's `JoinConditionWord`. Its a level of complexity that I think many would balk at
+
+I suppose—if we did do custom keywords in context blocks, and that’s a big if—we could also force them to use a sigil prefix too. 
+
+[13:19:38.0405] <jschoi>
+I think that LINQ blocks probably could still be usable without custom keywords anyway. 
+
+[13:23:20.0558] <rbuckton>
+I have a hard time justifying the value without features like `join`, `group`, `orderby`, etc. 
+
+
+2022-05-17
+[08:55:21.0310] <pzuraq>
+ljharb: can you remove zenparsing@gmail.com from the decorators meeting invites? There are two invites also, since we have two different times
+
+
+2022-05-18
+[17:31:32.0830] <rbuckton>
+I've updated https://github.com/tc39/proposal-grouped-and-auto-accessors with initial spec text and plan to bring it back to committee in June for possible advancement. The spec text is aligned with the proposed spec text for Stage 3 Decorators, and expands upon the current `accessor` keyword form as we discussed when we added the `accessor` keyword to the Decorators proposal.
+
+[17:32:24.0954] <rbuckton>
+Full spec text is at https://tc39.es/proposal-grouped-and-auto-accessors. I will update the website link in the GitHub Repo as soon as a chair is able to fix my permissions in the repo.
+
+[17:40:38.0140] <rbuckton>
+pzuraq: I wonder if we need a more general name than "ClassElementDefinition Record", considering object literals also have _MethodDefinition_ elements. In the auto-accessors proposal I add a second thing to an Object Literal that produces a "ClassElementDefinition Record", making it feel even more out of place in those algorithms.
+
+[07:27:40.0378] <pzuraq>
+yeah the overlap there is a bit odd for sure
+
+[07:27:44.0747] <pzuraq>
+open to naming suggestions
+
+[08:56:53.0782] <ljharb>
+> <@pzura:matrix.org> ljharb: can you remove zenparsing@gmail.com from the decorators meeting invites? There are two invites also, since we have two different times
+
+done
+
+[09:41:21.0077] <rbuckton>
+> <@pzura:matrix.org> open to naming suggestions
+
+It could just be as simple as "MemberDefinition Record", "PropertyDefinition Record", or "ElementDefinition Record". "PropertyDefinition" aligns with "PropertyDescriptor" even if it has always felt out of place calling a method a property. I'm personally partial to "MemberDefinition", since it is consistent with terms like "class member", "object literal member", and possible future things like enum members. 
+
+[10:01:05.0262] <rbuckton>
+During the Decorators call yesterday we discussed whether to bring https://github.com/tc39/proposal-decorators/issues/465 to plenary in June. pzuraq indicated that if the committee agreed to this change that he would not pursue decorator metadata and would leave that up to other delegates to decide whether to champion that proposal. Since there were only a few people in attendance, I wanted to get feedback from others in the group whether we should continue to pursue metadata support in some form if decorators have the ability to add any kind of extra initializer regardless of placement.
+
+[10:09:54.0612] <rbuckton>
+The state of using decorators to provide runtime metadata is somewhat up in the air, with several different solutions proposed:
+
+1. An opaque immutable object passed to every decorator within a class that is installed as `constructor[Symbol.metadata]`. Decorators would need to use a WeakMap to associate metadata, and provide their own APIs for reading metadata (i.e., metadata is private).
+
+2. A normal mutable object passed to every decorator within a class that is installed as `constructor[Symbol.metadata]`. Decorators could either write directly to the object or use a WeakMap and their own API (i.e., metadata can be public or private).
+
+3. An object passed to every decorator within a class, with methods that can be used to read and write metadata. The results of which would be stored as an object installed as `constructor[Symbol.metadata]` (i.e., metadata is public).
+
+[10:13:02.0970] <rbuckton>
+Public metadata can be achieved with (1) by using a second decorator.
+Private metadata can be achieved with (3) by storing an object in the public metadata that is only used as a WeakMap key.
+
+[10:15:37.0774] <pzuraq>
+> <@rbuckton:matrix.org> It could just be as simple as "MemberDefinition Record", "PropertyDefinition Record", or "ElementDefinition Record". "PropertyDefinition" aligns with "PropertyDescriptor" even if it has always felt out of place calling a method a property. I'm personally partial to "MemberDefinition", since it is consistent with terms like "class member", "object literal member", and possible future things like enum members.
+
+I like `MemberDefinition` as well, I think that covers both nicely
+
+[10:18:07.0390] <rbuckton>
+With #465 public and private metadata can still be achieved, but would depend on userland implementations (similar to `reflect-metadata`):
+ 
+- Private Metadata: use `addInitializer(cb, "class")` to add a class "extra" initializer regardless of decorator placement. The callback receives the constructor as the `this` binding and can store the constructor in a WeakMap.
+
+- Public Metadata: use `addInitializer(cb, "class")` to add a class "extra" initializer regardless of decorator placement. The callback receives the constructor as the `this` binding can can store the metadata in a property on the constructor. Caveat: for performance reasons, the property should be declared on the class as well.
+
+[10:20:53.0339] <rbuckton>
+My open questions are: If we bring #465 to plenary, is that likely to shut down any further progress towards decorator metadata? Are there use cases for #465 outside of metadata?
+
+[10:22:58.0201] <rbuckton>
+Each use case for #465 that has come to mind for me so far is very metadata-like. For example: React's `propTypes` is essentially runtime metadata.
+
+
+2022-05-19
+[18:20:30.0097] <Mathieu Hofman>
+> <@rbuckton:matrix.org> Public metadata can be achieved with (1) by using a second decorator.
+> Private metadata can be achieved with (3) by storing an object in the public metadata that is only used as a WeakMap key.
+
+can't public metadata be achieved with a single decorator also adding a static initializer?
+
+[18:21:21.0393] <Mathieu Hofman>
+Which also raises the question of whether the opaque object from (1) actually needs to be installed on the class, or if that could be done by an explicit decorator.
+
+[18:24:47.0713] <Mathieu Hofman>
+> <@rbuckton:matrix.org> With #465 public and private metadata can still be achieved, but would depend on userland implementations (similar to `reflect-metadata`):
+>  
+> - Private Metadata: use `addInitializer(cb, "class")` to add a class "extra" initializer regardless of decorator placement. The callback receives the constructor as the `this` binding and can store the constructor in a WeakMap.
+> 
+> - Public Metadata: use `addInitializer(cb, "class")` to add a class "extra" initializer regardless of decorator placement. The callback receives the constructor as the `this` binding can can store the metadata in a property on the constructor. Caveat: for performance reasons, the property should be declared on the class as well.
+
+The limitation is for multiple decorators working together. We need a context object to key on, and the common class constructor is only available after the extra initializers have been all called
+

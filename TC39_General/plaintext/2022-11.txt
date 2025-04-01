@@ -1,0 +1,2228 @@
+2022-11-02
+[04:24:25.0724] <Domenic>
+Anyone want to help back me up on https://github.com/web-platform-tests/wpt/pull/36746 ? The perennial confusion about the vague spec language like "For each own property key P of O"
+
+[04:42:03.0275] <annevk>
+Domenic: I think I agree with your conclusion, unless `OrdinaryOwnPropertyKeys` actually does something with the hook we do override, there's no reason to expect there would be additional own properties.
+
+[04:42:29.0127] <annevk>
+(Now whether that's good or bad, ...)
+
+
+2022-11-07
+[10:38:01.0228] <ptomato>
+I'm looking into the Array.fromAsync proposal and have a question about what people's understanding of "Zalgo" is (to explain the [jargon](https://blog.izs.me/2013/08/designing-apis-for-asynchrony/), Zalgo is a reference to a meme, that is used as shorthand for the situation where an async operation sometimes calls a callback and sometimes doesn't)
+
+[10:39:11.0388] <ptomato>
+is throwing an error immediately, on bad input, Zalgo?
+
+[10:40:14.0234] <ptomato>
+i.e.
+```js
+function myfunc(input) {
+  if (isBad(input)) throw new Error('bad!');
+  return promiseFromAsyncOperation(input);
+}
+```
+
+[10:41:12.0352] <ptomato>
+the Array.fromAsync proposal [says yes](https://github.com/tc39/proposal-array-from-async#errors) and takes care to check its input only inside its async closure, which means rejecting the promise, not throwing an error synchronously
+
+[10:41:51.0206] <ptomato>
+Atomics.waitAsync, on the other hand, does throw errors synchronously on bad input: (steps 1 and 2 of https://tc39.es/proposal-atomics-wait-async/#sec-dowait)
+
+[10:43:21.0323] <ptomato>
+reading the [original](https://blog.izs.me/2013/08/designing-apis-for-asynchrony/) [definitions](https://blog.ometer.com/2011/07/24/callbacks-synchronous-and-asynchronous/) of Zalgo, I'd say this is not Zalgo as originally defined
+
+[10:44:12.0226] <ptomato>
+however, maybe it is still desirable to do one or the other; in which case we should probably adjust one of these two proposals
+
+[10:45:06.0162] <Kris Kowal>
+Zalgo in short is a combinatoric explosion of behaviors that may be either synchronous or anachronous, such that it is not practical to test every combination that will be seen in production.
+
+[10:46:35.0793] <Kris Kowal>
+Vetting inputs is I believe debatable. It depends on whether the errant behavior can possibly vary at runtime.
+
+[10:47:05.0899] <Kris Kowal>
+Being JavaScript, it almost certainly can.
+
+[10:47:15.0497] <ljharb>
+the language has explicit decided with `async function` that sync exceptions should *never* be thrown from something that returns a promise. there's a few exceptions, i think, if you're calling something on the wrong receiver, but generally we should avoid that
+
+[10:47:26.0709] <bakkot>
+ptomato: I would say that Atomics.waitAsync is actually a sync function, despite the name
+
+[10:47:35.0970] <bakkot>
+it does not return a promise; it returns an object which is synchronously usable
+
+[10:47:37.0128] <ljharb>
+can it return a promise?
+
+[10:47:39.0233] <ljharb>
+ah ok
+
+[10:47:42.0632] <ljharb>
+then i would agree
+
+[10:47:49.0999] <bakkot>
+(one of the properties of that object can be a promise)
+
+[10:47:57.0568] <shu>
+Atomics.waitAsync is the way it is explicitly to avoid zalgo
+
+[10:47:58.0169] <ljharb>
+zalgo is basically "always, or never, return a promise"
+
+[10:48:13.0997] <ljharb>
+"an object containing a promise" is definitely not a promise :-)
+
+[10:48:53.0680] <shu>
+in particular, Atomics.waitAsync *needs* to fail fast because it's built to mutexes -- you can't wait until the next microtask tick to find out you couldn't acquire the lock and need to go into the slow path 
+
+[10:49:01.0138] <Kris Kowal>
+> <@ljharb:matrix.org> the language has explicit decided with `async function` that sync exceptions should *never* be thrown from something that returns a promise. there's a few exceptions, i think, if you're calling something on the wrong receiver, but generally we should avoid that
+
+And also the Promise constructor.
+
+[10:49:04.0650] <shu>
+so, instead of always returning a Promise it does this wrapping
+
+[10:49:34.0656] <ptomato>
+fair enough. I got misled by the first sentence of MDN on Atomics.waitAsync: "The static Atomics.waitAsync() method waits asynchronously on a shared memory location and returns a Promise."
+
+[10:49:48.0595] <shu>
+it waits asynchronously if it waits at all
+
+[10:49:52.0802] <ptomato>
+reading further down, you are right that it actually does not return a Promise
+
+[10:49:56.0835] <shu>
+if it doesn't wait, you can find out synchronously
+
+[10:52:27.0581] <ptomato>
+> <@ljharb:matrix.org> the language has explicit decided with `async function` that sync exceptions should *never* be thrown from something that returns a promise. there's a few exceptions, i think, if you're calling something on the wrong receiver, but generally we should avoid that
+
+is there documentation for this decision? seems like a good thing to put in https://github.com/tc39/how-we-work/pull/119 once that document is established
+
+[10:52:34.0713] <shu>
+all that said i love zalgo
+
+[10:52:36.0957] <shu>
+i wish we had zalgo
+
+[10:52:38.0139] <shu>
+but alas
+
+[11:02:17.0463] <ptomato>
+well, in lieu of spec conventions, if anyone has a pointer to context about that decision, I'd be happy to read more. maybe I'll write a blog post on this or something
+
+[11:03:14.0094] <joepie91 🏳️‍🌈>
+ptomato: https://blog.izs.me/2013/08/designing-apis-for-asynchrony/ is pretty much the canonical source on this topic
+
+[11:03:52.0080] <ptomato>
+thanks, but I linked that document above already 😄
+
+[11:04:01.0652] <joepie91 🏳️‍🌈>
+oh, sorry.
+
+[11:04:08.0483] <joepie91 🏳️‍🌈>
+only half paying attention today
+
+[11:04:34.0451] <ptomato>
+sync exceptions are not Zalgo according to that definition, so that's why I'm interested in the context of where we decided to depart from that
+
+[11:05:42.0572] <joepie91 🏳️‍🌈>
+I'm unsure of the exact process behind that decision, but it does meet the *principles* behind zalgo; errors that are sometimes synchronous and sometimes asynchronous make it difficult to reason about the behaviour of a function
+
+[11:09:17.0208] <ptomato>
+I tend to agree, although the article (and the one from Havoc Pennington before it) concentrates, rightly IMO, on the situation where a callback is called sometimes synchronously and sometimes asynchronously, which is much, much worse
+
+[11:10:09.0477] <Ashley Claymore>
+I found it more of an issue when `.then` was more common. Would frequently see code like `.catch(handleError)` but sometimes the code would sync throw and that wasn’t handled.
+Now `await` is here it’s less common, and code uses a catch block for both paths. But still seems like a good principle to follow 
+
+[11:11:30.0057] <ptomato>
+it's effectively a slightly different question; is it OK for the callback to not be called at all? (and I think there is good reason to answer no)
+
+[11:13:51.0054] <ptomato>
+which is apparently also what TC39 has concluded as well
+
+[11:17:58.0860] <Ashley Claymore>
+Many people, myself included, use zalgo also for when an api always calls the callback, but can either get the call before the outer call returns (current tick) or after (fresh tick)
+
+[11:19:28.0254] <Ashley Claymore>
+I think it is ok to further expand that to: when will the error information be available
+
+[11:19:59.0420] <Ashley Claymore>
+cuts down code paths if always async
+
+[11:20:15.0973] <ptomato>
+if the call happens before the outer call returns, isn't that effectively calling it synchronously?
+
+[11:25:51.0284] <Ashley Claymore>
+yeah
+
+[11:28:13.0363] <Ashley Claymore>
+ah right, and a sync error would be “not calling the callback at all”. Which yes is annoying. If the API returns a Result like container, then it has somewhere to return errors. It something is sync returning a value directly, it kinda has to throw if it wants to “return” an error 
+
+
+2022-11-08
+[00:59:21.0662] <Jack Works>
+Is it possible to freeze the [[Prototype]] of an ordinary object without wrapping it with Proxy? 
+
+[02:13:54.0448] <Ashley Claymore>
+Nope. Can only make it non-extensible. Props and prototype all part of the same bag
+
+[02:40:45.0803] <Ashley Claymore>
+https://github.com/tc39/proposal-freeze-prototype
+
+[02:42:23.0611] <Ashley Claymore>
+https://matrixlogs.bakkot.com/TC39_Delegates/2021-09-20#L1
+
+[07:30:19.0394] <nicolo-ribaudo>
+Is there an es5 way of creating a function with length n (where n is known statically when I'm writing the code), and for which `IsConstructor` returns `false`?
+
+[07:51:06.0837] <jmdyck>
+As far as I can tell, in es5, the only functions that don't have a [[Construct]] internal method are all built-ins. So even without the length constraint, the answer looks like no.
+
+[08:11:23.0082] <nicolo-ribaudo>
+Ok thanks, that matches what I expected but I was hoping for secret hacks 😂
+I know that I can create functions with length 0 and 1 using getters and setters in object literals, but it does not generalize to 2+ args.
+
+[08:11:43.0973] <nicolo-ribaudo>
+ * Ok thanks, that matches what I expected but I was hoping for secret hacks 😂
+I know that I can create functions with length 0 and 1 using getters and setters in object literals, but it does not generalize to 2+ args.
+
+[10:19:22.0093] <ljharb>
+those functions are constructors tho, aren't they?
+
+[10:24:53.0373] <nicolo-ribaudo>
+Nope:
+```js
+new (Object.getOwnPropertyDescriptor({ get x() {} }, "x").get) 
+// TypeError: Object.getOwnPropertyDescriptor(...).get is not a constructor
+```
+
+[10:26:51.0182] <littledan>
+yeah, all concise methods, e.g., `new ({x() {}}.x)`
+
+[10:26:58.0030] <littledan>
+and arrow functions
+
+[10:44:49.0514] <jmdyck>
+Are you running that in an ES5 engine?
+
+[10:45:42.0337] <littledan>
+I am saying, those things are not constructors, and that code throws. I am using a new engine
+
+[10:46:16.0239] <jmdyck>
+and nicolo-ribaudo ?
+
+[10:46:50.0332] <littledan>
+oh sorry I missed the "es5" part of the question!
+
+[10:47:26.0572] <jmdyck>
+looks like semantics changed between es5 and es6
+
+[10:56:14.0976] <Ashley Claymore>
+Does that work in ES5? alt: Using a getter, but re defining length and accessing args via `arguments`
+
+[10:56:26.0511] <Ashley Claymore>
+or is it a valid constructor in es5?
+
+[11:02:58.0182] <nicolo-ribaudo>
+No, I only tested it in modern browsers. Thank you!
+
+[11:03:22.0469] <nicolo-ribaudo>
+> <@jmdyck:matrix.org> Are you running that in an ES5 engine?
+
+ * No, I only tested it in modern browsers. Thank you!
+
+[11:04:14.0771] <nicolo-ribaudo>
+For context, I was trying to figure out how to compile arrow functions to es5 in a 100% spec compliant way (mostly for fun, I'm not going to add this to Babel)
+
+[11:05:25.0299] <nicolo-ribaudo>
+> <@aclaymore:matrix.org> sent an image.
+
+I thought that the length was non-configurable, this might work to at least keep the semantics of compiled code valid in modern engines 👀
+
+[11:07:32.0708] <jmdyck>
+In ES5, `get` PropertyName etc involves "the result of creating a new Function object as specified in 13.2", which always sets both [[Call]] and [[Construct]].
+
+[11:07:45.0784] <jmdyck>
+In ES6, it involves  "FunctionCreate(~Method~, ...)", which leads to FunctionAllocate being called with `_functionKind_` = "non-constructor", which causes \[\[Construct\]\] to not be set.
+
+[11:09:30.0791] <jmdyck>
+ * In ES6, it involves  "FunctionCreate(~Method~, ...)", which leads to FunctionAllocate being called with `_functionKind_` = "non-constructor", which causes \[\[Construct\]\] to not be set.
+
+
+2022-11-10
+[03:56:24.0072] <Jessidhia>
+Is there a good reason as to why https://tc39.es/ecma402/#sec-defaultlocale ignores the document language?
+
+Like, I know the language is intentionally underspecified, but is there a reason to prefer the chrome's language instead of the document's language? From what I can gather this would just result in out-of-place formatting if `Intl` formatting is used in documents where a `document.documentElement.lang` is specified and doesn't match the chrome's settings.
+
+[03:57:26.0938] <Jessidhia>
+on Firefox it ignores the document language *even if* it's present in `navigator.languages`; only the primary `navigator.language` is ever used
+
+[04:00:53.0296] <Jessidhia>
+this is kind of a blocker on me using `Intl.DateTimeFormat` without very careful wrapping 😅
+
+[04:02:04.0310] <Jessidhia>
+ * Is there a good reason as to why https://tc39.es/ecma402/#sec-defaultlocale ignores the document language?
+
+Like, I know the spec language is intentionally underspecified here, but is there a reason to prefer the chrome's language instead of the document's language? From what I can gather this would just result in out-of-place formatting if `Intl` formatting is used in documents where a `document.documentElement.lang` is specified and doesn't match the chrome's settings.
+
+[04:03:43.0935] <Jessidhia>
+(on the other hand this gets into trouble with SSR because there's no document language during SSR so I guess my problem formulation is incomplete)
+
+[04:34:37.0279] <annevk>
+"host environment's current locale" seems kinda bogus
+
+[04:36:28.0621] <annevk>
+Well, I guess it's good enough, but I haven't seen a PR for HTML that maps "current locale" to `navigator.language`'s underlying primitive.
+
+[04:38:55.0747] <annevk>
+(Using the language of a document wouldn't work in quite a few environments, e.g., all workers, worklets. And it's not necessarily declared on the root element all of the time either, although it kinda ought to be. So if you want to write portable code you probably want that to be a separate input from the end user locale.)
+
+[04:41:38.0319] <ryzokuken>
+Jessidhia: did you come across this by any chance? https://github.com/WICG/proposals/issues/78
+
+[04:41:59.0885] <ryzokuken>
+basically "fetch the user's preferred locale" is a known problem in Intl
+
+[04:43:42.0113] <Jessidhia>
+I had come across https://github.com/tc39/ecma402/issues/38 which I guess is similar enough to WICG#78
+
+[04:43:54.0764] <ryzokuken>
+it's a complicated problem to solve while protecting the users' privacy but we're working on it
+
+[04:44:16.0507] <ryzokuken>
+> <@jessidhia:matrix.org> I had come across https://github.com/tc39/ecma402/issues/38 which I guess is similar enough to WICG#78
+
+yes, basically this entire label: https://github.com/tc39/ecma402/labels/User%20Preferences
+
+[04:44:50.0355] <ryzokuken>
+it was an impetus for us to start looking into the problem, but the solution requires a non-trivial amount of API design and privacy auditing.
+
+[04:45:04.0088] <Jessidhia>
+but it's not quite what I was looking for; more of a way to include the application's preferences (say, user accessing page with document language set to Japanese while using an English language browser, which is my case as a developer of a Japanese web app 😅)
+
+[04:46:04.0505] <ryzokuken>
+ah, essentially the other way around, I guess?
+
+[04:46:28.0665] <ryzokuken>
+_enforcing_ a locale instead of inferring the user's preference, I mean
+
+[04:48:55.0716] <Jessidhia>
+yes, due to the document language; in my example the default result would produce a result with `/` separators instead of `YYYY年MM月DD日`, which would look out of place in a japanese language phrase (user preference for the website being `lang="ja"`)
+
+[04:50:09.0436] <Jessidhia>
+`luxon` somewhat has a facility for this (`Settings.defaultLocale`) but it doesn't handle dynamic updates well
+
+[04:50:28.0910] <ryzokuken>
+why can't you just call all the formatters with `"ja-JP"`?
+
+[04:50:40.0383] <ryzokuken>
+by hardcoding the locale argument
+
+[04:50:46.0301] <ryzokuken>
+ * by hardcoding the locale argument
+
+[04:52:25.0727] <Jessidhia>
+the locale is actually user preference (out of 4 supported languages) but yes, I can supply a locale -- the problem then becomes coworkers using Japanese browsers accidentally getting "correct" output while omitting the argument if they don't test changing the language
+
+[04:52:35.0342] <Jessidhia>
+ * the locale is actually user preference (out of 4 supported languages) but yes, I can supply a locale -- the problem then becomes coworkers accidentally getting correct output while omitting it if they don't use a mismatched browser/document language
+
+[04:52:57.0274] <Jessidhia>
+ * the locale is actually user preference (out of 4 supported languages) but yes, I can supply a locale -- the problem then becomes coworkers accidentally getting "correct" output while omitting the argument if they don't use a mismatched browser/document language
+
+[04:53:35.0737] <Jessidhia>
+ * the locale is actually user preference (out of 4 supported languages) but yes, I can supply a locale -- the problem then becomes coworkers using Japanese browsers accidentally getting "correct" output while omitting the argument if they don't test changing the language
+
+[04:55:55.0002] <Jessidhia>
+ * the locale is actually user preference (out of 4 supported languages) but yes, I can supply a locale (or `document.documentElement.lang`) -- the problem then becomes coworkers using Japanese browsers accidentally getting "correct" output while omitting the argument if they don't test changing the language
+
+[04:56:10.0891] <Jessidhia>
+ * the locale is actually user preference (out of 4 supported languages) but yes, I can supply a locale (or `document.documentElement.lang` on the browser side) -- the problem then becomes coworkers using Japanese browsers accidentally getting "correct" output while omitting the argument if they don't test changing the language
+
+[04:56:28.0939] <ryzokuken>
+I see
+
+[04:56:43.0465] <ryzokuken>
+well, this seems to be more of a host problem than a language problem 😅
+
+[04:56:58.0023] <ryzokuken>
+all ways to override would be host-defined behavior I'm afraid
+
+[04:58:22.0668] <Jessidhia>
+prioritizing document language would be sufficient for this use case
+
+[04:58:57.0351] <Jessidhia>
+the complication is on hosts without a document (like node), that would necessitate a host-defined override
+
+[04:59:24.0295] <ryzokuken>
+yes, but `DefaultLocale` is completely host-defined too (https://tc39.es/ecma402/#sec-defaultlocale)
+
+[04:59:44.0994] <ryzokuken>
+oh wait, we've looped around to the start
+
+[05:00:04.0334] <ryzokuken>
+but yes, essentially hosts can choose to do whatever they prefer as long as the result is a valid locale
+
+[05:40:25.0755] <annevk>
+ryzokuken: why is there no HTML PR for this feature?
+
+[05:55:15.0393] <ryzokuken>
+annevk: it's still under active development. We're only just starting to narrow down the final semantics after consultation with different browser privacy teams.
+
+[05:55:27.0079] <ryzokuken>
+but yes, hopefully a PR should be out soon.
+
+[07:08:45.0425] <littledan>
+maybe we could start with an HTML issue then?
+
+[07:17:58.0692] <annevk>
+ryzokuken: oh weird, I thought that by the time something is in the main spec it would be stage 4/done?
+
+[07:20:01.0217] <littledan>
+The Intl default locale logic came before ES6 even; as you know very well, annevk , HTML/JS spec coherence wasn't so great back then
+
+[07:21:16.0834] <annevk>
+Hah, I might have known for sure, but my memory isn't always up-to-date :-)
+
+[07:22:25.0884] <littledan>
+My understanding of the history is that actually, Intl was initially going to be proposed as a web spec, but the web standards folks felt the platform wasn't ready for it yet; TC39 OTOH was excited about making this happen, and worked with the internationalization teams of all the same companies, and shipped it :)
+
+[07:22:27.0245] <annevk>
+I recall some effort around an event for the default locale changing, but I'm not sure if that ever landed
+
+[07:22:42.0368] <littledan>
+IIRC that did land but only Firefox actually exposed that event
+
+[07:22:52.0486] <littledan>
+for the language changing
+
+[07:23:10.0342] <littledan>
+there was also an idea about exposing a more detailed locale; this is what ryzokuken is working on now
+
+[07:32:42.0481] <Jack Works>
+The compartment proposal used to contain that part. You were able to virtualize the default locale within a compartment
+
+[07:32:57.0210] <Jack Works>
+But after the proposal is simplified, those abilities are removed. 
+
+[07:33:08.0072] <Jack Works>
+* But after the proposal is simplified, those abilities are removed. 
+
+[07:35:06.0822] <annevk>
+Filed https://github.com/whatwg/html/issues/8493 as a start
+
+[07:36:09.0665] <annevk>
+(And yeah, `languagechange` did happen, `timezonechange` not yet.)
+
+[07:38:40.0713] <nicolo-ribaudo>
+Maybe following a similar naming scheme as ECMA-262 (e.g. HostGetDefaultLocale()) makes it easier to see what needs to be defined at the host level
+
+[07:57:45.0722] <littledan>
+Definitely. Historically, I think these algorithms were written without the intention to be hookable in this sort of way.
+
+[07:58:50.0907] <littledan>
+Allen always said, the spec is not an API, and hosts can go in and do whatever, subject to the documented constraints on hosts. The idea to mark all things as Host* is sort of a rejection of this idea.
+
+[08:03:53.0931] <nicolo-ribaudo>
+The Host* hooks are more an "API" that ecma262 expects the host to provide, than an API exposed by ecma262 to the host - they mark AOs that _must_ be provided by the host
+
+[08:35:53.0372] <littledan>
+Yeah, I agree with that idea. We can collectively change our minds on these things.
+
+[08:36:28.0794] <littledan>
+if we're trying to understand why the spec is how it is, it helps to understand that articulating host APIs like this was an anti-goal in the past.
+
+[09:12:28.0185] <annevk>
+I would love for it to be an even more concrete API and scope certain host hooks by tying them to agent clusters and such.
+
+[10:46:05.0833] <ljharb>
+definitely critical to keep the historical context; it seems to me that we've largely discovered the hazards of underspecifying and being too implicit, and are trying to avoid repeating those mistakes :-)
+
+
+2022-11-13
+[02:10:29.0133] <rkirsling>
+well this is odd. we got a JSC bug report suggesting that `"use strict"; x = this.x = 0;` should throw, but V8 and SM don't throw either. engine262 does, confirming the spec interpretation, but I wonder if it's web compatible to fix...
+
+[02:20:29.0024] <rkirsling>
+okay so the same reporter created V8 and SM bugs too, but the SM one was closed as duplicate of a 12(!)-year-old bug 👀
+
+[02:21:01.0319] <rkirsling>
+yet there's no documented reason for the non-fix: https://bugzilla.mozilla.org/show_bug.cgi?id=605515
+
+
+2022-11-14
+[16:54:47.0033] <bakkot>
+rkirsling: this is one of the older known flaws in the spec; see e.g. https://github.com/tc39/ecma262/issues/467
+
+[16:55:16.0152] <bakkot>
+there have been some recent attempts to improve the situation e.g. https://github.com/tc39/ecma262/pull/2267
+
+[16:55:37.0540] <bakkot>
+although with their own issues e.g. https://github.com/tc39/ecma262/issues/2659
+
+[16:55:48.0203] <bakkot>
+for your specific issue https://github.com/tc39/ecma262/pull/2205 is the best reference probably
+
+[16:56:13.0610] <bakkot>
+if you feel inclined to figure out what exactly web reality _is_, and how to write that down, most everyone would be happy with such a PR I think
+
+[16:57:13.0989] <bakkot>
+don't know that there would be much appetite for going the other way and trying to get implementations to match the spec
+
+[17:18:58.0976] <rkirsling>
+cool
+
+[17:44:31.0220] <rkirsling>
+I'm not sure if I fully understand where that ended up at a glance but I suppose i could have a chat with shu about it
+
+[05:02:33.0507] <ryzokuken>
+is there a `FlatList` operation somewhere?
+
+[07:10:52.0152] <Jack Works>
+Apply(%Array.prototype.flat%)?
+
+[07:11:27.0301] <ryzokuken>
+would that work on ECMAScript List thingies?
+
+[07:11:47.0761] <Jack Works>
+No
+
+[07:12:07.0994] <ryzokuken>
+that's what I was looking for
+
+[07:29:01.0974] <jmdyck>
+So the input would be a List whose elements could themselves be Lists?
+
+[07:30:40.0927] <littledan>
+It would be cool to have the full set of stuff like https://infra.spec.whatwg.org/ in ECMA-262. But they don't seem to have List flat either.
+
+[08:09:18.0050] <ryzokuken>
+> <@jmdyck:matrix.org> So the input would be a List whose elements could themselves be Lists?
+
+right, a list whose elements might optionally be further nested lists
+
+[08:09:42.0833] <ryzokuken>
+and a `FlatList` AO that would flatten it into a flat (?) list
+
+[08:09:46.0823] <ryzokuken>
+ * and a `FlatList` AO that would flatten it into a flat (?) list
+
+[08:11:11.0868] <jmdyck>
+I think a List-of-(possible)-Lists doesn't really happen in the current spec.
+
+[08:11:43.0267] <ryzokuken>
+not so far, but I'm dropping some hot spec text atm 🙈
+
+[08:11:53.0766] <ryzokuken>
+it's for a proposal, but the point still stands I guess
+
+[12:56:38.0045] <bakkot>
+would anything important break if we made Array.prototype and Object.prototype reject numeric properties, do you figure
+
+[12:57:14.0589] <bakkot>
+that is, making them a new kind of exotic object which would silently (or loudly, I guess) prevent adding properties which could be array indices
+
+[13:55:39.0293] <shu>
+oh man
+
+[13:56:08.0228] <littledan>
+Can we fix the override mistake in all cases except the one lodash runs into at the same time?
+
+[13:56:24.0783] <littledan>
+I mean, an exotic object can have a different kind of Set()
+
+[14:13:17.0449] <bakkot>
+what's the one lodash runs into?
+
+[14:15:01.0851] <littledan>
+(I don't remember the details offhand)
+
+[15:18:47.0105] <Domenic>
+> <@littledan:matrix.org> It would be cool to have the full set of stuff like https://infra.spec.whatwg.org/ in ECMA-262. But they don't seem to have List flat either.
+
+You're welcome to use Infra yourselves! (And send PRs for missing stuff.)
+
+[15:19:09.0306] <Domenic>
+No need to copy it over, specs are allowed to reference other specs.
+
+[15:19:20.0541] <littledan>
+I wouldn't mind adopting the sentence-based notation that infra uses, tbh
+
+[15:28:10.0146] <TabAtkins>
+it is very nice to use in practice
+
+
+2022-11-15
+[07:38:40.0993] <nicolo-ribaudo>
+Hello, maybe someone here knows the history of block-scoped functions.
+
+We have a very old Babel plugin, enabled by default, that does this transform ([@babel/plugin-transform-block-scoped-functions](https://babeljs.io/docs/en/babel-plugin-transform-block-scoped-functions)):
+```js
+{ function f() {} }
+// --->
+{ let f = function f() {} }
+```
+
+This plugin was created in response to this issue: https://github.com/babel/babel/issues/514
+
+Does anyone know:
+- why does Babel need to transform functions in blocks? Do they not work in older engines or older ECMAScript versions?
+- should the transform use `let` or `var`?
+
+[07:47:29.0402] <littledan>
+the transform should use `let` because the semantics of JS of functions in a block is that they're lexically scoped to the block (modulo Annex B 3.3)
+
+[07:48:01.0796] <littledan>
+The history is that, prior to ES6, in sloppy mode, each engine had its own way of hoisting functions out of blocks. This transform prevents that non-standard behavior.
+
+[07:49:00.0825] <littledan>
+it sounds like the transform implements the strict mode semantics. Sloppy mode semantics, in Annex B 3.3, is a mess and I don't recommend looking at it if you want to maintain your sanity :)
+
+[07:49:26.0059] <littledan>
+I think it's not necessary to enable this plugin by default since it is only needed if you target a pretty old JS engine
+
+[07:51:51.0184] <nicolo-ribaudo>
+Thank you! Follow-up question:
+
+We also have this test, that ensures that the function is hoisted to the outer scope when there is a variable with the same name (but only when we are also compiling `let`/`const` to `var`):
+```js
+var run = function () {
+  return false;
+};
+
+if (true) {
+  function run() {
+    return true;
+  }
+}
+
+function test() {
+  return run();
+}
+
+// ---- OUTPUT --->
+
+var run = function () {
+  return false;
+};
+if (true) {
+  var run = function () {
+    return true;
+  };
+}
+function test() {
+  return run();
+}
+```
+
+is this annex b behavior?
+
+[07:52:14.0338] <nicolo-ribaudo>
+> <@littledan:matrix.org> I think it's not necessary to enable this plugin by default since it is only needed if you target a pretty old JS engine
+
+Yeah right now we compile down to the oldest targets we support; this is going to change in Babel 8
+
+[07:55:04.0611] <littledan>
+> <@nicolo-ribaudo:matrix.org> Thank you! Follow-up question:
+> 
+> We also have this test, that ensures that the function is hoisted to the outer scope when there is a variable with the same name (but only when we are also compiling `let`/`const` to `var`):
+> ```js
+> var run = function () {
+>   return false;
+> };
+> 
+> if (true) {
+>   function run() {
+>     return true;
+>   }
+> }
+> 
+> function test() {
+>   return run();
+> }
+> 
+> // ---- OUTPUT --->
+> 
+> var run = function () {
+>   return false;
+> };
+> if (true) {
+>   var run = function () {
+>     return true;
+>   };
+> }
+> function test() {
+>   return run();
+> }
+> ```
+> 
+> is this annex b behavior?
+
+reviewing https://tc39.es/ecma262/#sec-block-level-function-declarations-web-legacy-compatibility-semantics  (actually B 3.2 now), yeah, it looks like an outer var declaration does not block this hoisting, though a let declaration would
+
+[07:56:29.0903] <nicolo-ribaudo>
+Thank you!
+
+Another thing we should to in Babel 8 is deciding if we want to consider Annex B or not, instead of enabling it _sometimes_
+
+[07:59:15.0531] <littledan>
+IMO it should be enabled always in Babel, given that Babel tends to target web/Node environments, which always enable Annex B
+
+[08:00:31.0999] <nicolo-ribaudo>
+And whichever choice we make, there will be a plugin to do the opposite
+
+[08:01:13.0300] <littledan>
+ah so it is an even lower pressure decision than I was imagining
+
+
+2022-11-16
+[02:44:42.0733] <Jessidhia>
+maybe one day UTF-16 can be relegated to Annex B… 🫠
+
+
+2022-11-17
+[18:57:58.0343] <Jack Works>
+oh I wonder what's the motivation for BigInt TAs
+
+[18:58:33.0018] <Jack Works>
+I thought TA is for low level calculations, is there a cross-platform representation (like IEEE floating points) for BigInt?
+
+[18:58:45.0499] <shu>
+oh the TAs aren't actually storing BigInts, they're storing (u)int64
+
+[18:59:02.0343] <shu>
+but to get the values out / or assign into them we need to put them into BigInts
+
+[18:59:08.0922] <shu>
+since Numbers don't have enough bits to hold int64s
+
+[19:01:32.0051] <Jack Works>
+🤔 so it cannot store infinitely big number?
+
+[19:02:24.0926] <Jack Works>
+oh I see
+
+[00:46:13.0912] <Domenic>
+So here is a fun case. On the web platform we have `Headers`, which is supposed to be `Map`-like. However, we want its entries to be sorted (based on their keys), when iterating.
+
+OK. So what happens if you mutate during iteration? In particular, consider starting with keys `["a", "c", "d"]`. `"a"` is visited. `"c"` is visited. At this point `"b"` is inserted. Now what?
+
+If we naively copy `Map`'s iteration algorithm, we get `["a", "c", "c", "d"]`, since `"c"` moved from index 1 to index 2 when we inserted `"b"`.
+
+We could output `["a", "c", "b", "d"]` (breaking the ordering invariant), or `["a", "c", "d"]` (breaking the invariant that things added during iteration are always visited). Or we could stick with the natural extension of `Map`'s behavior and do `["a", "c", "c", "d"]`. Which is least-bad?
+
+[00:58:45.0289] <Robert Pamely>
+I haven't run this, but from what I can tell in c++ it would just move on to "d" because "b" is behind the iterator. That's logically what I would expect myself. 
+
+[01:01:35.0012] <Robert Pamely>
+So I guess that's the middle option you gave reading again. If you insert during iteration you could miss elements. 
+
+[01:28:59.0858] <Ashley Claymore>
+TIL, Map delete doesn't actually remove the entry from the list (but implementations can avoid the memory leak)
+
+[01:29:20.0432] <Ashley Claymore>
+```
+let m = new Map();
+[..."abcde"].forEach(m.set.bind(m));
+
+for (const [k] of m) {
+  console.log(k);
+  if (k === "c") m.delete("b");
+}
+
+
+〠> a
+〠> b
+〠> c
+〠> d
+〠> e
+```
+
+[01:33:14.0095] <Ashley Claymore>
+so to see a map key twice looks like need to delete and then re-set
+
+[01:35:21.0955] <Ashley Claymore>
+I'm +1 on Robert Pamely . Inserting behind the sorted position of the iterator would result in that entry not being seen, and the current entry not being seen twice
+
+[07:45:13.0120] <bakkot>
++1 to `["a", "c", "d"]`; that's also consistent with e.g. Java's ConcurrentSkipListMap and separately I think is the least unexpected from first principles
+
+[07:45:44.0439] <bakkot>
+I think for sorted collections you should not expect that things added during iteration are necessarily visited
+
+
+2022-11-18
+[16:07:11.0550] <jmdyck>
+What is a "promise-like object"? (https://tc39.es/ecma262/#sec-promisecapability-records is the only occurrence in the spec)
+
+[16:11:42.0589] <bakkot>
+it deliberately doesn't have a formal definition
+
+[16:13:47.0278] <bakkot>
+formally it ends up being anything which can be produced by a constructor which takes a callback as an argument and immediately invokes that callback with two arguments, both of which are callable
+
+[16:13:51.0730] <bakkot>
+but that's not, like, useful
+
+[16:13:59.0156] <bakkot>
+so you should think of it as a promise-like object
+
+[16:18:30.0688] <jmdyck>
+Seems like that generality (allowing a promise-like object) isn't propagated through the spec.
+
+[16:19:49.0433] <bakkot>
+do you have a concrete case in mind?
+
+[16:21:27.0665] <jmdyck>
+e.g. Evaluate for a Cyclic Module Record says it returns "a Promise", but 2 of its returns are returning a capability's [[Promise]] field, which might be a promise-like object (or are we somehow guaranteed that it isn't?)
+
+[16:22:25.0957] <bakkot>
+in that case the promise is generated by `NewPromiseCapability(%Promise%)`, which does indeed create a capability which hold a genuine promise
+
+[16:22:48.0915] <nicolo-ribaudo>
+Step 6 of evaluate ensures that it's a real Promise, because it uses the %Promise% intrinsic. I think we can only get promise-likes when there are calls to `NewPromiseCapability` with user-provided consructors
+
+[16:24:16.0931] <nicolo-ribaudo>
+For example, `PromiseSubclass.all` will internally create a `PromiseCapability Record` containing an instance of `ProiseSubclass`, and will return that instance instead of a Promise
+
+[16:26:02.0490] <nicolo-ribaudo>
+We could link promise-like to step 2 of `NewPromiseCapability`, where it's defined (even if that step doesn't use the name promise-like)
+
+[16:26:42.0153] <nicolo-ribaudo>
+ * For example, `PromiseSubclass.all` will internally create a `PromiseCapability Record` containing an instance of `PromiseSubclass`, and will return that instance instead of a Promise
+
+[16:51:48.0069] <jmdyck>
+So is there any spec algorithm that treats a promise-like object as something more than just an object?
+
+[16:52:43.0737] <jmdyck>
+ * So is there any spec algorithm that treats a promise-like object as something more than just an object?
+
+[17:03:49.0945] <bakkot>
+I don't believe so
+
+[17:18:19.0338] <jmdyck>
+okay, thanks.
+
+[08:18:37.0802] <annevk>
+How much support would there be for Float16Array? https://github.com/w3c/ColorWeb-CG/blob/master/canvas_float.md
+
+[08:19:16.0701] <annevk>
+It seems kinda silly to not use the most logical type because we don't have it in JS since JS is mutable...
+
+[08:19:44.0540] <annevk>
+/me finds https://github.com/w3c/ColorWeb-CG/issues/87
+
+[08:21:25.0959] <littledan>
+leobalter was involved in raising this before. Actually I was a little negative about it because there weren't clear performance benefits (given the need to make it a double in memory in practice) or web platform use cases. The champions were saying, we could use this for WebGL, but hadn't been in touch with the WebGL folks. Anyway if there actually is this kind of motivation, I think we could do this pretty quickly.
+
+[08:22:43.0791] <littledan>
+it's not so trivial to do anything with TypedArrays at all, implementation-wise, but we managed for BigInt64Array, so I think this should be possible, if implementations want to put in the effort.
+
+[08:23:51.0957] <annevk>
+Thanks for the assessment, I'll leave a comment about not shipping the org-chart
+
+[08:24:19.0708] <littledan>
+Yeah, if someone wants to champion Float16Array, I'd be happy to do reviews/mentor/etc, just let me know.
+
+[15:43:16.0252] <TabAtkins>
+Has there been a proposal for `Set.toggle(val, bool?)` ? (If bool is not present, it adds or removes the value as needed; if it's present, `true` adds the value and `false` removes it.)
+
+[15:43:39.0786] <TabAtkins>
+This is a useful bit of functionality attached to DOMTokenList (like `el.classList`) and it would be good to ensure that Sets are at least as functional.
+
+[15:47:02.0386] <TabAtkins>
+(I could try to look around, but if someone has a memory one way or the other it'll save me a lot of time.)
+
+
+2022-11-21
+[23:30:04.0010] <rkirsling>
+> <@bakkot:matrix.org> for your specific issue https://github.com/tc39/ecma262/pull/2205 is the best reference probably
+
+coming back to this, can somebody (shu or otherwise) help me understand the last comment?
+
+[23:30:30.0979] <rkirsling>
+like, why do we need an HTML document in order to access the global lexical environment?
+
+[01:50:13.0595] <rkirsling>
+hmm, I think I got it after all.
+
+[01:50:30.0131] <rkirsling>
+ * hmm, I think I got it after all.
+
+[13:06:40.0722] <shu>
+i have no recollection of this
+
+[13:06:49.0596] <shu>
+i regret the internet having a permanent record, let me re-read this stuff
+
+
+2022-11-23
+[16:43:21.0237] <shu>
+do we have any prior art of built-in functions doing something different when _all_ parameters are undefined? like, not just default values for certain undefined parameters, but a special overload for the nullary case
+
+[16:43:50.0537] <shu>
+context is https://github.com/tc39/proposal-resizablearraybuffer/issues/113
+
+[16:44:18.0945] <shu>
+i think some intl methods do funky things
+
+[21:38:35.0193] <jmdyck>
+You mean like Date()?
+
+[00:49:32.0378] <rkirsling>
+^ this was what immediately came to mind for me too
+
+[00:50:11.0354] <rkirsling>
+https://twitter.com/leobalter/status/1099032006091046918
+
+[07:50:57.0840] <ptomato>
+not counting the case of a required parameter being omitted, I guess?
+
+[09:12:11.0732] <littledan>
+If someone wants to pick up standardizing all the edge cases of the Date constructor, I think that'd be a very important project.
+
+[09:20:00.0691] <jmdyck>
+Which edge cases haven't been standardized?
+
+[09:20:22.0432] <littledan>
+all the non-ISO8601 ones!
+
+[09:20:37.0620] <littledan>
+this is a major point of compatibility issues between JS implementations
+
+[09:21:03.0805] <jmdyck>
+Ah, so Date.parse really.
+
+[09:21:08.0791] <jmdyck>
+ * Ah, so Date.parse really.
+
+[09:21:19.0010] <littledan>
+it will be challenging to find the right set of things to interpret in practice to be compatible enough, but browsers have expressed appetite to upgrade to something if it's web-compatible in practice
+
+[10:38:59.0599] <ptomato>
+hi! in test262 we have an [RFC](https://github.com/tc39/test262/pull/3724) open (our first, as a trial of a new RFC process) about adding some facilities to test262 for improving the experience of writing asynchronous tests. we'd love to have some feedback from the perspective of implementers maintaining a test262 runner, and from (potential) test writers.
+
+[14:21:51.0323] <linusg>
+Does anyone know if https://fosstodon.org/@TC39 is a legitimate account (as in run by Ecma or a delegate)?
+
+[14:22:12.0250] <linusg>
+(I'd assume it's the same people as https://twitter.com/TC39 but I don't know about that one either :))
+
+[14:23:16.0547] <nicolo-ribaudo>
+It's legitimate, it's run by our chairs!
+
+[14:23:29.0418] <linusg>
+great, thanks!
+
+[14:37:29.0527] <ryzokuken (back friday)>
+I'd been meaning to add verified links to the TC39.es website or something but couldn't find the time yet
+
+[14:38:29.0240] <nicolo-ribaudo>
+It would be cool if there was already a PR open in the website repo waiting for review!
+
+[14:39:09.0840] <nicolo-ribaudo>
+It would have also been cool if the author of that PR realized that prettier was failing
+
+[15:33:50.0832] <ljharb>
+re Date.parse, that was already attempted, and was blocked (by the chrome team as i recall) 
+
+
+2022-11-24
+[16:05:48.0590] <littledan>
+ryzokuken (back friday): https://github.com/tc39/tc39.github.io/pull/303
+
+[16:07:11.0690] <ryzokuken (back friday)>
+Oh, nice
+
+[16:07:53.0013] <ryzokuken (back friday)>
+nicolo-ribaudo: thanks, will merge asap after the prettier fix
+
+[16:08:57.0479] <littledan>
+> <@ljharb:matrix.org> re Date.parse, that was already attempted, and was blocked (by the chrome team as i recall)
+
+If you're referring to what Richard Gibson proposed, and I co-blocked, the reason it didn't advance is because it wasn't attempting to solve the full problem: This attempt did not try to provide a full definition of a web-shippable Date.parse algorithm. An earlier attempt from Mozilla did work towards that goal, and it'd be great if that were revived.
+
+[16:09:56.0996] <littledan>
+I think browsers would be willing to make changes if it resolved this ongoing compatibility issue; that proposal required browsers to make changes while giving up on solving that problem.
+
+[16:10:20.0852] <littledan>
+(At least, this is what Domenic said at the time while he was agreeing with me on the block, IIRC)
+
+[16:12:29.0976] <littledan>
+Lots of other poorly-specified formats with significant compatibility issues had their parsing standardized at some much later point, e.g., HTML itself. Date.parse would be doable, but it's also understandable if an individual person doesn't want to take on such a challenge.
+
+[16:29:42.0358] <ljharb>
+ah yes, you're right
+
+[16:29:59.0196] <ljharb>
+altho i think blocking on a partial iterative approach is effectively blocking the whole thing, given how demotivating it is
+
+[16:31:02.0469] <littledan>
+Yeah, I really regret how demotivating the process was there
+
+[16:31:50.0645] <littledan>
+but I don't think we should add more features to Date.parse, which is something that proposal did. Standardizing it should be about building compatibility, not improving behavior to be more useful.
+
+[16:35:44.0040] <ljharb>
+(same thing happened with stack traces, in the same meeting)
+
+[16:35:58.0433] <ljharb>
+yeah i think it would have been a fine outcome if the objection was "no new stuff"
+
+[16:36:06.0501] <ljharb>
+that wasn't the takeaway for me tho
+
+[16:36:41.0118] <littledan>
+Yeah I guess the outcome could be confusing and lead to misunderstandings; I'm not sure what to do to address that.
+
+[16:37:09.0798] <littledan>
+I think the issue with stack traces was a bit different but I don't remember what exactly was being proposed
+
+[16:40:06.0682] <littledan>
+I guess we should figure this history of stack traces out a bit, since they are coming up this meeting too...
+
+[17:05:48.0390] <ljharb>
+it felt the same to me; i was specifying the structure but not the contents, and i was told that i'd be blocked if i did anything less then specify 100% of the existing behavior, including contents
+
+[17:05:49.0745] <ljharb>
+ * it felt the same to me; i was specifying the structure but not the contents, and i was told that i'd be blocked if i did anything less then specify 100% of the existing behavior, including contents
+
+[17:06:05.0656] <ljharb>
+whereas i see it as valuable to lock down the structure asap, and leave it to a followon proposal to lock down the contents
+
+[17:08:50.0143] <littledan>
+I think there are different challenges inherent in standardizing the stack vs standardizing Date.parse. For example, web reality agrees what the entrypoint is for Date.parse, but not the stack introspection APIs. And the nature of compatibility differs as well (e.g., Firefox's crazy experience that it would be web-incompatible of them to ship Chrome's API!)
+
+[17:09:40.0663] <littledan>
+they also differ in that changes to Date.parse are changing what an existing function does, but the stack proposal was a new one (with unclear implications for what happens to the existing APIs)
+
+[17:10:04.0877] <littledan>
+they are both important areas of work, but the differences in the problems call for somewhat different approaches
+
+[17:10:57.0715] <littledan>
+ * I think there are different challenges inherent in standardizing the stack vs standardizing Date.parse. For example, web reality agrees what the entrypoint is for Date.parse, but not the stack introspection APIs. And the nature of compatibility differs as well (e.g., Firefox's crazy experience that it would be web-incompatible of them to ship Chrome's API!)
+
+[17:13:09.0227] <littledan>
+when the standard says, "Do this [implicitly: plus something else which you have to figure out yourself]", this is a mess for implementers. ES6 implicitly did a bunch of this, and it took us more than a year to untangle it after it was already "standard". I prefer our post-ES6 habit of making each feature well-defined and complete, by the time it is standardized.
+
+[17:21:04.0275] <littledan>
+> <@ljharb:matrix.org> whereas i see it as valuable to lock down the structure asap, and leave it to a followon proposal to lock down the contents
+
+So I think iterative processes like these are good, and the stage process for a single proposal can be where the iteration happens (as opposed to multiple standard revisions)
+
+[21:29:19.0613] <ljharb>
+that only works if the same champions want to drive all stages of the change.
+
+[07:52:38.0197] <Richard Gibson>
+> <@littledan:matrix.org> but I don't think we should add more features to Date.parse, which is something that proposal did. Standardizing it should be about building compatibility, not improving behavior to be more useful.
+
+I am still willing to work on https://github.com/tc39/proposal-uniform-interchange-date-parsing or a successor, but I don't know what you're referring to by "add more features" (and yes, the denial did and still does feel like "all or nothing in one proposal", which I don't consider practical).
+
+
+2022-11-25
+[05:06:56.0605] <sachag>
+hi all! just wanted to let you know that this year's State of JS survey is now open: https://survey.devographics.com/survey/state-of-js/2022
+
+[05:07:28.0452] <sachag>
+also, I'm starting a mailing list focused on collaboration around the surveys if anybody would like to join: https://www.devographics.com/working-group/ 
+
+[05:10:51.0206] <sffc>
+littledan ljharb Richard Gibson: note that Date.parse is still evolving; see the link I shared in the ECMA-402 channel: https://bugs.chromium.org/p/v8/issues/detail?id=13494
+
+Basically there is a web reality concern that Date.parse can round-trip Intl.DateTimeFormat at least in the en-US locale.
+
+[12:14:50.0436] <snek>
+is there any intl way to see if the os prefers 24 hour time?
+
+[12:15:02.0936] <snek>
+like if the user's locale is en-US but they want 24 hour time anyway
+
+[13:03:40.0243] <ptomato>
+I think this is the "user preferences" proposal
+
+[14:23:56.0130] <snek>
+> <@pchimento:igalia.com> I think this is the "user preferences" proposal
+
+oooo do you have a link?
+
+[15:05:06.0411] <ptomato>
+https://github.com/tc39/ecma402/blob/master/meetings/notes-2022-11-03.md#proposals-and-discussion-topics
+
+
+2022-11-28
+[01:47:49.0970] <ryzokuken>
+> <@devsnek:matrix.org> oooo do you have a link?
+
+https://github.com/romulocintra/user-locale-client-hints/
+
+
+2022-11-29
+[02:40:57.0077] <Jack Works>
+just hit this
+
+[02:41:06.0967] <Jack Works>
+why this is allowed, it's a footgun!
+
+[08:24:24.0548] <ljharb>
+what’s the footgun?
+
+[08:24:39.0144] <ljharb>
+other than that the log in the child setter says “get” instead of “set”, it seems fine
+
+[08:40:19.0201] <danielrosenwasser>
+I think Jack Works is referring to the fact that the lack of a `get a` accessor in `Child` doesn't defer to the parent's `get a`
+
+[08:40:28.0082] <danielrosenwasser>
+ * I think Jack Works is referring to the fact that the lack of a `get a` accessor in `Child` doesn't defer to the `Parent`'s `get a`
+
+[09:58:51.0286] <ljharb>
+ohhh
+
+[09:59:01.0514] <ljharb>
+because getters and setters are coalesced
+
+[10:01:20.0682] <ljharb>
+yeah it would have made sense to have a default getter in the presence of a setter-only be `return super.whatever`, and a default setter in the presence of a getter-only be `return super.whatever = x`
+
+[10:01:41.0320] <ljharb>
+but i assume that adding that in classes in ES6 may have violated some kind of inconsistency with pre-class objects using ES5 getters/setters?
+
+[13:59:31.0804] <Ashley Claymore>
+a default setter sounds like it wouldn't work quite as nicely, as usually a getter-only means read-only, and a set will fail.
+
+[14:27:16.0838] <ljharb>
+sure, that’d still be the case on a base class - this would only apply to derived classes 
+
+
+2022-11-30
+[06:22:46.0576] <Jack Works>
+littledan: you may interested in this prototyping
+
+[06:23:01.0639] <Jack Works>
+implemented `import(spec, { reflect: true })` in webpack
+
+[06:23:27.0695] <Jack Works>
+ * implemented `import(spec, { reflect: true })` in webpack
+
+[06:24:18.0020] <littledan>
+> <@jackworks:matrix.org> littledan: you may interested in this prototyping
+
+Cool!
+
+[06:24:31.0722] <littledan>
+Ljharb, is there an issue tracking your concern?
+
+[06:24:48.0341] <littledan>
+Or Justin?
+
+[06:24:55.0537] <ljharb>
+for the module stuff?
+
+[06:25:13.0321] <littledan>
+Yes, the extensibility question
+
+[06:25:37.0775] <littledan>
+We need to have this discussion bringing everyone together. That was an important thing I learned today.
+
+[06:25:42.0527] <ljharb>
+my concerns came up during import assertions, and are very documented; i don't think i've documented yet how my fears exactly came true as predicted as tools tried to inject all sorts of wacky syntax forms into assertions
+
+[06:25:59.0722] <ljharb>
+if someone has a use case they should bring it to tc39, we don't provide programmable syntax
+
+[06:26:35.0591] <littledan>
+Right, can we move this discussion to an issue thread so you and Justin can lay out the arguments?
+
+[06:26:43.0911] <Jack Works>
+> <@ljharb:matrix.org> my concerns came up during import assertions, and are very documented; i don't think i've documented yet how my fears exactly came true as predicted as tools tried to inject all sorts of wacky syntax forms into assertions
+
+and they use `import x from "!raw-loader!./file.txt"` in days before.
+
+[06:26:53.0297] <littledan>
+(I think it will get lost in this chat and this is a major thing for us all to follow up on)
+
+[06:27:19.0136] <littledan>
+(And, to be clear, I am Ok with either outcome)
+
+[06:27:24.0789] <Justin Ridgewell>
+There was an issue, and several other bundlers voiced the same concern as me.
+
+[06:27:26.0719] <ljharb>
+> <@jackworks:matrix.org> and they use `import x from "!raw-loader!./file.txt"` in days before.
+
+yes, and the ecosystem recognized how terrible that is which is why it's been a bad practice to use webpack-specific loader syntax for a long time
+
+[06:27:57.0196] <Justin Ridgewell>
+The loader syntax didn't go away, it's just done in separate ways now.
+
+[06:28:15.0789] <Justin Ridgewell>
+Every bunder reinvents it for themselves
+
+[06:28:39.0833] <ljharb>
+extensible syntax is exactly every bundler reinventing it for themselves
+
+[06:28:43.0826] <littledan>
+> <@ljharb:matrix.org> yes, and the ecosystem recognized how terrible that is which is why it's been a bad practice to use webpack-specific loader syntax for a long time
+
+It sounds like this remains a point of disagreement within the community maybe
+
+[06:28:56.0134] <ljharb>
+if we want to avoid that (which i think we do) then the actual use cases need litigating _here_
+
+[06:28:57.0147] <ljharb>
+ * if we want to avoid that (which i think we do) then the actual use cases need litigating _here_
+
+[06:29:05.0569] <littledan>
+I don’t think any one of us could speak for the ecosystem any more than we can speak for TC39
+
+[06:29:16.0564] <ljharb>
+of course
+
+[06:29:40.0118] <ljharb>
+i'll qualify if it's really needed, "it seems like much of the ecosystem has"
+
+[06:30:19.0274] <ljharb>
+and to be fair i'm more talking about packages; it doesn't matter much what people do in their own apps
+
+[06:30:53.0770] <Jack Works>
+things become better after we have `import.meta`. Now many bundlers support `new URL("./spec", import.meta.url)` as a way to reflection and it also works in real browser
+
+[06:31:02.0890] <nicolo-ribaudo>
+I ideally would like bare JS to have the same capabilities as bundlers, except that bundlers also put everything in a single file
+
+[06:31:15.0569] <nicolo-ribaudo>
+It's nice to have image-loader in webpack, but I would also like it to work without webpack
+
+[06:32:38.0394] <Jack Works>
+I don't allow any loader in our project that convert any non JS files into a JS by `import` syntax unless the host can do that too (e.g. we allow JSON imports)
+
+[06:32:48.0848] <Justin Ridgewell>
+TC39 is not an appropriate place for all of the concerns bundler have to deal with, so I don't think that's possible
+
+[06:33:23.0087] <Jack Works>
+ * I don't allow any loader in our project that convert any non JS files into a JS by `import` syntax
+
+[06:33:30.0190] <nicolo-ribaudo>
+Which concerns, for example? I guess code splitting, but that still falls under the "putting multiple things in the same file" category
+
+[06:33:38.0127] <Jack Works>
+ * I don't allow any loader in our project that convert any non JS files into a JS by `import` syntax unless the host can do that too
+
+[06:34:20.0163] <Jack Works>
+ * I don't allow any loader in our project that convert any non JS files into a JS by `import` syntax unless the host can do that too (e.g. we allow JSON imports)
+
+[06:34:24.0959] <ljharb>
+i don't mean that tc39 has to provide every semantic, since that isn't always possible, but it should still be discussed
+
+[06:35:05.0333] <Justin Ridgewell>
+- Importing an image with blurry placeholder, intrinsic size, etc.
+- Import bytes buffers
+- Transforming files for the importer's usecase
+- Annotating metadata
+(these are just the things I did last week)
+
+[06:35:49.0430] <nicolo-ribaudo>
+> <@jridgewell:matrix.org> - Importing an image with blurry placeholder, intrinsic size, etc.
+> - Import bytes buffers
+> - Transforming files for the importer's usecase
+> - Annotating metadata
+> (these are just the things I did last week)
+
+Well, for example Module/ModuleSource can solve the first three by providing custom module loaders
+
+[06:35:54.0552] <Justin Ridgewell>
+It's all module reflection. TC39 has a need for WASM (that I agree with!), and bundler have a much lager need. I'd like a single solution to the full problem space.
+
+[06:35:55.0161] <ljharb>
+and why do these need parseable syntax instead of a comment?
+
+[06:36:23.0875] <Kris Kowal>
+These are good reasons to allow userspace to do more without our permission, as would be possible with Module and ModuleSource.
+
+[06:36:37.0775] <Kris Kowal>
+ * These are good reasons to allow userspace to do more without our permission, as would be possible with Module and ModuleSource.
+
+[06:36:39.0651] <nicolo-ribaudo>
+> <@nicolo-ribaudo:matrix.org> Well, for example Module/ModuleSource can solve the first three by providing custom module loaders
+
+Ok I see: you would want to pass data from the import statement to the import hook
+
+[06:37:19.0342] <nicolo-ribaudo>
+And "the bundler" is equivalent to `Module` with a custom import hook
+
+[06:37:25.0220] <nicolo-ribaudo>
+ * And "the bundler" is equivalent to `Module` with custom import hook
+
+[06:37:39.0419] <nicolo-ribaudo>
+ * And "the bundler" is equivalent to `Module` with a custom import hook
+
+[06:38:03.0921] <littledan>
+FWIW I lean towards what Justin is saying and sort of regret naming the keyword “assert” for that reason. I don’t feel like the assertion mental model resonates with anyone.
+
+[06:38:09.0671] <Justin Ridgewell>
+I don't understand the ModuleSource suggestion, relying on runtime evaluation means it's unacceptable for most of the web?
+
+[06:38:24.0006] <Justin Ridgewell>
+ * I don't understand the ModuleSource suggestion, relying on runtime evaluation means it's unacceptable for most of the web?
+
+[06:38:49.0066] <Justin Ridgewell>
+I can't have a bunder output that uses `eval()` in any form
+
+[06:38:57.0029] <Justin Ridgewell>
+It's going to immediately fail in CSP
+
+[06:39:08.0423] <Kris Kowal>
+Pardon module source with a lower case. Module blocks provide module sources with CSP annotation.
+
+[06:39:31.0493] <Kris Kowal>
+> <@jridgewell:matrix.org> I don't understand the ModuleSource suggestion, relying on runtime evaluation means it's unacceptable for most of the web?
+
+ * Pardon module source with a lower case. Module blocks provide module sources with CSP annotation.
+
+[06:40:40.0088] <nicolo-ribaudo>
+> <@jridgewell:matrix.org> I can't have a bunder output that uses `eval()` in any form
+
+I am very sorry to reply with a link to a proposal that has not been presented in detail (other in in Kris' module harmony presentations), but with https://github.com/tc39/proposal-compartments/blob/master/2-virtual-module-source.md we could have custom sources - even not created from module blocks - without eval.
+
+[06:41:10.0073] <littledan>
+I would say, I don’t see why JSON modules shouldn’t have a source
+
+[06:41:34.0796] <Luca Casonato>
+> I would say, I don’t see why JSON modules shouldn’t have a source
+
+Yeah, they probably should - that is up to the HTML integration though
+
+[06:41:41.0422] <Justin Ridgewell>
+I mean, why can't WASM just do `fetch().then(eval)`?
+
+[06:42:05.0692] <Justin Ridgewell>
+Like, isn't that the same suggestion as using Comparentments/ModuleSource/etc?
+
+[06:42:37.0363] <Justin Ridgewell>
+The use case seems the same to me, and I'm saying its much larger than just WASM.
+
+[06:43:46.0171] <ljharb>
+> <@littledan:matrix.org> FWIW I lean towards what Justin is saying and sort of regret naming the keyword “assert” for that reason. I don’t feel like the assertion mental model resonates with anyone.
+
+if you're going to call out "ecosystem" as being too broad then i'll call out that "anyone" is excluding me, for whom it resonates very strongly :-)
+
+[06:44:45.0394] <nicolo-ribaudo>
+I cannot speak for the champions of compartments, but from what I see one major goal of that proposal is to allow writing safe runtime code:
+- either without eval (for example, with the virtual module sources I linked) - and this is what I'm most interested in
+- or with eval in a controlled way, because compartment could provide custom versions of the dangerous objects and properly confine the executed string
+
+[06:44:56.0670] <Kris Kowal>
+> <@jridgewell:matrix.org> Like, isn't that the same suggestion as using Comparentments/ModuleSource/etc?
+
+To be clear, `new Module((module {}).source)` is safe under CSP.
+
+[06:45:19.0772] <Kris Kowal>
+And the `source` in question is a module source and an instance of `ModuleSource` but not constructed by `new ModuleSource(text)`
+
+[06:45:48.0272] <Justin Ridgewell>
+Yes, but that doesn't solve the transform, reflection, custom behavior, because none of that is representable in a `module {}` block?
+
+[06:46:27.0731] <Kris Kowal>
+Correct. For that, Nicolò cites a proposal for virtual module sources, which would be able to do these things in JavaScript, without eval.
+
+[06:47:00.0366] <Kris Kowal>
+But to be clear, that proposal is a place-holder. We have a lot of work to do to make it viable.
+
+[06:47:15.0434] <guybedford>
+Justin Ridgewell: today, bundlers _CANT_ bundle Wasm
+
+[06:47:24.0717] <guybedford>
+because there is no way to treat them as another node in the graph
+
+[06:47:35.0689] <guybedford>
+the ESM integration is not sufficient for most Wasm modules
+
+[06:47:48.0677] <guybedford>
+since it implies import maps support for things like wasi, which is simply not tractable in most scenarios
+
+[06:48:02.0582] <Justin Ridgewell>
+They can manually instantiate an array buffer, though.
+
+[06:48:04.0197] <guybedford>
+Wasm also does not support cycles, while Wasm import functions and memory bindings often rely on cyclical linkage
+
+[06:48:19.0026] <Justin Ridgewell>
+What's being suggested is a way to do it statically.
+
+[06:48:21.0232] <guybedford>
+manual instantiation is the reason bundling of Wasm is such bad UX right now
+
+[06:48:31.0169] <guybedford>
+look at any Wasm project
+
+[06:48:36.0643] <guybedford>
+and there's an option to set `CUSTOM_WASM_URL`
+
+[06:48:39.0291] <Justin Ridgewell>
+Right, which is **my exact argument for everything else**
+
+[06:48:46.0066] <guybedford>
+because the patterns are simply not supported
+
+[06:48:50.0228] <Justin Ridgewell>
+The problem space **is more than WASM**
+
+[06:49:08.0631] <guybedford>
+I would prefer not to be told what the problem space of my proposal is :)
+
+[06:49:10.0131] <Kris Kowal>
+> <@jridgewell:matrix.org> The problem space **is more than WASM**
+
+Agree very much.
+
+[06:49:25.0089] <Justin Ridgewell>
+The ergonomics that I need to support for my bundler has all of this other uses
+
+[06:49:51.0027] <Justin Ridgewell>
+I want (and other bundlers) want a solution that solves the full problem
+
+[06:50:02.0522] <guybedford>
+right, and that needs to be weighed against these use cases, but please don't make us overreach our use cases
+
+[06:50:03.0266] <Kris Kowal>
+Yes, I too have written bundlers. Agree very much that we need extension points and support from 262 for parity between dev and prod.
+
+[06:50:10.0229] <guybedford>
+we are solving specific problems we have clearly described
+
+[06:50:57.0655] <guybedford>
+a good way to start might be to hear what you are after more clearly
+
+[06:51:08.0502] <guybedford>
+perhaps you could present in the modules group what use cases _you_ would like to solve
+
+[06:51:30.0013] <guybedford>
+and we can start to build discussion around how the use cases fit together
+
+[06:51:36.0988] <Justin Ridgewell>
+`import module foo from 'wasm'` => `import foo from 'wasm' assert { type: 'module' }`
+
+[06:51:40.0599] <Justin Ridgewell>
+That's all I want
+
+[06:51:51.0789] <Justin Ridgewell>
+Put reflection into an extensible syntax
+
+[06:51:57.0153] <guybedford>
+It's really much better if you describe your use cases first
+
+[06:52:03.0556] <guybedford>
+instead of jumping to a specific syntactical change request
+
+[06:52:14.0429] <Justin Ridgewell>
+https://matrix.to/#/!wbACpffbfxANskIFZq:matrix.org/$4W15943K1Vb8Qmw5k-dTksp2GvxQbzW2CYRX-632J6o?via=matrix.org&via=mozilla.org&via=igalia.com
+
+[06:52:44.0597] <Justin Ridgewell>
+I've descrcibed the use cases every time you've brought up the proposal
+
+[06:52:44.0672] <guybedford>
+ah sorry I missed that
+
+[06:53:10.0954] <Kris Kowal>
+All of your cases are addressable in the fullness of harmony. Would be delighted to spend some time with you on that.
+
+[06:53:22.0928] <guybedford>
+what is the reason, you need overlap on this with assertions though?
+
+[06:53:50.0898] <guybedford>
+I can appreciate your wanting to use it, but not why our proposal should have to be shoehorned into it?
+
+[06:53:53.0126] <Kris Kowal>
+Well, good point, except for overlapping with assertions.
+
+[06:53:59.0834] <Justin Ridgewell>
+`assert` is badly named, it's extensibility that I want.
+
+[06:54:20.0198] <Kris Kowal>
+That extensibility can be satisfied fully by other means.
+
+[06:54:33.0828] <yulia>
+i also feel like it could have been named differently, but that has past -- does everyone have objections to `with`?
+
+[06:54:44.0142] <yulia>
+because i don't fully understand those objectsions
+
+[06:55:25.0512] <Kris Kowal>
+Well, renaming to `with` doesn’t answer Justin’s question. We’re not also proposing that arbitrary flags would be threaded thru `with` syntax into hooks.
+
+[06:55:49.0608] <Justin Ridgewell>
+Because it's all reflection. I think having a specific syntax and an extensible syntax that could accomplish the specific need is the incorrect way to solve the problem
+
+[06:56:12.0633] <yulia>
+im not suggesting a rename, but we have a number of specializations of loading that we want to do, and i don't think that the import + keyword really works, especially for dynamic import
+
+[06:56:13.0166] <Justin Ridgewell>
+(I need to go walk my dog, will check back afterwards)
+
+[06:56:18.0528] <yulia>
+plus this is extra stuff to learn for developers
+
+[06:56:28.0468] <yulia>
+whereas we've already introduced this new pattern with asserts
+
+[06:56:40.0000] <Kris Kowal>
+And I am adamant that extensible flags should not be threaded into import hooks because it reduces clarity of caching semantics across modules.
+
+[06:57:07.0277] <Kris Kowal>
+But I’m very supportive of having out-of-band metadata that clarifies the behavior of importing specifier patterns in a scope.
+
+[06:57:33.0845] <yulia>
+im not sure i am arguing for extensible flags, rather i support reconsidering how we expose this
+
+[06:57:39.0823] <ljharb>
+> <@yulia:mozilla.org> i also feel like it could have been named differently, but that has past -- does everyone have objections to `with`?
+
+yes, i'm very opposed to extensible syntax in unknowable ways that will fork the language
+
+[06:57:52.0966] <Justin Ridgewell>
+(my own hot take, import assertions are already reflection mixed with assertion, `import foo assert {type: 'json'}` does reflection because it's generating a module from non-JS)
+
+[06:58:12.0374] <yulia>
+assertions can already be arbitrary
+
+[06:58:19.0606] <yulia>
+they are determined by the host
+
+[06:58:21.0079] <Justin Ridgewell>
+> <@ljharb:matrix.org> yes, i'm very opposed to extensible syntax in unknowable ways that will fork the language
+
+This already exists in the ecosystem
+
+[06:58:21.0620] <Kris Kowal>
+As with Jordan, I’m in support of using `with` as a namespace 262 can extend, but not user code.
+
+[06:58:33.0765] <ljharb>
+> <@yulia:mozilla.org> assertions can already be arbitrary
+
+they're not allowed to change the representation of the module, per spec
+
+[06:58:44.0953] <yulia>
+that is what json does
+
+[06:58:45.0140] <ljharb>
+> <@jridgewell:matrix.org> This already exists in the ecosystem
+
+in the specifier, or via comments, sure. are there other ways?
+
+[06:58:58.0968] <yulia>
+a json file, imported as a module, will not make sense
+
+[06:59:04.0011] <ljharb>
+of course it does
+
+[06:59:10.0641] <ljharb>
+it's how node has worked for well over a decade
+
+[06:59:20.0668] <ljharb>
+it's just that browsers have a security constraint that requires the explicit assertion
+
+[06:59:23.0088] <yulia>
+when you import the default namespace you get an error
+
+[06:59:27.0045] <ljharb>
+it's not changing the module's representation
+
+[06:59:32.0381] <ljharb>
+you get an error, but the spec doesn't require it
+
+[06:59:39.0111] <ljharb>
+and node originally was supposed to have the assertion be optional
+
+[06:59:44.0044] <yulia>
+import isn't a keyword in json, neither is export -- we are doing an extra step
+
+[06:59:46.0273] <ljharb>
+(a single collaborator obstructed that)
+
+[06:59:49.0675] <yulia>
+its not just a host level assertions
+
+[07:00:03.0698] <ljharb>
+it's not a keyword in css or html either but those were candidates for Modules too
+
+[07:00:11.0242] <ljharb>
+i don't think that's a realistic rubric to apply
+
+[07:00:41.0421] <ljharb>
+the JS ecosystem has imported JSON for over a decade via `require('./path/to/file.json')`. it's well-understood and quite intuitive
+
+[07:00:46.0949] <yulia>
+im not sure what the rubric is here. i believe css was already spec'd html (or i was asked to review it recently anyway)
+
+[07:01:06.0257] <ljharb>
+i'm saying that "you can import something" doesn't have a requirement that it be exported from the source, unless the source is a module format that requires explicit exports
+
+[07:01:16.0416] <yulia>
+> <@ljharb:matrix.org> the JS ecosystem has imported JSON for over a decade via `require('./path/to/file.json')`. it's well-understood and quite intuitive
+
+yes, but it is unrelated to what modules do. that require works very differently from the beginning
+
+[07:01:17.0715] <ljharb>
+ * i'm saying that "you can import something" doesn't have a requirement that it be exported from the source, unless the source is a module format that requires explicit exports
+
+[07:01:37.0123] <ljharb>
+i don't agree that's true in user's mental models
+
+[07:01:46.0182] <yulia>
+user mental models are not what we are discussing?
+
+[07:01:46.0454] <ljharb>
+obv they're different under the hood, but that's irrelevant
+
+[07:02:01.0137] <ljharb>
+oh, that's what i'm discussing
+
+[07:02:06.0887] <ryzokuken>
+Christian Ulbrich: ping regarding importing JSON (we discussed it extensively the other day)
+
+[07:02:12.0388] <ljharb>
+sorry if i miscommunicated
+
+[07:02:22.0505] <yulia>
+you said no splitting of the language -- but you don't consider this to be a split? json != js
+
+[07:02:34.0256] <ljharb>
+no, i don't. wasm != js too
+
+[07:03:03.0509] <ljharb>
+i mean that *when it's javascript* i want things to be maximally universal, and tool-specific programmable syntax isn't
+
+[07:03:05.0669] <Kris Kowal>
+i think jordan’s concern is about emergent behavior of the ecosystem, producing further partitioning in what in npm is usable in various environments.
+
+[07:03:44.0273] <yulia>
+ok, i understand. I don't know if blocking syntax like `with` in favor of `import module` is the right choice though
+
+[07:03:54.0861] <yulia>
+there are other ways to do restriction and maximal compatibility
+
+[07:04:12.0450] <ljharb>
+maybe not. but even with the semantic restrictions on `assert`, there were tools who planned to abuse it for extensible syntax, until they got pushback
+
+[07:04:37.0413] <yulia>
+I had explicit feedback from developers to not continue to complicate import syntax
+
+[07:04:43.0245] <ljharb>
+"people want to do X" is not an automatic justification for providing a way for them to do X, and imo if the X is a good idea, it can be discussed in TC39
+
+[07:04:53.0070] <yulia>
+im even not sure if we should add something like `with` or if we should really just expand on `assert` because its already getting confusing
+
+[07:05:27.0273] <ljharb>
+for developers (not tool devs), extensible syntax is still more complex because it means there's more semantics to learn from more places
+
+[07:05:51.0762] <yulia>
+ok, yes -- but we already have `assert { ... } ` and users are already learning it
+
+[07:05:58.0632] <ljharb>
+iow i maintain that the confusion isn't about parsing, because humans don't parse that way, but it's about "understanding what the code does" - and extensible syntax makes that harder
+
+[07:06:13.0649] <yulia>
+if we then add `import lazy` and `import module` i am not so sure
+
+[07:06:27.0160] <Kris Kowal>
+> <@yulia:mozilla.org> im even not sure if we should add something like `with` or if we should really just expand on `assert` because its already getting confusing
+
+I’m open to managed extensions to the assert namespace, even for things that aren’t assertions, if that’s less burden on developers. I could even see a migration from `assert` to `with` if we require them to be equivalent. But only as long as those properties continue to be unavailable to import hooks.
+
+[07:06:31.0644] <ljharb>
+the semantics of `assert` are *always* "either it works or it throws"
+
+[07:06:35.0757] <ljharb>
+that is very easy to learn
+
+[07:06:47.0847] <Christian Ulbrich>
+yulia: But as I've said, in TS, there already is a special syntax for special imports, called _type imports_, and it is written like that: `import type { MyType } `... so for at least TS developers this would not be different, but I also object to the wording/naming of `module`.
+
+[07:06:57.0780] <ljharb>
+you might have to figure out what the various assertions *are*, but you don't have to figure out what they *do*
+
+[07:07:14.0860] <Kris Kowal>
+> <@ljharb:matrix.org> the semantics of `assert` are *always* "either it works or it throws"
+
+And I am in favor of maintaining this invariant because the alternative is to complicate cache keys and how singletons are shared between modules in the same scope.
+
+[07:07:35.0691] <yulia>
+> <@christianulbrich:matrix.org> yulia: But as I've said, in TS, there already is a special syntax for special imports, called _type imports_, and it is written like that: `import type { MyType } `... so for at least TS developers this would not be different, but I also object to the wording/naming of `module`.
+
+if we had types, then i would expect them to be imported like anything else. It doesn't seem to have the same level of modification as what import module/lazy might do
+
+[07:07:42.0681] <yulia>
+so this would be doubly confusing
+
+[07:07:55.0278] <yulia>
+because in one case you are declaring what you are importing, in another you are declaring how
+
+[07:08:13.0000] <ljharb>
+if we had types with no runtime semantics, you'd want them syntactically marked, so you could strip them easily
+
+[07:08:14.0195] <yulia>
+we should be very intentional about the right side and the left side of the expression is me point
+
+[07:08:47.0261] <Kris Kowal>
+> <@christianulbrich:matrix.org> yulia: But as I've said, in TS, there already is a special syntax for special imports, called _type imports_, and it is written like that: `import type { MyType } `... so for at least TS developers this would not be different, but I also object to the wording/naming of `module`.
+
+I’m okay with changing the syntax of import reflection for various reasons, but I can attest that living inside of the resulting universe with `module` blocks, `import module` begins to look familiar. The keyword `module` implies the production of `Module` instances in a very general way.
+
+[07:08:50.0763] <yulia>
+if we have import module/source/lazy whatever -- we should not have import type
+
+[07:09:29.0529] <Kris Kowal>
+To wit, if we renamed `module` to something like `moduleInstance`, it would also make sense to use `moduleInstace {}` as the introducer for module expressions.
+
+[07:10:23.0821] <Kris Kowal>
+> <@yulia:mozilla.org> if we have import module/source/lazy whatever -- we should not have import type
+
+I would make the looser statement that some combinations will necessarily fail at various times for various reasons.
+
+[07:10:59.0982] <yulia>
+my thoughts on this are strong -- we should not be changing the role ad hoc. it makes it harder to learn
+
+[07:11:04.0247] <Kris Kowal>
+And of those parts, I’m regretfully least attached to lazy.
+
+[07:11:35.0920] <Kris Kowal>
+Does the strength of your conviction extend to precluding WASM from participating in the ESM graph?
+
+[07:11:41.0630] <yulia>
+Thats a shame, as it exists and provides backing for your other proposals and could help resolve this
+
+[07:11:42.0588] <ljharb>
+finite syntax seems much easier to learn than any extensible syntax imo
+
+[07:12:09.0954] <yulia>
+> <@kriskowal:matrix.org> Does the strength of your conviction extend to precluding WASM from participating in the ESM graph?
+
+why would i preclude that?
+
+[07:12:27.0892] <yulia>
+we aren't proposing `import wasm`
+
+[07:12:46.0901] <yulia>
+in which case i would ask why we didnt do `import css`, `import json` etc.
+
+[07:12:55.0691] <Kris Kowal>
+> <@yulia:mozilla.org> why would i preclude that?
+
+I must be misunderstanding your objection. Are you objecting to JSON participating in the ESM graph?
+
+[07:12:59.0081] <yulia>
+and then, `import type` would make sense in the current scheme we created
+
+[07:13:07.0366] <yulia>
+> <@kriskowal:matrix.org> I must be misunderstanding your objection. Are you objecting to JSON participating in the ESM graph?
+
+nope, i am just pointing out that this exists
+
+[07:13:42.0424] <yulia>
+i am objecting to mixing roles and making additional syntax for developers to read, without being strict about what different parts of the import statement mean
+
+[07:14:10.0951] <yulia>
+yes, `with` is potentially extensible, but we are potentially, as a committee, going to add more of these
+
+[07:14:14.0636] <Kris Kowal>
+I’m in favor of opening the field for more types of modules.
+
+[07:14:27.0406] <Kris Kowal>
+> <@yulia:mozilla.org> i am objecting to mixing roles and making additional syntax for developers to read, without being strict about what different parts of the import statement mean
+
+Okay, we don’t disagree.
+
+[07:14:55.0438] <Kris Kowal>
+> <@yulia:mozilla.org> yes, `with` is potentially extensible, but we are potentially, as a committee, going to add more of these
+
+I’m in favor of 262 managing `with` and `assert`.
+
+[07:14:56.0981] <yulia>
+great, i was hoping this wasn't going to be controversial -- people should be able to rely on past knowledge
+
+[07:14:58.0013] <ljharb>
+i agree - but "extensible syntax" is the opposite of being strict about what different parts of the import statement mean
+
+[07:15:11.0483] <yulia>
+we can potentially be strict about `with`
+
+[07:15:14.0559] <ljharb>
+or rather, userland-extensible
+
+[07:15:20.0760] <ljharb>
+syntax that only _we_ extend is ofc fine (since technically that's "everything")
+
+[07:15:23.0521] <yulia>
+we delegated behavior of `assert` to the host
+
+[07:15:25.0218] <ljharb>
+ * syntax that only _we_ extend is ofc fine
+
+[07:15:44.0047] <ljharb>
+ * syntax that only _we_ extend is ofc fine (since technically that's "everything")
+
+[07:15:51.0410] <ljharb>
+not all behavior
+
+[07:15:53.0927] <yulia>
+and, i am not so pedantic about this, we can have stuff on the left hand side, we just have to be really intentional here
+
+[07:15:55.0930] <ljharb>
+it's tightly constrained, by design
+
+[07:16:21.0175] <ljharb>
+hosts are only allowed to reject or not based on `assert`; they can't provide different representations based on it
+
+[07:16:27.0039] <yulia>
+ok, lets pick this up tomorrow maybe, it doesnt sound like we have a huge gulf of disagreement
+
+[07:16:40.0062] <yulia>
+> <@ljharb:matrix.org> hosts are only allowed to reject or not based on `assert`; they can't provide different representations based on it
+
+they can and do given that css exists?
+
+[07:17:03.0681] <yulia>
+yes, we reject based on the mime type, but these don't get parsed as javascript
+
+[07:17:05.0988] <Kris Kowal>
+Okay, I think ljharb, yulia, and I are in agreement about the role of with/assert syntax in import statements and the open question is how to satisfy Justin’s request for extensibility. He’s clear about the requirements and we should be clear about alternative paths to simply forwarding a KV bag from syntax to import hooks.
+
+[07:17:26.0940] <ljharb>
+"parsed as javascript" isn't the constraint. it's "you can only ever get one representation of a specifier"
+
+[07:17:33.0360] <Kris Kowal>
+My concrete suggestion is that the mapping should occur out of band, in an import map or similar.
+
+[07:17:45.0214] <yulia>
+that sounds like a good path forward
+
+[07:18:06.0658] <ljharb>
+tbh i wish import assertions hadn't landed, out of band would have been much better. i think env-specific or tool-specific needs should be met outside the source code.
+
+[07:18:07.0970] <Kris Kowal>
+Yes. There must only be one representation per specifier (or the reflection thereof which I believe should be universal)
+
+[07:18:27.0513] <ljharb>
+ * tbh i wish import assertions hadn't landed, out of band would have been much better. i think env-specific or tool-specific needs should be met outside the source code.
+
+[07:18:52.0478] <yulia>
+yes that aligns with the current reality and i think im fine with that. and i think my concern (though not justins) is resolved with what we just discussed
+
+[07:21:21.0725] <Kris Kowal>
+Hey, you know what’s cool about circadian rhythms? Whenever the sun rises, your ability to go to sleep stops, but your need for sleep continues!
+
+[07:22:34.0942] <Kris Kowal>
+If this persists for, say, a few cycles, the whole world starts to feel like an IKEA with no exit.
+
+[07:26:43.0852] <Justin Ridgewell>
+> <@yulia:mozilla.org> im even not sure if we should add something like `with` or if we should really just expand on `assert` because its already getting confusing
+
+Having both `with` and `assert` is going to lead to confusion about which key-value goes where.
+
+[07:28:02.0026] <Justin Ridgewell>
+> <@ljharb:matrix.org> you might have to figure out what the various assertions *are*, but you don't have to figure out what they *do*
+
+But you do. You have to know that `assert { type: 'json' }` turns into a default import of an object (and no named imports). `type: 'css'` gives you a StyleSheet and no class names, etc. These are already reflections mixed with asserts.
+
+[07:30:00.0804] <Kris Kowal>
+In both cases, the hint does not need to be expressed in syntax and can _also_ be expressed elsewhere.
+
+[07:30:30.0788] <Kris Kowal>
+In the case of JSON, the behavior is indicated either by extension or MIME type depending on the medium. It could also be hinted in an import map.
+
+[07:30:51.0668] <ljharb>
+> <@jridgewell:matrix.org> But you do. You have to know that `assert { type: 'json' }` turns into a default import of an object (and no named imports). `type: 'css'` gives you a StyleSheet and no class names, etc. These are already reflections mixed with asserts.
+
+That’s not what they do, that’s what the modules are.
+
+[07:31:09.0345] <ljharb>
+json doesn’t “turn into” that, that’s what it always is
+
+[07:31:45.0888] <Justin Ridgewell>
+I don't understand, neither is JS so some reflection must have happened.
+
+[07:31:59.0093] <Justin Ridgewell>
+The reason you think JSON => default export is because node did it already, right?
+
+[07:32:04.0272] <Justin Ridgewell>
+I want to do that for my bundler.
+
+[07:32:08.0995] <ljharb>
+no, because conceptually that’s what it is
+
+[07:32:13.0153] <ljharb>
+json is a single thing
+
+[07:32:27.0848] <ljharb>
+that’s what a default export is - the single thing that represents what a Module is
+
+[07:32:47.0400] <ljharb>
+named exports are just extra stuff a Module has
+
+[07:32:49.0701] <Justin Ridgewell>
+We still have to teach people that you don't get named imports with JSON
+
+[07:32:57.0886] <snek>
+remember that json is not always an object at the top level
+
+[07:33:15.0710] <Justin Ridgewell>
+I don't share your intution on this at all, these are both reflection of some source text
+
+[07:33:37.0862] <ljharb>
+i can’t believe most devs think of importing something as reflecting on source text
+
+[07:33:56.0876] <Justin Ridgewell>
+It's literally not JS, so it must have done some reflection?
+
+[07:34:05.0559] <Justin Ridgewell>
+I don't understand this viewpoint at all
+
+[07:34:16.0482] <ljharb>
+i don’t think most devs even think of the term “reflection” much, tbh
+
+[07:34:20.0784] <Justin Ridgewell>
+I turned non JS into a JS module
+
+[07:34:30.0296] <ljharb>
+but sure, the *engine* might be doing reflection. You didn’t.
+
+[07:34:39.0628] <ljharb>
+and it’s still not a js module
+
+[07:34:47.0198] <ljharb>
+it’s a js value that represents the module
+
+[07:34:55.0926] <Justin Ridgewell>
+Bundlers assueme a limited role of the host.
+
+[07:35:06.0136] <ljharb>
+any more than Object is a js function - it’s not, it’s c++ in most cases
+
+[07:35:09.0579] <Justin Ridgewell>
+So I am the host reflecting on these import for my users.
+
+[07:35:13.0698] <ljharb>
+ok but devs aren’t the bundler, they just use them
+
+[07:35:16.0274] <Kris Kowal>
+> <@jridgewell:matrix.org> I turned non JS into a JS module
+
+Hold my beer. I turned HTML into a reactive Lisp compiles down to JS.
+
+[07:35:23.0242] <ljharb>
+the bundler is reflecting, sure.
+
+[07:35:34.0389] <ljharb>
+but most devs aren’t the bundler and don’t and won’t think that way 
+
+[07:36:12.0963] <Justin Ridgewell>
+Yet we're having to invent the syntaxes for them to do it, because the bundler can't know the correct use in every situation
+
+[07:36:15.0259] <ljharb>
+the prevailing mental model should be what most users reason about, which won’t likely match how implementers think
+
+[07:36:15.0779] <Kris Kowal>
+> <@kriskowal:matrix.org> Hold my beer. I turned HTML into a reactive Lisp compiles down to JS.
+
+And then I imported it in JavaScript, to be clear, so I could instantiate it. And I did it in the browser during development and in the bundler for production.
+
+[07:36:26.0233] <Kris Kowal>
+Which is to say, our wills are twins.
+
+[07:36:29.0161] <Justin Ridgewell>
+So they are having to think about it, in a really awful string specifier
+
+[07:36:48.0389] <ljharb>
+sure, or, they’re having to *not do the thing they can’t express*. Which is also a fine outcome.
+
+[07:37:16.0318] <ljharb>
+everything needn’t always be possible sans language changes 
+
+[07:37:17.0229] <Kris Kowal>
+Oh, and the string specifier was simply `./something.html`, where `.html` mapped to a transform that was indicated in the local `package.json`.
+
+[07:37:17.0232] <Justin Ridgewell>
+How?!
+
+[07:37:23.0656] <Kris Kowal>
+And the transform was brought in via the devDependencies.
+
+[07:37:28.0896] <Justin Ridgewell>
+Let's remove `require('json')` because that's not ES
+
+[07:37:46.0156] <Justin Ridgewell>
+Ergonmics are a core need for bundlers
+
+[07:37:59.0308] <Justin Ridgewell>
+I have to provide this ability to users, because they'll go somewhere else if I don't
+
+[07:38:20.0135] <Justin Ridgewell>
+Node had to allow importing JSON
+
+[07:38:26.0221] <Justin Ridgewell>
+ES had to allow importing JSON
+
+[07:38:32.0257] <Justin Ridgewell>
+We're here to solve the ecosystem's needs
+
+[07:38:52.0568] <Justin Ridgewell>
+ * We're here to solve the ecosystem's needs
+
+[07:39:01.0453] <ljharb>
+where else can they go if no bundlers can do it?
+
+[07:39:18.0659] <ljharb>
+> <@jridgewell:matrix.org> We're here to solve the ecosystem's needs
+
+yes, but not “all possible needs”, individual needs, one at a time
+
+[07:39:35.0943] <Kris Kowal>
+I think I’ve lost the crux of the argument.
+
+[07:39:50.0379] <Justin Ridgewell>
+Are we ignoring that the ecosystem invents their own languages and tools constanatly?
+
+[07:40:07.0801] <Kris Kowal>
+Near as I can tell, I want everything Justin wants and have a story about how to make it happen, but not necessarily identical proposed solutions.
+
+[07:40:12.0941] <Justin Ridgewell>
+There'll just be another tool that does the thing they need
+
+[07:40:16.0221] <ljharb>
+no, I’m saying that JS doesn’t have to become all things. If you want to invent a language, go for it
+
+[07:40:33.0567] <annevk>
+Kris Kowal: I would also appreciate a README.md or some such :-)
+
+[07:41:45.0305] <ljharb>
+imo some node collabs suffer from a similar problem; in a panic over “but what if people use something else” they end up trying to make node into something it shouldn’t be. if a better platform exists, *good*, people should go use it
+
+[07:41:54.0085] <Kris Kowal>
+I mean, pre-ESM, I did a thing called Guten Tags https://github.com/gutentags/gutentag which did transforms on the fly in dev (in the browser) and folded them into a bundle for prod. That’s where I’m starting. The loader was https://github.com/gutentags/system
+
+[07:42:20.0562] <Kris Kowal>
+The reason it’s relevant is that it was all async, so basically playing the CommonJS game with hands bound.
+
+[07:42:43.0538] <snek>
+> <@ljharb:matrix.org> imo some node collabs suffer from a similar problem; in a panic over “but what if people use something else” they end up trying to make node into something it shouldn’t be. if a better platform exists, *good*, people should go use it
+
+I think this is slightly inaccurate, people can't just up and switch to deno or bun overnight
+
+[07:42:45.0638] <ljharb>
+👏 for the pun
+
+[07:43:01.0595] <ljharb>
+i agree, which is why the fear is unfounded
+
+[07:43:05.0445] <snek>
+aws can't just say tomorrow that lambda will be their own new runtime that isn't node
+
+[07:43:26.0410] <ljharb>
+which means “a competitor has X and we don’t” is almost never an urgent scenario
+
+[07:43:35.0270] <snek>
+but this doesn't mean node users shouldn't have new interesting stuff
+
+[07:43:54.0573] <ljharb>
+also true. But nothing is interesting, or a good design, merely because someone else has it :-)
+
+[07:44:17.0506] <ljharb>
+* also true. But nothing is interesting, or a good design, merely because someone else has it :-)
+
+[08:01:58.0258] <Justin Ridgewell>
+https://github.com/tc39/proposal-import-reflection/issues/18 is where this was discussed before
+
+[08:05:20.0906] <guybedford>
+Justin Ridgewell: it seems like you just want to use import assertions for bundler metadata
+
+[08:05:34.0780] <guybedford>
+which understandably is a difficult thing to discuss in this committee, but of course you can do as you wish
+
+[08:05:45.0010] <guybedford>
+what I still don't understand is how this relates to import reflection
+
+[08:05:51.0714] <guybedford>
+I simply see no relation at all
+
+[08:07:43.0710] <Justin Ridgewell>
+What does "reflection" mean to you?
+
+[08:07:56.0246] <Justin Ridgewell>
+It's controlling runtime behavior of the module, that's a reflection to me.
+
+[08:08:38.0599] <Justin Ridgewell>
+Whether you lazy load, import unlinked, receive an array buffer, aren't those are all reflections?
+
+[08:09:13.0092] <Justin Ridgewell>
+All of it's metadata, but it's used to do something in the runtime
+
+[08:10:05.0761] <guybedford>
+we originally tried to define generic reflection when coming at this proposal, but at this point that is more of a design history than what the proposal represents now
+
+[08:10:36.0057] <guybedford>
+where we got to, with unification with module blocks and compartments, is the ability to get the uninstantiated module record
+
+[08:10:52.0690] <guybedford>
+that's the use case for JS and Wasm
+
+[08:11:30.0328] <Justin Ridgewell>
+What I'm objecting to is creating a specific syntax to solve this, when the extensible syntax already exists and can solve it just same.
+
+[08:12:11.0806] <Justin Ridgewell>
+I don't want to end up in the inevitable confusion about what keyword goes where
+
+[08:12:26.0674] <snek>
+is this the proposal for importing a module object instead of a module namespace
+
+[08:12:27.0669] <Justin Ridgewell>
+They're all reflections as I see it, and I want them to go into the same place
+
+[08:12:27.0716] <littledan>
+at some point, Justin and Jordan should sort of talk about it between them and work out a recommendation to make to Guy; it's not really fair for Guy to bear the burden of this disagreement
+
+[08:13:34.0849] <littledan>
+(sorry that's not to exclude other opinionated parties and co-champions of module reflection; they can join the battle and receive the results as well, but at least those people are affected)
+
+[08:14:57.0881] <snek>
+i think it makes sense to have a new syntax for uninstantiated module that doesn't need to be burdened with also being a whole generic system. (and as an aside, i still think people who want wasm modules instead of wasm module namespaces should not be using `import` anyway but 🤷)
+
+[08:15:04.0703] <annevk>
+I do think there's some value in being able to import something in various types. E.g., Blob vs ArrayBuffer comes to mind. But I don't have strong opinions on syntax (unless it's terrible :p)
+
+[08:15:47.0365] <guybedford>
+we did go through a lot of these cases when approaching reflection to try and see how it fits in with these use cases
+
+[08:16:13.0246] <guybedford>
+our eventual conclusion was that specifying these other types of reflections is very difficult because of host-specific semantics and the dififculty of getting agreement between hosts
+
+[08:16:32.0583] <guybedford>
+and that instead asset references would be the preferable approach
+
+[08:16:42.0791] <guybedford>
+with an opaque asset representation
+
+[08:17:02.0745] <guybedford>
+but this does not fulfill the requirements of import reflection for JS and Wasm modules, since it is not enough to know the asset, you need to know its modular interpretation
+
+[08:17:10.0191] <snek>
+the module blocks/compartments proposal has a `load` func or similar right?
+
+[08:17:18.0203] <Justin Ridgewell>
+I don't think we need to standardize the userland reflections
+
+[08:17:40.0815] <guybedford>
+so, we very much support work on asset references
+
+[08:17:52.0208] <Justin Ridgewell>
+Just the syntax, where implementers and bundlers can coexist
+
+[08:17:53.0135] <guybedford>
+as distinct from import reflection / module reflection
+
+[08:18:12.0781] <snek>
+it seems like it would be better to say that people should use like `Module.load('foo')` instead of `import module 'foo'`
+
+[08:18:48.0794] <guybedford>
+why have static `import { name } from 'mod'` at all?
+
+[08:18:53.0022] <guybedford>
+why not just have all dynamic `import()`
+
+[08:18:55.0622] <guybedford>
+and call it CJS?
+
+[08:19:01.0999] <guybedford>
+because there are benefits of static syntax
+
+[08:19:04.0777] <guybedford>
+we need those
+
+[08:19:05.0910] <snek>
+er
+
+[08:19:10.0243] <snek>
+its not about the static/dynamic ness
+
+[08:19:25.0475] <snek>
+its about confusion between the two use cases
+
+[08:19:33.0926] <snek>
+at least in my mind
+
+[08:20:04.0038] <guybedford>
+I'm not sure who's arguing what at this point tbh
+
+[08:20:08.0684] <Justin Ridgewell>
+I don't think having dynamic behavior solves the ergonomic need, because we could already do it
+
+[08:20:29.0466] <Justin Ridgewell>
+I agree with Guy's latest series of messages, and disagree with devsnek's.
+
+[08:20:41.0460] <snek>
+i don't have full context on what justin is asking for, i was just saying some general opinions i have about this proposal
+
+[08:20:46.0838] <snek>
+ * i don't have full context on what justin is asking for, i was just saying some general opinions i have about this proposal
+
+[08:20:48.0397] <Justin Ridgewell>
+Static analyzability is the reason this is nice to use
+
+[08:21:44.0661] <Kris Kowal>
+> <@devsnek:matrix.org> the module blocks/compartments proposal has a `load` func or similar right?
+
+`importHook` could be called `load` with a clean conscience. The name reflects that it’s the one driven by `import`, but its responsibilities are limited to loading and either parsing or fabricating a fake module source out of code.
+
+[08:22:26.0546] <snek>
+yeah i just don't feel like, if we have that functionality, the additional import syntax is worth it
+
+[08:22:29.0792] <Kris Kowal>
+And assets can be solved either with a reflection or a virtual module source. There’s more than one way to bake that cake.
+
+[08:22:54.0600] <snek>
+imo import is for doing the module namespace dance, and reflection and other stuff should be separate
+
+[08:23:16.0207] <Kris Kowal>
+I personally favor having a single reflection of module instances, a variety of reflections of module sources per type, and leave assets to virtual module sources.
+
+[08:39:20.0382] <guybedford>
+I again invite everyone who has brought forward opinions here to attend the module harmony meetings
+
+[08:39:49.0914] <guybedford>
+the original meeting issue is at https://github.com/tc39/Reflector/issues/436
+
+[08:40:06.0012] <guybedford>
+this meeting was created exactly to work through the difficult cross-cutting questions
+
+[08:40:26.0811] <guybedford>
+I will make sure to attend as possible coming meetings as well
+
+[08:41:11.0460] <guybedford>
+bringing agenda items for what you want to see is a great way to start. I think things work best when you focus on your own specification work to get your own results, treating proposal interaction as an open discussion as opposed to a fixed constraint
+
+[08:41:50.0826] <guybedford>
+or more specifically, when you focus on the use case you want to solve, and then allow open discussion around that
+
+[09:22:49.0718] <tolmasky>
+Are there any (JavaScript) packages and/or APIs that allow you to get ECMA spec data in a structured way. For example, if I wanted to get the contents of the Well-Known Intrinsics Objects table (https://262.ecma-international.org/13.0/#table-well-known-intrinsic-objects) as JSON, so I could list them, etc.
+
+[09:49:47.0459] <ljharb>
+tolmasky: no, but there's https://github.com/tc39/proposal-get-intrinsic which will let you enumerate them
+
+[11:13:25.0979] <bakkot>
+tolmasky: there's https://www.npmjs.com/package/@tc39/ecma262-biblio, though note that it is inherently unstable - editors make revisions to the organization of internal operations frequently and without going through plenary
+
+[11:13:45.0428] <bakkot>
+it only covers the names, arguments, and types of abstract operations, though
+
+[15:58:50.0420] <tolmasky>
+bakkot: yeah that looks close, it mentions the table, but doesn't have the contents of the table. OK, I'll just copy it by hand
+

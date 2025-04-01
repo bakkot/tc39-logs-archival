@@ -1,0 +1,606 @@
+2023-07-03
+[07:53:00.0611] <Michael Ficarra>
+our cache expiration on 262 is only 10 minutes and I can't find a way to change it :-(
+
+[07:57:55.0506] <bakkot>
+ you could always add a service worker
+
+[07:57:59.0125] <bakkot>
+I mean, probably don't do that
+
+[07:58:03.0623] <bakkot>
+but you could
+
+[08:08:49.0291] <ljharb>
+i think it's github-pages-wide
+
+
+2023-07-06
+[20:48:09.0730] <Michael Ficarra>
+slight issue: https://github.com/google/fonts/issues/6506
+
+[21:34:15.0376] <bakkot>
+can we just host it? it's like 200kb zipped for regular+bold+italic
+
+[07:16:46.0902] <jmdyck>
+NotEscapeSequence (NES) is disallowed in untagged TemplateLiterals,
+but allowed in tagged TemplateLiterals.
+So consider a tagged TemplateLiteral that contains a NES.
+The TRV of that NES is a String, and the TV of it is *undefined*.
+So in GetTemplateObject, the relevant element of `_rawStrings_` is a String,
+and of `_cookedStrings_` is *undefined*.
+Is that all correct?
+
+[07:30:45.0349] <Chris de Almeida>
+whatever font is used, we should serve it directly and not rely on CDNs
+
+[07:56:44.0535] <jmdyck>
+If so, the return-types of TemplateString + TemplateStrings need to be fixed, to allow for undefined.
+
+[08:37:49.0982] <bakkot>
+yup, sounds right
+
+[09:07:16.0711] <ljharb>
+> <@bakkot:matrix.org> can we just host it? it's like 200kb zipped for regular+bold+italic
+
+seems like we need to just host it, based on their response to michael's issue
+
+[09:09:55.0456] <Michael Ficarra>
+I will try swapping the glyph out and subsetting to get even smaller than what Google Fonts hosts.
+
+[09:12:41.0320] <ljharb>
+it'd be good if any modification you do to google's downloads is repeatable tho
+
+[10:58:26.0514] <Michael Ficarra>
+unbelievably, it actually worked 😀
+
+[10:58:54.0465] <Michael Ficarra>
+I now know way too much about opentype features and glyph substitution
+
+[10:59:36.0554] <Michael Ficarra>
+also, they're like 15kb each, so 60kb total, about the same as Google Fonts
+
+[10:59:48.0510] <Michael Ficarra>
+since I added a documentation comment
+
+[11:00:14.0093] <Michael Ficarra>
+> Latin subset from Google Fonts with support for slashed zero substitution added back in by Michael Ficarra.
+
+[11:00:35.0349] <bakkot>
+huh, the ttf versions are 160kb each (uncompressed)
+
+[11:01:09.0464] <bakkot>
+I guess woff is a lot more efficient?
+
+[11:01:39.0629] <bakkot>
+ * I guess woff2 is a lot more efficient?
+
+[11:01:51.0180] <Michael Ficarra>
+it's a huge subsetting
+
+[11:02:06.0902] <Michael Ficarra>
+most of the non-latin glyphs and tons of opentype features are dropped
+
+[11:02:32.0893] <Michael Ficarra>
+just latin, a couple ligatures and diacritics, and now slashed zero
+
+[11:02:33.0154] <bakkot>
+ah, makes sense
+
+[11:03:01.0822] <bakkot>
+... I wonder if someone has done the work to take an HTML document and automatically derive the subset of glyphs you actually need for that document, so you can ship only thos
+
+[11:03:02.0664] <bakkot>
+ * ... I wonder if someone has done the work to take an HTML document and automatically derive the subset of glyphs you actually need for that document, so you can ship only those
+
+[11:22:33.0898] <Michael Ficarra>
+any preference whether we serve separate woff2 font files or embed them as a base64 data URL in the ecmarkup CSS file?
+
+[11:28:10.0028] <bakkot>
+I would do separate files
+
+[11:28:30.0078] <Chris de Almeida>
+I must be missing some context from the editor call yesterday...  has a font been blessed by the editors?
+
+[11:28:35.0696] <bakkot>
+at least when the CSS is not already inlined
+
+[12:06:03.0854] <Michael Ficarra>
+Chris de Almeida: yes, we decided yesterday to go with IBM Plex Serif
+
+[12:25:39.0367] <Michael Ficarra>
+ugh ecmarkup has an option to inline the CSS
+
+[12:26:13.0857] <Michael Ficarra>
+which means I guess I have to inline the font as a base64 data URL when that is used
+
+[13:01:04.0423] <Chris de Almeida>
+related:  if it's not already on the radar, the `code {}` font-family should be updated to use `IBM Plex Mono`, as it is designed to comingle with the other Plex fonts.  (and no hard feelings against `Consolas`, which is ackchyually my preferred font for code editors)
+
+[13:04:25.0130] <bakkot>
+not Comic Code?
+
+[13:05:11.0416] <bakkot>
+I do feel a bit weird about using a font which is described as "It's global, it's versatile, and it's distinctly IBM"
+
+[13:05:12.0815] <bakkot>
+but like
+
+[13:05:14.0389] <bakkot>
+whatever I guess
+
+[13:13:07.0613] <Chris de Almeida>
+every day we all use things that are distinctly IBM, one more font won't kill us 😄
+
+[13:29:54.0318] <shu>
+i would like comic code
+
+[13:32:22.0496] <shu>
+> <@softwarechris:matrix.org> every day we all use things that are distinctly IBM, one more font won't kill us 😄
+
+leave that kind of content for Threads, this channel is Good vibes only
+
+[13:38:16.0682] <Chris de Almeida>
+lol.  the worst part about Threads is not being able to squat on the good usernames because they're all taken via instagram already
+
+[13:41:02.0380] <Chris de Almeida>
+ * lol.  the worst part about Threads is not being able to get your usual username because they're all taken via instagram already
+
+[14:06:02.0159] <shu>
+i knew i shuoldn't have mutadis mutandised the resizable buffer spec draft
+
+[14:06:07.0581] <shu>
+this is taking forever
+
+[14:16:54.0926] <ljharb>
+have _what_ now?
+
+[14:41:23.0222] <shu>
+https://en.wikipedia.org/wiki/Mutatis_mutandis
+
+[14:41:37.0642] <shu>
+i had a section that was like "just change the uses of these fields, omitted for brevity"
+
+[16:15:31.0169] <shu>
+why the hell do we call typed arrays Integer-Indexed exotic objects
+
+[16:15:36.0863] <shu>
+why didn't we just call them TypedArray exotic objects
+
+[16:46:21.0708] <bakkot>
+we could fix it
+
+[16:46:38.0990] <bakkot>
+90% of the answers to "why" questions about TAs are "khronos"
+
+[16:47:28.0925] <shu>
+it's like some star trek lore
+
+[16:47:42.0914] <shu>
+the strife started with the Khronos Accord
+
+[16:54:35.0406] <jmdyck>
+See https://github.com/tc39/ecma262/issues/1617
+
+[16:56:30.0462] <jmdyck>
+(from 4 years ago)
+
+[16:56:50.0158] <shu>
+i have no memory of this, but i agree with my past self still
+
+[16:58:08.0466] <shu>
+time gets away from us
+
+
+2023-07-07
+[17:02:06.0173] <Michael Ficarra>
+> <@bakkot:matrix.org> not Comic Code?
+
+I actually changed this yesterday lol https://github.com/tc39/ecmarkup/pull/539/files#diff-000c4303622fb87f6ed22f7294867fed4a69c49cbf0ee3bb61b0eeb6ae050ddcR108
+
+[17:13:03.0456] <Michael Ficarra>
+we also have some sans-serif usage; I'll probably update it all
+
+[11:25:31.0534] <shu>
+Michael Ficarra: how do i teach esmeta about duck-typed types? i'm doing:
+
+1. If _foo_ does not have a [[BarField]] internal field, throw.
+1. Perform AO(_foo_).
+
+where AO takes a Bar, whose brand is [[BarField]]
+
+context is https://github.com/tc39/ecma262/actions/runs/5489357665/jobs/10003415683?pr=3116
+
+[11:56:34.0295] <bakkot>
+you could try adding an assert after the check? if that doesn't work the alternative is, open an issue on esmeta and/or add the methods to esmeta-ignore
+
+
+2023-07-12
+[15:34:46.0280] <ljharb>
+it seems weird to me that SetTypedArrayFromArrayLike allows targetOffset to be a non-neg int, or ∞, but then it throws a RangeError if it's ∞ in step 11. why not throw that sooner, or disallow it entirely?
+
+[16:40:44.0436] <shu>
+i'd guess because that's just how it was copy/pasted during refactoring
+
+[16:41:02.0014] <shu>
+i can see an argument for helper AOs having tighter, already-checked types
+
+[16:41:41.0539] <shu>
+file an issue?
+
+[16:51:08.0934] <jmdyck>
+`%TypedArray%.prototype.set` has `Let _targetOffset_ be ? ToIntegerOrInfinity(...)`, so SetTypedArrayFromTypedArray and SetTypedArrayFromArrayLike have to accept infinity for that param. Both of them end up throwing a RangeError on infinity, BUT only if they haven't thrown for some other reason before then. So it's tempting to throw on infinity way up in `%TypedArray%.prototype.set`, but that would be a change in behaviour for some (pathological) cases.
+
+[16:59:34.0750] <jmdyck>
+Looks like throw-on-infinity was added in PR #2007, to avoid doing arithmetic on infinity, that previously would have been implicit in the subsequent step.
+
+
+2023-07-13
+[19:23:34.0166] <Richard Gibson>
+it looks like the validation order of `receiver.set(source, offset)` is basically
+1. Throw if _receiver_ is not a TypedArray.
+2. [in ToIntegerOrInfinity] Throw if _offset_ fails to coerce to a Number.
+3. Throw if _offset_ coerces to negative.
+4. [later steps are in SetTypedArrayFrom{TypedArray,ArrayLike}]
+5. Throw if _receiver_ is associated with a detached ArrayBuffer.
+6. [only in SetTypedArrayFromTypedArray] Throw if _source_ is associated with a detached ArrayBuffer.
+7. [only in SetTypedArrayFromArrayLike] Throw if _source_ fails to coerce to an Object or fails to return a "length" that coerces to a Number (which is otherwise clamped to the inclusive interval from 0 to 2**53-1) for later steps).
+8. Throw if _offset_ is infinite or _offset_ plus the length of _source_ exceeds the length of _receiver_.
+9 [only in SetTypedArrayFromTypedArray] Throw if _receiver_ and _source_ have different [[ContentType]] (one BigInt while the other is Number).
+
+It makes sense to reject infinite offset at the same place as rejecting finite-but-too-big offset (since both are effectively the same issue), but the overall behavior would be better if it were consistent with [how-we-work#119](https://github.com/tc39/how-we-work/pull/119/files#diff-b48c7b3eba9c6b2a43ae502ddc9eabd1a9c49a2aa5592c64ea8ef548dc81352aR18-R26) and performed **all** validation of _offset_ in the same place after getting the length of _source_—i.e., moving steps 2 and 3 above to immediately before step 8 (and ideally also moving step 9 above to immediately after step 6). Such error reshuffling would indeed be normative, but probably safe (if perhaps too minor to be worthwhile).
+
+[19:24:35.0640] <Richard Gibson>
+ * it looks like the validation order of `receiver.set(source, offset)` is basically
+
+1. Throw if _receiver_ is not a TypedArray.
+2. \[in ToIntegerOrInfinity\] Throw if _offset_ fails to coerce to a Number.
+3. Throw if _offset_ coerces to negative.
+4. \[later steps are in SetTypedArrayFrom{TypedArray,ArrayLike}\]
+5. Throw if _receiver_ is associated with a detached ArrayBuffer.
+6. \[only in SetTypedArrayFromTypedArray\] Throw if _source_ is associated with a detached ArrayBuffer.
+7. \[only in SetTypedArrayFromArrayLike\] Throw if _source_ fails to coerce to an Object or fails to return a "length" that coerces to a Number (which is otherwise clamped to the inclusive interval from 0 to 2\*\*53-1) for later steps).
+8. Throw if _offset_ is infinite or _offset_ plus the length of _source_ exceeds the length of _receiver_.
+9. \[only in SetTypedArrayFromTypedArray\] Throw if _receiver_ and _source_ have different \[\[ContentType\]\] (one BigInt while the other is Number).
+
+It makes sense to reject infinite offset at the same place as rejecting finite-but-too-big offset (since both are effectively the same issue), but the overall behavior would be better if it were consistent with [how-we-work#119](https://github.com/tc39/how-we-work/pull/119/files#diff-b48c7b3eba9c6b2a43ae502ddc9eabd1a9c49a2aa5592c64ea8ef548dc81352aR18-R26) and performed **all** validation of _offset_ in the same place after getting the length of _source_—i.e., moving steps 2 and 3 above to immediately before step 8 (and ideally also moving step 9 above to immediately after step 6). Such error reshuffling would indeed be normative, but probably safe (if perhaps too minor to be worthwhile).
+
+[20:46:23.0833] <ljharb>
+gotcha, that all makes sense
+
+[20:46:30.0083] <ljharb>
+i'll leave it be i suppose
+
+[10:48:30.0285] <ljharb>
+ok, related - can someone convince me that step 25 isn't broken? https://262.ecma-international.org/12.0/#sec-settypedarrayfromtypedarray
+
+my 1:1 implementation fails a test on Float32/Float64 arrays, but passes if i unconditionally do step 26
+
+[10:50:04.0737] <shu>
+can you elaborate more on what you mean by "broken"
+
+[10:51:11.0868] <shu>
+that reads okay to me?
+
+[10:52:44.0187] <ljharb>
+so, step 25 basically copies byte by byte - but i'm wondering if perhaps `limit` isn't correct or something
+
+[10:53:36.0518] <ljharb>
+the example i'm working with is `new Float32Array([1, 2, 3]).set(new Float32Array([10]), 1)` which invokes SetTypedArrayFromTypedArray
+
+[10:54:06.0750] <ljharb>
+it's quite obviously possible that my GetValueFromBuffer or SetValueInBuffer implementation is wrong
+
+[10:54:46.0407] <shu>
+step 26 also uses limit
+
+[10:54:54.0571] <ljharb>
+ * it's quite obviously possible that my GetValueFromBuffer or SetValueInBuffer implementation is wrong - since it's only wrong for Float32 and Float64, it might be in RawBytesToNumeric somewhere
+
+[10:55:01.0471] <shu>
+the only difference is whether you advance the index 1 byte at a time or ElementSize at a time
+
+[10:55:01.0784] <ljharb>
+true
+
+[10:55:42.0504] <ljharb>
+ok then i'll have to dig into my other implementations, thanks for confirming
+
+[10:55:55.0417] <shu>
+gl
+
+[10:56:07.0577] <ljharb>
+altho - can you help me find an example where skipping step 25 entirely would break, so i can add a test case?
+
+[10:56:28.0426] <shu>
+NaNs is the canonical example in my mind
+
+[10:56:38.0090] <shu>
+25 says preserve NaN bit patterns
+
+[10:56:39.0172] <shu>
+26 says don't have to
+
+[10:56:48.0372] <ljharb>
+ahhh ok, hm
+
+[11:29:53.0061] <ljharb>
+phew, ok found the problem, thanks for the confirmation
+
+[11:30:13.0462] <shu>
+what was the issue?
+
+[11:53:21.0810] <ljharb>
+for `// 6. Let rawValue be a List of elementSize containing, in order, the elementSize sequence of bytes starting with block[byteIndex].`, i was doing `var rawValue = $slice(new $Uint8Array(arrayBuffer), byteIndex, 0, elementSize); // step 6`
+
+and i changed it to `var rawValue = $slice(new $Uint8Array(arrayBuffer, byteIndex), 0, elementSize); // step 6`
+
+[12:02:13.0256] <shu>
+ah ha
+
+
+2023-07-17
+[06:31:12.0398] <Michael Ficarra>
+I have an ecmarkup PR with the updated fonts and other related accessibility styling improvements https://github.com/tc39/ecmarkup/pull/539
+
+[06:31:18.0118] <Michael Ficarra>
+we can go over it in the editor call
+
+
+2023-07-18
+[21:56:18.0209] <bakkot>
+would appreciate a stamp on https://github.com/tc39/proposal-set-methods/pull/101, since it's stage 3
+
+[21:56:26.0592] <bakkot>
+should be pretty quick
+
+
+2023-07-19
+[17:05:07.0028] <Michael Ficarra>
+yes, it is on the radar, see the TODO in the PR
+
+[07:40:34.0462] <Michael Ficarra>
+lmao "editorial" is really icing on the cake here: https://github.com/tc39/ecma262/pull/3124
+
+[08:15:31.0989] <shu>
+sick change bro
+
+[14:13:06.0976] <Michael Ficarra>
+shu: aren't you just saying the same thing as me here? https://github.com/tc39/ecma262/pull/3092#pullrequestreview-1463817571
+
+[14:33:35.0963] <Michael Ficarra>
+shu: you on your way?
+
+[15:47:42.0191] <Michael Ficarra>
+I'm glad we didn't go with the prefers-high-contrast opt-in, actually
+
+[15:48:11.0180] <Michael Ficarra>
+even people who don't consider themselves "disabled" often can benefit at least a little from disability accommodations
+
+[15:52:03.0956] <jmdyck>
+#3092 is failing IPR check because of Josh-Cena, but Josh-Cena has nothing to do with #3092?
+
+[15:55:18.0696] <bakkot>
+jmdyck: the main branch is also failing
+
+[15:55:30.0825] <bakkot>
+3092 is failing because of being based on main
+
+[16:04:18.0096] <ljharb>
+once he signs the form i can rerun the one on main, and it'll end up passing on any other PR as well after that
+
+[16:57:11.0467] <jmdyck>
+ok
+
+
+2023-07-20
+[21:38:30.0763] <Michael Ficarra>
+I pushed some updates to https://github.com/tc39/ecmarkup/pull/539 to address what we discussed in editor call today
+
+
+2023-07-22
+[05:59:50.0672] <jmdyck>
+Hm. https://tc39.es/ecma262/ is showing the version from June 29th, about 9 merges ago.
+
+[06:01:59.0181] <jmdyck>
+ * Hm. https://tc39.es/ecma262/ is showing the version from June 29th, about 8 merges ago.
+
+
+2023-07-24
+[21:23:22.0603] <ljharb>
+looks like about 3 weeks ago, github automatically turned on "environment protection" which only allows protected branches to deploy, and gh-pages isn't a protected branch. i loosened the setting and reran all the failed deploy jobs, and things should now be up to date, and moving forward.
+
+nice catch! lmk if you see any other issues.
+
+[22:28:44.0284] <Michael Ficarra>
+is there a reason gh-pages isn't protected?
+
+[22:28:52.0988] <Michael Ficarra>
+would it make sense to just protect it instead?
+
+[22:44:48.0296] <ljharb>
+we can do that too - we don't want deploys from just any protected branch, so either way the settings should only allow deploying from gh-pages
+
+[22:45:10.0623] <ljharb>
+but, protecting the branch would likely block the automation that pushes to it.
+
+[08:28:37.0425] <Chris de Almeida>
+if it's literally just "protected branch" with no specific requirements, you can just do something really lightweight, like just checking "Do not allow bypassing the above settings" and not checking anything else
+
+[08:29:31.0868] <Chris de Almeida>
+or like, 'allow force pushes' from one individual
+
+[13:48:48.0817] <ljharb>
+psa, the IPR thing happened again; i'm working on fixing the bug in the script now so it'll catch it before merge
+
+[13:51:47.0326] <bakkot>
+lol the contributor is not willing to sign the thing
+
+[13:52:06.0465] <bakkot>
+it's a totally trivial contribution; I would personally be inclined to say it doesn't need the IPR form
+
+[13:52:15.0220] <bakkot>
+but IIRC littledan was of the opinion that everyone needs to sign it
+
+[13:53:25.0556] <bakkot>
+I guess we back it out and land exactly the same commit but attributed to me? with maybe attribution given in the commit message? 
+
+[14:01:14.0558] <shu>
+wait
+
+[14:01:18.0262] <shu>
+the contributor is not willing to sign it?
+
+[14:02:10.0780] <bakkot>
+correct
+
+[14:02:16.0457] <bakkot>
+and the commit is already merged
+
+[14:11:03.0900] <ljharb>
+there's 3 PRs total, in fact
+
+[14:11:18.0657] <ljharb>
+so yeah we'd need to back all those out, and then we could reland them under someone else's name since they're indeed trivial
+
+[14:11:51.0600] <ljharb>
+i put up https://github.com/tc39/ecma262/pull/3128 which i think will catch the issue of a commit using an email address not associated with a github account, which was the problem with these three
+
+[14:12:37.0975] <ljharb>
+Michael Ficarra: do we really need to wait until wednesday to land that PR? is it something we could talk out here?
+
+[14:16:20.0518] <Michael Ficarra>
+I don't like that we're using a variety of different allowlisting strategies
+
+[14:16:31.0184] <Michael Ficarra>
+and was already uncomfortable that they were imprecise before
+
+[14:16:53.0668] <ljharb>
+the goal is to reduce them all to zero
+
+[14:17:09.0746] <Michael Ficarra>
+we're not going to reduce them all to zero, there are legacy contributions
+
+[14:17:16.0199] <ljharb>
+in the case of the commit one tho, those can't ever be fixed unless the email address on the commit is added (or re-added) to the user's github account.
+
+[14:17:40.0265] <ljharb>
+the form-signing one we absolutely can. but indeed the legacy commit list likely couldn't. for example, bterlson has commits in there with his microsoft email address
+
+[14:17:44.0579] <Michael Ficarra>
+is there any reason to do anything other than hard-code some SHAs?
+
+[14:17:56.0081] <ljharb>
+it would be a large list of shas. but sure, we could do that
+
+[14:18:06.0893] <ljharb>
+but i'm not sure why that needs to hold up this PR, which fixes a current issue, since we can iterate on it
+
+[14:18:24.0695] <Michael Ficarra>
+because I'm tired of it breaking like this
+
+[14:18:27.0865] <Michael Ficarra>
+this is embarrassing
+
+[14:18:33.0653] <ljharb>
+this PR fixes that breakage
+
+[14:18:48.0891] <Michael Ficarra>
+I cannot be sure of that until I understand the solution better
+
+[14:18:50.0873] <ljharb>
+(modulo the 3 PRs discussed above, which it can account for as well)
+
+[14:19:23.0354] <ljharb>
+ok, how can i help you understand that? basically, a commit can have any email address on it, and github only links that to an account if the email address is currently on the account
+
+[14:19:48.0259] <ljharb>
+and the "legacy commit list", including the commits that broke it this time, are all commits that can't be linked to an account
+
+[14:20:15.0342] <bakkot>
+`contributing.md` should probably mention in big letters that the IPR form is required, also
+
+[14:20:19.0041] <bakkot>
+it doesn't currently afaict
+
+[14:20:36.0432] <ljharb>
+but either way what is the harm of adding this now? it won't make things worse, and more importantly it won't make it any harder to come up with an alternative solution later
+
+[14:21:12.0429] <ljharb>
+as it stands now, PRs that will break main don't show up as broken until after merging; with this PR, those PRs will not be blocked from landing
+
+[14:21:14.0974] <ljharb>
+ * as it stands now, PRs that will break main don't show up as broken until after merging; with this PR, those PRs will now be blocked from landing
+
+[14:21:56.0176] <ljharb>
+i'm personally more concerned with putting out the current fire than with embarrassment.
+
+[14:24:46.0270] <ljharb>
+i'll add the revert commits for those three PRs to my IPR fix, though, since they clearly aren't going to sign it
+
+[14:25:46.0372] <Michael Ficarra>
+we could also just set a starting date?
+
+[14:26:22.0380] <Michael Ficarra>
+and it can just be bumped to the last "manual audit" in case of failure
+
+[14:26:45.0496] <ljharb>
+sure, that would be fine too. landing this PR doesn't make it harder to make that change tho.
+
+[14:32:52.0753] <ljharb>
+my fix PR now reverts those 3 PRs, as well as fixes the current issue (altho it might not show up as fixed til it lands), and prevents it from reoccurring, so i'd prefer to land that now and we can change the strategy to whatever you want later
+
+[14:35:20.0747] <ljharb>
+ * my fix PR now reverts those 3 PRs, as well as fixes the current issue (altho it won't show up as fixed til it lands, because it uses pull_request_target), and prevents it from reoccurring, so i'd prefer to land that now and we can change the strategy to whatever you want later
+
+
+2023-07-25
+[19:11:24.0765] <Michael Ficarra>
+sure, I'm fine with landing something in the interim
+
+[19:12:15.0265] <Michael Ficarra>
+we should still make sure we address it in this week's editor call
+
+[19:12:56.0178] <Michael Ficarra>
+also, I don't like your specific solution in the PR
+
+[19:13:28.0114] <Michael Ficarra>
+the strings/symbols are just an ad hoc tagged union; just use an object with a "type" field as the tag
+
+[19:13:36.0004] <Michael Ficarra>
+not like it matters much though, it's just a CI script
+
+[20:05:25.0474] <ljharb>
+i just figured string/symbol was a fine divider; i'm fine using an object if you want to leave that feedback
+
+[20:05:39.0566] <ljharb>
+and 1000% we should discuss it on wednesday :-) i just want to get CI green asap
+
+
+2023-07-27
+[08:53:53.0924] <jmdyck>
+shu, if you rebase #3116 to main, I can submit a PR of suggested changes to your rab-stage4 branch.
+
+[09:02:59.0028] <shu>
+sure will do that today
+
+[12:13:50.0827] <shu>
+jmdyck: i've rebased #3116
+
+[12:14:02.0831] <jmdyck>
+thx
+
+
+2023-07-28
+[15:11:48.0475] <jmdyck>
+done
+
+[15:12:11.0975] <shu>
+awesome, reviewing now
+
+[15:12:14.0988] <shu>
+thanks for the detailed review
+
+[15:12:35.0500] <jmdyck>
+👍️
+

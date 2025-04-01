@@ -1,0 +1,293 @@
+2023-07-03
+[16:46:14.0737] <littledan>
+Thanks for updating the Wasm ESM integration for source imports
+
+
+2023-07-05
+[12:31:26.0119] <littledan>
+so, the champion's stance is, "Please implement all of Wasm/ESM integration. however, if you want to ship only the source part, do it with this particular form of error." right?
+
+
+2023-07-06
+[09:41:26.0545] <ljharb>
+ok to delete next week's meeting, due to plenary?
+
+[10:06:00.0271] <nicolo-ribaudo>
+Yes!
+
+[12:31:31.0055] <danielrosenwasser>
+Hey folks, pardon my ignorance, but I've been trying to piece together the story of how Shadow Realms, Compartments, and SES sort of fits together to allow untrusted code to execute (apart from availability concerns). Does this sound right?
+
+1. Components allow you to create a new intermediate "global scope", but where the intrinsics and `globalThis` are still shared with those of the current Realm (a.k.a. the host?).
+2. To "safely" run arbitrary code inside of a Component, one would need to lock down the intrinsics (i.e. the proposed `lockdown()` in SES)
+3. Because it is impractical to lock down your own Realm, that's where Shadow Realms come in. You create a separate Shadow Realm, lock that down, and run arbitrary code within a Compartment in that Realm.
+
+is that the right intuition? Is there anything I'm missing?
+
+[12:31:49.0838] <danielrosenwasser>
+ * Hey folks, pardon my ignorance, but I've been trying to piece together the story of how Shadow Realms, Compartments, and SES/Hardened JavaScript sort of fit together to allow untrusted code to execute (apart from availability concerns). Does this sound right?
+
+1. Components allow you to create a new intermediate "global scope", but where the intrinsics and `globalThis` are still shared with those of the current Realm (a.k.a. the host?).
+2. To "safely" run arbitrary code inside of a Component, one would need to lock down the intrinsics (i.e. the proposed `lockdown()` in SES)
+3. Because it is impractical to lock down your own Realm, that's where Shadow Realms come in. You create a separate Shadow Realm, lock that down, and run arbitrary code within a Compartment in that Realm.
+
+is that the right intuition? Is there anything I'm missing?
+
+[16:06:59.0412] <Mathieu Hofman>
+In Compartments / Evaluators, the `globalThis` would not be shared, but the intrinsics would be shared for the Realm. For Evaluators, it may be possible to have different evaluators share the same global object, including the realm's original global object, though obviously that would not be useful as an integrity boundary.
+
+[16:09:00.0904] <Mathieu Hofman>
+It should be possible to lockdown your own realm.
+
+[16:11:21.0699] <Mathieu Hofman>
+ShadowRealm and Compartments are mostly orthogonal. The problem that ShadowRealm solves is that some code expects a non locked down environment (compatibility), and it's impossible to virtualize another environment on some hosts (aka browsers) where the main realm's global object has powerful non configurable properties.
+
+[16:11:47.0309] <Mathieu Hofman>
+I'll let Kris Kowal correct any misrepresentation I may have made
+
+
+2023-07-07
+[17:00:22.0217] <Kris Kowal>
+Mathieu Hofman’s points are all correct. ShadowRealm is an orthogonal and sometimes complementary approach to Lockdown and Compartments (or the more surgical Evaluators + Module Harmony)
+
+[17:01:56.0081] <Kris Kowal>
+Lockdown makes the surrounding realm suitable for multiple guest programs. The surrounding realm can be a ShadowRealm, but does not have to be.
+
+[17:04:44.0700] <Kris Kowal>
+danielrosenwasser So, point 3 is not the case: it is practical to lockdown() an ordinary realm.
+
+[17:06:18.0391] <Kris Kowal>
+But running lockdown in the primary realm does mean less JavaScript will function normally in that realm. So, a shadow realm could be useful for those cases.
+
+[17:06:36.0377] <danielrosenwasser>
+right, that's really what I meant
+
+[17:06:50.0595] <danielrosenwasser>
+e.g. your own code expects an "unlocked" realm, but it's a sufficient constraint on guest code where you want to reused the same Realm instead of spinning up a Shadow Realm per guest
+
+[17:06:56.0563] <danielrosenwasser>
+ * e.g. your own code expects an "unlocked" realm, but it's a sufficient constraint on guest code where you want to reuse the same Realm instead of spinning up a Shadow Realm per guest
+
+[17:07:07.0526] <Kris Kowal>
+Yes, that is a nice arrangement.
+
+[17:07:50.0976] <Kris Kowal>
+Not one we’ve had the opportunity to try yet though! We’ve been locking down primary realms, including worker realms, for all of Agoric’s work.
+
+[17:09:13.0675] <Kris Kowal>
+Shims are not really a problem. Lockdown just has to cooperate with the shim. After shims, the biggest problem is usually property override mistakes, which aren’t really detectable until you’ve frozen some intrinsics.
+
+[17:10:35.0314] <Kris Kowal>
+Notably, code of the flavor `{}.constructor = myConstructor` or `myPrototype.toString =` have to be changed to use `Object.defineProperty`, but then you’re golden. Folks using Hardened JavaScript generally get by these obstacles by patching the package and sending up a PR.
+
+[17:12:09.0806] <bakkot>
+ugh
+
+[17:12:18.0324] <bakkot>
+can we make Object.prototype.constructor/toString be more exotic instead of that
+
+[17:12:29.0607] <Kris Kowal>
+That would be nice. We would like that.
+
+[17:12:53.0736] <danielrosenwasser>
+(I would like to know what that means too :D)
+
+[17:12:56.0696] <bakkot>
+I want to make it more exotic anyway https://github.com/tc39/proposal-symbol-proto/issues/1
+
+[17:13:36.0700] <danielrosenwasser>
+So would Shadow Realms not also be an alternative sandboxing technique? It sounds like it provides similar guarantees without needing a lockdown, but at the expense of a higher footprint
+
+[17:13:44.0483] <Kris Kowal>
+Yes, that proposal is consistent with our aims and also hits the data-only prototype-pollution-attack firmly on the head.
+
+[17:14:35.0640] <Kris Kowal>
+I would say complementary. Lockdown gives you multi-tenant realms, including multi-tenant shadowrealms.
+
+[17:15:05.0120] <Kris Kowal>
+And multi-tenancy comes with its own bag of trade-offs.
+
+[17:15:24.0724] <danielrosenwasser>
+Right, so while they are somewhat orthogonal, there is overlap in the use-cases and there will necessarily be a nuanced understanding of which is best for your situation
+
+[17:15:37.0124] <danielrosenwasser>
+e.g. `instanceof Array` etc
+
+[17:15:58.0592] <Kris Kowal>
+That is, for example, you can’t safely endow a lockdown compartment with high resolution timers.
+
+[17:16:02.0184] <danielrosenwasser>
+ * e.g. `instanceof Array` will not be coherent between Realms, Compartments share more than you might anticipate by default, etc.
+
+[17:17:43.0229] <Kris Kowal>
+Yeah, the `instanceof Array` issue, we call identity discontinuity hazards, or more recently, Mark dubbed them “eval twins”
+
+[17:18:31.0342] <Kris Kowal>
+But you don’t get identity discontinuity with either ShadowRealm or Compartment.
+
+[17:19:49.0898] <Kris Kowal>
+ * But you don’t get identity discontinuity of intrinsics with either ShadowRealm or Compartment.
+
+[17:34:19.0988] <Kris Kowal>
+Regarding multi-tenancy, the thing that we often miss is that all real JavaScript applications are multi-tenant if you count your third-party dependencies as tenants, and especially if you consider the Node.js standard library a tenant.
+
+[17:36:34.0105] <Kris Kowal>
+The only arrangements that qualify as single-tenant are hand-rolled web pages with no dependencies that rely exclusively on platform APIs implemented entirely in the non-JavaScript substrate. And the only cases where multi-tenant programs are not problematic are the ones where there’s no value to staging an attack.
+
+[17:38:56.0725] <Kris Kowal>
+But yes, the mitigations have overlapping threat models and lots and lots of nuance :-)
+
+[17:40:26.0570] <danielrosenwasser>
+Right, there is usually an idealistic "assume my dependencies are not malicious or hijacked". I know stuff like LavaMoat helps protect against that piece of the puzzle. 
+
+[17:41:45.0236] <Kris Kowal>
+The idealistic assumptions admittedly work out surprisingly well most of the time.
+
+[17:42:00.0993] <danielrosenwasser>
+yeah, it's worked out well enough so far what could go wrong? :D
+
+[17:44:18.0689] <danielrosenwasser>
+Okay, this has certainly given me a much better understanding of the lay of the land. I might come back with more questions, but I really appreciate you taking the time to explain!
+
+[17:44:50.0644] <Kris Kowal>
+It’s a living!
+
+[18:06:49.0535] <Mathieu Hofman>
+In case anyone reading doesn't have the background, lavamoat is fully leveraging compartments for isolation, and wouldn't be able to be implemented with ShadowRealm.
+
+
+2023-07-10
+[07:19:41.0975] <littledan>
+There are also people who “believe in” ShadowRealms and don’t “believe in” lockdown. Objectively I think ShadownRealms have a smaller attack surface.
+
+[07:23:32.0406] <littledan>
+I am interested in this area of understanding how to guard against malicious dependencies. I don’t see how any kind of isolation mechanism can be enough to guard against logic errors which are at the center of some issues. I hope we in TC39 can discuss how to improve communication about important updates, and how to maintain good dependency metadata, in the future.
+
+[07:31:44.0535] <naugtur>
+> <@littledan:matrix.org> I am interested in this area of understanding how to guard against malicious dependencies. I don’t see how any kind of isolation mechanism can be enough to guard against logic errors which are at the center of some issues. I hope we in TC39 can discuss how to improve communication about important updates, and how to maintain good dependency metadata, in the future.
+
+LavaMoat uses Hardened Javascript (SES) to isolate each dependency into a separate Compartment and only allow access to globals and imports listed in a policy. The Principle of Least Authority approach + an assumption that an initial trusted state exists (or a necessity to review the generated policy) guard against malicious packages reaching for unexpected powers/APIs or attempting poisoning of prototypes or objects passed around.
+
+It is still possible for a package to deliberately introduce a vulnerability in the implementation of eg. a cryptographic function. But the main concern are packages being taken over or corrupted to perform general-purpose attacks like sending process.env serialized to a 3rdparty server.
+
+
+2023-07-18
+[08:22:32.0814] <littledan>
+Should we be asking the various Twitter clones to weigh in on our `source` bike shed?
+
+[08:26:18.0471] <littledan>
+Also, how is https://github.com/whatwg/html/pull/9486 going? Domenic's suggestions make sense to me; are we going to make a new version that adopts those suggestions?
+
+[08:36:07.0322] <nicolo-ribaudo>
+> <@littledan:matrix.org> Also, how is https://github.com/whatwg/html/pull/9486 going? Domenic's suggestions make sense to me; are we going to make a new version that adopts those suggestions?
+
+Domenic's suggestions match what is already included in the initial commit, and there is no answer yet to what the `Accept:` header for JSON should be. I'm mostly waiting for Anne to express his opinion since he has been pinged, but I read in some matrix room that he has limited availability for the next few weeks.
+
+[08:37:16.0404] <nicolo-ribaudo>
+> <@littledan:matrix.org> Should we be asking the various Twitter clones to weigh in on our `source` bike shed?
+
+I'm worried about asking to the whole world to express an opinion, because people that do not already follow the proposal are probably not going to cast an informed "vote"
+
+[08:56:56.0651] <nicolo-ribaudo>
+I'm in a place with a terrible internet connection today, so I won't probably be able to participate to the meeting (I will try to join anyway, but I have low expectations 😅)
+
+[08:57:25.0873] <nicolo-ribaudo>
+ * I'm in a place with a terrible internet connection today, so I won't probably be able to participate in the meeting (I will try to join anyway, but I have low expectations 😅)
+
+[09:03:36.0778] <littledan>
+> <@nicolo-ribaudo:matrix.org> Domenic's suggestions match what is already included in the initial commit, and there is no answer yet to what the `Accept:` header for JSON should be. I'm mostly waiting for Anne to express his opinion since he has been pinged, but I read in some matrix room that he has limited availability for the next few weeks.
+
+Hmm, I thought Domenic was indicating what the Accept: header should be: it should be whatever falls out of the current algorithm when the destination is ""
+
+[09:03:40.0531] <Kris Kowal>
+I will be on the call shortly. Have not read backlog. Have no topic. Eager to hear about Bergen.
+
+[09:03:58.0162] <littledan>
+(I have a conflict today and won't attend unless someone indicates that it's important for me to be present and skip my conflict)
+
+[09:05:38.0485] <nicolo-ribaudo>
+> <@littledan:matrix.org> Hmm, I thought Domenic was indicating what the Accept: header should be: it should be whatever falls out of the current algorithm when the destination is ""
+
+Which is `*/*` (and it's what the PR already does), but ideally we would have something more specific since then the browser will assert that it's JSON
+
+[09:06:04.0095] <littledan>
+> <@nicolo-ribaudo:matrix.org> Which is `*/*` (and it's what the PR already does), but ideally we would have something more specific since then the browser will assert that it's JSON
+
+well, so, I guess Domenic voiced his opinion (keep it that way) and now we'll see what Anne says?
+
+[09:06:12.0814] <littledan>
+there should be someone in Mozilla to ping too, right? Maybe Simon?
+
+[09:07:10.0910] <nicolo-ribaudo>
+I asked to the SpiderMonkey person that is working on import attributes to forward that issue to the relevant mozilla people
+
+[09:07:44.0685] <nicolo-ribaudo>
+ * I asked to the SpiderMonkey person that is working on import attributes (mgaudet) to forward that issue to the relevant mozilla people
+
+[09:09:06.0526] <Luca Casonato>
+Kris Kowal: just waiting on you
+
+[09:09:09.0988] <Luca Casonato>
+ * Kris Kowal: just waiting on you :)
+
+[09:10:45.0393] <littledan>
+> <@nicolo-ribaudo:matrix.org> I asked to the SpiderMonkey person that is working on import attributes (mgaudet) to forward that issue to the relevant mozilla people
+
+If you don't hear back from them, you could work in the other direction with the Mozilla WHATWG editor
+
+[09:11:10.0455] <littledan>
+anyway sounds good
+
+[09:17:36.0593] <Luca Casonato>
+https://github.com/tc39/proposal-source-phase-imports/issues/53
+https://github.com/tc39/proposal-source-phase-imports/issues/54
+
+[10:05:46.0742] <nicolo-ribaudo>
+Did you talk about anything other than the name bikeshedding?
+
+[10:06:16.0978] <Kris Kowal>
+We talked a little about what proposal to dig into next. I’m reminded that I need to break up Compartments.
+
+[10:08:35.0722] <Kris Kowal>
+I am going to propose `descriptor`. Mathieu Hofman brought it up and I was initially hesitant, but then we had a great conversation about how to frame this phase in a way that neither characterizes it as before or after another phase. Source, coming to think about it more deeply, implies _after_ source in the way Prelink (or unlinked) implies _before_ link. So, we talked a bit about what exactly was intrinsic to the handle currently named `ModuleSource`, and that is that it is a _descriptor_ of the _bindings_ and _behavior_ necessary for the module system to construct a _namespace_, _environment_, and _linkage_. 
+
+[10:09:40.0951] <Kris Kowal>
+We also observed that we would ideally avoid `moduleInstance.source.source` as the way to express the actual source text. The “descriptor” is actually a handle that retains the “object code”, not the “source code”, so “source” is further a misnomer.
+
+[10:10:32.0081] <Kris Kowal>
+We’re all in agreement that `source` is our best name yet and that all of the options are imperfect, including source. I’m going to propose `descriptor` to see if it gets some traction from the `source` skeptics. If it doesn’t, we’re fine rolling with `source`.
+
+[10:23:46.0481] <nicolo-ribaudo>
+Thanks for the summary!
+
+[10:24:30.0188] <Kris Kowal>
+https://github.com/tc39/proposal-source-phase-imports/issues/53#issuecomment-1640654943
+
+[10:28:10.0897] <nicolo-ribaudo>
+Did anyone brought up the potential naming conflict with property descriptors, that already exist as a word in the language (`getOwnPropertyDescriptor`)?
+
+[10:28:41.0563] <nicolo-ribaudo>
+(but good idea, I like it much more than `parsed`)
+
+[10:31:24.0777] <Richard Gibson>
+I like the past participles ("resolved", "parsed", "linked", etc.)
+
+[10:55:28.0416] <Kris Kowal>
+> <@gibson042:matrix.org> I like the past participles ("resolved", "parsed", "linked", etc.)
+
+That would be consistent if we decided that in general every phase is synecdoche for “the development of a module such that it is _at least_: resolved, located, fetched, parsed, linked, executed (to the first await), resolved (such that the promise returned by a dynamic import has been resolved with the namespace object), and settled (such that if the module happens to be thenable…)”
+
+[11:00:34.0587] <Kris Kowal>
+Nobody brought up property descriptor. I did mention that the last phase of Compartment has a notion of a module descriptor that contains a source but isn’t a source. I think we’ve designed our way out of the need for such a thing (aliases and such can be modeled as virtualization of a `ModuleDescriptor`, e.g., `new ModuleDescriptor({ bindings: [ { exportAllFrom: './alias.js' } ]})`.
+
+[11:01:44.0788] <Kris Kowal>
+Or for inter-compartmental aliases, `new otherEvaluators.ModuleDescriptor({ bindings: [ { exportAllFrom: './alias.js' } ] });`.
+
+
+2023-07-25
+[08:41:03.0887] <Kris Kowal>
+I will certainly be late to today’s call. 
+
+[08:42:22.0838] <nicolo-ribaudo>
+I forgot to mention it but I'm on vacation today and I will not join
+

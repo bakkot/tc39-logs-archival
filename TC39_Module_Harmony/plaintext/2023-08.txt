@@ -1,0 +1,178 @@
+2023-08-01
+[14:32:52.0555] <Kris Kowal>
+This is the change that Caridy prepared https://tc39.es/proposal-compartments/0-module-and-module-source.html
+
+[14:33:27.0918] <Kris Kowal>
+My intention is to move this into a repository, but it’s unclear to me whether we should factor this even finer before making one or more module harmony layers out of it.
+
+[14:34:38.0305] <Kris Kowal>
+Luca Casonato Would you like to see an attempt to carve off smaller proposals (in the spirit of making them importable into other proposals like expressions), like one for introducing the module instance concept without the Module constructor?
+
+
+2023-08-02
+[01:33:28.0330] <Luca Casonato>
+Kris Kowal: I'd like to see a proposal / document that outlines the minimum shared `Module` between expressions, instance imports, and virtualisation. I _think_ this is:
+
+```ts
+interface Module {
+  get source(): %AbstractModuleSource%;
+}
+
+const mod: Module; // could come from expression, instance import, or constructor
+
+await import(mod); // these modules are importable
+new Worker(mod); // or usable as the entrypoint to a Worker
+self.postMessage(mod); // and structuredClonable (transferrable) to other contexts
+```
+
+[01:33:36.0902] <Luca Casonato>
+ * Kris Kowal: I'd like to see a proposal / document that outlines the minimum shared `Module` between expressions, instance imports, and virtualisation. I _think_ this is:
+
+```ts
+class Module {
+  get source(): %AbstractModuleSource%;
+}
+
+const mod: Module; // could come from expression, instance import, or constructor
+
+await import(mod); // these modules are importable
+new Worker(mod); // or usable as the entrypoint to a Worker
+self.postMessage(mod); // and structuredClonable (transferrable) to other contexts
+```
+
+[01:34:08.0119] <Luca Casonato>
+In essence, all the `Module` semantics minus actually getting ahold of a `Module` object
+
+[01:34:59.0253] <Luca Casonato>
+From there, we can pursue all three ways of getting ahold of a `Module` in parallel:
+- expressions
+- instance imports
+- constructor (this one also introduces `ModuleSource`)
+
+[01:35:42.0447] <Luca Casonato>
+ * Kris Kowal: I'd like to see a proposal / document that outlines the minimum shared `Module` interface between expressions, instance imports, and virtualisation. I _think_ this is:
+
+```ts
+class Module {
+  get source(): %AbstractModuleSource%;
+}
+
+const mod: Module; // could come from expression, instance import, or constructor
+
+await import(mod); // these modules are importable
+new Worker(mod); // or usable as the entrypoint to a Worker
+self.postMessage(mod); // and structuredClonable (transferrable) to other contexts
+```
+
+[05:52:59.0204] <nicolo-ribaudo>
+guybedford Luca Casonato fyi https://github.com/babel/babel/pull/15829
+
+
+2023-08-08
+[07:22:49.0046] <nicolo-ribaudo>
+Last week we discussed meeting only when there are some topics on the agenda. Is there anything we would like to talk about today?
+
+[09:37:28.0252] <Luca Casonato>
+Sorry, I'm in a different time zone this week so totally forgot about the module harmony call!
+
+
+2023-08-22
+[06:42:42.0869] <Luca Casonato>
+Hey folks, if we have time I'd like to present something on module instance imports. I wrote up an explainer here: https://github.com/lucacasonato/proposal-module-instance-imports
+
+I'd like to talk about it at the TC39 tools meeting tomorrow to get some feedback from tool authors on this direction before talking to HTML folks
+
+[06:43:05.0173] <Luca Casonato>
+ * Hey folks, if we have time I'd like to present something on module instance imports. I wrote up an explainer here: https://github.com/lucacasonato/proposal-module-instance-imports
+
+I'd like to talk about it at the TC39 tools meeting tomorrow to get some feedback from tool authors on this direction before talking to HTML folks (and then I'll try present at Tokyo plenary)
+
+[09:05:21.0001] <nicolo-ribaudo>
+I'll join, I just have to figure out why in google meet my audio is not working
+
+[11:03:21.0120] <Kris Kowal>
+Am I right that we’re in agreement that “module phase imports” means that the module has advanced to at least the “linked” phase before you get a handle on the instance?
+
+[11:04:45.0502] <Kris Kowal>
+That seems consistent with all visions of the future except the one where a module instance could be transferred _without_ linkage, relieving the sender of the obligation to load a possibly different module graph before transmitting the instance.
+
+[11:05:17.0721] <Kris Kowal>
+Whereas, source phase does not imply the sender doing any of that work.
+
+[11:06:57.0716] <Kris Kowal>
+I like that `import.source` and `import.module` can facilitate different scenarios.
+
+[16:13:12.0204] <Kris Kowal>
+Luca Casonato: My proposal this morning does not account for transfer of `import.meta`.
+
+[16:13:53.0639] <Kris Kowal>
+And I suspect it cannot.
+
+
+2023-08-23
+[02:17:02.0585] <nicolo-ribaudo>
+> <@kriskowal:matrix.org> Am I right that we’re in agreement that “module phase imports” means that the module has advanced to at least the “linked” phase before you get a handle on the instance?
+
+No, I always assumed that the "module instance phase" is equivalent to
+```js
+import module mod from "m";
+
+// equivalent to
+
+import source _s from "m";
+const mod = new Module(_s, {
+  importHook: <the import hook from this module>
+});
+```
+
+[02:17:55.0897] <nicolo-ribaudo>
+> <@kriskowal:matrix.org> Am I right that we’re in agreement that “module phase imports” means that the module has advanced to at least the “linked” phase before you get a handle on the instance?
+
+ * No, I always assumed that the "module instance phase" is equivalent to
+
+```js
+import module mod from "m";
+
+// equivalent to
+
+import source _s from "m";
+const mod = new Module(_s, {
+  importHook: <the import hook from this module>,
+  ...<context needed for the import hook>,
+});
+```
+
+[02:18:10.0233] <nicolo-ribaudo>
+That is, it's not linked but it has the necessary info to then link it (either "here" or "on the other side")
+
+[09:10:31.0278] <Kris Kowal>
+That’s interesting. That suggests that we may need to think more rigorously on this, that there may need to be a mechanism to explicitly advance to the linked phase.
+
+[09:11:51.0981] <Kris Kowal>
+Either that or put bundlers or module-instance-transfer mechanism at liberty to advance to the linked phase for a module instance by some other means.
+
+[09:13:43.0711] <Kris Kowal>
+I’m tentatively assuming we’ll need `import.link(mod)` for that.
+
+[10:00:19.0049] <Luca Casonato>
+I realized during the tc39 tools meeting just now that you also get a form of asset references with module instance imports: `import module a from "data:application/javascript,export * from './a.js'";`
+
+[10:00:28.0480] <Luca Casonato>
+it's very cheaty
+
+[10:01:06.0250] <Luca Casonato>
+Well it doesn't actually work because of relative specifiers in data URLs, but it can nearly work
+
+[10:01:16.0438] <Luca Casonato>
+ * Well it doesn't actually work because you can't have relative specifiers in data URLs, but it can nearly work
+
+
+2023-08-29
+[09:02:28.0632] <nicolo-ribaudo>
+The agenda is empty -- are we meeting?
+
+At some future meeting (I'm not ready for it today) I would like to talk more about part of guy's proposal, specifically about moving the resolution data from the instance to the source, moving the distinction between source/instance to "static data" vs "module runtime state"
+
+[09:07:00.0222] <Kris Kowal>
+I’m present and do not have a topic to bring.
+

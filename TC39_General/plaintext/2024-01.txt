@@ -1,0 +1,409 @@
+2024-01-15
+[09:24:29.0827] <nicolo-ribaudo>
+I'm trying to use `using` declarations in a real project -- I like the feature but oh I hate so much that we decided to require a binding name
+
+[09:24:42.0299] <nicolo-ribaudo>
+https://github.com/nicolo-ribaudo/babel/pull/10/files?w=1
+
+[09:25:13.0709] <nicolo-ribaudo>
+```js
+        using _1 = this.withState("inType", true);
+        // Temporarily remove a JSX parsing context, which makes us scan different tokens.
+        using _2 = this.withState("context", this.state.context.slice(0, 1));
+```
+
+[09:25:22.0231] <nicolo-ribaudo>
+I haven't had to use `using _3` yet :)
+
+[09:27:40.0637] <nicolo-ribaudo>
+ * I have not used `using _3` yet :)
+
+[09:27:46.0272] <nicolo-ribaudo>
+ * I did not used `using _3` yet :)
+
+[09:27:49.0995] <nicolo-ribaudo>
+ * I did not use `using _3` yet :)
+
+[10:02:20.0969] <nicolo-ribaudo>
+ * <del>I did not use `using _3` yet :)</del> EDIT: spoke too son
+
+[10:08:37.0674] <nicolo-ribaudo>
+ * <del>I did not use `using _3` yet :)</del> EDIT: spoke too son, I'm at `_4` now
+
+[10:30:59.0735] <Ashley Claymore>
+You could `using stack = new DisposableStack();` and then `stack.use` multiple times without needing to name them  
+
+[10:32:49.0357] <Ashley Claymore>
+did the proposal have anonymous `using` before and the we removed it? Or am I hallucinating that like a LLM
+
+[10:36:21.0963] <Ashley Claymore>
+https://github.com/tc39/proposal-explicit-resource-management/issues/65
+
+[15:45:18.0123] <littledan>
+> <@aclaymore:matrix.org> did the proposal have anonymous `using` before and the we removed it? Or am I hallucinating that like a LLM
+
+Yes, it had using void
+
+[15:45:53.0781] <littledan>
+IMO we should figure out how to make _ work well for this purpose. Nicolo had some good ideas about semantics.
+
+
+2024-01-16
+[12:27:42.0516] <TabAtkins>
+We've been considering `void` as a no-binding matcher in Pattern Matching; that might work here? `using void = ...;`
+
+[12:27:55.0667] <TabAtkins>
+Oh lol littledan just said that
+
+[12:42:41.0691] <littledan>
+I am anti-void for this purpose for the record
+
+[12:42:54.0124] <littledan>
+And anti making it pattern matching only
+
+[12:43:31.0978] <littledan>
+* I think void would be a little funny for this purpose given that it’s an operator
+
+[12:43:52.0806] <littledan>
+* And this case shows it would be nice to be accessible outside of pattern matching 
+
+[13:07:01.0605] <bakkot>
+crazy thought: `_` as an identifier can be redeclared as long as it's never referred to (and there's no direct `eval`s in scope, I guess?)
+
+[15:09:50.0182] <littledan>
+> <@bakkot:matrix.org> crazy thought: `_` as an identifier can be redeclared as long as it's never referred to (and there's no direct `eval`s in scope, I guess?)
+
+That was Nicolo’s idea, except that if you do refer to it, you get a runtime error 
+
+[15:10:20.0545] <littledan>
+And I guess we don’t enforce in the old sloppy constructs 
+
+[15:10:22.0795] <bakkot>
+don't love the idea of a local binding which throws when referenced
+
+[15:10:33.0404] <bakkot>
+reading local bindings should not be side-effecting
+
+[15:10:37.0774] <littledan>
+Why? We already have TDZ
+
+[15:10:43.0378] <bakkot>
+hm, I guess
+
+[15:10:47.0570] <littledan>
+It would literally be in TDZ 
+
+[15:10:49.0137] <bakkot>
+for now, anyway
+
+[15:11:01.0429] <littledan>
+Ah!
+
+[15:11:14.0826] <bakkot>
+I would prefer a static error but runtime is also ok I guess
+
+
+2024-01-17
+[23:14:07.0777] <ljharb>
+are you suggesting your crazy thought be a change in the lang, making `_` special?
+
+[23:28:54.0698] <Andreu Botella>
+I wonder if having an optional form without an identifier would be possible, from a parsing standpoint
+```js
+using ident = expression(1);
+using expression(2);
+```
+
+[06:29:23.0352] <littledan>
+> <@ljharb:matrix.org> are you suggesting your crazy thought be a change in the lang, making `_` special?
+
+yes
+
+[06:30:05.0029] <littledan>
+> <@abotella:igalia.com> I wonder if having an optional form without an identifier would be possible, from a parsing standpoint
+> ```js
+> using ident = expression(1);
+> using expression(2);
+> ```
+
+Aside from not solving the more general problem, this faces the syntactic misfortune of not working if the expression that you're using begins with (
+
+[08:04:24.0272] <ljharb>
+ah, well that's certainly a nonstarter then
+
+
+2024-01-20
+[19:56:11.0782] <rbuckton>
+> <@abotella:igalia.com> I wonder if having an optional form without an identifier would be possible, from a parsing standpoint
+> ```js
+> using ident = expression(1);
+> using expression(2);
+> ```
+
+See https://github.com/rbuckton/proposal-void-binding, which I plan to discuss at an upcoming TC39 meeting. This was originally part of the `using` proposal and was pulled out to serve as a broader independent proposal.
+
+[19:59:29.0617] <Jessidhia>
+> Discards in array binding and assignment patterns (i.e., const [void, a, void] = iter) to explicitly mark elisions and avoid trailing , confusion ([a, ,]).
+amusingly there is a comma confusion here (should be [, a,])
+
+[19:59:35.0025] <Jessidhia>
+* Discards in array binding and assignment patterns (i.e., const [void, a, void] = iter) to explicitly mark elisions and avoid trailing , confusion ([a, ,]).
+ amusingly there is a comma confusion here (should be [, a,])
+
+[19:59:41.0447] <Jessidhia>
+* > Discards in array binding and assignment patterns (i.e., const [void, a, void] = iter) to explicitly mark elisions and avoid trailing , confusion ([a, ,]).  amusingly there is a comma confusion here (should be [, a,])
+
+[19:59:47.0995] <Jessidhia>
+* Discards in array binding and assignment patterns (i.e., const [void, a, void] = iter) to explicitly mark elisions and avoid trailing , confusion ([a, ,]).  amusingly there is a comma confusion here (should be [, a,])
+
+[00:26:58.0037] <Jack Works>
+working on simple Go To Definition functionality
+
+[01:44:21.0986] <Domenic>
+The proposal-void-binding is compelling in how it lists lots of cases where this would be moderately useful. Still, for the original case of `using`, `using void = new UniqueLock(mutex)` feels sadly lame, compared to `using new UniqueLock(mutex)`. I think because, unlike cases such as parameter bindings or destructuring, I'm not trying to express "don't put anything in this slot"; I'm actually trying to avoid the "slot" (binding) concept at all, and just say "I am using this resource".
+
+[01:46:47.0675] <Domenic>
+So to me it feels like a tradeoff between trying to create a generally useful void-binding concept, versus making the using-a-resource case more idiomatic with specialized syntax like `using! expression` or something else. Since it's maybe not possible to create something both unambiguous and not-super-weird-looking, I guess `using void =` is probably the best place to end up. Still sad.
+
+
+2024-01-21
+[17:03:32.0830] <littledan>
+Yeah, I am sympathetic to a form that doesn’t look like binding. But outside of that, Domenic do you have an opinion on void vs _ ?
+
+[17:04:50.0906] <Domenic>
+Not really, void seems kind of cute
+
+[21:10:49.0101] <Kris Kowal>
+I favor void over _. It’s a keyword, albeit a lost keyword, and this use is analogous.
+
+
+2024-01-22
+[05:56:23.0833] <littledan>
+yeah I guess I'm probably over-indexing on the operator syntax of void in my skepticism of void. "lost" is a good characterization. But still, _ has recognition from other languages.
+
+[06:29:28.0507] <Jan Olaf Martin>
+> <@littledan:matrix.org> yeah I guess I'm probably over-indexing on the operator syntax of void in my skepticism of void. "lost" is a good characterization. But still, _ has recognition from other languages.
+
+I'm not sure if the recognition from other languages outweighs the established use(s) of `_` in the JS ecosystem. I assume most JS devs would associate it with "bag of utility functions", not necessarily with "unused".
+
+[07:06:29.0898] <littledan>
+Yeah, that's fair. At least the _ is *locally* unambiguous/compatible
+
+[07:06:50.0440] <littledan>
+really, `void` for this purpose is even somehow more apt than `void` for C, isn't it
+
+[07:10:53.0307] <Kris Kowal>
+Use of _ I’ve encountered is not as a black hole (void) but as a readable reference to the last thing bound. 
+
+[07:11:39.0356] <littledan>
+oh yeah I guess overloading both of those in the same thing is weird
+
+[08:09:57.0843] <snek>
+I feel like _ is off the table since it's already a valid identifier 
+
+[08:12:24.0394] <littledan>
+> <@devsnek:matrix.org> I feel like _ is off the table since it's already a valid identifier
+
+the idea is to stay with its current semantics wherever valid, and just introduce a TDZ or syntax error when bound in an invalid duplicate way (eg strict mode parameters)
+
+[08:12:34.0829] <littledan>
+> <@devsnek:matrix.org> I feel like _ is off the table since it's already a valid identifier
+
+ * the idea is to stay with its current semantics wherever valid, and just introduce a TDZ or syntax error (*for usage, not definition*) when bound in an invalid duplicate way (eg strict mode parameters)
+
+[09:32:44.0671] <ljharb>
+i don’t think moving towards scala’s “21 different meanings for _” would be an improvement
+
+[09:47:24.0660] <littledan>
+OK I'm convinced. So who's bringing the void proposal to committee?
+
+[09:47:39.0880] <littledan>
+We can do it separately from pattern matching, right? it'd just compose well
+
+[09:48:22.0973] <bakkot>
+> So who's bringing the void proposal to committee
+
+per https://github.com/tc39/agendas/blob/main/2024/02.md, rbuckton 
+
+[09:50:38.0038] <bakkot>
+I also like the "ignore a parameter to a callback" use case
+
+[09:50:42.0744] <rbuckton>
+I would prefer `_`, but picked `void` due to concern's like ljharb's. At the very least, `void` in this sense has a similar semantic meaning. A `void` expression _discards_ a result, while a `void` binding _discards_ the binding.
+
+[09:51:38.0532] <littledan>
+> <@rbuckton:matrix.org> I would prefer `_`, but picked `void` due to concern's like ljharb's. At the very least, `void` in this sense has a similar semantic meaning. A `void` expression _discards_ a result, while a `void` binding _discards_ the binding.
+
+yeah, the complexity is that extractors/pattern matching may introduce expressions in the LHS
+
+[09:51:48.0675] <rbuckton>
+Callback parameters, excluding things from `...`, explicit Elision (i.e., `const [a, void] = iter` vs `const [a, , ] = iter` due to trailing `,`), all seem good to me :)
+
+[09:52:25.0660] <rbuckton>
+I plan to handle `void` vs `void expression` in things like destructuring via a cover grammar.
+
+[09:52:39.0499] <bakkot>
+yeah `void` instead of holes in array destructuring is a definite improvement also
+
+[09:52:49.0862] <rbuckton>
+So this is designed to dovetail with pattern matching and extractors, which are specifically called out in the explainer.
+
+[09:54:41.0119] <rbuckton>
+I'm debating on `void` for explicit elision in array literals as well, since `[0, ,]` and `[a, void 0]` are subtly different.
+
+[09:56:06.0141] <rbuckton>
+```js
+var ar1 = [0, , ];
+var ar2 = [0, void 0];
+ar1.length; // 2;
+ar2.length; // 2;
+ar1[1]; // undefined
+ar2[1]; // undefined
+1 in ar1; // false <---
+1 in ar2; // true
+```
+
+[09:57:10.0462] <bakkot>
+> <@rbuckton:matrix.org> I plan to handle `void` vs `void expression` in things like destructuring via a cover grammar.
+
+I suspect you can just update the existing cover grammar; it already has to deal with stuff like `[ { m } ]` being legal only in expression position and `[{ a = 0 }]` only being legal in binding/assignment target position
+
+[09:57:19.0686] <bakkot>
+> <@rbuckton:matrix.org> I plan to handle `void` vs `void expression` in things like destructuring via a cover grammar.
+
+ * I suspect you can just update the existing cover grammar; it already has to deal with stuff like `[ { m(){} } ]` being legal only in expression position and `[{ a = 0 }]` only being legal in binding/assignment target position
+
+[09:57:41.0262] <rbuckton>
+> <@bakkot:matrix.org> I suspect you can just update the existing cover grammar; it already has to deal with stuff like `[ { m(){} } ]` being legal only in expression position and `[{ a = 0 }]` only being legal in binding/assignment target position
+
+I have a rough outline of that in the explainer under the Grammar heading.
+
+[09:59:34.0208] <bakkot>
+ah, nice
+
+[10:03:02.0111] <bakkot>
+> <@rbuckton:matrix.org> I'm debating on `void` for explicit elision in array literals as well, since `[0, ,]` and `[a, void 0]` are subtly different.
+
+my answer to this would be no: no one should be writing array holes on purpose, so we shouldn't provide new syntax to help them
+
+[10:03:14.0674] <bakkot>
+I'm not dead set against it, I just don't want it
+
+[10:37:55.0245] <rbuckton>
+I agree that no one should write them on purpose, but people can and do. I would only consider supporting it if full parity for explicit _Elision_ is necessary for advancement. i.e., if to have `[a, void, b] = [1, , 3]` I must also have `[1, void, 3]`, then I believe the `void` in `[1, void, 3]` *must* be equivalent to `[1, , 3]`, else it is not truly an in-place replacement for _Elision_.
+
+[10:38:42.0565] <rbuckton>
+But I'm fine with not having it if there isn't a hard requirement for it from other delegates.
+
+[11:15:00.0062] <littledan>
+yes, I agree that we shouldn't make `void` in certain expression context another way to say `void 0`.
+
+[11:15:13.0133] <littledan>
+that seems complicated and unmotivated
+
+[11:16:15.0782] <bakkot>
+if I have understood correctly the idea would be an _elision_, not `undefined`; those are different
+
+[11:16:24.0459] <bakkot>
+ * if I have understood correctly the idea would be an _elision_ (i.e. a hole), not `undefined`; those are different
+
+[11:31:25.0915] <littledan>
+yes, so I agree with Ron that it shouldn't do `undefined`. This seems to be a sort of strawperson that no one is arguing for.
+
+[11:31:52.0299] <littledan>
+but having another way to type holes also seems not so motivated
+
+
+2024-01-30
+[18:19:34.0856] <jmdyck>
+Does anyone know why ScriptEvaluation asserts that the execution context stack (on exit and presumably entry) isn't empty?
+
+[18:20:22.0652] <jmdyck>
+I can understand why HTML might want it to be the case, but that's HTML's problem.
+
+[18:21:04.0894] <jmdyck>
+Why does EcmaScript care whether it's empty or not?
+
+[18:35:00.0238] <bakkot>
+I would guess it is just there as a consistency check: every time a context is added, it is later removed
+
+[18:37:20.0147] <snek>
+i think the spec assumes you have an outer execution context that is kept with the realm
+
+[18:37:33.0577] <snek>
+but
+
+[18:37:48.0761] <snek>
+i don't think its really necessary 
+
+[18:38:36.0268] <jmdyck>
+@bakkot: Hm, asserting non-empty on exit isn't a very good way to achieve that consistency check.
+
+[18:39:05.0985] <snek>
+we already have that consistency check built into the stack operation itself
+
+[18:40:07.0839] <snek>
+> Suspend scriptContext and remove it from the execution context stack.
+
+presumably if this is a stack, there's only one thing you can remove 
+
+[18:41:31.0591] <jmdyck>
+I don't think there was a suggestion of ambiguity as to what to remove
+
+[18:42:44.0298] <jmdyck>
+It would be useful to assert, e.g. that ScriptEvaluation leaves the EC stack the way it found it.
+
+[18:43:19.0991] <snek>
+idk if it would be more useful than any other op that modifies the stack
+
+[18:43:46.0543] <snek>
+(which is not to say it wouldn't be useful)
+
+[18:44:35.0950] <jmdyck>
+Some stack-manipulating AOs do this by grabbing the running execution context before pushing, then after popping, saying that the pop restores the former running EC.
+
+[18:44:54.0456] <jmdyck>
+But that's not what ScriptEvaluation does.
+
+[18:45:57.0678] <jmdyck>
+Merely asserting a non-empty stack on exit doesn't achieve that at all.
+
+[18:46:14.0491] <snek>
+can i just say how much i love that SS and RS are grouped together now
+
+[18:47:24.0067] <snek>
+i think "Resume the context that is now on the top of the execution context stack as the running execution context." is pretty standard
+
+[18:47:50.0356] <snek>
+the assertion is not though
+
+[18:50:41.0351] <jmdyck>
+There are 7 occurrences of "Remove _X_ from the EC stack and restore _Y_ as the running EC."
+
+[18:51:29.0497] <snek>
+"restore" 🤔
+
+[18:53:49.0828] <jmdyck>
+(Actually, they're all literally `Remove _calleeContext_ from the execution context stack and restore _callerContext_ as the running execution context.`)
+
+[18:57:29.0641] <jmdyck>
+There's 3 occurrences of `Resume the context that is now on the top of the execution context stack as the running execution context.`
+
+[18:59:43.0448] <snek>
+yeah
+
+[19:00:28.0287] <snek>
+do we ever define what it means to suspend and resume contexts
+
+[19:00:33.0498] <snek>
+"restore" aside
+
+[19:01:34.0615] <jmdyck>
+We don't.
+
+[19:03:53.0600] <jmdyck>
+But see https://github.com/tc39/ecma262/pull/2962, which gets rid of "suspend" and "resume" as applied to ECs.
+
+[19:04:19.0335] <jmdyck>
+(Also, its first commit gets rid of "restore".)
+

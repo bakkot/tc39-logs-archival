@@ -1,0 +1,113 @@
+2023-08-24
+[13:34:36.0719] <ljharb>
+where'd be the right place to report a chrome bug, that `Object.assign(new URL('about:blank'), { protocol: 'http' }).protocol === 'http'` is false
+
+[13:35:23.0725] <shu>
+https://bugs.chromium.org/p/chromium/issues/list
+
+[13:40:35.0790] <bakkot>
+ljharb: the `protocol` accessor includes `:`, doesn't it?
+
+[13:41:08.0145] <bakkot>
+`Object.assign(new URL('about:blank'), { protocol: 'http' }).protocol === 'http:' // true`
+
+[13:42:48.0742] <bakkot>
+yeah https://url.spec.whatwg.org/#dom-url-protocol
+
+[13:43:03.0857] <bakkot>
+that's not a bug, that's just how URL objects work
+
+
+2023-08-25
+[17:26:08.0289] <ljharb>
+i think Firefox appends the colon for you but that wasn’t the problem. It works fine when the starting protocol is http/https
+
+[17:26:33.0826] <ljharb>
+but doesn’t when it’s about: - maybe it’s fixed in chrome but not in node tho
+
+[17:27:42.0371] <ljharb>
+(what i mean is, yes i made an error and it should be equal to the string including the colon, but it doesn’t work in latest node when it starts as about:blank
+
+[17:27:58.0665] <ljharb>
+* (what i mean is, yes i made an error and it should be equal to the string including the colon, but it doesn’t work in latest node when it starts as about:blank)
+
+[17:51:19.0155] <bakkot>
+Node implements its own copy of the URL object, so that would be a Node bug, not a Chrome bug
+
+[21:25:08.0080] <ljharb>
+fair enough
+
+[21:25:32.0429] <ljharb>
+indeed, you're exactly right, i'll file a node issue
+
+[21:27:09.0692] <ljharb>
+ * indeed, you're exactly right, i filed https://github.com/nodejs/node/issues/49319
+
+[01:26:11.0180] <nicolo-ribaudo>
+Do browsers plan to ship the decorators and decorators metadata proposals at the same time?
+
+We usually have one Babel plugin per proposal, but I'm considering just implementing both in the same since it's much easier to do.
+
+[10:10:36.0113] <shu>
+> <@nicolo-ribaudo:matrix.org> Do browsers plan to ship the decorators and decorators metadata proposals at the same time?
+> 
+> We usually have one Babel plugin per proposal, but I'm considering just implementing both in the same since it's much easier to do.
+
+no promises but that seems likely for V8
+
+
+2023-08-30
+[11:03:50.0962] <ljharb>
+shu: it seems like assigning `Symbol.toStringTag` on %Iterator%.prototype (to match the iterator helpers semantics) causes a *huge* deopt for all iterator things in "whatever version of v8 node is using". is that something that'd be fixed if i filed an issue? (specifically, the deopt for adding a largely unrelated property to a builtin)
+
+[11:07:12.0525] <shu>
+feel free to file, can take a look and if we decide not too we'll close it with explanation
+
+[11:08:29.0751] <shu>
+ * feel free to file, can take a look and if we decide not to we'll close it with explanation
+
+[11:15:19.0273] <shu>
+why do you think it's `Symbol.toStringTag` that's causing it? AFAIK there's no big deopt hammer (i.e. a "protector" in V8 terminology) around that symbol
+
+[12:25:36.0030] <ljharb>
+because i have a package that installs it, i added it as a transitive dep of eslint-plugin-react, and it doubled linting time. when i commented out that installation, the speed was restored
+
+[12:25:57.0753] <ljharb>
+(npmjs.com/iterator.prototype is the one that installs it, it's used in https://npmjs.com/es-iterator-helpers)
+
+[12:26:28.0653] <ljharb>
+maybe it affects Symbol.iterator lookup because of the "symbols list" on the object, or something, i dunno. i'll file it later today, thanks
+
+[12:27:11.0799] <ljharb>
+ * because i have a package that installs it, i added it as a transitive dep of eslint-plugin-react, and it doubled linting time. when i commented out that installation, the speed was restored (note this was even when all usage of es-iterator-helpers was commented out - meaning that merely requiring iterator.prototype which mutates the object triggers the deopt)
+
+[13:12:22.0058] <ljharb>
+filed https://bugs.chromium.org/p/chromium/issues/detail?id=1477372, thanks
+
+[13:48:53.0631] <shu>
+ljharb: can you expand on "iterate stuff"?
+
+[13:49:00.0874] <shu>
+like, with a small program if possible?
+
+[13:49:18.0910] <ljharb>
+unfortunately i don't know exactly what triggers it since i can't repro locally
+
+[13:49:30.0450] <ljharb>
+but eslint-plugin-react `Array.from`'s a bunch of Maps and Sets, in particular
+
+[13:49:47.0814] <shu>
+if we can't repro locally we won't be able to do anything either
+
+[13:49:50.0918] <ljharb>
+fair
+
+[13:49:56.0518] <ljharb>
+i can try to come up with something
+
+[13:50:00.0571] <shu>
+thanks
+
+[13:50:19.0716] <ljharb>
+my guess is that if i, like, time 1000 Array.from's of a Map, before and after the mutation, it'll be vastly different. i'll post on the issue once i find something like that
+

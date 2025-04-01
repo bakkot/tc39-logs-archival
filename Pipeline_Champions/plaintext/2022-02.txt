@@ -1,0 +1,442 @@
+2022-02-04
+[11:35:35.0120] <TabAtkins>
+It feels like it would be appropriate to do a presentation at the March meeting to get the committee's temperature again, and finally resolve the topic token issue, in anticipation of asking for Stage 3 at probably the following meeting after that. Does this sound good to everyone, or do we still have concerns?
+
+[14:21:15.0452] <Justin Ridgewell>
+Were the adhoc meeting notes published?
+
+[14:34:13.0943] <pokute>
+> <@jridgewell:matrix.org> Were the adhoc meeting notes published?
+
+I recall that they were planned to be released when the plenary meeting notes are published.
+
+
+2022-02-05
+[16:52:20.0446] <jschoi>
+> <@jridgewell:matrix.org> Were the adhoc meeting notes published?
+
+I have not published them yet. I was planning to do them soon, before plenary, but I wasn’t sure whether someone else wanted to wait until plenary notes got published.
+
+
+2022-02-07
+[09:15:47.0315] <jschoi>
+https://github.com/tc39/incubator-agendas/pull/23
+
+
+2022-02-09
+[06:38:33.0389] <jschoi>
+A Babel contributor has opened a pull request for adding an optional pipe operator spelled as `?>` to Babel. https://github.com/babel/babel/pull/14255 
+
+[06:50:48.0065] <Ashley Claymore>
+only a little shame we can't do this:`if (val ?> true) { ... `,  need to `if (val != null)` but some projects force always strict equality checks so then have to do `if ((val ?? null) !== null)`
+
+
+2022-02-10
+[03:09:07.0236] <nicolo-ribaudo>
+> <@jschoi:matrix.org> A Babel contributor has opened a pull request for adding an optional pipe operator spelled as `?>` to Babel. https://github.com/babel/babel/pull/14255 
+
+Note that we won't accept it until it's at least stage 1
+
+[10:50:32.0082] <TabAtkins>
+I'm on record as thinking an optional pipe would be worthwhile; pipe fills the same syntax role as method chaining and `.?()` is useful.
+
+[10:53:57.0413] <TabAtkins>
+(But I'm more than happy to keep it on the back burner as a follow-on proposal.)
+
+
+2022-02-11
+[07:54:38.0870] <jschoi>
+ljharb: Regarding https://github.com/tc39/proposal-pipeline-operator/issues/262#issuecomment-1036323490, `source |> a + (# |> b + #)` is valid. It is the same as `source |> a + (b + #)` and `a + (b + source)`.
+
+However, `source |> (a + # |> b) + #` is invalid, because `|> b` does not contain any topic reference.
+
+[07:55:18.0880] <jschoi>
+Also, `source |> a => # + a |> output(#)` is invalid because arrow functions (and all other non-pipe AssignmentExpressions) must be parenthesized in pipe bodies to prevent confusing grouping.
+
+[08:02:26.0654] <ljharb>
+Thanks, the rules are straightforward but that doesn’t mean contrived examples are intuitive :-)
+
+[10:46:06.0983] <jschoi>
+We have banned `a |> # ? c : d` and require parentheses: `(a |> #) ? c : d` or `a |> (# ? c : d)`.
+
+I think we should also ban `a ? b : c |> #` and require parentheses: `(a ? b : c) |> #` or `a ? b : (c |> #)`. This would add an early error to ConditionalExpression. I plan to add this to the spec later if nobody else has objections.
+
+[10:55:42.0176] <TabAtkins>
+yes
+
+[11:14:29.0021] <jschoi>
+Should we require ban `a = b |> #` and require `(a = b) |> #` or `a = (b |> #)`?
+
+[11:14:52.0764] <jschoi>
+Same with banning `yield a |> #` and requiring `(yield a) |> #` or `yield (a |> #)`.
+
+[11:15:06.0114] <jschoi>
+ * And should we ban `yield a |> #` and require `(yield a) |> #` or `yield (a |> #)`.
+
+[11:15:09.0464] <jschoi>
+ * Should we ban `a = b |> #` and require `(a = b) |> #` or `a = (b |> #)`?
+
+[11:15:18.0975] <jschoi>
+ * And should we ban `yield a |> #` and require `(yield a) |> #` or `yield (a |> #)`?
+
+[11:16:00.0857] <jschoi>
+And should we ban `yield a |> #` and require `(yield a) |> #` or `yield (a |> #)`?
+
+[11:17:38.0512] <jschoi>
+My inclination is no: the ternary operator is special and has special opportunity for confusion, but `=`, `=>`, and `yield` are okay to have “looser” precedence than `|>`.
+
+[11:17:52.0332] <jschoi>
+ * And should we ban `yield a |> #` and require `(yield a) |> #` or `yield (a |> #)`?
+
+[11:17:54.0246] <jschoi>
+ * And should we ban `a => b |> #` and require `(a => b) |> #` or `a => (b |> #)`?
+
+
+[11:18:21.0674] <jschoi>
+ * My inclination is no: the ternary operator is special and has special opportunity for confusion.
+(Note: We do already ban all four of these operators in pipe _bodies_: `a |> b = #`, `a |> b => #`, and `a |> yield #` are all SyntaxErrors.)
+
+[11:18:26.0929] <jschoi>
+ * My inclination is no: the ternary operator is special and has special opportunity for confusion.
+
+[11:18:27.0519] <jschoi>
+(Note: We do already ban all three of these operators in pipe _bodies_: `a |> b = #`, `a |> b => #`, and `a |> yield #` are all SyntaxErrors.)
+
+[11:18:40.0517] <jschoi>
+ * (Note: We do already ban all three of these operators in pipe _bodies_: `a |> b = #`, `a |> b => #`, and `a |> yield #` are all SyntaxErrors.)
+
+[11:19:12.0165] <jschoi>
+ * My inclination is no: the ternary operator is special and has special opportunity for confusion, but `=`, `=>`, and `yield` are okay to have “looser” precedence than `|>`.
+
+[11:28:44.0239] <TabAtkins>
+Agree on all counts; those all read reasonably to me as the head of statements (assuming that for all of them the pipe binds tighter, producing the second parenthesized example)
+
+[11:33:16.0471] <jschoi>
+Yeah.
+
+[11:33:35.0065] <jschoi>
+The precedence relationships between `yield`, `=`, `=>`, and `? :` are already a mess, due to the weird LHSes of `=` and `=>`, as well as `? :`’s being ternary.
+
+`1 ? x = 2 : 3` groups as `1 ? (x = 2) : 3` and `1 ? x => 2 : 3` groups as `1 ? (x => 2) : 3`. But `x = 1 ? 2 : 3` is `x = (1 ? 2 : 3)` and `x => 1 ? 2 : 3` is `x => (1 ? 2 : 3)`. The whole concept of “precedence” breaks down at this level…so I’m not sure how to explain where `|>` fits in in laypersons’ terms (let alone explaining how `yield`, `=`, `=>`, and `? :` in such terms).
+
+[11:33:57.0477] <jschoi>
+ * The precedence relationships between `yield`, `=`, `=>`, and `? :` are already a mess, due to the weird LHSes of `=` and `=>`, as well as `? :`’s being ternary.
+
+`1 ? x = 2 : 3` groups as `1 ? (x = 2) : 3` and `1 ? x => 2 : 3` groups as `1 ? (x => 2) : 3`. But `x = 1 ? 2 : 3` is `x = (1 ? 2 : 3)` and `x => 1 ? 2 : 3` is `x => (1 ? 2 : 3)`. The whole concept of “precedence” breaks down at this level…so I’m not sure how to explain where `|>` fits in in laypersons’ terms (let alone explaining how `yield`, `=`, `=>`, and `? :` in such terms).
+
+[13:49:18.0221] <jschoi>
+Regarding the topic token: Based on https://github.com/tc39/proposal-record-tuple/issues/10#issuecomment-1036648269, it seems like ljharb would push back against `#` and `@@`. If this is strong, it seems like `^^` is the top contender (or at least the least offensive) within the Committee.
+
+[13:57:31.0308] <jschoi>
+ * Regarding the topic token: Based on https://github.com/tc39/proposal-record-tuple/issues/10#issuecomment-1036648269, it seems like ljharb would push back against `#` and `@@`. If this is strongly felt, it seems like `^^` may be the top contender (or at least the least offensive) within the Committee.
+
+[13:57:53.0649] <jschoi>
+ * Regarding the topic token: Based on https://github.com/tc39/proposal-record-tuple/issues/10#issuecomment-1036648269, it seems like ljharb would push back against `#` and `@@`. If this is strongly felt, it seems like `^^` and `%%` may be the top contenders (or at least the least offensive) within the Committee.
+
+[14:09:53.0028] <ljharb>
+i haven't decided how strong i feel about it, but i don't think `@` is better than `#`
+
+[14:10:00.0229] <ljharb>
+ * i haven't decided how strong i feel about it, but i don't think `@` is better than `#`
+
+[14:10:12.0272] <ljharb>
+i do prefer a single token over a double one tho
+
+
+2022-02-12
+[16:03:14.0034] <TabAtkins>
+Still angling for ## too.
+
+[16:03:42.0499] <TabAtkins>
+But yeah, we should def put the question to the committee this next meeting and just stick with the results.
+
+[18:46:56.0425] <rkirsling>
+I'm not seeing `*` on https://github.com/tc39/proposal-pipeline-operator/wiki/Bikeshedding-the-Hack-topic-token/
+
+[18:48:21.0898] <rkirsling>
+but it's hard to believe that this wouldn't've been discussed -- is it precluded by something?
+
+[18:56:56.0315] <ljharb>
+multiplication and exponential ion of pipeline placeholder values seems like it’d be pretty common
+
+[19:28:46.0262] <rkirsling>
+ah right. I really dislike the idea of using it for anything other than denesting function call parens but that's indeed a problem
+
+[19:28:59.0768] <rkirsling>
+however, it's also a problem for `%`. we should add that rationale to the chart
+
+[19:29:02.0135] <rkirsling>
+ * however, it's also a problem for `%`
+
+[19:29:40.0829] <rkirsling>
+ * however, it's also a problem for `%`. we should add that rationale to the chart
+
+[19:31:04.0695] <rkirsling>
+oh I guess it's technically there for %: "Most pipe expressions would not contain the remainder operator %."
+
+[19:31:58.0048] <rkirsling>
+"how common a binary operator is in practice" feels like a deeply flimsy argument, but avoiding binop tokens is a valid stance to take
+
+[19:32:26.0969] <rkirsling>
+ * "how common a binary operator is in practice" feels like a deeply flimsy argument, but avoiding binop tokens is a valid stance to take
+
+[19:32:55.0083] <rkirsling>
+ * ah right. I really dislike the idea of using `|>` for anything other than denesting function call parens but that's indeed a problem
+
+[22:56:42.0394] <ljharb>
+ * multiplication and exponentiation of pipeline placeholder values seems like it’d be pretty common
+
+[22:57:16.0588] <ljharb>
+i think it's pretty well supported by usage; the airbnb config bans bitwise operators entirely (re `^`) and `%` is pretty rare too
+
+[10:22:05.0443] <pokute>
+> <@rkirsling:matrix.org> ah right. I really dislike the idea of using `|>` for anything other than denesting function call parens but that's indeed a problem
+
+Does this include packing into an object too: `complexExpression |> { input: #, modifier: 'foo' }`;
+
+[12:29:57.0893] <rbuckton>
+> <@pokute:matrix.org> Does this include packing into an object too: `complexExpression |> { input: #, modifier: 'foo' }`;
+
+I agree with rkirsling. I generally consider any non- function call unnesting to be a gross misuse. I'm only on board with Hack-style because it handles `await`/`yield` better than F#-style. Using it for other operations feels like it will obfuscate the meaning of your code more than it will help. 
+
+[12:35:44.0113] <rbuckton>
+Chaining multiple function calls using a single context is fairly common practice. For something like a math operation, it's more common to name variables as often those names have meaning in various algorithms and make them easier to recognize. 
+
+[12:41:31.0181] <rbuckton>
+If I were to change the PFA placeholder to a different token, how much traction would `?` have as the topic? I've been considering swapping the placeholder to `~` to match the proposed `f~()` syntax.
+
+[12:42:56.0506] <rbuckton>
+Plus, I'm feeling less and less confident PFA will ever advance.
+
+[13:11:23.0701] <pokute>
+I guess it depends on what one considers functions then. I could consider anything that takes input and return output to be function of sorts (side effects are a different matter though). Formal JS functions are a convenient, and often the only feasible way to encapsulate such data transformation operations in a way that they can be called again and modified etc. The expression side of `1 |> # + 2` does not implement anything that's included in Function.prototype so it's not a `Function`, but is could be seen as a broader-sense function.
+
+[13:12:51.0529] <pokute>
+> <@rbuckton:matrix.org> I agree with rkirsling. I generally consider any non- function call unnesting to be a gross misuse. I'm only on board with Hack-style because it handles `await`/`yield` better than F#-style. Using it for other operations feels like it will obfuscate the meaning of your code more than it will help.
+
+ * I guess it depends on what one considers functions then. I could consider anything that takes input and return output to be function of sorts (side effects are a different matter though). Formal JS functions are a convenient, and often the only feasible way to encapsulate such data transformation operations in a way that they can be called again and modified etc. The expression side of `1 |> # + 2` does not implement anything that's included in Function.prototype so it's not a `Function`, but is could be seen as a broader-sense function.
+
+[13:28:22.0671] <pokute>
+> <@rbuckton:matrix.org> Plus, I'm feeling less and less confident PFA will ever advance.
+
+Don't mind too much about that. It might be that the problem space that PFAs help  solve are a bit too ambiguous currently and other dataflow proposals getting into standard / getting stalled can help find its niche. I can see you've done a great job with the proposal and I'm really grateful for you championing PFA. Even if PFA doesn't advance, having it in the history where it was honestly evaluated is a good signal.
+
+[13:28:45.0687] <pokute>
+ * I guess it depends on what one considers functions then. I could consider anything that (optionally) takes input and return output to be function of sorts (side effects are a different matter though). Formal JS functions are a convenient, and often the only feasible way to encapsulate such data transformation operations in a way that they can be called again and modified etc. The expression side of `1 |> # + 2` does not implement anything that's included in Function.prototype so it's not a `Function`, but is could be seen as a broader-sense function.
+
+[13:29:08.0491] <pokute>
+ * I guess it depends on what one considers functions then. I could consider anything that (optionally) takes input and returns output to be function of sorts (side effects are a different matter though). Formal JS functions are a convenient, and often the only feasible way to encapsulate such data transformation operations in a way that they can be called again and modified etc. The expression side of `1 |> # + 2` does not implement anything that's included in Function.prototype so it's not a `Function`, but is could be seen as a broader-sense function.
+
+[13:47:30.0669] <pokute>
+> <@rbuckton:matrix.org> Plus, I'm feeling less and less confident PFA will ever advance.
+
+ * Don't mind too much about that. It might be that the problem space that PFAs help solve are a bit too ambiguous currently and other dataflow proposals getting into standard / getting stalled can help find its niche. I can see you've done a great job with the proposal and I'm really grateful for you championing PFA. Even if PFA doesn't advance, having it in the history where it was honestly evaluated is a good signal.
+
+[13:53:14.0094] <pokute>
+ * Don't mind too much about that and focus on having PFA advance. I really liked the introduction of `f~()` syntax after getting stuck and it was an excellent move as a champion that narrowed down the opposition against the proposal. It might be that the problem space that PFAs help solve are a bit too ambiguous currently and other dataflow proposals getting into standard / getting stalled can help find its niche. I can see you've done a great job with the proposal and I'm really grateful for you championing PFA. Even if PFA doesn't advance, having it in the history where it was honestly evaluated is a good signal.
+
+[13:58:27.0254] <pokute>
+I don't think the discussion of the current JS dataflow would be up to this point without the sincere effort put into PFA as one alternative part of the solution.
+
+
+2022-02-13
+[16:01:29.0363] <jschoi>
+> <@rbuckton:matrix.org> If I were to change the PFA placeholder to a different token, how much traction would `?` have as the topic? I've been considering swapping the placeholder to `~` to match the proposed `f~()` syntax.
+
+We have considered `?` in the past, and perhaps we should consider it again. Although a reason why we discarded it was because of visual confusion with binary `??`, optional chaining `?.`, and ternary `? :`—these three forms probably would not occur very often inside pipe bodies. For example, `x |> f(?, 0)`. And perhaps we could be okay with requiring parentheses where tokenization would be ambiguous (e.g., `x |> (?).?x`).
+
+[16:03:51.0300] <jschoi>
+With regards to using pipes for unnesting anything other than function calls, I would say that there is a gray zone between “function calls only” and “function calls with other syntax forms”. For example, it is quite common to use an array to supply a single value to a function that expects an iterable, e.g., `f([g(x)])`.
+
+[16:05:47.0111] <jschoi>
+If you wouldn’t object to it, Ron (and others), I would like to add `?` back to the list for consideration. I’ve come around to it again, especially after `#`’s recently dimming prospects. 
+
+[16:09:50.0082] <jschoi>
+(See also https://github.com/tc39/proposal-hack-pipes/issues/2.)
+
+[16:10:42.0308] <jschoi>
+* > <@rbuckton:matrix.org> If I were to change the PFA placeholder to a different token, how much traction would `?` have as the topic? I've been considering swapping the placeholder to `~` to match the proposed `f~()` syntax.
+
+We have considered `?` in the past, and perhaps we should consider it again. Although a reason why we discarded it was because of visual confusion with binary `??`, optional chaining `?.`, and ternary `? :`—these three forms probably would not occur very often inside pipe bodies. For example, `x |> f(?, 0)`. And perhaps we could be okay with requiring parentheses where tokenization would be ambiguous (e.g., `x |> (?).y` may be okay…since they should be writing `x.y` anyway).
+
+[16:13:33.0587] <jschoi>
+* With regards to using pipes for unnesting anything other than function calls, I would say that there is a gray zone between “function calls only” and “function calls with other syntax forms”. For example, it is quite common to use an array to supply a single value to a function that expects an iterable, e.g., `f([g(x)])`. `x |> f(#) |> g([#])` would arguably fall under this gray zone.
+
+[16:14:53.0319] <jschoi>
+* (See also https://github.com/tc39/proposal-hack-pipes/issues/2 for previous discussion. What I didn’t realize back then is that `?` is a tokenization problem only with `.`, and `x |> (?).y |> f(?)` should nearly always be `x.y |> f(?)` anyway.)
+
+[16:36:47.0407] <ljharb>
+I think ? has a much higher risk of conceptual conflict; i think ternary and optionality and nullish coalescing will occur *quite* frequently in a pipeline step.
+
+[17:57:49.0154] <jschoi>
+At the very least, ternary conditionals and nullishness coalescing usually separate operands with spaces (`? ? x : y` and `? ?? x` rather than `(?)?x:y` and `(?)??x`). But, yes, if they are expected to be common, then `?` is quite suboptimal. 😔
+
+
+2022-02-14
+[10:24:39.0140] <TabAtkins>
+I'll note that we have objections on board to choices that use a binop, even a rare one, because it means we have to have a special parsing environment (a la regex literals) and that's complicated.
+
+[10:26:22.0152] <TabAtkins>
+I'm against `?` because there are too many usages of it already, and unlike PFA it's not in a special distinguishable location on its own. If you thought the memes about `^^^` becoming valid were bad, wait until `?.?a???` is a valid expression.
+
+[10:26:32.0933] <TabAtkins>
+oh wait i can make that better
+
+[10:26:39.0239] <TabAtkins>
+`?.?(?)???`
+
+[10:26:51.0101] <TabAtkins>
+wait wait wait
+
+[10:27:02.0165] <TabAtkins>
+`???.?(?)???:?`
+
+[10:28:16.0024] <TabAtkins>
+I think that's the best I can do without getting repetitious. I suppose I can throw in a `[?]` somewhere
+
+[10:29:13.0597] <TabAtkins>
+`???.?(?)???[?]:?`
+
+[10:31:39.0284] <TabAtkins>
+(should parse as `t ? (t.?(t) ?? t[t]) : t`)
+
+[10:50:17.0873] <jschoi>
+> <@tabatkins:matrix.org> I'm against `?` because there are too many usages of it already, and unlike PFA it's not in a special distinguishable location on its own. If you thought the memes about `^^^` becoming valid were bad, wait until `?.?a???` is a valid expression.
+
+Point taken. 
+
+[10:54:43.0082] <jschoi>
+`^^` remains my second top choice. I remain strongly averse to `##` if tuple literals go with `#[]`.
+
+[10:56:19.0469] <TabAtkins>
+it's cool, we'll just leave it to arena combat
+
+[10:56:43.0865] <TabAtkins>
+or perhaps more realistically, do a straw poll of the remaining reasonable options at the next meeting and just go with whatever the winner is.
+
+
+2022-02-15
+[21:41:28.0141] <rkirsling>
+clearly we just need to sink decorators once and for all and reclaim @ 😉
+
+[21:49:51.0129] <rkirsling>
+but if not, I'd suggest `#_`; if we can't use # or @ alone then we're clearly dead in the water on single-character solutions, but the ideal solution if we were starting from scratch would obviously be `_`. so if we've been tending to use # as a sigil for stuff lately then it seems reasonable to sigilize `_`. presumably this doesn't cause any problems since `#_` would only be currently valid as an `in` LHS
+
+[21:50:22.0427] <rkirsling>
+ * but since that's sadly not going to happen, I'd suggest `#_`; if we can't use # or @ alone then we're clearly dead in the water on single-character solutions, but the ideal solution if we were starting from scratch would obviously be `_`. so if we've been tending to use # as a sigil for stuff lately then it seems reasonable to sigilize `_`. presumably this doesn't cause any problems since `#_` would only be currently valid as an `in` LHS
+
+[08:02:00.0529] <jschoi>
+Are there plans to ever allow unqualified private fields, like `1 + #x`?
+
+[10:00:16.0602] <Ashley Claymore>
+> <@jschoi:matrix.org> Are there plans to ever allow unqualified private fields, like `1 + #x`?
+
+I believe not as that would make '`#x in v`' ambiguous.
+
+[10:00:42.0855] <Ashley Claymore>
+* > <@jschoi:matrix.org> Are there plans to ever allow unqualified private fields, like `1 + #x`?
+
+I believe not as that would make '`#x in v`' ambiguous.
+
+[11:44:05.0970] <ljharb>
+That was explicitly decided to never be an option as part of private-in
+
+[11:44:47.0885] <ljharb>
+but also, nonzero people would have prevented that from happening anyways, because not all field access is on the receiver.
+
+[13:44:07.0753] <jschoi>
+Being reminded that private fields are always qualified—and that `#_` is an option—has made me somewhat less averse to `##`, funnily enough. As long as we’re making `#` into a ‘syntax dispatch’ token, maybe `##` or `#_` wouldn’t be too bad even when mixed with tuples/records…but `##` at least is still “heavier” and “noisier” than `^^`.
+
+[13:45:37.0850] <jschoi>
+`… |> f(#[##])` / `… |> f(#[#_])` / `… |> f(#[^^])` is going to be real, and it’s going to be common. 
+
+[13:45:48.0621] <jschoi>
+* `|> f(#[##])` / `|> f(#[#_])` / `|> f(#[^^])` is going to be real, and it’s going to be common. 
+
+[13:46:23.0096] <jschoi>
+* Being reminded that private fields are always qualified—and that `#_` is an option—has made me somewhat less averse to `##`, funnily enough. As long as we’re making `#` into a ‘syntax dispatch’ token, maybe `##` or `#_` wouldn’t be too bad even when mixed with tuples/records…but `##` at least is still “heavier” and “noisier” than `^^`.
+
+[13:47:18.0813] <jschoi>
+* `… |> f(#[##])` / `… |> f(#[#_])` / `… |> f(#[^^])` is going to be real, and it’s going to be common. 
+
+[13:58:42.0198] <ljharb>
+jschoi: `x |> #y in #` isn't all too bad, to be sure (with `#` or `##`)
+
+[13:58:56.0344] <ljharb>
+ * jschoi: `x |> #y in #` isn't all too bad, to be sure (with `#` or `##`)
+
+[14:12:52.0118] <TabAtkins>
+Worst-case syntax confusion so far would be `#[##.#x]`
+
+[14:13:14.0093] <TabAtkins>
+which imo is sufficiently okay? There's always non-`#` tokens between the `#` that help break up the visual flow.
+
+[14:13:48.0336] <TabAtkins>
+(The only reason I'd object lightly to `#_` is they're on opposite hands and both Shifted, so I've gotta do a little dance when typing it.)
+
+[14:34:06.0507] <jschoi>
+> <@tabatkins:matrix.org> Worst-case syntax confusion so far would be `#[##.#x]`
+
+Yeah. Though my concern isn’t syntax confusion so much as visual noise and human cognitive burden during code reading and glyph recognition.
+
+[14:34:50.0653] <jschoi>
+> <@ljharb:matrix.org> jschoi: `x |> #y in #` isn't all too bad, to be sure (with `#` or `##`)
+
+With regards to `#` topics, I wish `#` topics were possible, but `#` topics are not possible if `#[]` syntax is used for tuple literals. (That’s why I had been asking about `@[]` tuple literals, but it seems like Committee opinions may be cool towards that.)
+
+[14:35:06.0353] <ljharb>
+ah, true enough
+
+[14:36:24.0606] <jschoi>
+* > <@tabatkins:matrix.org> Worst-case syntax confusion so far would be `#[##.#x]`
+
+Yeah. Though my concern isn’t syntax confusion so much as visual noise, glyph-recognition speed, and cognitive burden during rapid code scanning by human eyes.
+
+[14:38:51.0870] <jschoi>
+* > <@tabatkins:matrix.org> Worst-case syntax confusion so far would be `#[##.#x]`
+
+Yeah. Though my concern isn’t syntax confusion so much as visual noise, glyph-recognition speed, and cognitive burden during rapid code scanning by human eyes. Although it is true that it is slightly broken up by `[` and `.`…they’re all going to blur together while you’re scanning through a big module.
+
+[14:39:09.0487] <jschoi>
+* > <@tabatkins:matrix.org> Worst-case syntax confusion so far would be `#[##.#x]`
+
+Yeah. Though my concern isn’t syntax confusion so much as visual noise, glyph-recognition speed, and cognitive burden during rapid code scanning by human eyes. Although it is true that the `#`s are slightly broken up by `[` and `.`…they’re all going to blur together while you’re scanning through a big module.
+
+
+2022-02-16
+[08:23:15.0499] <jschoi>
+nicolo-ribaudo published https://github.com/babel/babel/pull/14278. It tries to inline topic references by replacing them with their LHSes when they’re pure. Very cool!
+
+[08:24:10.0017] <jschoi>
+I hadn’t known that a `path.isPure` method was already implemented in Babel…
+
+[08:26:56.0277] <nicolo-ribaudo>
+We already use it to optimize in multiple places!
+
+[08:28:38.0473] <nicolo-ribaudo>
+The next step will be to introduce an "assume that imported bindings are constant" option, since it's what will help in most cases. Otherwise this code still needs tmp vars:
+```
+import { map, filter } from "array";
+val
+  |> map(#, x => x + 2)
+  |> filter(#, x => x > 3)
+```
+
+[08:29:00.0907] <nicolo-ribaudo>
+because a call to `map` might change what `filter` is
+
+[08:29:12.0823] <nicolo-ribaudo>
+ * because a call to `map` might change what `filter` is
+
+[08:30:17.0076] <pokute>
+I'm interested in which of these assumptions would apply for TypeScript downlevel transformations too.
+
+[08:35:26.0759] <pokute>
+I wonder if TS has such purity checks too. I guess optimizing even literals would be helpful...
+
+[08:35:35.0896] <pokute>
+ * I wonder if TS has such purity checks too. I guess optimizing even literals would be helpful...
+
+[14:34:49.0058] <TabAtkins>
+Ah the purity constraint is because of the swapped order of evaluation, interesting
+

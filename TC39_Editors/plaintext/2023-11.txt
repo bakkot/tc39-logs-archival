@@ -1,0 +1,237 @@
+2023-11-08
+[06:00:42.0905] <jmdyck>
+Let me see if I've got this straight...
+
+[06:01:30.0673] <jmdyck>
+Symbols can be put into 3 categories:
+
+[06:01:39.0294] <jmdyck>
+- Well-known symbols
+
+[06:03:29.0800] <jmdyck>
+- Symbols created by the Symbol constructor
+
+[06:03:51.0419] <jmdyck>
+- Symbols created by Symbol.for
+
+[06:13:14.0866] <jmdyck>
+Symbols created by the Symbol constructor have language identity, the others don't. So Symbols created by Symbol() are suitable for use as a weak reference, and the others aren't, *except* that well-known symbols are.
+
+[06:16:33.0948] <jmdyck>
+So in the one place that the spec uses the concept of 'language identity' (in the Note for CanBeHeldWeakly), it isn't even exactly the necessary concept.
+
+[07:00:31.0994] <jmdyck>
+(Actually, the 'Identity' section implies that well-known symbols *have* language identity, but I don't see how that could be. E.g., you can manifest @@match just by saying `Symbol.match`.)
+
+[11:42:08.0770] <jmdyck>
+so.... any thoughts on whether well-known symbols have language identity?
+
+[11:46:19.0540] <shu>
+they do
+
+[11:46:38.0171] <shu>
+kinda by fiat, i guess
+
+[11:46:45.0500] <shu>
+let me see if i can dig up any discussion
+
+[11:48:58.0985] <shu>
+i cannot dig up discussion
+
+[11:49:52.0872] <jmdyck>
+So how to reconcile that with the ability to manifest them without prior reference?
+
+[11:50:36.0008] <shu>
+i can only offer the practical GC difference, which is that well-known symbols are eternal roots and there is a bounded set of them. it doesn't matter much whether we say they have or have not language identity, there is no danger in holding them weakly because they will never be collected
+
+[11:51:10.0659] <shu>
+it was decided it was easier to think of them as having identity, since that's the line we wanted to draw for CanBeHeldWeakly, and identity was the best-matched concept to explain the line to draw
+
+[11:51:31.0329] <shu>
+Symbol.for symbols are unbounded and users can generate new ones (the "manifesting")
+
+[11:51:39.0299] <shu>
+i don't think of "manifesting" as simply referencing
+
+[11:51:47.0202] <shu>
+i don't "manifest" the built-in Object by typing `Object`
+
+[11:52:34.0182] <jmdyck>
+Hm, spec doesn't define "manifest".
+
+[11:52:47.0825] <shu>
+indeed it does not
+
+[11:52:55.0139] <shu>
+i don't think we have it in us to define manifest either
+
+[11:53:08.0868] <shu>
+but it's something like "causing things to be created that wasn't already there"
+
+[11:53:29.0147] <shu>
+but that is like, a concrete way to think about it, not a spec way to think about it
+
+[11:53:53.0427] <shu>
+the spec does not preclude a world where, for example, the set of all floating point Number values are already there, just floating around
+
+[11:54:03.0963] <jmdyck>
+and that idea doesn't work with "Values without identity may be manifest ..."
+
+[11:54:04.0769] <shu>
+and each time you need one you just "reference" it instead of "manifest" it
+
+[11:54:20.0040] <shu>
+> and that idea doesn't work with "Values without identity may be manifest ..."
+
+how so?
+
+[11:55:44.0310] <jmdyck>
+Well, like in your example, `3.2` doesn't cause a Number value to be 'created'.
+
+[11:56:04.0300] <shu>
+the point is that concretely, in the real world where JS is implemented, it does
+
+[11:56:19.0742] <shu>
+the parallel is stronger with strongs
+
+[11:56:30.0041] <shu>
+it is not possible, in a real implementation, to pre-create the infinite set of all possible string values
+
+[11:56:43.0602] <shu>
+the spec does not preclude such an implementation, though
+
+[11:56:56.0273] <shu>
+ * the parallel is stronger with strings
+
+[11:57:30.0756] <jmdyck>
+agree that "causing things to be created that wasn't already there" is an implementation way of thinking about "manifest".
+
+[11:57:38.0272] <shu>
+(it is actually possible, if pointless, to do it for all 64bit floating point values at least)
+
+[11:58:02.0543] <shu>
+but we work backwards -- we're not interested in defining an ontology per se
+
+[11:58:26.0330] <shu>
+we're interested in capturing some way, in the spec, to explain why Symbol.for symbols can't be weak keys
+
+[11:59:10.0056] <jmdyck>
+right, but it seems to me that bringing in the idea of "language identity" is maybe counter-productive
+
+[11:59:26.0391] <shu>
+suggestions welcome, the last time we tried it it was... hard and contentious
+
+[11:59:33.0336] <jmdyck>
+hm
+
+[11:59:35.0644] <shu>
+kevin and i felt "identity" was the right concept, and i continue to feel that way
+
+[11:59:45.0294] <shu>
+most programmers have some intuitive notion of "identity" that mostly matches up
+
+[12:00:51.0617] <jmdyck>
+So you would say that "language identity" perfectly matches the semantics of CanBeHeldWeakly?
+
+[12:01:18.0212] <shu>
+i would, yes
+
+[12:01:51.0723] <jmdyck>
+ok
+
+[12:21:51.0649] <bakkot>
+(although we chose "CanBeHeldWeakly" instead of my [or someone's anyway] original "HasIdentity" specifically to avoid needing that to be true)
+
+[12:23:05.0451] <jmdyck>
+I think I'd have difficulty justifying the statement "Symbols produced by Symbol.for do not have language identity" using only what the spec says about identity. (I note that the spec doesn't try to justify it.)
+
+[12:23:35.0463] <bakkot>
+Symbol.for symbols are very much an edge case, basically _the_ edge case
+
+[12:24:05.0177] <jmdyck>
+yup
+
+[12:24:06.0656] <bakkot>
+it depends on whether you think of Symbol.for as being a registry which holds the symbols it has produced, or being a factory which produces indistinguishable values when given the same input
+
+[12:24:13.0753] <bakkot>
+both are compatible with the observable behavior
+
+[12:24:34.0682] <bakkot>
+engines I think tend to take the latter perspective, which means they do not have identity because you can manifest the values without having had a handle to them
+
+[12:26:01.0358] <jmdyck>
+The spec certainly encourages thinking of the registry.
+
+[12:26:48.0738] <bakkot>
+yeah.
+
+[12:28:12.0132] <bakkot>
+might be worth adding a sentence to the description of Symbol.for mentioning the alternative perspective, I think
+
+[12:38:42.0826] <jmdyck>
+https://github.com/tc39/ecma262/pull/3217 has some suggestions, but doesn't do anything radical like do away with the concept of language identity.
+
+[12:39:20.0752] <jmdyck>
+or attempt to justify "Symbol.for Symbols don't have lang identity"
+
+[13:53:45.0096] <shu>
+FYI i can only stay for 30 minutes today
+
+
+2023-11-15
+[14:07:36.0519] <bakkot>
+I'm gonna have to miss today's meeting, sorry for late notice
+
+[14:07:43.0887] <bakkot>
+there's a question in the delegates channel we should address
+
+[14:08:18.0181] <bakkot>
+also shu the test262 tests for Set.prototype.union have landed; I'll add tests for the other cases shortly
+
+[14:38:27.0430] <Michael Ficarra>
+shu: you coming?
+
+[15:35:49.0893] <Michael Ficarra>
+shu: since the request is now just for numbers/samples of customers for when Chrome tries to ship again, maybe you should be the one that asks for more data in https://github.com/tc39/proposal-iterator-helpers/issues/286
+
+[15:36:00.0093] <Michael Ficarra>
+I don't wanna request something on Chrome's behalf
+
+[15:36:13.0530] <shu>
+sure
+
+
+2023-11-16
+[13:47:58.0656] <bakkot>
+We should also take a look at Allen's docs for printable ecma262
+
+[13:48:25.0639] <bakkot>
+I think it's doable without much work on our part, just some CSS tweaks, as long as we don't mind too much about tables crossing page boundaries and that sort of thing
+
+[14:43:02.0951] <Michael Ficarra>
+agreed, it's on my list but I'm too busy to get to it until after this upcoming meeting
+
+
+2023-11-17
+[19:41:39.0824] <ljharb>
+2 "for stage 4" things on the agenda now; promise.withresolvers and array grouping
+
+[20:28:06.0259] <shu>
+with resolvers easiest review
+
+[12:47:31.0052] <Chris de Almeida>
+hey folks -- who will be handing the editors' report at plenary and how much time do you need?
+
+[12:58:10.0520] <Michael Ficarra>
+we don't make the editors' report until the Wednesday before the meeting
+
+[12:58:21.0925] <Michael Ficarra>
+the usual answer is Kevin and 10-15min though
+
+[13:02:24.0256] <Chris de Almeida>
+that's fine, just getting ahead of it as US folks will be coming out of a 4-day weekend into plenary.  I'll pencil in KG and 15m, just let me know if that changes. thanks
+
+[13:04:23.0541] <Michael Ficarra>
+will do
+

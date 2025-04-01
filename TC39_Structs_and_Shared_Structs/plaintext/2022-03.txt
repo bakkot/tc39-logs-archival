@@ -1,0 +1,181 @@
+2022-03-10
+[15:50:44.0290] <shu>
+interesting limitation i just ran into during implementation of the shared struct prototype: on shared structs, `Atomics` operations that need to inspect the value for its operation cannot work for values that don't have identity
+
+[15:51:11.0025] <shu>
+for example, suppose there's a shared struct `s` with a field `p` that has the value `42`
+
+[15:51:52.0033] <shu>
+`Atomics.load(s, 'p')`, `Atomics.store(s, 'p', whatever)`, `Atomics.exchange(s, 'p', whatever)` all work fine since they just treat the field as bits, there's no inspection of the contents
+
+[15:52:21.0246] <shu>
+`Atomics.compareExchange(s, 'p', 42, whatever)` or `Atomics.add(s, 'p')`, by contrast, can't be made to work on all implementations
+
+[15:54:24.0752] <shu>
+if an implementation chooses to box its values like V8, then '42' is not the integer 42, but a heap allocation. the implementation complexity for making those Atomics operations work is quite high, will be slow, and also defeats the purpose (lightweight synchronization). for heavier weight synchronization, use plain reads/writes and operations then synchronize separately on a mutex
+
+[15:55:46.0718] <shu>
+if an implementation NaN-boxes, like JSC and SpiderMonkey, maybe treating double bit patterns as arbitrary atomic64s might work for a subset of operations like compareExchange, but can't be made to work for arithmetic operations
+
+[15:55:54.0224] <shu>
+since there are no hardware instructions for atomic floating point math
+
+[15:57:55.0345] <shu>
+OTOH if we extend structs with field types, then Atomics could work on certain field types (like the existing TA types)
+
+
+2022-03-11
+[16:03:20.0604] <shu>
+so the upshot here is, i think: without field types, the kind of lock-free programming with shared structs will be pretty limited
+
+[16:03:35.0146] <shu>
+and that's probably fine, because you shouldn't be doing lock-free programming most of the time?
+
+[19:18:05.0293] <rbuckton>
+One of the uses for `compareExchange` is to implement lock-free updates (i.e., atomically compare and update, returning a value so you can see if you succeeded). Requiring locks to use `compareExchange` kind of defeats the purpose. 
+
+[10:45:55.0484] <asumu>
+That's interesting, so then `compareExchange`, `add`, `sub`, etc. will just error on a shared struct until types are added? The issue with the boxed case is that doing the loads atomically to read the actual value has high cost?
+
+[10:51:53.0056] <asumu>
+BTW, on another topic there's been some development on the Wasm GC side. The idea for now is to have a minimal JS API for the MVP proposal, that won't allow attaching a prototype or reading the fields off of a GC struct from JS (more precisely, you would need to call a Wasm function to do that). Then a richer JS API would be in a separate follow-up proposal. I think that's still compatible with JS structs, in that the connection to structs could come in the follow-up proposal (there is no need for GC structs to be reflected as JS structs if the fields are not readable from JS directly as properties).
+
+But I'd like to make sure the minimal JS API won't preclude using structs in the future, by keeping the reflected Wasm GC struct as a frozen object (with no own properties) and a null, immutable prototype. Eventually the follow-up proposal could make those reflect as structs. Does that sound like it would work for future compatibility with structs?
+
+[10:52:22.0191] <asumu>
+ * BTW, on another topic there's been some development on the Wasm GC side. The idea for now is to have a minimal JS API for the MVP proposal, that won't allow attaching a prototype or reading the fields off of a GC struct from JS (more precisely, you would need to call a Wasm function to do that). Then a richer JS API would be in a separate follow-up proposal. I think that's still compatible with JS structs, in that the connection to structs could come in the follow-up proposal (there is no need for GC structs to be reflected as JS structs if the fields are not readable from JS directly).
+
+But I'd like to make sure the minimal JS API won't preclude using structs in the future, by keeping the reflected Wasm GC struct as a frozen object (with no own properties) and a null, immutable prototype. Eventually the follow-up proposal could make those reflect as structs. Does that sound like it would work for future compatibility with structs?
+
+[10:52:43.0631] <asumu>
+ * BTW, on another topic there's been some development on the Wasm GC side. The idea for now is to have a minimal JS API for the MVP proposal, that won't allow attaching a prototype or reading the fields off of a GC struct from JS (more precisely, you would need to call a Wasm function to do that). Then a richer JS API would be in a separate follow-up proposal. I think that's still compatible with JS structs, in that the connection to structs could come in the follow-up proposal (there is no need for GC structs to be reflected as JS structs if the fields are not readable from JS directly as properties).
+
+But I'd like to make sure the minimal JS API won't preclude using structs in the future, by keeping the reflected Wasm GC struct as a frozen object (with no own properties) and a null, immutable prototype. Eventually the follow-up proposal could make those reflect as structs. Does that sound like it would work for future compatibility with structs?
+
+
+2022-03-15
+[11:12:08.0839] <shu>
+> <@rbuckton:matrix.org> One of the uses for `compareExchange` is to implement lock-free updates (i.e., atomically compare and update, returning a value so you can see if you succeeded). Requiring locks to use `compareExchange` kind of defeats the purpose.
+
+agreed
+
+[11:12:40.0688] <shu>
+> <@atakikawa:igalia.com> That's interesting, so then `compareExchange`, `add`, `sub`, etc. will just error on a shared struct until types are added? The issue with the boxed case is that doing the loads atomically to read the actual value has high cost?
+
+no, the issue is that there are no CPU instructions to do this in a way without locking it with an actual mutex, which as Ron said above, kinda defeats the purpose
+
+[11:13:01.0912] <shu>
+`add` and `sub` will just error without field types, yes
+
+[11:13:26.0105] <shu>
+`compareExchange` would work _only_ for things with identity, like objects
+
+[11:13:35.0362] <shu>
+i don't know how to make `compareExchange` work for e.g. numbers
+
+[11:13:43.0672] <shu>
+ * i don't know how to make `compareExchange` work for e.g. numbers
+
+[11:14:40.0032] <shu>
+specifically for cmpxcg i think that's probably fine
+
+[11:15:17.0171] <shu>
+most cmpxchg in my experience are for lock-free updates of state, and the workaround in this case is to wrap it in an Object so you can do pointer comparison on the Object pointer
+
+[11:16:00.0943] <shu>
+it's a bit annoying if you have a fixed number of states, like what you might use a int enum for in C++, since this means you'd need to make a few constant Objects ahead of time like
+
+[11:16:07.0989] <shu>
+for example, if you were writing a mutex yourself
+
+[11:16:39.0681] <shu>
+`const LOCKED_STATE = {}; const UNLOCKED_STATE = {}; const CONTENDED_LOCKED_STATE = {};` and use those objects for the cmpxchgs
+
+[11:17:11.0607] <shu>
+it is kind of annoying but also fundamental, we don't have ints in the language outside of TAs...
+
+[11:20:41.0351] <shu>
+another way to say this restriction is: i know how to make atomics work for pointers. the only values guaranteed to be implemented with pointers in all implementations are things with identity. values without identity won't work with atomics because the implementations strategies differ, and there's no way to make the atomics work without the use of expensive mutexes in all implementations. and if you were using mutexes, you might as well use mutexes in the user code to do your synchronization, since the point of `Atomics` is fast, non-blocking, lock-free operations
+
+[11:21:50.0677] <shu>
+and if we were to extend structs with field types in the future, we _could_ make `Atomics` work on fields with integer field types, but that would also basically require that all implementations must implement those fields as unboxed
+
+[15:14:26.0837] <rbuckton>
+Though I don't think `{}` works as you describe, since a normal JS object isn't shared. 
+
+[15:24:24.0355] <rbuckton>
+So, my understanding is that in V8, numbers are boxed and stored on the heap, and those heap-allocated boxes are per isolate? 
+
+[16:27:55.0815] <shu>
+rbuckton: quite right, needed to be shared objects
+
+[16:28:35.0227] <shu>
+rbuckton: in V8, non-Smi numbers (for simplicity in this conversation assume Smis are 31-bit ints) are boxed and stored on the heap
+
+[16:29:10.0764] <shu>
+they can be allocated in a shared heap that can be shared across Isolates, but the problem is that the sensible semantics for `cmpxchg`ing a number isn't box equality but actual numeric equality
+
+[16:29:53.0796] <shu>
+and the only way to do that and use an underlying boxing implementation strategy is to have an internalization table for all shared numbers, so you can ensure there is a single canonical heap allocation for a particular number
+
+[16:30:22.0571] <shu>
+and i haven't been able to think of a way to apply that canonicalization lazily, i.e. only canonicalize the fields that you want to `cmpxchg`
+
+[16:30:47.0195] <shu>
+because to replace a non-canonical copy with a canonical copy of a boxed number is of course a separate write that might become observable to other threads
+
+[16:31:51.0487] <shu>
+but also having a "number table" like an interned string table is complex and may make number performance rather strange
+
+[16:36:54.0020] <shu>
+for other atomic operations like `add`, the boxing itself makes the operations unimplementable
+
+[16:37:46.0802] <shu>
+they'd end up being need to be implemented as "fetch original box, unbox, add, re-box, cmpxchg with original box" loops
+
+[16:37:51.0712] <shu>
+which seems undesirable?
+
+[16:38:30.0826] <shu>
+something to discuss at this week's call :)
+
+
+2022-03-16
+[17:25:07.0789] <rbuckton>
+> <@shuyuguo:matrix.org> but also having a "number table" like an interned string table is complex and may make number performance rather strange
+
+That's kind of what I was curious about. Within a shared struct, have numbers point to the canonical copy. When the field is accessed, convert the canonical number to the thread/isolate's version, and vice versa for writes/compares. Its certainly inefficient, but plausible.
+
+[17:25:42.0887] <rbuckton>
+The question I have is whether this makes type hints for fields worth considering for MVP
+
+[17:41:53.0751] <shu>
+> The question I have is whether this makes type hints for fields worth considering for MVP
+
+good question, something worth discussing this thurs
+
+[17:42:00.0072] <shu>
+ * > The question I have is whether this makes type hints for fields worth considering for MVP
+
+good question, something worth discussing this thurs
+
+[17:42:06.0632] <shu>
+my intuition is still no
+
+
+2022-03-17
+[10:01:59.0313] <asumu>
+Heyo, the structs call is now right?
+
+[10:03:15.0314] <shu>
+yep!
+
+[10:03:37.0826] <shu>
+rbuckton: ^
+
+[10:53:14.0411] <rbuckton>
+Sorry I missed this, I've been under the weather the past few days.
+
+[13:50:53.0187] <shu>
+no worries, feel better
+

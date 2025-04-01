@@ -1,0 +1,512 @@
+2024-07-01
+[16:08:30.0735] <kriskowal>
+Food for thought for folks in this room. For ModuleSource instances, XS reflected bindings with a `bindings` array and the mood in the room currently favors `import()`, `exports()`, and `reexports()` methods that return arrays of import specifiers, names, and import specifiers respectively. A virtual module source would be obliged to provide one or the other, but the XS `bindings` reflects a detail that is probably important. The evaluation of a virtual module source needs to get a namespace object that reflects the _internal_ names for all the bindings, like `import {x as y} from 'z'` would have `y` on the external namespace, and the `x` property on the internal namespace. This allows for `import {x as y} from 'a'; import {x as z} from 'b'`. This is a detail that the `imports()`, `exports()`, and `reexports()` expression of bindings can’t express.
+
+
+2024-07-02
+[17:43:17.0505] <kriskowal>
+guybedford: were you imagining that `source.imports()` return through to WebAssembly.Module.imports(source)` without mapping the {module, name, kind} treble to just name?
+
+[17:43:31.0270] <kriskowal>
+ * guybedford: were you imagining that `source.imports()` return through to `WebAssembly.Module.imports(source)` without mapping the {module, name, kind} treble to just name?
+
+[17:43:44.0093] <kriskowal>
+ * guybedford: were you imagining that `source.imports()` return through to `WebAssembly.Module.imports(source)` without mapping the `{module, name, kind}` treble to just `name`?
+
+[17:44:41.0364] <kriskowal>
+I would invite folks to join TG3 tomorrow to discuss module harmony topics. I don’t think we have an agenda.
+
+[17:44:55.0806] <kriskowal>
+ * I would invite folks to join TG3 Wed to discuss module harmony topics. I don’t think we have an agenda.
+
+[22:32:50.0805] <jakobjingleheimer>
+I already have plans for tomorrow
+
+[10:46:17.0385] <guybedford>
+Are you saying that in the case of a reexport - there is a desire to see the exact reexport binding mapping?
+
+When we originally evaluated, our concern was the fact that `import { x } from './y'; export { x }` and `export { x } from './y'` are semantically equivalent, but would reflect differently in the bindings. With the bindings scheme we have now both of the above would have the same output for the exports() and imports() analysis.
+
+[10:47:02.0443] <guybedford>
+so if we did provide a reexports scheme, then the question is should those be represented the same or differently? And if not the same, is this is a useful analysis from a semantic point of view?
+
+[10:49:32.0813] <guybedford>
+it could be interpreted that way although is an entirely new implementation
+
+
+2024-07-03
+[09:51:47.0867] <guybedford>
+This very interesting case came up in Node.js today  -https://github.com/bojavou/disambiguate-namespace
+
+[09:52:05.0771] <guybedford>
+Apparently when `export * as X from 'x'` was specified, we inadvertantly specified value deduping!!?????
+
+[09:52:34.0223] <guybedford>
+that is `export * from './a'; export * from './b'` where both `a` and `b` contain the source text `export * as X from 'x'` IS NOT AMBIGUOUS!
+
+[09:52:52.0495] <guybedford>
+might be some V8 / Firefox divergence in the implementation
+
+[09:56:22.0640] <guybedford>
+are we sure this is the correctly specified behaviour and not algorithmically incorrect?
+
+[09:57:06.0447] <guybedford>
+would be interested to hear others' takes on this
+
+[10:03:29.0980] <nicolo-ribaudo>
+I have no idea about what is the expected behaviour, but it'd be interesting to dig up the notes to see if it was every discussed
+
+[10:20:31.0092] <guybedford>
+Firefox and V8 do different things - it's an error in V8 and works in Firefox
+
+[10:20:39.0816] <guybedford>
+strictly speaking, Firefox is following the spec correctly
+
+[10:33:20.0298] <nicolo-ribaudo>
+My intuition is that the spec behaviour is correct, since those two exports are pointing to the same binding internally
+
+[10:34:02.0545] <nicolo-ribaudo>
+For most people either behaviour would be ok though, since nobody thinks about the binding of the namespace object (but only about its value)
+
+[10:35:13.0009] <nicolo-ribaudo>
+It's the same as `export { foo as X } from "X"` in both `a` and `b` is not ambiguous, because they both point to the binding `foo`. `*` is just a special binding name, the same way as `default` is
+
+[10:35:37.0453] <guybedford>
+I suppose so!
+
+[11:15:09.0141] <Jack Works>
+so for this case, `import {x} from '...'; export {x}` must be reflected as "reexport" x from '...'
+
+[11:15:33.0764] <Jack Works>
+> <@guybedford:matrix.org> This very interesting case came up in Node.js today  -https://github.com/bojavou/disambiguate-namespace
+
+otherwise this might not be reflected
+
+[14:59:05.0527] <kriskowal>
+On the topic of `bindings` vs `imports`, `exports`, and `reexports`, I observed during TG3 that a virtual module source constructor needs bindings, but doesn’t necessarily need to be able to see the bindings of another module source. To make a mock, seeing the `exports` of another module is sufficient to create the appropriate `bindings`. So, I am no longer convinced there’s an issue with coherence.
+
+[15:03:16.0115] <kriskowal>
+Consider:
+```
+const source = new ModuleSouce({
+  bindings: [
+    { import: 'x', as: 'a', from: '1.js' },
+    {import: 'x', as: 'b', from: '2.js'},
+    {export: 'default'},
+    {exportAllFrom: '3.js'},
+  ],
+  evaluate(ns) {
+    ns.default = ns.a + ns.b;
+  },
+});
+source.exports() // ['default']
+source.imports() // ['1.js', '2.js']
+source.reexports() // ['3.js']
+```
+
+[15:03:28.0488] <kriskowal>
+ * Consider:
+
+```
+const source = new ModuleSouce({
+  bindings: [
+    {import: 'x', as: 'a', from: '1.js' },
+    {import: 'x', as: 'b', from: '2.js'},
+    {export: 'default'},
+    {exportAllFrom: '3.js'},
+  ],
+  evaluate(ns) {
+    ns.default = ns.a + ns.b;
+  },
+});
+source.exports() // ['default']
+source.imports() // ['1.js', '2.js']
+source.reexports() // ['3.js']
+```
+
+[15:05:18.0238] <guybedford>
+the argument that is currently swaying it back for me is actually this ambiguous question though
+
+[15:05:35.0010] <guybedford>
+that even if we can determine the names, determining ambiguous exports requires the reexports information
+
+[15:05:57.0337] <guybedford>
+so you can make a wrapper with just knowing export star and direct exports
+
+[15:06:10.0508] <guybedford>
+but you can't detect ambiguous exports without reexports info
+
+[15:06:24.0296] <guybedford>
+I know when we previously discussed that we determined that was okay not to be able to do
+
+[15:06:35.0027] <guybedford>
+but there's certainly an argument there still I suppose
+
+[15:07:11.0451] <kriskowal>
+We may need to go deeper into concrete cases to resolve the question.
+
+[15:07:53.0019] <kriskowal>
+I have so far struggled to come up with a compelling “auto-mock” with the primitives we have.
+
+[15:09:11.0829] <kriskowal>
+But with some more specific constraints and limitations, there’s probably a reasonable, practical module adapter for something like instrumenting all exported functions.
+
+[15:10:07.0137] <kriskowal>
+It probably remains useful to think about the question in relation to virtual module sources.
+
+[15:10:32.0637] <guybedford>
+I guess the use case question is also - how useful is it to trace reexports
+
+[15:10:39.0438] <guybedford>
+and determine their original definer
+
+[15:11:39.0399] <kriskowal>
+Right. We need a motivating use case. I can imagine one, but it’s pretty imaginary: providing primitives for LSP to navigate the the definition of an imported name.
+
+[15:12:15.0511] <kriskowal>
+That’s tenuous because your LSP is going to be looking at the full source text.
+
+[15:14:33.0762] <kriskowal>
+The real and present motivating use case for module source reflection is a bundler, and for a bundler, all you need is `imports()` (assuming it includes `reexports()`). You need `exports()` only to fail-during-bundling if there’s a name collision between multiple reexports.
+
+[15:15:33.0791] <kriskowal>
+I suppose the ambiguity does come to bear, though, even in the bundling case. You would have to know that two names from disparate reexports correspond to the same value to know whether there was a conflict.
+
+[15:17:02.0525] <kriskowal>
+/me drives another nail into his export-star-from plushie
+
+[15:57:28.0566] <guybedford>
+right so previously we determined perhaps exact conflict detection isn't a necessary use case
+
+[15:57:36.0580] <guybedford>
+but if it is we can readdress that too
+
+[15:59:22.0750] <guybedford>
+I've posted https://github.com/tc39/proposal-esm-phase-imports/issues/20
+
+
+2024-07-04
+[00:32:43.0320] <nicolo-ribaudo>
+The use case for exports() is that you might want to wrap your module in another, and you need to know if there is a default to re-export or not
+
+[00:33:15.0970] <nicolo-ribaudo>
+Or you want to wrap it and wrap all its exported functions in some logging utility 
+
+[04:03:34.0086] <littledan>
+I don’t think this proposal has enough machinery to let you do those re-exports because the set of exported names has to be static.
+
+[04:04:40.0089] <littledan>
+That is what has always confused me about the presence of these methods in the proposal. And bundlers are operating at a very different “time” from the other operations on module sources.
+
+[04:06:55.0227] <Jack Works>
+for the virtualization motivation, it's important to emulate ES module semantics. although this proposal itself cannot achieve that, with a bunch of other proposals we may do that in the future. the ability to detect ambiguous star export is also needed to fully implement ES semantics 
+
+[04:17:40.0311] <littledan>
+> <@jackworks:matrix.org> for the virtualization motivation, it's important to emulate ES module semantics. although this proposal itself cannot achieve that, with a bunch of other proposals we may do that in the future. the ability to detect ambiguous star export is also needed to fully implement ES semantics 
+
+Agreed. The question in my mind was, which parts will and won’t be useful to incrementally ship, when we aren’t yet including that bunch of other proposals yet. I think we all agree on not cutting off the ability to detect ambiguous star exports in the future, right?
+
+[04:20:29.0938] <Jack Works>
+if we reflect "import {x} from y; export { x }" as imports: [x from y]; export: [x from y], like the source code was "export { x } from y", we can detect this case without make the api surface complex
+
+[07:24:30.0272] <nicolo-ribaudo>
+The set has to be static at module creation time. i.e. you could do this:
+```js
+async function wrapModuleHidingX(url) {
+  const source = await import.source(url);
+  const names = source.exportNames().filter(name => name !== "x");
+  return new ModuleSource(`
+    export { ${ names.join(",") } } from "${url}";
+  `);
+}
+```
+
+[08:49:08.0282] <nicolo-ribaudo>
+From the modules call today:
+```js
+// mod1
+export let a;
+export { a as b };
+
+// mod2
+export { a as x } from "mod1";
+
+// mod3
+export { b as x } from "mod3";
+
+// mod4
+export * from "mod2"
+export * from "mod3"
+```
+
+_If_ the use case is to detect not-actually-ambiguous ambigous re-exports, then the source of `mod1` needs a way to say that `a` and `b` internally refer to the same local binding
+
+[08:52:47.0464] <guybedford>
+from the above discussion - it is not enough to have a reexports analysis providing `{ importName, exportName }` it must provide the full list of `{ importName, exportName, localName }` for both reexported and local bindings
+
+[10:27:42.0696] <kriskowal>
+I should note, though it is a minor and possibly moot thing, if we do go with the names `imports`, `exports`, and `reexports`, it would simplify migration for `ses` if these were accessors, since they have been direct own value properties of module source objects in our system for some years.
+
+[10:29:12.0681] <guybedford>
+I think there may still be a compat concern there, since we would likely want to treat `import { x } from 'x'; export { x }` as a reexport and not an exports value
+
+[10:30:50.0445] <kriskowal>
+If the spec converges on `bindings`, we won’t have any trouble migrating.
+
+[10:31:45.0728] <kriskowal>
+If we converge on `imports()`, `exports()`, `reexports()` methods, differentiating legacy will be possible but weird.
+
+[10:35:04.0845] <guybedford>
+We were considering supporting a single `exports()` with form `{ exportName, importName, localName, module }`, where the existence of `module` implies reexports.
+
+Our discussion today was that it might make sense to update `exports()` to return an object, but still leave out this binding info for now until we have a use case. But that by returning an object we could be forwards compatible with full bindings information if needed in future.
+
+[10:44:53.0509] <kriskowal>
+In this universe, does `imports()` capture all import specifiers regardless of whether they’re in import or export statements?
+
+[10:45:24.0678] <guybedford>
+yes, but without bindings information on imports
+
+[10:45:31.0565] <kriskowal>
+And thus `imports()` and `exports()` would obviate `reexports()`?
+
+[10:46:02.0985] <guybedford>
+exports() would effectively be the union of direct and indirect exports yes
+
+[10:46:29.0301] <kriskowal>
+A nice thing about this idea in abstract is that `imports()` and `exports()` would serve fully orthogonal motivating use cases.
+
+[10:47:45.0855] <kriskowal>
+That is, `imports` is for capturing transitive dependencies and `exports` is for foretelling link errors.
+
+[10:48:09.0426] <kriskowal>
+Bundlers need the former, and bundlers would be more polite with the latter.
+
+[10:49:13.0827] <kriskowal>
+And I don’t think anyone loves `reexports`. It would not be missed.
+
+[10:50:17.0029] <guybedford>
+okay, I will update `exports()` to be the more general object form for now, but just as `{ exportName: string }[]`. Then will create another issue for tracking complete bindings analysis being added to the object for further discussion
+
+[10:54:37.0039] <kriskowal>
+Would not mind workshopping the property names.
+
+[10:55:58.0544] <kriskowal>
+e.g., `{ export, import, lexical, from }`
+
+[10:56:38.0015] <kriskowal>
+ * e.g., `{ export, import = export, lexical = export, from? }`
+
+[11:00:58.0787] <guybedford>
+would you be open to using the `Name` suffix in those?
+
+[11:01:10.0078] <guybedford>
+`{ exportName, importName, lexicalName, from? }`
+
+[11:01:47.0514] <guybedford>
+then that would align with defining `{ exportName }` as the current structure for now
+
+[11:02:06.0011] <guybedford>
+with `importName`, `lexicalName` and `from?` as the required additions for full bindings analysis
+
+[11:03:00.0491] <kriskowal>
+I don’t love the `Name` suffix aesthetically. I wouldn’t object, though.
+
+[11:26:37.0034] <guybedford>
+would you be open to renaming `lexical` to `local` in exchange for dropping the `Name` suffix!?
+
+[11:41:13.0823] <guybedford>
+I've posted https://github.com/tc39/proposal-esm-phase-imports/pull/21
+
+[14:05:14.0908] <kriskowal>
+Yes :)
+
+[14:07:07.0238] <kriskowal>
+It would follow that the bindings argument for a virtual module source would be a similar shape to the `exports()`, but would include bindings that had no corresponding `export` name.
+
+[14:09:46.0547] <kriskowal>
+Any chance wildcard exports might be consolidated into `exports`?
+
+[14:10:08.0702] <kriskowal>
+I know there’s a challenge that '*' is a bindable name distinct from wildcard exports.
+
+[14:11:12.0573] <kriskowal>
+I believe that’s why Moddable proposed `{exportAllFrom}` as a distinct binding type from `{export, as?, from}`.
+
+
+2024-07-05
+[20:11:37.0311] <Jack Works>
+> <@nicolo-ribaudo:matrix.org> From the modules call today:
+> ```js
+> // mod1
+> export let a;
+> export { a as b };
+> 
+> // mod2
+> export { a as x } from "mod1";
+> 
+> // mod3
+> export { b as x } from "mod3";
+> 
+> // mod4
+> export * from "mod2"
+> export * from "mod3"
+> ```
+> 
+> _If_ the use case is to detect not-actually-ambiguous ambigous re-exports, then the source of `mod1` needs a way to say that `a` and `b` internally refer to the same local binding
+
+then what about letting the export name (optionally) be an array? e.g. for code
+
+```js
+export let a, b
+export { a as c }
+```
+
+it reflected as `exports: [ ["a", "c"], "b" ]`
+
+[00:52:54.0433] <littledan>
+Oh, with the ModuleSource constructor, sure
+
+[10:00:17.0104] <guybedford>
+Jack Works: the same unification can be achieved by including `localName` in future
+
+[10:01:10.0481] <guybedford>
+kriskowal: I think if we were to consolidate `wildcardExports()` that would require a discriminant field at this point for the return value such as `{ exportType: 'direct' }` etc.
+
+[10:01:31.0166] <guybedford>
+whereas if we don't consolidate, we can avoid a discriminant even when supporting full bindings information
+
+
+2024-07-11
+[05:26:17.0856] <jakobjingleheimer>
+I'll be 5–10 mins late today
+
+[09:02:14.0505] <jakobjingleheimer>
+Got approval to use my fireflies account for some meetings
+
+[09:10:01.0355] <nicolo-ribaudo>
+Awesome, thanks!
+
+
+2024-07-18
+[03:07:52.0230] <nicolo-ribaudo>
+guybedford I have another question about ModuleSources across workers. Consider this example:
+
+1. you open your webpage
+2. you serve a file `console.log(1)` at `http://localhost:8080/a.js`
+3. you do `const source = await import.source("http://localhost:8080/a.js")` in the main thread
+4. you change `http://localhost:8080/a.js` to instead serve `console.log(2)`
+5. you do `await import(source)` in the main thread
+6. you spawn a worker
+7. in the worker, you do `await import("http://localhost:8080/a.js")`
+8. you postMessage `source` from the main thread to the worker
+9. in the worker, you do `await import(source)`
+
+(a) What does the main thread log?
+(b) What does the worker log?
+(c) Does moving step 7 to the end change what the worker logs?
+
+[03:45:41.0966] <Jack Works>
+my intuition is we can leave that implementation defined unless there are some editorial problems
+
+[03:47:23.0521] <littledan>
+By implementation defined, do you mean host defined, so like HTML would have a particular answer?
+
+[03:47:37.0150] <littledan>
+How do you think html should answer these?
+
+[03:50:04.0930] <Jack Works>
+what do browsers do today? we can already test if the main thread shares the module cache with workers
+
+[03:50:34.0579] <Jack Works>
+I would prefer keeping the current behavior unless there is a good reason to change it.
+
+[03:52:28.0909] <Jack Works>
+and if they don't share the module cache today, I would answer the question above like this (a) 1 (b) 2 (c) yes?
+
+[03:54:30.0712] <nicolo-ribaudo>
+Today browsers log 1 and 2 (I only tested Chrome). For (c), you mean yes because it would log 1 both times?
+
+[03:54:53.0007] <nicolo-ribaudo>
+> <@jackworks:matrix.org> my intuition is we can leave that implementation defined unless there are some editorial problems
+
+Well yes host defined, but it's still on us to propose to HTML what the behaviour should be :)
+
+[04:15:28.0595] <Jack Works>
+> <@nicolo-ribaudo:matrix.org> Today browsers log 1 and 2 (I only tested Chrome). For (c), you mean yes because it would log 1 both times?
+
+I think transfer the stale module source to the worker should fill the module cache so it only logs 1, no more network fetch, but I'm open to it
+
+[04:17:34.0093] <nicolo-ribaudo>
+I think that might be the best approach
+
+[04:17:51.0806] <nicolo-ribaudo>
+Something I dislike about the races though, is that all the static analysis on module sources in unreliable
+
+[04:18:37.0378] <nicolo-ribaudo>
+i.e. if instead of console.log those examples were `export let a = 1` and `export let b = 1`, then the result of line 9 doesn't have any `a` export but `source.exports` contains `a`
+
+[08:00:01.0786] <nicolo-ribaudo>
+I'll be a few minutes late
+
+[08:08:20.0584] <Luca Casonato>
+> Something I dislike about the races though, is that all the static analysis on module sources in unreliable
+
+But not within a single realm - it's only unreliable cross-realm / cross-agent
+
+[09:41:43.0331] <guybedford>
+We discussed this today as having four possible semantics (and please share if you can think of more):
+1. **First wins:** As Nicolo discussed in the original description, where the potentially stale source and instance content is used.
+2. **Replace:** Transfer of a module source into a new realm, acts as a registry set semantic, which replaces the module at that key in the registry and refreshes the instance slot.
+3. **New key:** Transfer of a module source, when the key has another source, causes the key itself to be updated.
+4. **Throw:** When transferring a module source, if there is already a source at its key and it does not exactly match the source transferred, throw when attempting to import the source.
+
+We had some lively discussions today, which we will pick up again next week.
+
+[09:43:02.0041] <nicolo-ribaudo>
+> <@nicolo-ribaudo:matrix.org> guybedford I have another question about ModuleSources across workers. Consider this example:
+> 
+> 1. you open your webpage
+> 2. you serve a file `console.log(1)` at `http://localhost:8080/a.js`
+> 3. you do `const source = await import.source("http://localhost:8080/a.js")` in the main thread
+> 4. you change `http://localhost:8080/a.js` to instead serve `console.log(2)`
+> 5. you do `await import(source)` in the main thread
+> 6. you spawn a worker
+> 7. in the worker, you do `await import("http://localhost:8080/a.js")`
+> 8. you postMessage `source` from the main thread to the worker
+> 9. in the worker, you do `await import(source)`
+> 
+> (a) What does the main thread log?
+> (b) What does the worker log?
+> (c) Does moving step 7 to the end change what the worker logs?
+
+Guy's message is in response to this
+
+[09:50:51.0504] <guybedford>
+ * We discussed this today as having four possible semantics (and please share if you can think of more):
+
+1. **First wins:** As Nicolo discussed in the original description, where the potentially stale source and instance content is used.
+2. **Replace:** Transfer of a module source into a new realm, acts as a registry set semantic, which if it is exactly the same module source coalesces with the existing source and instance, but otherwise replaces the module at that key in the registry and refreshes the instance slot.
+3. **New key:** Transfer of a module source, either coalesces or when the key has another source, causes the key itself to be updated.
+4. **Throw:** When transferring a module source, if there is already a source at its key and it does not exactly match the source transferred, throw when attempting to import the source.
+
+We had some lively discussions today, which we will pick up again next week.
+
+[11:43:39.0287] <guybedford>
+ * We discussed this today as having four possible semantics (and please share if you can think of more):
+
+1. **First wins:** As Nicolo discussed in the original description, where the potentially different cached source and instance content is used.
+2. **Replace:** Transfer of a module source into a new realm, acts as a registry set semantic, which if it is exactly the same module source coalesces with the existing source and instance, but otherwise replaces the module at that key in the registry and refreshes the instance slot.
+3. **New key:** Transfer of a module source, either coalesces or when the key has another source, causes the key itself to be updated.
+4. **Throw:** When transferring a module source, if there is already a source at its key and it does not exactly match the source transferred, throw when attempting to import the source.
+
+We had some lively discussions today, which we will pick up again next week.
+
+
+2024-07-25
+[13:27:19.0068] <jakobjingleheimer>
+Sorry i was not there today. My partner was hit by a semi on the highway (he's mostly okay)
+
+[13:30:21.0341] <littledan>
+wow that's terrible, I'm glad he's mostly OK
+

@@ -1,0 +1,288 @@
+2024-03-01
+[03:07:15.0119] <abelkius>
+> <@holger_benl:matrix.org> The ones in May are for all of Germany
+
+oh wow 🥲
+
+[05:55:11.0109] <jkup>
+I moved our Google Docs notes into a central repository (https://github.com/jkup/tg4). I figure we can give a TC39 GitHub admin rights to it, and they can move it into the TC39 org. I wanted to give folks a bit to check it out before I submit it to be linked in https://github.com/tc39/notes
+
+[12:03:45.0778] <ljharb>
+you can put it in github.com/tc39-transfer on your own, and then i can bounce it in
+
+[12:04:51.0658] <ljharb>
+ * jkup: you can put it in github.com/tc39-transfer on your own, and then i can bounce it in
+
+[12:05:24.0594] <jkup>
+This is a very cool idea!
+
+[12:09:27.0085] <ljharb>
+also if you lmk the github names of everyone in tg4, i'll make a team for them (DM is fine)
+
+[12:09:32.0718] <ljharb>
+ * also if you lmk the github names of everyone in tg4, i'll make a team for yall (DM is fine)
+
+
+2024-03-06
+[10:16:01.0228] <jkup>
+Justin Ridgewell (and all): As the scopes proposal (https://github.com/tc39/source-map-rfc/blob/main/proposals/scopes.md) nears spec completion, and a few consumers (Chrome DevTools, Replay.io) are working on implementations, I think it would be great for a generator to also begin work on an implementation. I asked Nic about how difficult it would be for me (with help) to add scopes support to Babel and they mentioned that you had probably the most context around Babel's source map generation. I'm curious if you have any time / availability to help shepherd a feature implementation!
+
+
+2024-03-07
+[00:56:49.0155] <Justin Ridgewell>
+I have a couple of questions/comments on the Scopes proposal:
+- Why is Original Scope `column` absolute?
+- What’s the point of splitting Original Scope’s Start/End? Just encode it together
+- Are Generated Range’s `originalScope` and `callsite` mutually exclusive?
+- I have no idea how to parse Generated Range’s `bindings`.
+    - Is `M` a DATA?
+    - What is “negative number of sub-ranges”?
+    - “Use -1 to indicate that the current variable is unavailable (e.g. due to shadowing) in this sub-range”…
+        - This causes a large delta encoding to jump backwards, then a large delta to jump forwards. Just encode an empty string value into `names` array
+    - [Side note: the note telling you that `line` is relative is in the `column` list item]
+
+
+[01:27:20.0043] <Simon Zünd>
+Thanks for the ideas/feedback! Yeah there are couple of rough edges in the current proposal.
+
+* Original files are formatted normally, so I'd imagine that most of the columns are absolute anyway given that not many scopes will start on the same line.
+* Encoding start/end items separately gives us the tree structure of scopes immediately and you don't have to nest the scopes manually based on position alone (which could be ambiguous if 2 scopes have the same start, not sure if that occurs in practice though).
+* No, call-site is specifically for inlining. So for a generated range that represents an inlined function the `originalScope` points to the original inlined function scope and call-site points to where that inlined function was actually called in the original code. This is required to get stack traces right.
+* Bindings are a bit tricky, maybe we went overboard with trying to encode it efficiently.
+  * We basically distinguish between 2 cases:
+     1) The variable is available for the full range with the same expression, in that case we only need a single offset into the names array.
+     2) The variable requires different expressions for parts of the generated range. In this case the first DATA is again a single offset into the names array. This is the expression from the range start. Then we encode another data `M`, to denote how many more live ranges we have. We encode it negated, so decoders can distinguish between case 1) and 2).
+  * Holger filed a bug about how to encode unavailable here. https://github.com/tc39/source-map-rfc/issues/70. I like your suggestion as well and will add it to the list.
+
+
+[01:35:58.0430] <Justin Ridgewell>
+> Original files are formatted normally, so I'd imagine that most of the columns are absolute anyway given that not many scopes will start on the same line.
+
+We could make it relative to the last Original Source Start's `column`, though, meaning indentation would be handled easily with 1 VLQ byte. Because of our crappy 5/8s base64, and the first byte containing the sign bit, we only have only 4 bits of data in the first byte. If a column is at column 16, then we have to use 2 bytes in an absolute encoding. If it's relative, it's just `E`s and `F`s to indent and dedent.
+
+[01:39:05.0728] <Justin Ridgewell>
+> Encoding start/end items separately gives us the tree structure of scopes immediately
+This is gonna hurt serialize/deserialize performance because I'll have to make a tree. It's **much** faster to have a flat array
+
+[01:39:17.0931] <Justin Ridgewell>
+ * > Encoding start/end items separately gives us the tree structure of scopes immediately
+
+This is gonna hurt serialize/deserialize performance because I'll have to make a tree. It's **much** faster to have a flat array
+
+[01:43:18.0803] <Justin Ridgewell>
+> Bindings are a bit tricky, maybe we went overboard with trying to encode it efficiently. We basically distinguish between 2 cases:
+
+Can you give me two example encodings?
+
+
+[01:45:24.0135] <Simon Zünd>
+I don't have an example for bindings encoding but holgers impl is here: https://github.com/hbenl/tc39-proposal-scope-mapping/blob/master/src/encodeScopes.ts
+
+[01:45:56.0660] <Justin Ridgewell>
+Oh, and should we have the ability to set a binding expression?
+
+[01:46:23.0045] <Simon Zünd>
+Also I don't follow how decoding this is more expensive. The decoder I wrote does this in a single pass. Instead of dumping it into a single array it keeps a stack around to build the tree on the fly
+
+[01:46:39.0733] <Simon Zünd>
+encoding might be a different story depending if you already have the tree or not, otherwise it's just a normal depth first traversal
+
+[01:46:55.0659] <Justin Ridgewell>
+Eg, if I need an expression to read `JSBI.BigInt(…)`, how do I set it?
+
+[01:49:16.0950] <Simon Zünd>
+I don't follow fully, can you give a bit more context for an example. Whats the original vs generated
+
+[01:52:14.0677] <Justin Ridgewell>
+> <@szuend:matrix.org> Also I don't follow how decoding this is more expensive. The decoder I wrote does this in a single pass. Instead of dumping it into a single array it keeps a stack around to build the tree on the fly
+
+I'm competing against WASM impls, so the encoding/decoding code I write needs to be absurdly efficient. If I have to create a tree structure to deserialize, then I'm recursing to and my hot loop is jumping around.
+
+[01:52:47.0385] <Justin Ridgewell>
+I need to come up with a way to get a flat array out of all of this for every entry, something like the current segment decoding in https://github.com/jridgewell/sourcemap-codec?tab=readme-ov-file#usage
+
+[01:53:18.0121] <Justin Ridgewell>
+Flat, packed, SMI arrays
+
+[01:56:44.0903] <Justin Ridgewell>
+I'm going to have deal with it anyways in the Generated side, where at least it makes sense because we're doing `;` delimiters for liens
+
+[01:56:55.0132] <Justin Ridgewell>
+ * I'm going to have deal with it anyways in the Generated side, where at least it makes sense because we're doing `;` delimiters for lines
+
+[01:58:58.0083] <Simon Zünd>
+It's still flat packed SMI arrays. For original scopes they are delimited by `,` for generated ranges it's `;` and `,`
+
+[01:59:10.0186] <Justin Ridgewell>
+The proposal has an example with `BigInt`. Something like:
+```js
+// input
+const n = 9007199254740991n;
+
+// output
+const n = JSBI.BigInt(9007199254740991); // [1073741823, 8388607]
+```
+
+Then explains there's a way run an expression to "get" the current value formatted as `"BigInt(9007199254740991)"`
+
+[01:59:16.0507] <Simon Zünd>
+Sematnics is determined by how many elements the SMI arrays has
+
+[01:59:16.0782] <Justin Ridgewell>
+But what if I want to update that value?
+
+[02:01:56.0932] <Simon Zünd>
+Good question, at the moment we only cover reading variables, but not writing them.
+
+[02:05:10.0430] <Justin Ridgewell>
+I'm not sure what you mean, the encoding is forced to be nested
+
+[02:05:16.0333] <Justin Ridgewell>
+https://github.com/hbenl/tc39-proposal-scope-mapping/blob/e73d4254d9c258888d37f0889e937aa9b78de04b/src/decodeScopes.ts#L43
+
+[02:07:22.0375] <Justin Ridgewell>
+I'm either recursing to pull data into a nested Original Source, or maybe I'm maintaining my own stack to assign values to
+
+[02:08:49.0270] <Justin Ridgewell>
+I guess a stack will work, I can pop from it and assign the end line/col when I encounter the End message
+
+[02:09:53.0941] <Simon Zünd>
+FWIW here is how I implemented it in DevTools for now: https://crrev.com/c/5307620
+
+[02:10:57.0498] <Simon Zünd>
+It's split into a generator producing the start/end items from VLQ and a for-loop + stack that builds the tree
+
+[02:12:53.0352] <Simon Zünd>
+If you are only interested in producing SMI arrays as fast as possible you can simplify the generator to read VLQs until it sees a `,` and you distinguish start/end items by the length of the produced array
+
+[02:13:02.0918] <Justin Ridgewell>
+Yah, you maintained a stack and assigned the end-index aftewards: https://source.chromium.org/chromium/chromium/src/+/main:third_party/devtools-frontend/src/front_end/core/sdk/SourceMapScopes.ts;l=88-92;drc=80a32637bfe732b657407430464d5b81b6bdf5ea
+
+[02:13:15.0833] <Simon Zünd>
+yep
+
+[02:13:46.0667] <Simon Zünd>
+basically exactly what you said
+
+[02:13:59.0094] <Simon Zünd>
+ * basically what you said
+
+[02:15:24.0776] <Simon Zünd>
+The problem is if you encode scopes fully, then you have to sort them afterwards based on source position. That saves you the stack during decoding, but it's expensive to build
+
+[02:16:00.0311] <Simon Zünd>
+Since scopes could occur in any order. So you have to sort them first, and then nest them
+
+[02:16:29.0744] <Justin Ridgewell>
+I think it's a line/col stack check to see if you're in a nested scope?
+
+[02:16:41.0683] <Justin Ridgewell>
+It's basically the same both ways
+
+[02:17:18.0973] <Justin Ridgewell>
+> Since scopes could occur in any order. So you have to sort them first, and then nest them
+
+:straight-to-jail:
+
+[02:17:54.0686] <Justin Ridgewell>
+Keep them monotonically increasing, like the informal `sections` note in sectioned maps
+
+[02:19:59.0879] <Simon Zünd>
+Sure, I'm also a bit afraid if tools spit out with identical start/end, so you'd also need the convention that the first entry is the parent of the second
+
+[02:20:00.0084] <Simon Zünd>
+ * Sure, I'm also a bit afraid if tools spit out scopes with identical start/end, so you'd also need the convention that the first entry is the parent of the second
+
+[02:21:44.0374] <Simon Zünd>
+But yeah, in the end it probably doesn't matter. If more folks prefer to not encode as a tree, then I'm also fine with that
+
+[02:22:40.0830] <Justin Ridgewell>
+https://github.com/hbenl/tc39-proposal-scope-mapping/blob/e73d4254d9c258888d37f0889e937aa9b78de04b/src/encodeScopes.ts#L72
+
+[02:22:45.0023] <Justin Ridgewell>
+Ee gad
+
+[02:23:04.0978] <Justin Ridgewell>
+Tree traversal to get the `DATA scope offset into originalScopes[offset]`
+
+[02:24:26.0860] <Justin Ridgewell>
+And https://github.com/hbenl/tc39-proposal-scope-mapping/blob/e73d4254d9c258888d37f0889e937aa9b78de04b/src/decodeScopes.ts#L129
+
+[02:25:22.0441] <Justin Ridgewell>
+You're going to have to maintain a flat array anyways, or suffer recursion
+
+[02:25:31.0570] <Simon Zünd>
+It's just a proof of concept :)
+
+[02:26:37.0950] <Justin Ridgewell>
+Does Dev Tools not deal with it?
+
+[02:27:04.0313] <Simon Zünd>
+There could be a better way to reference the corresponding original scope in the encoding, but I'm not sure.
+
+[02:27:04.0852] <Simon Zünd>
+Impl wise you either track the reference. Or you flatten out the decoded original scopes again into an array and just index into that
+
+[02:28:54.0522] <Simon Zünd>
+I haven't landed the code yet, I'm in the middle of implementing
+
+[11:28:12.0564] <Justin Ridgewell>
+* Keep them monotonically increasing, like the informal offset note in sectioned maps
+
+
+2024-03-08
+[05:09:06.0476] <Holger Benl>
+If the expression is a valid left-hand-side expression then you can also use it to update the value. If it isn't then I think updating the value is impossible because there is no variable (or object property) in the generated code that corresponds to the original variable (usually because the variable's value got inlined).
+
+[05:11:25.0195] <Holger Benl>
+FWIW we should update this example from the proposal - since the generated code also contains a variable `n` for the bigint, the expression in the sourcemap should be `n` (and hence it could be updated).
+
+[05:16:20.0268] <Holger Benl>
+I would also be fine with a linear encoding (in fact an earlier version of my proposal did that)
+
+
+2024-03-13
+[09:17:13.0691] <Nic>
+https://github.com/whatwg/html/
+
+[09:18:07.0638] <Nic>
+Here is where `import.meta` properties are defined: https://html.spec.whatwg.org/#hostgetimportmetaproperties
+
+[09:39:10.0535] <jkup>
+Would be really great to get some thoughts on whether we should be covering this or not in our spec! https://github.com/tc39/source-map-spec/pull/30
+
+
+2024-03-26
+[06:13:25.0331] <jkup>
+Hey all! We are officially confirmed for June 24th and 25th for our in-person meetup and hackathon in Munich! Really hope you all are able to attend. We'll be sending out a Google Form sign up sheet for attendance and I'll share a draft agenda in April, but wanted to let everyone know ASAP so you all can plan travel and time off!
+
+
+2024-03-27
+[15:41:41.0103] <asumu>
+Hi folks, I had a question about a part of the spec that isn't currently very precise. In the [terminology](https://tc39.es/source-map/#terminology) section, it's mentioned that `the VLQ Base64 encoded are limited to 32-bit quantities`. Should we refine "limited" here to mean it's invalid, or some other semantics? (e.g., it's clamped to 32-bit, or leave it undefined what happens) I believe Firefox [considers it invalid](https://github.com/mozilla/source-map/blob/master/wasm-mappings/src/lib.rs#L592) while WebKit & Chrome don't enforce the limit [1](https://github.com/WebKit/WebKit/blob/main/Source/WebInspectorUI/UserInterface/Models/SourceMap.js#L240), [2](https://source.chromium.org/chromium/chromium/src/+/main:third_party/devtools-frontend/src/front_end/core/sdk/SourceMap.ts;l=814) IIUC.
+
+[15:42:15.0736] <asumu>
+ * Hi folks, I had a question about a part of the spec that isn't currently very precise. In the [terminology](https://tc39.es/source-map/#terminology) section, it's mentioned that `the VLQ Base64 encoded are limited to 32-bit quantities`. Should we refine "limited" here to mean VLQs exceeding 32-bits are invalid, or some other semantics? (e.g., it's clamped to 32-bit, or leave it undefined what happens) I believe Firefox [considers it invalid](https://github.com/mozilla/source-map/blob/master/wasm-mappings/src/lib.rs#L592) while WebKit & Chrome don't enforce the limit [1](https://github.com/WebKit/WebKit/blob/main/Source/WebInspectorUI/UserInterface/Models/SourceMap.js#L240), [2](https://source.chromium.org/chromium/chromium/src/+/main:third_party/devtools-frontend/src/front_end/core/sdk/SourceMap.ts;l=814) IIUC.
+
+[15:43:26.0096] <asumu>
+ * Hi folks, I had a question about a part of the spec that isn't currently very precise. In the [terminology](https://tc39.es/source-map/#terminology) section, it's mentioned that `the VLQ Base64 encoded are limited to 32-bit quantities`. Should we refine "limited" here to mean VLQs exceeding 32-bits are invalid, or some other semantics? (e.g., it's clamped to 32-bit, or say it's invalid but some implementations may accept them anyway, etc.) I believe Firefox [considers it invalid](https://github.com/mozilla/source-map/blob/master/wasm-mappings/src/lib.rs#L592) while WebKit & Chrome don't enforce the limit [1](https://github.com/WebKit/WebKit/blob/main/Source/WebInspectorUI/UserInterface/Models/SourceMap.js#L240), [2](https://source.chromium.org/chromium/chromium/src/+/main:third_party/devtools-frontend/src/front_end/core/sdk/SourceMap.ts;l=814) IIUC.
+
+
+2024-03-28
+[17:16:13.0549] <asumu>
+(there's also the question of if the sign bit counts for the limit or not)
+
+[17:29:40.0071] <Justin Ridgewell>
+Yes, we should sepcify that.
+
+[08:33:35.0852] <rbuckton>
+I will be a few minutes late to the source maps naming track meeting today as I have a conflict.
+
+[09:04:23.0228] <jkup>
+Meeting now! https://bloomberg.zoom.us/j/98319586084?pwd=Skwyejc3bDBMRnY5ZlBqaUp0VzFBQT09
+
+[15:53:45.0193] <asumu>
+> <@atakikawa:igalia.com> Hi folks, I had a question about a part of the spec that isn't currently very precise. In the [terminology](https://tc39.es/source-map/#terminology) section, it's mentioned that `the VLQ Base64 encoded are limited to 32-bit quantities`. Should we refine "limited" here to mean VLQs exceeding 32-bits are invalid, or some other semantics? (e.g., it's clamped to 32-bit, or say it's invalid but some implementations may accept them anyway, etc.) I believe Firefox [considers it invalid](https://github.com/mozilla/source-map/blob/master/wasm-mappings/src/lib.rs#L592) while WebKit & Chrome don't enforce the limit [1](https://github.com/WebKit/WebKit/blob/main/Source/WebInspectorUI/UserInterface/Models/SourceMap.js#L240), [2](https://source.chromium.org/chromium/chromium/src/+/main:third_party/devtools-frontend/src/front_end/core/sdk/SourceMap.ts;l=814) IIUC.
+
+I filed an issue for this if anyone has further thoughts https://github.com/tc39/source-map/issues/80
+

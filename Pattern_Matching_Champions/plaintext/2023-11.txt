@@ -1,0 +1,432 @@
+2023-11-01
+[19:13:02.0385] <Jack Works>
+but decorator member expression does not allow `?.` or `this`
+
+[19:13:12.0921] <Jack Works>
+ * but decorator member expression does not allow `?.`
+
+
+2023-11-02
+[05:10:32.0675] <Jack Works>
+do we allow Elision?
+
+[05:10:49.0173] <Jack Works>
+`x is [,,,1]` or `x is [void, void, void, 1]`?
+
+[05:11:01.0850] <Jack Works>
+I remember we've discussed this before but I cannot recall the decision
+
+[08:44:26.0467] <Jack Works>
+are we really allowing `let` leak to the outside of the expression?
+
+[08:44:43.0949] <Jack Works>
+this section is nightmare now and I don't know how to get started
+
+[08:45:26.0595] <Jack Works>
+for example, `const a = expr is let b` is a thing now, and it can happen arbitrary deep
+
+[08:49:49.0845] <Jack Works>
+> <@jackworks:matrix.org> this section is nightmare now and I don't know how to get started
+
+(I also believe if it really goes like this, engines won't like it)
+
+[13:12:57.0715] <TabAtkins>
+> <@jackworks:matrix.org> I remember we've discussed this before but I cannot recall the decision
+
+I think holes should probably match as if they were `void` patterns. (But I could easily be convinced they should be an error.)
+
+[13:16:09.0211] <TabAtkins>
+> <@jackworks:matrix.org> for example, `const a = expr is let b` is a thing now, and it can happen arbitrary deep
+
+Yep, that's correct. `b` would be established at the top of the nearest block scope (whether before or after `a` I'm not sure, and I'm not sure if the order matters), and be in TDZ until it was set by the pattern.
+
+[16:54:56.0236] <Jack Works>
+I think that requires me to add all production into section 8
+
+
+2023-11-03
+[19:31:43.0262] <Jack Works>
+class T extends ((class {} is let x), x) { [1 is let y]() {}, x = ((1 is let z), z) };
+
+const { x = 1 is let y, [(Symbol.iterator is let w, w)]: p } = 1 is let z;
+
+if (false) expr is let x; // if (false) let x = expr // is syntax error
+
+[19:31:53.0379] <Jack Works>
+try to find some cursed case
+
+[21:42:15.0938] <rbuckton>
+I'm not sure that's a helpful exercise. You can find cursed cases of just about any syntax. None of those cases will be likely in practice. 
+
+[02:40:08.0279] <Jack Works>
+😭
+
+[11:09:07.0777] <ljharb>
+yes, elision is allowed and should simply ignore that item
+
+[11:12:18.0686] <Jack Works>
+All the easy part of the spec is done
+
+[11:14:15.0146] <Jack Works>
+The rest work:
+- Object & Array pattern (not that hard, because I can copy cache semantics from the old spec)
+- Extractor pattern (depends on RS of Array pattern)
+- Binding pattern (don't know how to do this, so I'll leave it to the last)
+
+[11:41:26.0549] <Jack Works>
+oh, I think match expressions need a cover grammar...
+
+[11:43:11.0808] <Jack Works>
+I wonder if we can change it to postfix syntax to solve this problem, like expr matches { ... }
+
+
+2023-11-13
+[07:43:52.0393] <rbuckton>
+Are we meeting today? Do we have an agenda to discuss? 
+
+[08:00:51.0258] <Jack Works>
+I'm joining
+
+[08:01:00.0382] <TabAtkins>
+I'm be in the meeting shortly
+
+[08:03:00.0056] <ljharb>
+I’ll be a bit late also - kid home sick - but I’ll def be there
+
+
+2023-11-20
+[08:04:13.0402] <Jack Works>
+https://github.com/tc39/proposal-pattern-matching/pull/295
+
+This PR is now ready. I have no more things to change before I receive any input. The Scope Analysis is left as a TODO and it won't be in this PR.
+
+I hope README PR can be updated to fit the spec because more details are considered when writing the spec than just considering the normal cases in the README
+
+[08:05:32.0371] <Jack Works>
+The last thing I hope to add is private field match, `{ #field: let x }`, I didn't add it and left as an editor note. if we have this we should also have it in destructing.
+
+[08:06:35.0470] <Jack Works>
+Also I found `match expression` is not easy to use when I writing examples. `Do expression` or similar semantics is necessary to write code in an ergonomic way.
+
+[08:09:50.0176] <Jack Works>
+match expr and match stmt also has a syntax conflict, I think the RHS of a match clause should be like this:
+
+MatchPattern `:` lookahead != `{` Expression `;`
+MatchPattern `:` Block `;`
+
+MatchExpression: it is a SyntaxError if Block Contains Return/Break/Continue 
+
+[08:13:49.0919] <Jack Works>
+https://raw.githack.com/tc39/proposal-pattern-matching/new-spec/index.html
+
+[10:45:50.0302] <ljharb>
+> <@jackworks:matrix.org> The last thing I hope to add is private field match, `{ #field: let x }`, I didn't add it and left as an editor note. if we have this we should also have it in destructing.
+
+i think there should be a separate proposal to add it in destructuring, and then once it lands, both would get it
+
+[10:56:18.0206] <TabAtkins>
+Yeah, I think that's reasonable.
+
+[10:56:28.0258] <TabAtkins>
+No strong reason for us to jump ahead of destructuring here.
+
+
+2023-11-21
+[21:18:35.0393] <Jack Works>
+problem I found with `is` expr. might be visually confusing
+
+[21:19:29.0802] <Jack Works>
+```js
+if (expr is x[Symbol.toPrimitive]) {}
+```
+
+x[Symbol.toPrimitive] or (expr is x)[Symbol.toPrimitive]?
+
+[21:20:03.0593] <Jack Works>
+this is basically a problem for all patterns we have, even adding `( )` does not solve this problem
+
+[21:20:25.0228] <Jack Works>
+ * this is basically a problem for all patterns we have, even adding `( )` around pattern does not solve this problem
+
+[21:20:54.0472] <Jack Works>
+the only way I see now is to add `( )` around the whole `expr is ...`
+
+[10:59:14.0732] <TabAtkins>
+`x[foo]` is a pattern, the grammar should bind that way. If you want to force the other parsing, `(expr is x)[Symbol.toPrimitive]`.
+
+[11:42:36.0220] <Jack Works>
+> <@tabatkins:matrix.org> `x[foo]` is a pattern, the grammar should bind that way. If you want to force the other parsing, `(expr is x)[Symbol.toPrimitive]`.
+
+not yet IMO, then let me change another example 
+
+[11:42:51.0356] <Jack Works>
+x is a and {}.toString
+
+[11:43:21.0048] <Jack Works>
+{}.toString is not a valid pattern, so it means (x is a and {}).toString
+
+[12:25:45.0827] <TabAtkins>
+Ah right, yes that's reasonable.
+
+[12:25:58.0610] <TabAtkins>
+I mean, it's def confusing, but it's the behavior I'd expect to fall out.
+
+[12:26:42.0897] <rbuckton>
+I wouldn't expect that to be valid at all
+
+[12:27:06.0410] <rbuckton>
+`is` is not a MemberExpression, so `x is a and {}.toString` would just be a syntax error
+
+[12:27:53.0402] <rbuckton>
+Just like `i++.toString()` is also a syntax error
+
+[12:31:35.0539] <rbuckton>
+> <@tabatkins:matrix.org> `x[foo]` is a pattern, the grammar should bind that way. If you want to force the other parsing, `(expr is x)[Symbol.toPrimitive]`.
+
+I'm not certain how useful `x[foo]` would be as a pattern, as its arguably *vanishingly* rare that anyone would publish an API that puts an extractor/matcher in a symbol-named property of an object, as that results in a very poor developer experience.
+
+[12:32:09.0802] <TabAtkins>
+`x is arr[1]`
+
+[12:32:18.0074] <rbuckton>
+`x is { [foo]: let y }` is definitely a valid pattern
+
+[12:32:56.0341] <rbuckton>
+> <@tabatkins:matrix.org> `x is arr[1]`
+
+That looks more like someone might have been confused as to how array destructuring works.
+
+[12:33:17.0773] <TabAtkins>
+There is no meaningful difference between that and `x is obj.foo`
+
+[12:36:08.0124] <rbuckton>
+`obj.foo` does not allow for arbitrary expression evaluation inside of a pattern, while `obj[foo]` does, so there is a meaningful difference.
+
+[12:38:41.0678] <rbuckton>
+My point is that the 99%+ use case is going to be `x is obj.foo`, so I'm not sold on how valuable `x is obj[foo]` will be, especially if it adds unnecessary complication to the grammar or semantics.
+
+[12:44:08.0629] <rbuckton>
+ * My point is that the 99%+ use case is going to be either `x is foo` or `x is obj.foo`, so I'm not sold on how valuable `x is obj[foo]` will be, especially if it adds unnecessary complication to the grammar or semantics.
+
+[13:49:12.0503] <ljharb>
+`x is obj[foo]` is critically necessary because of symbols
+
+[13:49:36.0740] <ljharb>
+it was barely tolerable for decorators to not have them, and i don't think the spec or grammar complexity is relevant
+
+[13:49:45.0960] <ljharb>
+ * it was barely tolerable for decorators to not have them, and i don't think the spec or grammar complexity is relevant (in terms of priority of consitutencies)
+
+[13:49:51.0733] <ljharb>
+ * it was barely tolerable for decorators to not have them, and i don't think the spec or grammar complexity is relevant (in terms of priority of constiuencies)
+
+[13:50:29.0693] <rbuckton>
+> <@ljharb:matrix.org> `x is obj[foo]` is critically necessary because of symbols
+
+I would argue that putting a custom extractor you want to match *against* behind a symbol is a terrible API design.
+
+[13:50:31.0657] <ljharb>
+there's a huge "expected usage" difference where it's unlikely people will decorate with a symbol or computed property of an object, but it's very likely they'll want to match against one
+
+[13:50:42.0438] <ljharb>
+it doesn't have to be a custom extractor, `is` isn't just for those.
+
+[13:53:47.0619] <rbuckton>
+It would still be a poor design choice, to store the think you want to match against behind a symbol, whatever it is. I'm also not saying we *shouldn't* have it, but that if it came down to a choice over whether to have that capability vs almost any other piece of the proposed pattern matching syntax, I would cut indexed access in a pattern first.
+
+[13:53:54.0626] <rbuckton>
+ * It would still be a poor design choice, to store the thing you want to match against behind a symbol, whatever it is. I'm also not saying we _shouldn't_ have it, but that if it came down to a choice over whether to have that capability vs almost any other piece of the proposed pattern matching syntax, I would cut indexed access in a pattern first.
+
+[14:05:35.0455] <TabAtkins>
+the fact that you can match against something in `foo.bar` implies that you need to be able to match against something in `foo[0]`. Symbols don't even factor into it; this is purely just that JS does not make a meaningful distinction between dot property access and bracket property access, and we shouldn't either.
+
+
+2023-11-22
+[16:19:03.0485] <Jack Works>
+yes, match against arr[0] is a legit use case
+
+[16:20:32.0524] <Jack Works>
+> <@rbuckton:matrix.org> `is` is not a MemberExpression, so `x is a and {}.toString` would just be a syntax error
+
+ok...? I do not quite understand how this works, can you explain more? now it is a relational expression, that already makes x is {}. toString illegal?
+
+[16:33:10.0904] <rbuckton>
+Yes, if `is` is in RelationalExpression, then `is {}.anything` is illegal
+
+[16:33:53.0924] <rbuckton>
+`a in b.c` is legal because the right-hand side of `in` allows MemberExpression. 
+
+[16:35:14.0861] <rbuckton>
+`a is pattern` doesn't parse a MemberExpression on the right, it parses a MatchPattern, so it only allows a	`.` if it is specified in syntax
+
+[16:36:51.0770] <Jack Works>
+🤔🤔🤔🤔🤔
+
+[16:37:31.0603] <rbuckton>
+We allow `a is b.c` because you've explicitly specified PatternMatchingMemberExpression: https://raw.githack.com/tc39/proposal-pattern-matching/new-spec/index.html#prod-PatternMatchingMemberExpression
+
+[16:37:39.0879] <Jack Works>
+that's interesting, what is legal to follow a relational expression directly?
+
+[16:38:26.0672] <Jack Works>
+I want to make sure nothing is visually confusing
+
+[16:57:13.0937] <rbuckton>
+there are two ways to think about "to the right":
+1. When parsing a _RelationalExpression_, what can be parsed for any given production on the right of a relational operator. For example, in `` RelationalExpression `<` ShiftExpression ``, what kind of things can be parsed if you only look at _ShiftExpression_.
+2. When parsing productions top-down, if a production contains a _RelationalExpression_, what kind of things can you parse after the RelationalExpression itself is finished.
+
+For (1), given `A < B`, `B` can be anything that can be parsed in a _ShiftExpression_:
+- ShiftExpression: `<<`, `>>`, `>>>` (i.e., `A < B << C` is parsed as `A < (B << C)`)
+- AdditiveExpression: `+`, `-` (i.e., `A < B + C` is parsed as `A < (B + C)`)
+- MultiplicativeExpression: `*`, `/`, `%` (i.e., `A < B * C` is parsed as `A < (B * C)`)
+- UpdateExpression: postfix `++`, `--`
+- LeftHandSideExpression/OptionalExpression/MemberExpression/CallExpression: `?.`, `[`, `.`, `` ` ``
+
+For (2), you look at anything that can _contain_ a RelationalExpression on the left of some other terminal/nonterminal:
+- RelationalExpression: `<`, `<=`, `>`, `>=`, `instanceof`, `in` (i.e., in `A < B`, `A` can be a RelationalExpression, so it can be followed by `<`, etc.)
+- EqualityExpression: `==`, `===`, `!=`, `!==`
+- BitwiseANDExpression: `&`
+- BitwiseXORExpression: `^`
+- BitwiseORExpression: `|`
+- LogicalANDExpression: `&&`
+- LogicalORExpression: `||`
+- CoalesceExpression: `??`
+- ConditionalExpression: `?`, `:`
+- AssignmentExpression: `=`, `+=`, `-=`, etc.
+
+
+
+[17:00:20.0571] <rbuckton>
+ * there are two ways to think about "to the right":
+
+1. When parsing a _RelationalExpression_, what can be parsed for any given production on the right of a relational operator. For example, in ``RelationalExpression `<` ShiftExpression``, what kind of things can be parsed if you only look at _ShiftExpression_.
+2. When parsing productions top-down, if a production contains a _RelationalExpression_, what kind of things can you parse after the RelationalExpression itself is finished.
+
+For (1), given `A < B`, `B` can be anything that can be parsed in a _ShiftExpression_:
+
+- ShiftExpression: `<<`, `>>`, `>>>` (i.e., `A < B << C` is parsed as `A < (B << C)`)
+- AdditiveExpression: `+`, `-` (i.e., `A < B + C` is parsed as `A < (B + C)`)
+- MultiplicativeExpression: `*`, `/`, `%` (i.e., `A < B * C` is parsed as `A < (B * C)`)
+- UpdateExpression: postfix `++`, `--`
+- LeftHandSideExpression/OptionalExpression/MemberExpression/CallExpression: `?.`, `[`, `.`, `````
+
+For (2), you look at anything that can _contain_ a RelationalExpression on the left of some other terminal/nonterminal:
+
+- RelationalExpression: `<`, `<=`, `>`, `>=`, `instanceof`, `in` (i.e., in `A < B`, `A` can be a RelationalExpression, so it can be followed by `<`, etc.)
+- EqualityExpression: `==`, `===`, `!=`, `!==`
+- BitwiseANDExpression: `&`
+- BitwiseXORExpression: `^`
+- BitwiseORExpression: `|`
+- LogicalANDExpression: `&&`
+- LogicalORExpression: `||`
+- CoalesceExpression: `??`
+- ConditionalExpression: `?`, `:`
+- AssignmentExpression: `=`, `+=`, `-=`, etc.
+- Expression: `,`
+- Anything that follows where Expression can be used
+
+[17:00:35.0392] <rbuckton>
+So in `A < B`, if `B` is just an identifier, the following tokens could legally follow it:
+- From (1): `<<`, `>>`, `>>>`, `+`, `-`, `*`, `/`, `%`, `++`, `--`, `?.`, `[`, `.`, `(`, `` ` ``
+- From (2): `<`, `<=`, `>`, `>=`, `==`, `===`, `!=`, `!==`, `&`, `^`, `|`, `&&`, `||`, `??`, `?`, `:`, `=`, `+=` (and other compound ops), `,`, plus anything that can follow _Expression_ in the grammar.
+
+[17:01:34.0267] <rbuckton>
+Everything that comes from (1) is only legal because it is specifically part of the grammar defined for _RelationalExpression_. Everything that comes from (2) is legal because some other production defines it as following a _RelationalExpression_.
+
+[17:03:27.0212] <rbuckton>
+So for an `is` pattern, you will always contend with (2), but the grammar you supply for MatchPattern will define (1). The caveat, of course, being ASI and how it applies to ambiguous tokens like `+`, `-`, `(`, and `[` that can start a new statement.
+
+[17:04:03.0029] <Jack Works>
+thanks, this is very helpful
+
+[17:04:14.0122] <rbuckton>
+Since `.` is defined in (1) for a given RelationalExpression, it only really has the meaning we ascribe to it given the syntax we define.
+
+[17:04:44.0156] <Jack Works>
+for is expression, the only valid set is from (2)
+
+[17:05:28.0288] <Jack Works>
+so, a confusing case (especially for JSX users) will be `x is < y > z ...`
+
+[17:06:40.0208] <rbuckton>
+Correct. Per the pattern grammar, `a is b.c` is legal only because we define it as part of PatternMatchingMemberExpression, which limits what can be the starting token to Identifier, `this`, `super`, and a MetaProperty (like `new.target`)
+
+[17:07:05.0047] <Jack Works>
+and it is visually confusing, no parse confusing because JSX element is not a pattern
+
+[17:07:59.0011] <rbuckton>
+Yes. In regular JS, it would be parsed as `(x is < y) > z` since _RelationalPattern_ can appear on the left. 
+
+[17:10:01.0867] <rbuckton>
+JSX has its own set of parsing concerns, given that JSX also looks like valid JS when you consider ASI, and requires either infinite lookahead or a fairly aggressive cover grammar to address:
+```js
+a
+<b>c 
+```
+
+[17:11:21.0715] <rbuckton>
+That visual confusion can be addressed via linters or limitations on JSX syntax. Also, `x is < y > z` is somewhat meaningless because its rare to compare booleans relationally.
+
+[17:12:13.0081] <Jack Works>
+another case I can think of is developers might forgot to add `and` and let it becomes `x is > 10 < 20` (should be `x is > 10 and < 20`), but I think it's not a problem we need to care about
+
+[17:12:26.0050] <rbuckton>
+I also wouldn't expect that `x is <y>` would be meaningful in a file that had both JSX and pattern matching, I could never see it as a blessed syntax.
+
+[17:13:16.0374] <rbuckton>
+> <@jackworks:matrix.org> another case I can think of is developers might forgot to add `and` and let it becomes `x is > 10 < 20` (should be `x is > 10 and < 20`), but I think it's not a problem we need to care about
+
+This seems like something a type system could catch (i.e., `boolean` and `number` are not comparable)
+
+[17:14:13.0205] <Jack Works>
+I think `is` expression is ok now
+
+[17:14:37.0871] <Jack Works>
+we should discuss about do-expression like semantics in the next meeting
+
+[17:14:47.0790] <Jack Works>
+ * we should discuss about do-expression like semantics (for match clauses) in the next meeting
+
+[17:19:33.0252] <rbuckton>
+Fyi, I have a concern with the editors note here: https://raw.githack.com/tc39/proposal-pattern-matching/new-spec/index.html#prod-MemberExpressionPattern:~:text=All%20productions%20except,can%20be%20removed.
+
+I would argue that `` PatternMatchingMemberExpression `.` IdentifierName `` is also a minimum requirement, otherwise this will not meet my needs for Extractors and ADT enums. I think `?.` could be dropped, as DecoratorMemberExpression does not support it and I'm not even clear on what matching against an optional chain should even mean.
+
+[17:22:04.0725] <Jack Works>
+matches when both sides are undefined?
+
+[17:22:16.0750] <Jack Works>
+ * matches when both sides are undefined or the same value?
+
+[17:25:11.0425] <rbuckton>
+There's a conflicting interpretation that it could mean "if the property isn't present, don't throw *AND* don't match". 
+
+[17:25:31.0749] <rbuckton>
+vs "if the property isn't present, don't throw and _match `undefined`"
+
+[17:25:35.0418] <rbuckton>
+ * vs "if the property isn't present, don't throw and \_match `undefined`_"
+
+[17:25:41.0432] <rbuckton>
+ * vs "if the property isn't present, don't throw and _match `undefined`_"
+
+[17:25:53.0003] <rbuckton>
+ * There's a conflicting interpretation that it could mean "if the property isn't present, don't throw and _don't match_".
+
+[17:26:34.0865] <rbuckton>
+I think both are equally valid interpretations, and I'd much rather just err on the side of "don't support this"
+
+[17:26:47.0925] <Jack Works>
+ok, I'll remove this
+
+[17:34:47.0747] <Jack Works>
+I'll also add `x[Expression]` as a valid PatternMatchingMemberExpression
+
+[17:35:26.0035] <Jack Works>
+since `{ x: array[0] }` is a valid use case, and we already have arbitrary expression interpolation in this `{ [Symbol.iterator]: ... }`
+
+[17:37:08.0196] <Jack Works>
+ * I'll also add `x[Expression]` as a valid PatternMatchingMemberExpression
+*already updated.
+

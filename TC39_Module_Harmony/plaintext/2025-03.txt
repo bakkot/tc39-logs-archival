@@ -1,0 +1,258 @@
+2025-03-03
+[09:55:10.0126] <Chengzhong Wu>
+If the time is moved one hour earlier, I have a conflict at the second half hour.
+
+[09:59:31.0469] <nicolo-ribaudo>
+I now have two recurring conflicts the hour after for 3 weeks out of four 😅
+
+[09:59:58.0046] <nicolo-ribaudo>
+(numerics proposals and source maps)
+
+[10:48:42.0696] <jakobjingleheimer>
+I start a new job this week, so I dunno what my availability will be during work hours (which this currently is—an hour later isn't)
+
+[11:08:09.0042] <guybedford>
+okay, let's hold again for now, daylight savings also coming up
+
+
+2025-03-04
+[20:50:48.0869] <kriskowal>
+I continue to become available two hours after the current scheduled meeting time. 
+
+
+2025-03-13
+[07:11:28.0369] <nicolo-ribaudo>
+Ugh I have a conflict today because of the EU-US different DST change, I might be able to join in the second 30 minutes
+
+[07:13:19.0737] <jakobjingleheimer>
+Oh right. Crap, i have a meeting at 4pm
+
+[08:04:18.0818] <guybedford>
+ahh right, okay I'm here if anyone wants to discuss ESM Integration stuff and https://github.com/WebAssembly/esm-integration/pull/104
+
+[08:31:14.0657] <guybedford>
+still around if you want to start half an hour late nicolo-ribaudo 
+
+[08:31:50.0641] <nicolo-ribaudo>
+Yes coming in a second 
+
+
+2025-03-20
+[07:02:04.0808] <jakobjingleheimer>
+Still have the 4pm meeting so I can't make this week either :(
+
+
+2025-03-21
+[11:54:20.0120] <guybedford>
+I've posted up a draft HTML PR for ESM Phase Imports in https://github.com/whatwg/html/pull/11152
+
+[11:54:23.0221] <guybedford>
+feedback very welcome!
+
+[15:19:25.0350] <bakkot>
+guybedford: I haven't been following closely; can you give an example of how one would obtain an unrooted module in the current world?
+
+[15:19:38.0433] <bakkot>
+(i.e. in the world without `module {}` syntax)
+
+[15:20:50.0595] <bakkot>
+I guess just the `ModuleSource` constructor?
+
+[15:21:37.0656] <bakkot>
+I forget if we were exposing that or not
+
+[15:23:35.0161] <bakkot>
+oh and `WebAssembly.compile` I guess
+
+[15:34:11.0582] <bakkot>
+unrelated, has there been any discussion of Trusted Types integration?
+
+[15:35:04.0157] <bakkot>
+right now there's TrustedScript; presumably there would need to be TrustedModuleSource or something? Kinda of annoying but not terrible I guess
+
+[16:07:29.0747] <guybedford>
+yes just via `new WebAssembly.Module(bytes)` today and in future perhaps either `new ModuleSource('source')` and `eval('module { }')`.
+
+[16:08:16.0794] <guybedford>
+For the most part I think rooted modules are _trusted_ in the sense that they are known to originate from their URL and origin with CSP / integrity checks as appropriate
+
+[16:08:34.0843] <guybedford>
+I'm hopeful that security model might be possible to develop further
+
+[16:08:53.0183] <guybedford>
+(all rooted sources as trusted sources)
+
+[16:09:26.0137] <guybedford>
+* yes just via `new WebAssembly.Module(bytes)` today and in future perhaps either `new ModuleSource('source')` or `eval('module { }')`.
+
+[16:12:21.0429] <bakkot>
+Trusted Types is specifically a mechanism for getting from untrusted values to values which can be used in contexts which require trust (that is, which pass CSP)
+
+[16:13:05.0547] <bakkot>
+so the relevant thing here would be a way to take an _unrooted_ source and get something usable in a CSP context
+
+[16:13:13.0508] <guybedford>
+Right, but Trust Types are sink protections for user sources. But module sources are trusted sources, therefore do not require sink protection.
+
+[16:13:27.0789] <bakkot>
+for rooted module sources, yes
+
+[16:13:36.0205] <nicolo-ribaudo>
+I'm thinking that you would need a TrustedScript as an argument to a potential ModuleSource constructor
+
+[16:13:48.0628] <nicolo-ribaudo>
+Similarly to how you need to pass a TrustedScript to Function
+
+[16:14:19.0369] <nicolo-ribaudo>
+And gate creation of Module sources, rather than their usage
+
+[16:18:38.0392] <bakkot>
+I was trying to figure out how this works for WASM but it's apparently unspecified, fun fun
+
+[16:19:09.0453] <bakkot>
+anyway empirically CSP blocks compilation to Module objects
+
+[16:19:23.0268] <bakkot>
+so probably it makes more sense for the trust gate to be on creation of Module objects, not on their use
+
+[16:19:54.0021] <bakkot>
+as nicolo-ribaudo suggests but not as currently specified, at least based on my reading of the description in the PR; correct me if I'm wrong
+
+[16:20:29.0488] <bakkot>
+https://github.com/WebAssembly/spec/issues/1393 is the wasm+csp issue incidentally
+
+[16:20:36.0694] <bakkot>
+man CSP is just the single worst web spec
+
+[16:20:42.0294] <bakkot>
+CSP and everything it touches
+
+[16:20:44.0386] <guybedford>
+Yes, that might well be the approach. Note also that module declarations nested arbitrarily deep in sources that bottom out as rooted sources are still also themselves rooted sources. Yes Wasm might even benefit from its own trusted types support for WebAssembly compile. Note that source phase integration for Wasm already unified Wasm CSP on script-src policy.
+
+[16:21:14.0785] <bakkot>
+> Note that source phase integration for Wasm already unified Wasm CSP on script-src policy.
+
+Did it? Where's that specified?
+
+[16:21:48.0965] <guybedford>
+In the HTML integration PR - https://github.com/whatwg/html/pull/10380 were a bunch of discussions in WhatWG about that
+
+[16:24:47.0920] <bakkot>
+I don't see any discussions of CSP in that thread or anything in the PR which touches CSP
+
+[16:24:51.0644] <bakkot>
+did you mean to link a different one?
+
+[16:29:26.0198] <guybedford>
+I believe there was a WhatNOT meeting to discuss it, we also discussed it considerably in the modules group and various threads. I don't know if there's an easy canonical resource to find on that. It comes down to using destination script for Wasm I believe.
+
+[16:29:46.0559] <bakkot>
+bleh
+
+[16:31:01.0756] <bakkot>
+I believe you that these discussions happened but it is a bad state of affairs when to know what a correct implementation is you have to have been at a specific meeting, rather being able to look at a specification
+
+[16:34:09.0899] <guybedford>
+I should actually just land https://github.com/WebAssembly/esm-integration/pull/78, it was previously blocked by Anne, but he later rescinded this and I never landed it.
+
+[16:34:43.0230] <bakkot>
+ah, nice!
+
+[16:38:18.0303] <guybedford>
+Merged, thanks for the ping
+
+[16:39:07.0322] <bakkot>
+I assume the intention is that worker modules are governed by worker-src?
+
+[16:42:58.0405] <guybedford>
+yes, exactly, since `new Worker(mod)` sets the worker URL from the module URL. Then there's some questions around transfer, similarly to the ones for WA.Module. Still not clear how postMessage works with CSP to me.
+
+[16:44:26.0048] <shu>
+the html integration PR for supporting `new Worker(mod)` isn't merged yet, is it?
+
+[16:44:58.0255] <guybedford>
+no, it's just a draft as I just posted up in https://app.element.io/?updated=1.11.93#/room/#tc39-compartments:matrix.org/$vkBt_r3WpPEc-S4JjDQRQFswYCMmKKqSzNRZxH-Hw7k
+
+[16:45:11.0080] <guybedford>
+* no, it's just a draft as I just posted up in 
+
+[16:45:44.0087] <guybedford>
+* no, it's just a draft as I just posted up in https://matrix.to/#/!RkpmGMjJtqLKXzByOT:matrix.org/$vkBt_r3WpPEc-S4JjDQRQFswYCMmKKqSzNRZxH-Hw7k?via=matrix.org&via=igalia.com&via=mozilla.org
+
+[16:45:51.0557] <shu>
+okay, i'm just trying to take down AIs
+
+[16:46:05.0751] <shu>
+the CSP integration is unobservable until the HTML PR merges, yeah?
+
+[16:46:12.0940] <shu>
+or is it unrelated?
+
+[16:46:36.0886] <guybedford>
+for workers yes, for Wasm source phase already landed it's already integrated
+
+[16:47:58.0314] <shu>
+is there change needed to CSP implementations today for `import source foo from "foo.wasm"`?
+
+[16:48:59.0570] <shu>
+well, i guess "yes" to the extent that it needs to check script-src just like JS modules?
+
+[16:51:30.0287] <shu>
+yeah i have no idea what's actually needed here to ship. would appreciate a pointer to a spec draft / PR against CSP, though i hear CSP spec itself is a dumpster fire
+
+[16:51:30.0905] <guybedford>
+Yes, although it's a minor implementation detail in the fetch implementation - that the network request is the same that requests for JS or Wasm under script destination, then handling Wasm based on the content-type.
+
+
+2025-03-22
+[17:05:21.0492] <bakkot>
+I think the spec is actually fine on this front for `import source foo from "foo.wasm"`
+
+[17:07:38.0292] <bakkot>
+ES calls HostLoadImportedModule as defined in HTML, which does a fetch with destination "script", which triggers the `script-src-elem` pre-request check in CSP (why "elem"? ehhhhhhhhhhh), which will cause either `script-src-elem`, `script-src`, or `default-src` to apply
+
+[17:07:53.0982] <bakkot>
+* ES calls HostLoadImportedModule as defined in HTML, which does a fetch with destination "script", which triggers the `script-src-elem` pre-request check in CSP (why "elem"? ehhhhhhhhhhh), which will cause either `script-src-elem`, `script-src`, or `default-src` to apply (the first of those which is present)
+
+[17:07:59.0429] <bakkot>
+I assume the intention is that if this check passes then the module is allowed to run
+
+[17:10:49.0718] <bakkot>
+where "this check" means "the governing CSP directive lists the script's URL as an allowed host source" or (I think?) "there is an allowed hash source in the import map" as of https://github.com/whatwg/html/pull/10269
+
+[17:11:25.0928] <bakkot>
+note that this is _not_ how it works for webassembly outside of ESM integration; `WebAssembly.instantiateStreaming` is (empirically; this is not specified afaict) governed only by the `unsafe-eval` or `unsafe-wasm-eval` source expressions even when loading a wasm script from an allowed source, never by host or hash sources
+
+[17:11:32.0085] <bakkot>
+(which is dumb but whatever I guess)
+
+[17:16:14.0381] <bakkot>
+looks like there's a WPT for `<script type="module" src="./resources/execute-start.wasm"></script>` but not for `import source`
+
+
+2025-03-27
+[07:10:35.0254] <bakkot>
+guybedford: if I have a CSP of `script-src 'self'`, and then `import source foo from './foo.wasm'; WebAssembly.instantiate(foo)`, does that work or does the CSP also need to include `unsafe-wasm-eval`?
+
+[07:12:37.0568] <bakkot>
+I know the `import source` part should work; I'm asking if the `WebAssembly.instantiate` has a separate gate. I _think_ the idea is that it does not have a separate gate and so that works? the wasm csp proposal has `HostEnsureCanCompileWasmBytes` which claims to only guard `WebAssembly.compile` and `compileStreaming`
+
+[07:13:10.0406] <bakkot>
+* I know the `import source` part should work; I'm asking if the `WebAssembly.instantiate` has a separate gate. I _think_ the idea is that it does not have a separate gate and so the snippet above works? the wasm csp proposal has `HostEnsureCanCompileWasmBytes` which claims to only guard `WebAssembly.compile` and `compileStreaming`
+
+[07:13:24.0374] <nicolo-ribaudo>
+I unfortunately cannot join today. I still plan to review Guy's PRs.
+
+[08:04:11.0606] <guybedford>
+Thanks nicolo-ribaudo I will wait for your review on https://github.com/WebAssembly/esm-integration/pull/104 before landing it. It would be nice to be able to land the corresponding Node.js PR before the 24 release cutoff with this if possible as well.
+
+[08:05:58.0074] <Chengzhong Wu>
+v24 was cut off already
+
+[08:06:16.0097] <Chengzhong Wu>
+https://github.com/nodejs/node/pull/57609
+
+[08:55:31.0564] <guybedford>
+ahh right, thanks, landing as soon as possible then at least
+

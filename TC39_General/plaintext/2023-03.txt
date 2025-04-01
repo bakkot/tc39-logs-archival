@@ -1,0 +1,449 @@
+2023-03-09
+[03:41:46.0153] <nicolo-ribaudo>
+I just noticed thanks to https://github.com/tc39/ecma262/pull/3027 that we list abstract operations as "spec values without identity". Does the spec ever compare abstract operations, or ever use them as first-class values?
+
+[03:49:26.0693] <bakkot>
+I don't think so, no
+
+[04:46:48.0645] <jmdyck>
+I don't see anywhere that we compare abstract operations. As for treating them as first-class values,
+- https://tc39.es/ecma262/#sec-applystringornumericbinaryoperator step 7 has `Let _operation_ be the abstract operation associated with _opText_ and Type(_lnum_) in the following table:`
+- https://tc39.es/ecma262/#sec-numerictorawbytes step 3.b has `Let _convOp_ be the abstract operation named in the Conversion Operation column ...`
+
+[06:58:05.0803] <nicolo-ribaudo>
+Thank you!
+
+[11:27:21.0651] <shu>
+in case any node hackers around: does node not call `V8::Dispose()` on process exit?
+
+[11:27:55.0622] <shu>
+i'm trying to print some diagnostic stuff on process exit and it doesn't seem to be called. interestingly, `node --help` does seem to call it, but not normal execution
+
+[11:43:33.0640] <shu>
+ooh it might be this stdout redirection thing
+
+[11:55:58.0179] <shu>
+okay i give up, `atexit` time
+
+
+2023-03-13
+[11:02:10.0266] <snek>
+it *should* call it
+
+[11:02:28.0414] <snek>
+maybe you've hit a bug
+
+[15:30:43.0077] <Hemanth H.M>
+Is there a section in the spec which talks about spec specific symbols and their meaning? (Grammar??)
+
+For example: `?` indicates that if an exception is thrown during this operation, it should be propagated up to the caller of this function.
+
+[15:40:34.0366] <bakkot>
+notational conventions
+
+[15:41:20.0747] <bakkot>
+`?` is specifically covered under https://tc39.es/ecma262/multipage/notational-conventions.html#sec-returnifabrupt-shorthands
+
+[15:41:33.0920] <bakkot>
+though note that the spec does not have a notion of "an exception being thrown" in the spec's meta-language
+
+[15:41:48.0335] <bakkot>
+there's just completion records, some of which can be throw completions
+
+[15:41:51.0255] <bakkot>
+(same as in e.g. rust)
+
+[16:10:55.0932] <jmdyck>
+If by "grammar", you mean a grammar for the pseudocode in the spec's algorithms, then no, no such section. The closest is https://tc39.es/ecma262/#sec-algorithm-conventions
+
+[16:38:41.0421] <Hemanth H.M>
+Ah, right! Notational and Algorithmic conventions; Trying to translate that to dev approximations rather than spec's meta-language. 
+
+
+2023-03-14
+[00:53:54.0673] <BrownJenkin>
+is it worth suggesting `Math.TAU`? i have to `Math.TAU = 2 * Math.PI` at the top every time.
+
+[01:18:25.0758] <Domenic>
+https://esdiscuss.org/topic/math-tau
+
+[01:20:15.0762] <Domenic>
+https://github.com/rwaldron/tc39-notes/blob/master/meetings/2014-07/jul-31.md#51-mathtau
+
+[02:44:42.0065] <BrownJenkin>
+lame.
+
+[02:45:11.0485] <BrownJenkin>
+even python got a math.tau
+
+[03:39:34.0315] <rkirsling>
+wow, the relevant Python issue number for that was apparently 12345
+
+[03:39:45.0866] <rkirsling>
+ * wow, the relevant Python issue number for that was apparently 12345: https://bugs.python.org/issue12345
+
+[03:41:50.0559] <rkirsling>
+lol, Guido on 2016-08-10: "I'm just going to do this." benevolent dictator indeed
+
+[03:42:58.0890] <rkirsling>
+to be fair, that decision was a full two years after the above TC39 discussion (which IIUC was also before the TC39 Process began)
+
+[03:44:06.0673] <rkirsling>
+ * to be fair, that decision was a full two years after the above TC39 discussion (and that was also before the TC39 Process began)
+
+[03:44:29.0936] <rkirsling>
+so I think it'd be valid to reconsider, it would just require usage data
+
+[03:45:19.0584] <rkirsling>
+ * prior art is important, so I think it'd be valid to reraise; the presentation would just require usage data
+
+[03:46:29.0363] <rkirsling>
+('cause one figures it would basically either get blocked at Stage 0 or go straight to Stage 3)
+
+[03:47:48.0708] <rkirsling>
+ * to be fair, that was a full two years after the above TC39 discussion (which itself was before the current TC39 Process began)
+
+[03:54:31.0315] <rkirsling>
+as usual, it sucks that github search is so useless
+
+[04:34:43.0358] <annevk>
+The rationale there is pretty weak too "might make Python popular"
+
+[05:11:12.0850] <bakkot>
+github search is pretty decent these days I think - https://github.com/search?q=language%3Apython+math.tau&type=code
+
+[05:40:34.0126] <annevk>
+bakkot: if you compare that to results for math.pi it really doesn't seem worth the time
+
+[05:55:55.0416] <BrownJenkin>
+it's a line of code
+
+[05:56:10.0001] <BrownJenkin>
+how much time is that?
+
+[06:01:55.0461] <Andreu Botella>
+it might be a line of code for you to polyfill, but to add it to the language takes consensus and definitely more than one line in the spec and in browsers' code
+
+[06:34:48.0375] <rkirsling>
+the time in question here is primarily referring to the fact that the committee has finite time to consider proposals in general
+
+[06:36:13.0385] <rkirsling>
+if we spent an hour battling over whether this is worth it, that'd be an hour we didn't spend talking about another proposal, which could potentially mean that some other proposal comes to fruition months later than it otherwise would have
+
+[06:36:18.0964] <annevk>
+it's also the time for people writing educational material, tests, implementations, web developers trying to understand code, etc.
+
+[06:37:20.0946] <rkirsling>
+you're not wrong but I feel like it's not hard to find people passionate enough about tau to do that willingly :p
+
+[07:01:12.0290] <BrownJenkin>
+> <@abotella:igalia.com> it might be a line of code for you to polyfill, but to add it to the language takes consensus and definitely more than one line in the spec and in browsers' code
+
+sorry. you are right. this is a very important piece of software and change needs to have aa very good reason.
+
+[07:02:06.0843] <BrownJenkin>
+* sorry. you are right. this is a very important piece of software and change needs to have a very good reason.
+
+[10:33:42.0777] <ljharb>
+i would LOVE to add Math.tau
+
+[10:34:09.0406] <ljharb>
+ * i would LOVE to add Math.TAU but yeah it'll be a tough sell for some, even tho it's literally just a property and a number
+
+[16:36:54.0323] <jasew>
+https://github.com/rust-lang/rust/issues/66770
+
+
+2023-03-15
+[17:01:05.0025] <bakkot>
+Math.TWO_PI, I love it
+
+[17:01:19.0301] <bakkot>
+(TAU is better but less funny)
+
+[17:02:07.0742] <shu>
+i would be in favor of TWO_PI but would not be in favor of TAU for this reason
+
+[17:04:07.0773] <bakkot>
+> There are people who don't know tau, but know pi. Even if you would find a bit more convenient using math.Tau instead of 2*math.Pi, I'd prefer that all Go code used pi so that every developer can instantly get it.
+
+ok actually TWO_PI is maybe reasonable
+
+[17:04:11.0824] <bakkot>
+(from https://github.com/golang/go/issues/40663#issuecomment-671605986 )
+
+[17:04:39.0381] <shu>
+2 * `Math.PI` is less typing even
+
+[17:05:17.0774] <bakkot>
+only in contexts where you don't need parentheses
+
+[21:10:25.0407] <BrownJenkin>
+* sorry. you are right. this is a very important piece of software and change needs to have a very good reason.
+
+[00:44:01.0784] <annevk>
+`Math.2PI`, checkmate
+
+[00:52:13.0040] <Domenic>
+`Math["2PI"]` is required, which is even funnier.
+
+[05:15:29.0054] <littledan>
+Can we add Math.OFFSET (defined as 1) to add or subtract to fix off-by-one errors? This need occurs frequently in industry.
+
+[05:16:28.0100] <littledan>
+Although it is longer to type, it supplies more semantic information 
+
+[06:08:08.0412] <bakkot>
+perl has a better way https://perldoc.perl.org/perlvar#$%5B
+
+[08:15:28.0865] <ptomato>
+`OPTION BASE 1`
+
+[11:13:23.0429] <Hemanth H.M>
+Is there a way to know the contributions made by ecma members in TC39? Like number of proposals championed or authored? The current dataset doesn't provide that stat. 
+
+[11:15:32.0573] <Hemanth H.M>
+Math.tau!
+
+
+[11:17:38.0999] <Hemanth H.M>
+looks like there was some discussion https://esdiscuss.org/topic/math-tau
+
+[12:10:59.0193] <littledan>
+Hemanth H.M: you can probably find this from the proposal repo. What are you trying to do?
+
+[12:55:30.0663] <Hemanth H.M>
+get a list of proposals that PayPal has participated since it joined ecma
+
+[13:30:16.0077] <Michael Ficarra>
+Hemanth H.M: somebody (I think yulia?) posted a link to a website made by a community member that allows you to break down proposals by person/stage/stars/etc
+
+[13:30:23.0995] <Michael Ficarra>
+I don't remember which Matrix channel it was in
+
+[13:30:38.0781] <Michael Ficarra>
+but if you look through the logs from around the last meeting, you should be able to find it
+
+[13:44:53.0382] <Chris de Almeida>
+https://www.proposals.es/
+
+[13:45:01.0133] <Chris de Almeida>
+I believe that's this but it hasn't been updated in years
+
+[13:56:47.0283] <yulia>
+> <@michaelficarra:matrix.org> Hemanth H.M: somebody (I think yulia?) posted a link to a website made by a community member that allows you to break down proposals by person/stage/stars/etc
+
+We should have this data in the proposal data repo
+
+[13:57:23.0427] <yulia>
+https://github.com/tc39/dataset
+
+[13:58:14.0110] <yulia>
+it is by name, not by member, but if you have a list of representatives it should be equivalent if you filter champions and authors
+
+[14:17:39.0348] <ljharb>
+how do you define participated?
+
+[15:15:13.0653] <Michael Ficarra>
+Chris de Almeida: ah yes, that was it
+
+
+2023-03-18
+[07:15:41.0334] <Hemanth H.M>
+Yup, aware of this dataset. Looks like that’s the only way out for now. 
+
+[07:16:50.0669] <Hemanth H.M>
+Authored or cochamp of a proposal 
+
+[11:58:12.0331] <Michael Ficarra>
+you probably shouldn't be looking to build a justification for continued participation based on proposals authored/championed
+
+[11:58:53.0871] <Michael Ficarra>
+giving constructive feedback that alters the course of a proposal (for the benefit of both the public and for Paypal) is arguably more important work
+
+[12:00:45.0703] <Hemanth H.M>
+For sure! This is in addition to the constructive feedback and likes. 
+
+[12:00:46.0191] <Chris de Almeida>
+https://allcontributors.org/docs/en/overview
+
+
+2023-03-22
+[08:43:34.0118] <jmdyck>
+It's strange I'm not seeing anything in the Delegates room.
+
+[08:46:48.0980] <jmdyck>
+Are they all on a field trip?
+
+[08:47:06.0280] <ryzokuken>
+I see recent activity
+
+[08:47:26.0834] <jmdyck>
+okay, so some kind of notification problem for me
+
+[08:47:50.0746] <jmdyck>
+I did check that I had notifications enabled.
+
+[08:48:48.0678] <jmdyck>
+No wait, it's not notifications. I'm not *seeing* anything in the Delegates room.
+
+[08:49:39.0059] <ryzokuken>
+maybe try leaving and rejoining? 🤷
+
+[08:49:43.0903] <ryzokuken>
+that sometimes works
+
+[08:51:22.0206] <jmdyck>
+ok, will try that
+
+[08:53:31.0316] <jmdyck>
+Left + joined. Not seeing anything new.
+
+[08:55:41.0589] <Chris de Almeida>
+what client are you using?
+
+[08:56:00.0960] <jmdyck>
+app.element.io
+
+[08:56:25.0996] <Chris de Almeida>
+clear cache and cookies?  😳
+
+[08:56:39.0867] <ptomato>
+the last message I see in the delegates room is from 16:34 Pacific time yesterday, does that match what you see?
+
+[08:56:54.0224] <Chris de Almeida>
+> context is not shared, only metadata is.
+
+[08:57:03.0279] <jmdyck>
+yes 16:34 yesterday
+
+[08:57:51.0418] <jmdyck>
+oh, it's still early in Seattle, duh.
+
+[08:58:07.0411] <Chris de Almeida>
+oh.. you said you weren't seeing "anything"...
+
+[08:58:13.0377] <jmdyck>
+got my time-zone conversion wrong.
+
+[08:58:49.0465] <Chris de Almeida>
+there are some new items for you now
+
+[08:58:57.0999] <jmdyck>
+yup, see them.
+
+[08:59:18.0629] <jmdyck>
+thx
+
+
+2023-03-25
+[00:52:43.0954] <annevk>
+What hold `Float16Array` back from Stage 3?
+
+[01:05:28.0825] <littledan>
+> <@annevk:matrix.org> What hold `Float16Array` back from Stage 3?
+
+More information on motivation and investigation into implementation difficulty 
+
+[01:06:32.0870] <littledan>
+If Safari wants Float16Array to happen, they can say so and explain why in committee next time, and I bet it would help (I imagine it will be brought back soon, especially if you prepare something like that)
+
+[01:07:10.0024] <littledan>
+> <@littledan:matrix.org> More information on motivation and investigation into implementation difficulty 
+
+This concern was expressed by Chrome and Firefox. So getting in touch with them could also help 
+
+[01:07:25.0004] <littledan>
+It wasn’t a “no” but a “maybe, we need to understand more”
+
+[01:07:36.0773] <annevk>
+Ah I thought we would have. And at least Chrome's canvas people also want it.
+
+[01:12:59.0962] <littledan>
+IIRC the canvas demand was mentioned; I suspect engine teams just want slightly more time to think about it
+
+[01:22:59.0352] <annevk>
+Fair I guess, for WebKit it wasn't estimated to be a big deal, but I heard other engine estimates that were way up and went up each time I heard it anew so I guess I rather not ask again 😊
+
+[01:23:53.0913] <littledan>
+You all seem really efficient at doing certain things!
+
+[08:14:49.0051] <bakkot>
+I do hope to bring it back next meeting but yeah it'll depend on engines having had a chance to confirm it'll be feasible on all their supported targets
+
+[08:15:03.0665] <bakkot>
+I am almost certain it should be, from poking around, but they'll need to confirm for themselves
+
+[08:15:34.0575] <bakkot>
+Also I am reaching out to more of the web platform to see what integration work there is to be done in e.g. webgl and wasm
+
+[08:26:01.0223] <annevk>
+bakkot: cool, I noticed that Wasm doesn't have anything below i32, which was somewhat surprising
+
+[08:26:35.0588] <annevk>
+We'll also need a slight Web IDL update, but should be easy enough
+
+
+2023-03-26
+[03:55:26.0953] <littledan>
+> <@annevk:matrix.org> bakkot: cool, I noticed that Wasm doesn't have anything below i32, which was somewhat surprising
+
+Not as scalars, but yes as memory instructions, see https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-memarg (and as of recently, in SIMD, and in the near future, in Wasm GC)
+
+[03:56:11.0435] <littledan>
+I would get in touch with Deepti Gandluri to learn about any history/context on whether people have brought up float16 in SIMD discussions 
+
+[04:01:34.0715] <littledan>
+Brief related discussion: https://github.com/WebAssembly/spec/issues/804
+
+[04:07:50.0916] <littledan>
+Looks like emscripten supports functionality to round to f16 (typed as i16 internally) https://reviews.llvm.org/D61287 probably this means sunfishcode could speak more to the demand/rationale
+
+[04:43:08.0566] <annevk>
+Thanks littledan that will make for some relaxing reading later :-)
+
+
+2023-03-30
+[11:03:03.0939] <ptomato>
+any editor guidance on https://github.com/tc39/proposal-temporal/issues/2531 ? is the Set specification type something that would be useful to use more broadly in abstract operations not pertaining to the memory model?
+
+[11:35:22.0149] <littledan>
+(not an editor, but what we're really missing is a Map type in the spec... might make sense to fix this locally for Temporal but I'd love to see more intuitive data structures more broadly, including set, ideally somehow shared by https://infra.spec.whatwg.org if possible)
+
+[11:40:08.0714] <bakkot>
+ptomato: I think probably it's simpler to use a List, and explicitly skip over duplicates, possibly with the assistance of a helper like the SetDataHas helper added in the set methods proposal (https://tc39.es/proposal-set-methods/#sec-setdatahas). contra littledan I think it's generally best to minimize the number of "foundational" types in the spec - there's less to reason about that way. (e.g., a mathematical set isn't ordered, so when you convert one to a List the resulting order is simply not specified, which you probably don't want even if it doesn't actually end up mattering given how you happen to be consuming that List right now)
+
+[11:40:50.0225] <littledan>
+bakkot: Did you see how the WHATWG Infra doc doesn't add lots of foundational types, but defines some in terms of others?
+
+[11:41:26.0547] <littledan>
+ * (not an editor, but what we're really missing is a Map type in the spec... might make sense to fix this locally for Temporal but I'd love to see more intuitive data structures more broadly, including set, ideally somehow shared by https://infra.spec.whatwg.org if possible)
+
+[Edit: By "fix this locally" I meant, just use a List for now]
+
+[11:42:29.0831] <bakkot>
+littledan: yup and I've also seen e.g. https://github.com/whatwg/infra/pull/451 which points to some of the difficulties with that approach - specifying a whole type, with all of its attendant semantics, is actually quite a bit of work and sometimes has non-obvious implications for consumers
+
+[11:43:43.0012] <bakkot>
+ptomato: I should say also that in that particular case you don't need SetDataHas given how you're using the list - since it just contains strings, and you don't need ±0 deduplication, you can use the simpler "If _list_ does not contain _value_, then" formulation
+
+[11:44:11.0184] <littledan>
+thanks for explaining, bakkot 
+
+[11:47:00.0515] <bakkot>
+(in whatwg's case they probably do end up needing to deal with specifying new types, since they have enough uses of map-likes to justify it and they need to ensure those are all consistent, but if they'd stuck with lists of key/value pairs everywhere it would have been more obvious originally that iteration semantics weren't actually well-defined, instead of people just using the infra Map and assuming it was fully specified)
+
+[11:47:18.0340] <bakkot>
+ * (in whatwg's case they probably do end up needing to deal with specifying new types, since they have enough uses of user-exposed map-likes to justify it and they need to ensure those are all consistent, but if they'd stuck with lists of key/value pairs everywhere it would have been more obvious originally that iteration semantics weren't actually well-defined, instead of people just using the infra Map and assuming it was fully specified)
+
+
+2023-03-31
+[15:41:55.0061] <TabAtkins>
+Hm, I'm having trouble finding an older proposal for `catch (e if ...)`
+
+[15:42:09.0619] <TabAtkins>
+Was it just matching the old Moz behavior?
+
+[15:48:37.0587] <TabAtkins>
+Importantly: did it just rethrow the error if none of the catches matched?
+

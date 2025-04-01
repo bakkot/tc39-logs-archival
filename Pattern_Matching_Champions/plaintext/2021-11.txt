@@ -1,0 +1,938 @@
+2021-11-16
+[13:01:55.0865] <rbuckton>
+I've been looking at Rust and C# pattern matching today while revisiting my enum proposal in light of the new proposal by Jack Works. One thing that struck me about C# was that destructuring (nee. deconstruction) is user-controllable via a `Deconstruct`-named method. It got me to thinking whether we might be able to propose something similar:
+```js
+Symbol.destructure // symbol
+
+enum Option of ADT {
+  Some(value),
+  None
+}
+ 
+const x = Option.Some(1);
+const Option.Some(y) = x;
+y; // 1
+ 
+match (x) {
+  when Option.Some(y) { ... }
+  when None { ... }
+}
+```
+Where an `Option.Some` instance has a `@@destructure` method:
+```js
+// return the actual value to destructure
+Option.Some.prototype[Symbol.destructure] = function () { return [this.value]; }
+```
+And _BindingPattern_ could evolve to allow `QualifiedName(BindingElementList)` and `QualifiedName{BindingPropertyList}` (where _QualifiedName_ is something like `a.b.c`, etc.)
+
+[13:05:01.0800] <rbuckton>
+`match (x) { .. }` would recognize the `QualifiedName(BindingElementList)`/`QualifiedName{BindingPropertyList}` syntax and do the following: 
+1. Throw if _QualifiedName_ does not have a `@@destructure` method.
+2. Match if `x` is an instance of _QualifiedName_ and the result of the destructure method matches the rest of the pattern specified by _BindingElementList_/_BindingPropertyList_.
+
+[13:05:52.0528] <rbuckton>
+`let`/`const`/`var` would do the same except it would throw if (2) isn't a match.
+
+[13:07:47.0703] <rbuckton>
+That would make for a nice parallel syntax for ADT-style enums for construction and deconstruction (i.e., `x = Option.Some(y)` -> `Option.Some(y) = x`)
+
+[13:08:06.0738] <rbuckton>
+ * I've been looking at Rust and C# pattern matching today while revisiting my enum proposal in light of the new proposal by Jack Works. One thing that struck me about C# was that destructuring (nee. deconstruction) is user-controllable via a `Deconstruct`-named method. It got me to thinking whether we might be able to propose something similar:
+```js
+Symbol.destructure // symbol
+
+enum Option of ADT {
+  Some(value),
+  None
+}
+ 
+const x = Option.Some(1);
+const Option.Some(y) = x;
+y; // 1
+ 
+match (x) {
+  when Option.Some(y) { ... }
+  when Option.None { ... }
+}
+```
+
+Where an `Option.Some` instance has a `@@destructure` method:
+```js
+// return the actual value to destructure
+Option.Some.prototype[Symbol.destructure] = function () { return [this.value]; }
+```
+
+And _BindingPattern_ could evolve to allow `QualifiedName(BindingElementList)` and `QualifiedName{BindingPropertyList}` (where _QualifiedName_ is something like `a.b.c`, etc.)
+
+[15:03:45.0562] <Jack Works>
+Yeah, if we have that expressiveness it will be very powerful. Currently I had to use @@matcher + deconstruction to design that. 
+
+[15:47:33.0196] <Jack Works>
+One of the reason I split ADT Enum to have its own constructor object (introduce two binding for ADT Enum, the first one is normal Enum, the second one is the ADT constructor object) is that I'm worrying about combining them will make it impossible to match structures across the ShadowRealm
+
+[15:49:39.0677] <Jack Works>
+For example, @@matcher is not wrapped when the ADT constructor send across the ShadowRealm, but it's still possible to match the ADT via the original plain Enum and treat it as a "old style" tagged union. If we combine them (like rbuckton version) it will be not possible to match across ShadowRealm
+
+[15:54:27.0849] <rbuckton>
+Here's a sketch of a proposal for @@destructure: https://gist.github.com/rbuckton/ae46b33f383ba69880c7138c49b5e799
+
+
+2021-11-17
+[16:16:16.0196] <Jack Works>
+This is amazing. Is it possible to also cover if let (like rust)?
+
+[16:16:45.0449] <Jack Works>
+And why you require a instanceof check? That's unreliable
+
+[17:45:03.0974] <Jack Works>
+Oops, syntax collision
+
+[17:45:26.0929] <Jack Works>
+(possibility?)
+
+[18:25:23.0371] <rbuckton>
+Its legal syntax, but always an error.
+
+[18:25:34.0827] <rbuckton>
+(a runtime error, but an error)
+
+[18:25:52.0080] <rbuckton>
+There was some discussion about this in TDZ last meeting I think
+
+[18:36:57.0859] <rbuckton>
+The `QualifiedName{BindingPropertyList}` syntax collides with the proposed `match` syntax though, which would mean we'd need to disambiguate somehow:
+```js
+// option 1 - add => to 'when' clause:
+match (x) {
+  when Message.Write(message) => { ... }
+  when Message.Move{x, y} => { ... }
+}
+const Message.Move{x, y} = z;
+const Message.Write(message) = z;
+ 
+// option 2 - add disambiguator to InstanceBindingPattern:
+match (x) {
+  when Message.Write.(message) { ... }
+  when Message.Move.{x, y} { ... }
+}
+const Message.Move.{x, y} = z;
+const Message.Write.(message) = z;
+ 
+// option 3 - drop InstanceObjectPattern
+match (x) {
+  when Message.Write(message) { ... }
+  when Message.Move({x, y}) { ... }
+}
+const Message.Move({x, y}) = z;
+const Message.Write(message) = z;
+```
+
+Option 3 maybe isn't so bad?
+
+[18:39:25.0584] <rbuckton>
+Option 3 could work because of how I define ADT enum for a record/object here: https://gist.github.com/rbuckton/192c2922650e05a1ca9cd7c01be7fc6c
+A record/object ADT enum could have a @@destructure method that returns `[{ x, y }]`, so it would work with the nested destructuring pattern.
+
+[18:51:50.0315] <rbuckton>
+> <@jackworks:matrix.org> And why you require a instanceof check? That's unreliable
+
+True, but you can hook `instanceof` using `Symbol.hasInstance` if your enum mapper wants to generate something more portable.
+
+[18:54:26.0910] <ljharb>
+Making that a protocol sounds like a non starter
+
+[18:54:47.0429] <ljharb>
+The entire and only value of destructuring is that it’s sugar for normal property access; a protocol would shred that
+
+[18:55:03.0274] <ljharb>
+* The entire and only value of destructuring is that it’s sugar for normal property access but without the duplicate naming; a protocol would shred that
+
+[18:57:29.0943] <rbuckton>
+There's plenty of prior art though. C#'s `Deconstruct`, Scala's `unapply`. You can already hook array destructuring using `[Symbol.iterator]`.
+
+[18:58:04.0056] <rbuckton>
+And I disagree that that's the only value. Pattern matching makes it even more valuable.
+
+[19:53:04.0656] <ljharb>
+The only current value :-) pattern matching’s value is predicated on it exactly matching the simplicity that is destructuring.
+
+[19:53:29.0273] <ljharb>
+Prior art is useful to inspire how we might do something; it’s irrelevant tho when its unidiomatic for the language.
+
+[19:53:52.0662] <ljharb>
+there’s tons of things tons of languages do that would be horrifically bad in JS; “prior art” isn’t a justification to add anything.
+
+[09:14:32.0325] <rbuckton>
+I've amended the proposal to align more with scala extractor objects (i.e., no built-in instanceof check, renamed `@@destructure` to `@@unapply` and moved it off the instance and onto the _QualifiedName_, dropped `QualifiedName{x,y}` and only have `QualifiedName(x)`). There's plenty of places I could see this being useful as it allows you to apply custom logic during destructuring:
+```js
+const MapExtractor = {
+  [Symbol.unapply](value) { 
+    const obj = {};
+    for (const [key, value] of map) {
+      obj[typeof key === "symbol" ? key : `${key}`] = value;
+    }
+    return [obj];
+  }
+}
+
+const obj = {
+  map: new Map().set("a", 1).set("b", 2)
+};
+
+const { map: MapExtractor({ a, b }) } = obj;
+```
+
+The ability to evaluate custom logic in the middle of a destructuring is something I've often wanted.
+
+[09:14:57.0582] <rbuckton>
+ * I've amended the proposal to align more with scala extractor objects (i.e., no built-in instanceof check, renamed `@@destructure` to `@@unapply` and moved it off the instance and onto the _QualifiedName_, dropped `QualifiedName{x,y}` and only have `QualifiedName(x)`). There's plenty of places I could see this being useful as it allows you to apply custom logic during destructuring:
+```js
+const MapExtractor = {
+  [Symbol.unapply](value) { 
+    const obj = {};
+    for (const [key, value] of map) {
+      obj[typeof key === "symbol" ? key : `${key}`] = value;
+    }
+    return [obj];
+  }
+}
+
+const obj = {
+  map: new Map().set("a", 1).set("b", 2)
+};
+
+const { map: MapExtractor({ a, b }) } = obj;
+```
+
+The ability to evaluate custom logic in the middle of a destructuring is something I've often wanted.
+
+[09:18:51.0701] <rbuckton>
+> <@ljharb:matrix.org> Prior art is useful to inspire how we might do something; it’s irrelevant tho when its unidiomatic for the language.
+
+Destructuring itself was unidiomatic for JavaScript when it was added. I don't think this approach is unidiomatic, as it thematically aligns with other patterns we're considering for JavaScript such as pipeline, decorators, and pattern matching. It also would make it easier to work with ADT enums.
+
+[09:22:40.0179] <ljharb>
+no it wasn't
+
+[09:22:59.0134] <ljharb>
+`var x = o.x` was quite idiomatic. destructuring was just syntax sugar for that idiomatic pattern.
+
+[09:24:13.0659] <ljharb>
+The criteria for adding something can't solely be that there's places it "could" be useful; it also needs to fit with the expectations language users have. The expectation language users have is that destructuring is  exactly the same as not destructuring - just more concise. That's not an expectation worth breaking.
+
+[09:33:11.0387] <rbuckton>
+I don't think this breaks that expectation. You argue that destructuring is a concise form of this idiom:
+```js
+var x = o.x;
+var { x } = o;
+```
+
+I'm arguing that extractors are just as applicable if you extend your example to this:
+
+```js
+var x = f(o.x);
+```
+
+[09:34:21.0555] <rbuckton>
+The difference being that `f(o.x)` is the application of `o.x` to `f`, but inverting that in destructuring would be the "un-application".
+
+[09:40:39.0733] <rbuckton>
+Here's a slightly less contrived example:
+```js
+const InstantExtractor = {
+    * [Symbol.unapply](value) {
+        if (value instanceof Temporal.Instant) yield value;
+        else if (value instanceof Date) yield Temporal.Instant.fromEpochMilliseconds(value.getTime());
+        else if (typeof value === "string") yield Temporal.Instant.from(value);
+    }
+};
+
+class Book {
+    constructor({
+        isbn,
+        title,
+        InstantExtractor(createdAt) = Temporal.Now.instant(),
+        InstantExtractor(modifiedAt) = createdAt
+    }) {
+        this.isbn = isbn;
+        this.title = title;
+        this.createdAt = createdAt;
+        this.modifiedAt = modifiedAt;
+    }
+}
+```
+
+[09:41:19.0075] <rbuckton>
+ * Here's a slightly less contrived example:
+```js
+const InstantExtractor = {
+    [Symbol.unapply](value) {
+        if (value instanceof Temporal.Instant) return [value];
+        if (value instanceof Date) return [Temporal.Instant.fromEpochMilliseconds(value.getTime())];
+        if (typeof value === "string") return [Temporal.Instant.from(value)];
+        return [undefined];
+    }
+};
+
+class Book {
+    constructor({
+        isbn,
+        title,
+        InstantExtractor(createdAt) = Temporal.Now.instant(),
+        InstantExtractor(modifiedAt) = createdAt
+    }) {
+        this.isbn = isbn;
+        this.title = title;
+        this.createdAt = createdAt;
+        this.modifiedAt = modifiedAt;
+    }
+}
+```
+
+[09:42:14.0752] <rbuckton>
+ * Here's a slightly less contrived example:
+```js
+const InstantExtractor = {
+    * [Symbol.unapply](value) {
+        if (value instanceof Temporal.Instant) yield value;
+        else if (value instanceof Date) yield Temporal.Instant.fromEpochMilliseconds(value.getTime());
+        else if (typeof value === "string") yield Temporal.Instant.from(value);
+        else yield;
+    }
+};
+
+class Book {
+    constructor({
+        isbn,
+        title,
+        InstantExtractor(createdAt) = Temporal.Now.instant(),
+        InstantExtractor(modifiedAt) = createdAt
+    }) {
+        this.isbn = isbn;
+        this.title = title;
+        this.createdAt = createdAt;
+        this.modifiedAt = modifiedAt;
+    }
+}
+```
+
+[09:42:50.0803] <rbuckton>
+ * Here's a slightly less contrived example:
+```js
+const InstantExtractor = {
+    * [Symbol.unapply](value) {
+        if (value instanceof Temporal.Instant) yield value;
+        else if (value instanceof Date) yield Temporal.Instant.fromEpochMilliseconds(value.getTime());
+        else if (typeof value === "string") yield Temporal.Instant.from(value);
+    }
+};
+
+class Book {
+    constructor({
+        isbn,
+        title,
+        InstantExtractor(createdAt) = Temporal.Now.instant(),
+        InstantExtractor(modifiedAt) = createdAt
+    }) {
+        this.isbn = isbn;
+        this.title = title;
+        this.createdAt = createdAt;
+        this.modifiedAt = modifiedAt;
+    }
+}
+```
+
+[09:49:37.0448] <rbuckton>
+ * Here's a slightly less contrived example:
+```js
+const InstantExtractor = {
+    * [Symbol.unapply](value) {
+        if (value instanceof Temporal.Instant) yield value;
+        else if (value instanceof Date) yield Temporal.Instant.fromEpochMilliseconds(value.getTime());
+        else if (typeof value === "string") yield Temporal.Instant.from(value);
+    }
+};
+
+class Book {
+    constructor({
+        isbn,
+        title,
+        InstantExtractor(createdAt) = Temporal.Now.instant(),
+        InstantExtractor(modifiedAt) = createdAt
+    }) {
+        this.isbn = isbn;
+        this.title = title;
+        this.createdAt = createdAt;
+        this.modifiedAt = modifiedAt;
+    }
+}
+new Book({ isbn: "...", title: "...", createdAt: Temporal.from("...") });
+new Book({ isbn: "...", title: "...", createdAt: "..." });
+new Book({ isbn: "...", title: "...", createdAt: new Date() });
+```
+
+[10:03:47.0380] <rbuckton>
+> <@jackworks:matrix.org> And why you require a instanceof check? That's unreliable
+
+I removed the `instanceof` check from the runtime semantics along with my other recent changes. It could still be used in userland inside the `@@unapply` (née `@@destructure`) method, but built-ins could leverage private slots for brand checks.
+
+[10:07:56.0987] <TabAtkins>
+The current proposal does address this use-case, just with a slightly longer syntax: `when ^Option.Some() with val` instead of `when ^Option.some(val)`
+
+[10:08:06.0874] <rbuckton>
+Also, `@@unapply` isn't too different from `@@matcher`. An `@@unapply` method could just return null/undefined in place of a `matched` property, and instead of `^Expr as { x, y }` you would use `Expr({ x, y})`
+
+[10:08:22.0366] <rbuckton>
+Yes, but only in pattern matching.
+
+[10:08:26.0151] <TabAtkins>
+That way we allow arbitrary expressions (rather than just predefined named things) and don't have to invent a brand new destructuring variant
+
+[10:08:43.0885] <TabAtkins>
+Oh, I see, you are talking about destructuring
+
+[10:09:10.0309] <rbuckton>
+Yes, but it also applies to pattern matching since pattern matching partly relies on destructuring.
+
+[10:10:02.0062] <TabAtkins>
+Yes, tho technically we do so by explicitly using the same syntax as destructuring, rather than implicitly by importing destructuring.
+
+[10:10:11.0882] <rbuckton>
+Rust considers this to be part of pattern matching.
+
+[10:12:34.0475] <rbuckton>
+I think these two concepts are convergent:
+```js
+match (x) {
+  when Option.Some(value: { status: 200 }) { ... }
+  when Option.Some(value: { status: 404 }) { ... }
+  when Option.None { ... }
+}
+```
+
+[10:17:37.0365] <TabAtkins>
+Yeah, Rust doesn't have support for arbitrary matchers, just the structural matching of their struct types.
+
+[10:19:00.0064] <TabAtkins>
+Similar for Python - rather than supporting a matching protocol, they have a syntax that looks similar to this, where you can destructure into a list or dict that looks like a constructor invocation
+
+[10:35:18.0433] <rbuckton>
+ * I think these two concepts are convergent:
+```js
+match (x) {
+  when Option.Some({ status: 200 }) { ... }
+  when Option.Some({ status: 404 }) { ... }
+  when Option.None { ... }
+}
+```
+
+[10:39:21.0705] <rbuckton>
+C#'s approach is similar:
+```cs
+var result = x switch {
+  Option.Some(Response { status: 200 }) => ...,
+  Option.None => ...
+};
+```
+
+[10:39:43.0355] <rbuckton>
+Except C# has a `Deconstruct` method that it uses for extraction (so syntax+protocol)
+
+[10:39:55.0902] <rbuckton>
+ * Except C# has a `Deconstruct` method that it uses for extraction (so syntax+protocol)
+
+
+2021-11-18
+[17:40:23.0443] <Jack Works>
+> <@rbuckton:matrix.org> I've amended the proposal to align more with scala extractor objects (i.e., no built-in instanceof check, renamed `@@destructure` to `@@unapply` and moved it off the instance and onto the _QualifiedName_, dropped `QualifiedName{x,y}` and only have `QualifiedName(x)`). There's plenty of places I could see this being useful as it allows you to apply custom logic during destructuring:
+> ```js
+> const MapExtractor = {
+>   [Symbol.unapply](value) { 
+>     const obj = {};
+>     for (const [key, value] of map) {
+>       obj[typeof key === "symbol" ? key : `${key}`] = value;
+>     }
+>     return [obj];
+>   }
+> }
+> 
+> const obj = {
+>   map: new Map().set("a", 1).set("b", 2)
+> };
+> 
+> const { map: MapExtractor({ a, b }) } = obj;
+> ```
+> 
+> The ability to evaluate custom logic in the middle of a destructuring is something I've often wanted.
+
+If you dropped the {} form, how it works with ADT objects? Match on the 1st argument? That creates a syntax irsymmetry
+
+[17:42:44.0125] <Jack Works>
+> <@rbuckton:matrix.org> Also, `@@unapply` isn't too different from `@@matcher`. An `@@unapply` method could just return null/undefined in place of a `matched` property, and instead of `^Expr as { x, y }` you would use `Expr({ x, y})`
+
+So why not merging them? 
+
+[17:42:48.0070] <rbuckton>
+There's no syntax asymmetry for usage/extraction:
+
+```js
+enum Message of ADT {
+   Move{x, y},
+}
+
+const msg = Message.Move({ x: 1, y: 1 });
+const Message.Move({ x, y }) = msg;
+```
+
+[17:44:03.0541] <rbuckton>
+It might even make sense to drop `PropertyName{x, y}` from ADT enums in favor of `PropertyName({x, y})` for declaration symmetry
+
+[17:44:32.0293] <rbuckton>
+```js
+enum Message of ADT {
+  Write(message),
+  Move({ x, y })
+}
+```
+
+[17:44:33.0450] <Jack Works>
+> <@rbuckton:matrix.org> There's no syntax asymmetry for usage/extraction:
+> 
+> ```js
+> enum Message of ADT {
+>    Move{x, y},
+> }
+> 
+> const msg = Message.Move({ x: 1, y: 1 });
+> const Message.Move({ x, y }) = msg;
+> ```
+
+Hmm this is interesting. I was thinking of the definition body in the Enum and deconstruction syntax is asymmerty
+
+[17:45:14.0383] <rbuckton>
+In your proposal, ADT enum value construction uses `Foo.Bar({ x, y })` as well
+
+[17:45:39.0877] <Jack Works>
+> <@rbuckton:matrix.org> It might even make sense to drop `PropertyName{x, y}` from ADT enums in favor of `PropertyName({x, y})` for declaration symmetry
+
+But if that's the case, will you allow Prop({ a: { b }})?
+
+[17:47:09.0865] <rbuckton>
+That might be a bridge too far, to be honest. 
+
+[19:40:10.0585] <Jack Works>
+I don't think that would be allowed either but developers might think it can
+
+[09:48:15.0983] <rbuckton>
+It wouldn't be allowed for the declaration, but would be allowed for construction and deconstruction. I don't think its so bad to disallow it at declaration, since enums would be a new feature and thus require learning the syntax to be able to use it.
+
+[11:50:02.0917] <ljharb>
+… what is an "ADT enum" and why is this concept important for enums and/or pattern matching?
+
+[11:52:48.0873] <ljharb>
+to me an enum is just a closed set of explicitly named values (any distinct values) that conceptually enumerates some domain
+
+[13:02:54.0432] <jschoi>
+> <@ljharb:matrix.org> … what is an "ADT enum" and why is this concept important for enums and/or pattern matching?
+
+ADT = https://en.wikipedia.org/wiki/Generalized_algebraic_data_type in this case, I believe. 
+
+[13:02:58.0716] <jschoi>
+See also https://github.com/rbuckton/proposal-enum/issues/6
+
+[13:03:51.0153] <jschoi>
+They’re essentially structs with predefined categories. Or enums with additional payloads. Haskell, Rust, and Swift have them. They can use pattern matching on them. 
+
+[13:04:07.0486] <jschoi>
+* They’re essentially structs with predefined categories. Or enums with payload. Haskell, Rust, and Swift have them. They can use pattern matching on them. 
+
+[13:04:50.0384] <jschoi>
+* They’re essentially structs with predefined categories. Or enums with additional payloads. Haskell, Rust, and Swift have them. They can use pattern matching on them. 
+
+[13:08:35.0135] <jschoi>
+Like a Result type being made of the union of a Failure() singleton and a Success(value) type, after which Result values could be pattern matched between Failure() and Success(value) values, with value automatically being extracted in the Success branch. That’s probably what they’re talking about.  
+
+[13:14:10.0575] <ljharb>
+ok, but you can already do that with pattern matching wiht objects
+
+[13:14:30.0837] <ljharb>
+so sure, that should work, but that just means enums would need a very obvious and intuitive matcher protocol, right?
+
+[13:15:32.0845] <jschoi>
+Yes, as far as I can tell, but perhaps I’m missing something. 
+
+[15:25:13.0751] <rbuckton>
+> <@ljharb:matrix.org> so sure, that should work, but that just means enums would need a very obvious and intuitive matcher protocol, right?
+
+ADT enums would, yes. That's what `@@unapply` or (`@@matcher`) would give you.
+
+[15:27:56.0475] <rbuckton>
+From what I've seen, languages that have ADT enums make heavy use of them alongside pattern matching as almost the majority use case.
+
+[15:54:36.0231] <ljharb>
+oh hm - we'd have to special-case enums in pattern matching tho somehow, because you'd want `when (enum.FOO)` to match, but the matcher protocol couldn't exist on, say, `1`
+
+[15:55:03.0215] <ljharb>
+or actually `enum.FOO` would just be the runtime value, so there's not even a matcher protocol needed?
+
+[15:55:11.0455] <ljharb>
+so yeah i'm still confused about the unapply stuff.
+
+[15:56:05.0218] <ljharb>
+```
+match (x) {
+  when (enum.foo) { … }
+  when (enum.bar) { … }
+  when (enum.baz) { … }
+  else { … }
+}
+```
+this would work just fine as-is, since each enum property is just a value, with no special affordance
+
+
+2021-11-19
+[16:02:24.0219] <rbuckton>
+In Scala, an object with an `apply` method is essentially a function, and can behave similar to a constructor. So you can do something like `Book.apply(isbn, name)` (or just `Book(isbn, name)` and get a `Book` object back. You give it arguments and it gives you the result.
+
+The `unapply` method is something like the inverse of a constructor. You give it the result and it gives you back the arguments. 
+
+[16:04:28.0243] <rbuckton>
+This is especially useful in pattern matching. In JS, (without extra syntax) it might look something like this
+
+```js
+const x = new Book(isbn, name);
+const [isbn, name] = Book.unapply(x);
+```
+
+[16:05:52.0855] <rbuckton>
+ * This is especially useful in pattern matching. In JS, (without extra syntax) it might look something like this
+```js
+const x = new Book(isbn, name);
+const [isbn, name] = Book[Symbol.unapply](x);
+```
+
+[16:06:17.0297] <rbuckton>
+With syntax it would instead look like this:
+```js
+const x = new Book(isbn, name);
+const Book(isbn, name) = x;
+```
+
+[16:08:48.0079] <rbuckton>
+This becomes even more powerful when used in a binding pattern, allowing you to evaluate extractor logic in the middle of a binding pattern:
+```js
+const books = [new Book(isbn, name, { publisher: "O'Reilly" })]
+const [Book(isbn, name, { publisher )] = books;
+```
+
+[16:11:49.0490] <rbuckton>
+The `const Book(isbn, name) = x;` syntax is also an example of pattern matching. Book's "unapply" might look like this:
+```js
+class Book {
+  isbn;
+  name;
+  constructor(isbn, name) {
+    this.isbn = isbn;
+    this.name = name;
+  }
+  static [Symbol.unapply](book) {
+    // return an iterable for a valid match.
+    // return 'undefined' or 'null' to indicate unapply was unsuccessful.
+    if (book instanceof Book) return [book.isbn, book.name];
+  }
+}
+ 
+const Book(isbn, name) = null; // throws an error because the match failed.
+```
+
+[16:15:30.0957] <rbuckton>
+As a result, `@@unapply` is very similar to the proposed `@@matcher` with the following distinctions:
+- In `@@matcher` you return an object with `matched: true ` to indicate success. In `@@unapply` you return an iterable.
+- In `@@matcher` you return an object with `matched: false` to indicate failure. In `@@unapply` you return null/undefined.
+- In `@@matcher` you return an object with a `value` property that is destructured. In `@@unapply` you just return an iterable.
+- In `@@matcher`, the destructured value can be an object or an iterable. In `@@unapply` it can only be an iterable (but that can contain an object.
+
+[16:16:42.0918] <rbuckton>
+(its possible `@@unapply` could return a non-iterable, though that wouldn't work with `const Foo(bar) = x` destructuring)
+
+[16:20:26.0288] <rbuckton>
+`match` syntax could be extended to support extractors in a way that is consistent with extractor binding patterns and other match clauses.
+
+[16:22:06.0076] <rbuckton>
+```js
+match (msg) {
+  when (Message.Move({ x, y })) { ... }
+  when (Message.KeyPress({ alt: true, key })) { ... }
+  else { ... }
+}
+```
+
+[16:22:51.0055] <rbuckton>
+ * ```js
+match (msg) {
+  when (Message.Move({ x, y })) { ... }
+  when (Message.KeyPress({ alt: true, key })) { ... }
+  else { ... }
+}
+```
+
+[16:24:12.0827] <rbuckton>
+ * In Scala, an object with an `apply` method is essentially a function, and can behave similar to a constructor. So you can do something like `Book.apply(isbn, name)` (or just `Book(isbn, name)`) and get a `Book` object back. You give it arguments and it gives you the result.
+
+The `unapply` method is something like the inverse of a constructor. You give it the result and it gives you back the arguments.
+
+[16:24:32.0653] <rbuckton>
+ * This is especially useful in pattern matching. In JS, (without extra syntax) it might look something like this:
+```js
+const x = new Book(isbn, name);
+const [isbn, name] = Book[Symbol.unapply](x);
+```
+
+[16:24:52.0967] <rbuckton>
+ * This becomes even more powerful when used in a binding pattern, allowing you to evaluate extractor logic in the middle of the pattern:
+```js
+const books = [new Book(isbn, name, { publisher: "O'Reilly" })]
+const [Book(isbn, name, { publisher )] = books;
+```
+
+[16:25:04.0442] <rbuckton>
+ * This becomes even more powerful when used in a binding pattern, allowing you to evaluate extractor logic in the middle of the pattern:
+```js
+const books = [new Book(isbn, name, { publisher: "O'Reilly" })]
+const [Book(isbn, name, { publisher })] = books;
+```
+
+[16:25:37.0898] <rbuckton>
+ * This becomes even more powerful when used in a binding pattern, allowing you to evaluate extractor logic in the middle of the pattern:
+```js
+const books = [new Book("...isbn...", "...name...", { publisher: "O'Reilly" })]
+const [Book(isbn, name, { publisher })] = books;
+```
+
+[16:26:16.0946] <rbuckton>
+ * The `const Book(isbn, name) = x;` syntax is also an example of pattern matching. Book's "unapply" might look like this:
+```js
+class Book {
+  isbn;
+  name;
+  constructor(isbn, name) {
+    this.isbn = isbn;
+    this.name = name;
+  }
+  static [Symbol.unapply](book) {
+    // return an iterable for a valid match.
+    // return 'undefined' or 'null' to indicate unapply was unsuccessful.
+    if (book instanceof Book) return [book.isbn, book.name];
+    return null;
+  }
+}
+ 
+const Book(isbn, name) = null; // throws an error because the match failed.
+```
+
+[16:26:57.0176] <rbuckton>
+ * As a result, `@@unapply` is very similar to the proposed `@@matcher` with the following distinctions:
+- In `@@matcher` you return an object with `matched: true ` to indicate success. In `@@unapply` you return an iterable.
+- In `@@matcher` you return an object with `matched: false` to indicate failure. In `@@unapply` you return null/undefined.
+- In `@@matcher` you return an object with a `value` property that is destructured. In `@@unapply` you just return an iterable.
+- In `@@matcher`, the destructured value can be an object or an iterable. In `@@unapply` it can only be an iterable (but that iterable could contain an object).
+
+[22:56:37.0736] <ljharb>
+i think if to explain the usefulness of a concept you have to describe another language, that maybe it's not that useful?
+
+[22:56:54.0581] <ljharb>
+my recollection of unapply in scala is that it's powerful but very confusing
+
+[10:21:04.0408] <rbuckton>
+> <@ljharb:matrix.org> i think if to explain the usefulness of a concept you have to describe another language, that maybe it's not that useful?
+
+The only thing I described in another language was how Scala uses "unapply" as the inverse of "apply". The rest of what I posted was related to JS. 
+
+[10:51:37.0773] <ljharb>
+Yeah maybe I’m just hung up on the naming
+
+[10:53:00.0251] <ljharb>
+Either way I think if we want an inverse constructor protocol that works on destructuring and pattern matching it needs to be its own proposal. I’m skeptical that would advance tho for reasons described previously; i also doubt implementers would relish the prospect of making object destructuring as slow as iterable destructuring
+
+[11:04:46.0959] <rbuckton>
+It shouldn't affect object destructuring at all, since its a separate syntax.
+
+[11:05:19.0966] <rbuckton>
+(the initial version did, but I've since changed the explainer since I initially posted it here)
+
+[11:05:47.0385] <rbuckton>
+ * (the initial version did, but I've since changed the explainer since I initially posted it here)
+
+
+2021-11-20
+[18:12:49.0569] <ljharb>
+Why does an iterable make sense? A match should only be comparing to one pattern/value
+
+[18:57:39.0445] <rbuckton>
+For unapply, it's because it's essentially extracting arguments. I was considering `const Foo{x,y} = z` in addition to `const Foo(x, y) = z`, but there's no parallel construction syntax and I was concerned (incorrectly) that there was a syntax conflict in `match`. 
+
+[18:58:33.0957] <rbuckton>
+(I thought a `when` clause was paren-less)
+
+[21:45:18.0718] <ljharb>
+atm it's only parenless with the pin operator's parenless form, but all that's still up in the air
+
+[23:50:20.0029] <mpcsh>
+Very late to this conversation, but here's my $0.02:
+- I _love_ ADT enums in Rust, but JS isn't Rust. JS has easy / quick objects, Rust doesn't. Rust has a robust type system, JS doesn't. I think ADT enums are the right solution for Rust given those differences; I don't really see what they offer us in JS beyond what already exists.
+- I'm also a bit confused about `@@unapply` returning an iterable. It seems to me that there are two use-cases for `@@unapply`: one is tuple-like and one is record-like. I'm a bit skeptical of to solve both of those by returning an iterable, but maybe I'm missing something? Why not just have it return an array for the tuple-like case or an object for the record-like case?
+- Speaking of the differences between JS and Rust, I think we should also keep in mind the relative complexity of both languages. Rust has a much higher bar to entry than JS; both languages have their place, to be sure, but I worry that introducing full-fat ADT enums would increase JS's bar to entry.
+
+[23:50:28.0296] <mpcsh>
+ * Very late to this conversation, but here's my $0.02:
+- I _love_ ADT enums in Rust, but JS isn't Rust. JS has easy / quick objects, Rust doesn't. Rust has a robust type system, JS doesn't. I think ADT enums are the right solution for Rust given those differences; I don't really see what they offer us in JS beyond what already exists.
+- I'm also a bit confused about `@@unapply` returning an iterable. It seems to me that there are two use-cases for `@@unapply`: one is tuple-like and one is record-like. I'm a bit skeptical of to solve both of those by returning an iterable, but maybe I'm missing something? Why not just have it return an array for the tuple-like case or an object for the record-like case?
+- Speaking of the differences between JS and Rust, I think we should also keep in mind the relative complexity of both languages. Rust has a much higher bar to entry than JS; both languages have their place, to be sure, but I worry that introducing full-fat ADT enums would increase JS's bar to entry.
+
+
+2021-11-23
+[10:53:01.0769] <rbuckton>
+I do find it interesting that every conversation I've had with folks in the JS community about standardizing enums ends up with requests to consider ADT enums. 
+
+[10:59:21.0807] <rbuckton>
+I've been asking folks on V8 to consider heuristics to improve ICs based on ADT-like discriminants for years, because code like TS's `Node` is essentially an ADT, but so much of our codebase is megamorphic despite the majority of megamorphic access being against a discriminant field (`kind`). My hope is that if ADT enums become a thing, that they could be optimized around the discriminant in ways that regular objects can't.
+
+[11:06:00.0400] <rbuckton>
+The reason I am proposing that `@@unapply` return an iterable is that it is essentially the inverse of function application. I'd use `Reflect.apply`/`Function.prototype.apply` as examples, but they take "Array-likes" rather than iterables, but non-iterable "array-likes" can't be destructured using array destructuring. Instead, its more like `f(...args)` or `new C(...args)`.
+
+[11:06:42.0928] <rbuckton>
+I'm not opposed to allowing `@@unapply` to return something else, as that was actually in an earlier draft.
+
+[11:44:11.0980] <rbuckton>
+I've amended https://gist.github.com/rbuckton/ae46b33f383ba69880c7138c49b5e799 to reintroduce `Foo{x}` extractors (which allows `@@unapply` to return non-iterables) as well as to add some additional examples.
+
+[11:44:56.0606] <rbuckton>
+ * I've amended https://gist.github.com/rbuckton/ae46b33f383ba69880c7138c49b5e799 to reintroduce `Foo{x}` extractors (which allows `@@unapply` to return non-iterables) as well as to add some additional examples.
+
+[11:48:01.0766] <rbuckton>
+That means that `@@unapply` covers the same capabilities as `@@matcher`, with the following differences (amended from the list above):
+- In `@@matcher` you return an object with `matched: true ` to indicate success. In `@@unapply` you return the object to be destructured.
+- In `@@matcher` you return an object with `matched: false` to indicate failure. In `@@unapply` you return null/undefined.
+- In `@@matcher` you return an object with a `value` property that is destructured. In `@@unapply` you just return the value.
+
+[11:54:07.0394] <rbuckton>
+The question I have is this: if Extractor Objects has merit and is worth considering as a language feature (either as part of pattern matching, or as a separate proposal), should it use `@@matcher` (and its semantics), or should `match` use `@@unapply` (and its semantics)? 
+
+
+
+2021-11-24
+[19:51:32.0384] <ljharb>
+`undefined` and `null` are both completely reasonable and valid values for a custom matcher to return, which is why a sentinel value doesn't work, and a container object (like IteratorResult or a Promise settlement object) was chosen.
+
+[22:45:46.0638] <Jack Works>
+> <@ljharb:matrix.org> `undefined` and `null` are both completely reasonable and valid values for a custom matcher to return, which is why a sentinel value doesn't work, and a container object (like IteratorResult or a Promise settlement object) was chosen.
+
+Support. I think LHS unapply can use @@matcher as it's underlying semantics.
+
+
+2021-11-25
+[18:19:26.0904] <mpcsh>
++1 to Jordan's point. I feel like that would be the case with `@@unapply` semantics too: what if the `x` in `Foo{x}` is `string | null`? how do you distinguish between "failure" and "success but the value is `null`"?
+
+[19:34:43.0954] <rbuckton>
+For `Foo{x}` where `x` can be null, the return value would be `{ x: string | null }` if successful, or `null` if not. 
+
+[19:38:18.0882] <rbuckton>
+The result for extractors is always something to be further destructured. Having `null | undefined` be the error case falls out of the fact you can't destructure `null` or `undefined` anyways. 
+
+[19:40:51.0813] <rbuckton>
+The extractor syntax can only be used as an array or object destructuring (at least, based on what I've currently written in that explainer) 
+
+[20:05:16.0774] <mpcsh>
+I see, and then for `Foo(x)` the result would be `[string | null]` if successful or `null` if not?
+
+[20:07:38.0988] <rbuckton>
+Yes
+
+[20:10:44.0848] <mpcsh>
+gotcha. in that case, is there any particular reason that we should align these two proposals? your semantics make sense to me for extractor objects, but I think custom matchers definitely need to use a container object.
+
+[22:38:39.0199] <rbuckton>
+I'll try to follow up on this after the holiday. 
+
+
+2021-11-27
+[11:30:10.0887] <ljharb>
+“always something to be further destructured” i don’t think is a concept that really makes sense in js; we have mostly non-destructurable types of values.
+
+
+2021-11-29
+[10:38:43.0476] <rbuckton>
+I'm stating that the syntax for an extractor is always destructuring, just like `const {} = ...` and `const [] = ...` is always destructuring, and throws if the RHS is `null`, so its very much a concept in JS.
+
+
+2021-11-30
+[00:08:30.0426] <ljharb>
+yes but the thing you extract isn’t always further destructured 
+
+[00:20:54.0080] <rbuckton>
+> <@ljharb:matrix.org> yes but the thing you extract isn’t always further destructured
+
+With the `const Foo(x) = ...` and `const Foo{x} = ...` syntax, it is. `const Foo(x) = ...` is analogous to `const [x] = ...`, and `const Foo{x} = ...` is analogous to `const {x} = ...`. Extractors are only for those two cases, and certainly don't cover the whole of pattern matching.
+
+[00:21:34.0038] <rbuckton>
+With an extractor there is no analogue to `const x = ...`.
+
+[00:23:25.0928] <rbuckton>
+(or at least, none that I've found a compelling syntax for, so far)
+
+[00:27:07.0101] <rbuckton>
+Aside from the object destructuring pattern, the general principle behind an extractor is that it is the inverse of construction, i.e. `const x = Foo(a, b, c)` (multiple values in to one value out) vs `const Foo(a, b, c) = x` (one value in to multiple values out).
+
+[08:12:01.0495] <mpcsh>
+TabAtkins (c.f. [this post](https://github.com/tc39/Reflector/issues/412#issuecomment-982785776)) mind if I take the doodle for the next incubator call off your hands? I'll post the agenda by EOD today
+
+[08:12:36.0063] <TabAtkins>
+Oh sure, have fun
+
+[09:33:32.0062] <mpcsh>
+alright y'all, [here's my roundup](https://hackmd.io/@mpcsh/HJ9bJk4tK) of all our current open questions. let's use this as an agenda for an incubator call. there's a lot here - I think we'll need at least 2 hours. do folks have a preference for one long session with an intermission vs two (or more) calendar invites? cc ljharb TabAtkins yulia danielrosenwasser Jack Works rkirsling
+
+[09:43:30.0486] <yulia>
+when is the incubator call?
+
+[11:09:18.0437] <TabAtkins>
+mpcsh: will send out the doodle for it today
+
+[11:09:48.0868] <TabAtkins>
+I prefer a single long session, personally, but I'm fine with either if others have a strong pref for multiple meetings.
+
+[11:10:11.0645] <TabAtkins>
+Also, hoo boy mpcsh , great job with that agenda. I've gone thru and made all my notes, thanks so much for gathering all the issues like this.
+
+[12:21:51.0019] <TabAtkins>
+rbuckton: I'm open to re-evaluating the custom-matcher space. How would you handle the use-case of just "tell if the value is of this type"? `Foo()` would seem to match only if the match value was an empty array, right? Or is there implicit `...` semantics?
+
+[12:29:21.0391] <rbuckton>
+I'm not sure what you mean by "implicit `...` semantics", but one option is this:
+```js
+Foo[Symbol.unapply] = function (value) {
+  if (value instanceof Foo) return [value];
+  return null;
+};
+
+match (x) {
+  when (Foo(y)) { /*...*/ } // if you want 'y'
+  when (Foo()) { /*...*/ } // if you don't want 'y'
+}
+```
+But that depends on whether pattern matching checks whether the `when` clause is exhaustive (i.e., would `when ([])` match for `[1, 2, 3]`). If it is exhaustive, you could do something like:
+```js
+match (x) {
+  when (Foo(..._)) { /*don't care about the results*/ }
+}
+```
+
+[12:33:56.0249] <TabAtkins>
+Okay, yeah, that's exactly what I meant. Patterns *are* exhaustive, unlike destructuring (`when ([])` does *not* match `[1,2,3]`), so you'd indeed have to manually declare you don't care about the results.
+
+[12:44:01.0420] <mpcsh>
+> <@yulia:mozilla.org> when is the incubator call?
+
+TBD! I'm going to send out a doodle today - wanted to gather folks' preferences for one long session vs multiple shorter blocks
+

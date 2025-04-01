@@ -1,0 +1,45 @@
+2022-05-10
+[08:11:30.0265] <ramsey>
+Does anyone have any experience converting canonical language tags from ICU to ECMA402?
+
+[08:14:11.0777] <ramsey>
+> <@ramsey:matrix.org> Does anyone have any experience converting canonical language tags from ICU to ECMA402?
+
+And, more to the point, if so, is the code/algorithm you used to perform the conversion publicly available?
+
+[12:36:27.0921] <sffc>
+ICU has functions that output BCP-47 identifiers, which are compatible with 402
+
+
+2022-05-11
+[17:41:12.0982] <ramsey>
+> <@sffc:mozilla.org> ICU has functions that output BCP-47 identifiers, which are compatible with 402
+
+Do you know which functions output BCP-47 identifiers? For example, I'm looking at `uloc_canonicalize()` which, given a value like `EN-US`, will output the canonical value `en_US`, but if you pass `en_US` to `Intl.getCanonicalLocales()` (in every implementation I've tried), you get a `RangeError`. https://unicode-org.github.io/icu-docs/apidoc/released/icu4c/uloc_8h.html#a69b148194cf57ac40d4bb15c5b905260
+
+[11:18:21.0574] <ramsey>
+Ha ha! Found it. It's `uloc_toLanguageTag()`
+
+
+2022-05-28
+[13:32:30.0860] <Richard Gibson>
+ryzokuken 🇬🇷 sffc I've been thinking about Temporal, and would like to be more specific about the relationship between ECMA-262 and ECMA-402 in general. What are your feelings on proposing something formal like the following at the upcoming plenary?
+> 1. Any behavior specified in ECMA-402 (including circumstances that require throwing an exception) must be valid in an ECMA-262 implementation that does not support ECMA-402, allowing any ECMA-262 implementation to adopt it incrementally.
+> 2. ECMA-402 must not prohibit any behavior that is specified in ECMA-262 as available to implementations other than introduction of new built-in values and use of reserved function parameters, allowing any ECMA-262 implementation to adopt it without introducing backwards incompatibility.
+
+
+2022-05-31
+[09:30:31.0372] <sffc>
+Seems reasonable; I would support it
+
+[10:24:38.0206] <zbraniecki>
+sffc: https://github.com/boa-dev/boa/pull/2072#issuecomment-1141836914 - that makes a lot of sense to me. The "cut off from the right" for extensions makes no sense to me. Can we fine tune ECMA-402 to remove extensions first?
+
+[13:04:28.0903] <sffc>
+> <@zbraniecki:matrix.org> sffc: https://github.com/boa-dev/boa/pull/2072#issuecomment-1141836914 - that makes a lot of sense to me. The "cut off from the right" for extensions makes no sense to me. Can we fine tune ECMA-402 to remove extensions first?
+
+Yeah; in practice, these are currently always language identifiers, not locale identifiers, but with our work on user preferences, Unicode extensions will start to show up more, and we should be more future-proof
+
+[13:10:05.0246] <zbraniecki>
+I recommended to them to file an issue against ecma. I'm also wondering if we should additionally document that "BestAvailable" algo has known correctness bugs - https://github.com/rxaviers/ecma402-fix-lookup-matcher
+

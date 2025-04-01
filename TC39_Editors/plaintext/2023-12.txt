@@ -1,0 +1,344 @@
+2023-12-04
+[07:25:47.0135] <ljharb>
+is https://github.com/tc39/ecma262/pull/3176 ready to merge?
+
+[07:29:16.0088] <Michael Ficarra>
+yeah, should be
+
+[07:29:43.0338] <Michael Ficarra>
+https://github.com/tc39/ecma262/pull/3179 should be good now too, right?
+
+[08:37:00.0893] <ljharb>
+both good, both landed. i've asked the author of the latter to add their commit email to their github account, after which the IPR check will be passing again (not sure why it didn't fail on the PR since i explicitly check for this; it's on my list to investigate)
+
+
+2023-12-05
+[11:57:49.0636] <ljharb>
+IPR check is passing again.
+
+
+2023-12-06
+[12:15:07.0360] <bakkot>
+I can't make editor call today due to being on a plane
+
+[12:42:55.0040] <Michael Ficarra>
+can't afford airplane wifi on F5 salaries 😞
+
+[12:43:20.0661] <ljharb>
+oof
+
+[12:43:23.0878] <ljharb>
+any thoughts on https://github.com/tc39/ecma262/pull/3238 ?
+
+[12:43:51.0702] <ljharb>
+that's the only thing on the label that isn't identity stuff
+
+[12:43:53.0010] <Michael Ficarra>
+I added editor call label to it
+
+[12:43:55.0213] <Michael Ficarra>
+I'm fine with it
+
+[12:44:04.0846] <ljharb>
+oh i meant from kevin since he won't be on the call
+
+[12:44:09.0752] <Michael Ficarra>
+ohhh
+
+[13:32:37.0347] <shu>
+how much can airplane wifi be, $80?
+
+[14:36:48.0263] <bakkot>
+turns out that the flight is delayed but I don't really want to take a call sitting here in the airport
+
+[14:38:13.0992] <Michael Ficarra>
+😞
+
+
+2023-12-07
+[10:13:17.0920] <bakkot>
+writing up the spec for base64 and I really want to use break/continue
+
+[10:13:22.0442] <bakkot>
+what if we defined those
+
+[10:13:57.0741] <bakkot>
+the alternative is "repeat, while done is false" and then a great deal of nesting
+
+[10:18:37.0654] <Michael Ficarra>
+we have early returns, so you could technically use that
+
+[10:21:03.0933] <Michael Ficarra>
+also, that reminds me that I wanted to clarify that early returns do, in fact, skip steps that follow
+
+[10:51:42.0391] <ljharb>
+a separate AO with early returns seems nice
+
+[10:51:52.0513] <ljharb>
+> <@michaelficarra:matrix.org> also, that reminds me that I wanted to clarify that early returns do, in fact, skip steps that follow
+
+… how would anyone assume otherwise?
+
+[10:55:19.0984] <Michael Ficarra>
+in some (older) programming languages, you could just set a return value at any point in the program (or multiple points) and continue execution
+
+[10:56:19.0972] <Michael Ficarra>
+there's no reason to believe that someone reading the spec steps should assume "return" also means "and stop executing further steps"
+
+[10:56:36.0466] <Michael Ficarra>
+it could reasonably be understood to mean "set the return value to this"
+
+[10:56:51.0996] <Michael Ficarra>
+ * in some (older) programming languages, you could just set a return value at any point in the function (or multiple points) and continue execution
+
+[10:56:59.0127] <shu>
+i think you're confusing setting the return value to a statement saying, control is returned
+
+[10:57:21.0772] <shu>
+the older PLs separated the two, but i don't know of any PL that has something that says "return" but doesn't return control
+
+[10:57:55.0895] <shu>
+ * i think you're confusing setting the return value with a statement saying, control is returned
+
+[10:58:14.0045] <bakkot>
+restructuring flow to use early returns instead of break/continue can make it worse
+
+[10:58:38.0061] <bakkot>
+in this case there is a fair bit of state which would need to be passed into the continuation AO
+
+[10:59:25.0636] <bakkot>
+also that doesn't work for continue unless we replace the whole loop with recursion, which would also be worse
+
+[11:04:42.0912] <Michael Ficarra>
+> <@shuyuguo:matrix.org> the older PLs separated the two, but i don't know of any PL that has something that says "return" but doesn't return control
+
+that's fair, I don't know of any that used the keyword "return" for this
+
+[11:05:25.0845] <Michael Ficarra>
+> <@bakkot:matrix.org> restructuring flow to use early returns instead of break/continue can make it worse
+
+yes I believe this, and was only somewhat serious in my suggestion
+
+[11:05:50.0432] <bakkot>
+so, agreed we should add break/continue?
+
+[11:05:55.0058] <Michael Ficarra>
+no
+
+[11:06:02.0619] <bakkot>
+aww
+
+[11:06:12.0087] <Michael Ficarra>
+what do you think about "go to step `<emu-xref ...`"
+
+[11:06:12.0817] <bakkot>
+at least a couple other proposal authors have asked for it
+
+[11:06:25.0991] <bakkot>
+uhhhhhhhh
+
+[11:06:39.0582] <Michael Ficarra>
+you like it, don't you?
+
+[11:06:56.0323] <bakkot>
+not sure goto is better than break/continue but I guess if we carefully don't abuse it it would be ok?
+
+[11:07:40.0340] <Michael Ficarra>
+I think I prefer it
+
+[11:08:20.0279] <bakkot>
+I think that most proposal authors / readers would be more comfortable with break/continue than goto
+
+[11:08:28.0960] <bakkot>
+so can you say more about why you would prefer it?
+
+[11:09:49.0678] <Michael Ficarra>
+it's dead simple for a reader
+
+[11:10:08.0459] <bakkot>
+so is break/continue, as long as the reader is at all technical
+
+[11:10:15.0733] <Michael Ficarra>
+no chance to like incorrectly match it up with the containing repetition or go to the wrong instruction
+
+[11:11:40.0448] <Michael Ficarra>
+also, "go to step X" is familiar for *any* reader
+
+[11:12:12.0681] <bakkot>
+yeah but many possible uses are incoherent so when you read it you need to convince yourself it's coherent
+
+[11:12:22.0378] <bakkot>
+and the only uses I would want to allow are break/continue
+
+[11:12:32.0673] <bakkot>
+so for technical readers, you'd have to manually translate it to break/continue
+
+[11:12:33.0972] <bakkot>
+which is dumb
+
+[11:12:37.0867] <bakkot>
+we should just write the thing we mean
+
+[11:24:39.0222] <bakkot>
+anyway I would be ok with goto instead, it just seems dumb
+
+[11:24:45.0019] <bakkot>
+would like to hear from shu I guess
+
+[11:30:34.0328] <ljharb>
+with the AO and state passing, would a Record cover that?
+
+[11:36:12.0573] <bakkot>
+you still have to construct and pass said record, and record fields are more annoying than local variables, so no, not really
+
+[11:54:54.0113] <shu>
+brothers i love goto
+
+[11:55:01.0507] <shu>
+jump jump jump jump jump
+
+[11:55:06.0788] <shu>
+jump around
+
+[11:58:40.0288] <jmdyck>
+@bakkot: would you allow 'break' in For, Repeat, and While ?
+
+[12:08:02.0336] <bakkot>
+jmdyck: yes
+
+[12:08:14.0852] <bakkot>
+assuming by "while" you mean "Repeat, while"
+
+[12:10:14.0453] <jmdyck>
+Actually, there's one step that starts "While", in CleanupFinalizationRegistry. But it doesn't want a break now, and probably won't in future, so probably no loss to leave it out.
+
+[12:12:18.0963] <bakkot>
+yeah that's not exactly a loop anyway
+
+[12:13:09.0631] <jmdyck>
+With Repeat, there's Repeat-while, Repeat-until, and Repeat-forever
+
+[12:16:20.0474] <jmdyck>
+(Repeat-forever currently exits via explicit or implicit 'Return')
+
+[12:43:34.0672] <Richard Gibson>
+break/continue, but only labeled
+```
+1. [id="step-loop"] Repeat,
+  1. Set _i_ to _i_ + 1.
+  1. If _i_ ≥ _len_, break out of <emu-xref href="#step-loop"></emu-xref>.
+  1. Set _next_ to ? Get(_source_, ! ToString(𝔽(_i_))).
+  1. If _next_ is *undefined*, continue to <emu-xref href="#step-loop"></emu-xref>.
+  1. …
+```
+
+[12:52:56.0474] <bakkot>
+sgtm
+
+[12:56:56.0500] <ljharb>
+semantics sound good, but "break out of" would need a pretty clear definition
+
+[13:06:14.0217] <Michael Ficarra>
+nah, I still prefer goto
+
+[14:00:38.0487] <jmdyck>
+So then it would get rendered as (e.g.) "ii. If _i_ ≥ _len_, break out of 2.c."
+
+[14:02:05.0994] <jmdyck>
+and "If _next_ is **undefined**, continue to 2.c."
+
+[14:02:30.0972] <jmdyck>
+ * and "iv. If _next_ is **undefined**, continue to 2.c."
+
+[14:07:43.0554] <jmdyck>
+Might want to insert "step".
+
+[14:11:59.0498] <jmdyck>
+To simulate a 'break' with 'go to', you'd need to go to the step after the loop, so you'd have to label that step, but then someone might insert a step before that, without realizing that the label needs to be moved.
+
+[14:16:10.0734] <jmdyck>
+To simulate a 'continue' with 'go to', I suppose you'd put a do-nothing step at the end of the body and go to that.
+
+[14:34:04.0181] <Michael Ficarra>
+jmdyck: for continue, you can just point to the loop head
+
+[14:54:39.0038] <jmdyck>
+That wouldn
+
+[14:54:55.0604] <jmdyck>
+ * That wouldn't be very clear: could suggest restarting the loop.
+
+[14:57:45.0280] <Michael Ficarra>
+what does restarting mean?
+
+[14:57:51.0936] <jmdyck>
+ * To simulate a 'break' with 'go to', you'd need to go to the step after the loop, so you'd have to label that step, but then someone might insert a step before that, without realizing that the label needs to be moved. (Similarly if the labelled step needs to move elsewhere.)
+
+[14:57:56.0179] <Michael Ficarra>
+I don't see how it could possibly be misinterpreted
+
+[14:58:35.0777] <jmdyck>
+restarting means execute the step, same as if you go to it from outside.
+
+[14:59:03.0695] <Michael Ficarra>
+... that is the correct behaviour?
+
+[15:02:40.0535] <Michael Ficarra>
+oh I see, you're thinking of using it with "For ..." loops
+
+[15:02:50.0771] <Michael Ficarra>
+I was only considering "repeat"
+
+[15:03:42.0084] <jmdyck>
+right.
+
+[15:03:54.0322] <Michael Ficarra>
+let's not do that
+
+[15:04:01.0412] <jmdyck>
+hah
+
+[15:05:47.0543] <shu>
+have i said i love goto
+
+[15:11:35.0566] <jmdyck>
+yes, but your intonation is kind of faint
+
+
+2023-12-09
+[10:52:32.0464] <bakkot>
+Michael Ficarra: the "is an object" definition links to https://tc39.es/ecma262/multipage/ecmascript-data-types-and-values.html#sec-object-type, but that doesn't answer the questions one is actually likely to have upon clicking that link, like "does a function count"
+
+[10:53:27.0797] <bakkot>
+thoughts on either pointing that link somewhere else, or adding a paragraph to that section along the lines of "callable objects are called functions; all functions are members of the Object type"?
+
+
+2023-12-11
+[08:49:13.0737] <Michael Ficarra>
+I'd be open to something like that
+
+[08:49:36.0906] <Michael Ficarra>
+let's try to keep it as minimal as we can though
+
+
+2023-12-20
+[09:42:44.0389] <shu>
+i won't be at the call today
+
+[09:42:51.0343] <shu>
+see you all next year
+
+
+2023-12-21
+[16:49:10.0798] <jmdyck>
+I completely forgot about the meeting, did anything interesting happen?
+
+[16:55:37.0219] <bakkot>
+nope
+
+[17:42:47.0937] <Michael Ficarra>
+pretty much just https://github.com/tc39/ecma262/pull/1518#issuecomment-1865235583, https://github.com/tc39/ecma262/pull/3239#pullrequestreview-1791771439, and https://github.com/tc39/ecma262/pull/3245
+
+[18:43:16.0327] <jmdyck>
+tx
+

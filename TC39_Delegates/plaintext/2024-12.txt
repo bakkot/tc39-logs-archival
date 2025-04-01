@@ -1,0 +1,1717 @@
+2024-12-02
+[06:59:39.0008] <ryzokuken 🇷🇸>
+Draft Schedule is up on the Reflector: https://github.com/tc39/Reflector/issues/545
+
+[08:58:29.0533] <Rob Palmer>
+The meeting begins in 1 minute!!!
+
+[09:00:49.0545] <Michael Ficarra>
+FYI we still don't have a TCQ link
+
+[09:03:23.0929] <nicolo-ribaudo>
+If Google meet is stuck on "Getting ready... You'll be able to join in just a moment", is it a problem on my side?
+
+[09:03:27.0659] <ljharb>
+https://tcq.app/meeting/RKti
+
+[09:03:39.0836] <ljharb>
+probably, there's a bunch of us in it
+
+[09:04:10.0051] <nicolo-ribaudo>
+Ok thanks, time to restart everything
+
+[09:12:48.0157] <nicolo-ribaudo>
+Chairs, last minute change. It seems like I will be the one presenting the TG4 status report
+
+[09:40:01.0142] <littledan>
+I like Samina’s idea to have a liaison from TC39 to IETF, analogous to our close relationship with W3C and Unicode. Is anyone interested in playing this role?
+
+[09:45:32.0045] <saminahusain>
+In the past, I think 2021, Mathew Miller was the liaison contact from  tc39
+
+[09:49:54.0455] <bakkot>
+sorry, I forgot to add to the agenda constraints that I'm not available the first hour today
+
+[09:50:19.0099] <bakkot>
+hope we can get to my iterator closing topic after that
+
+[09:54:17.0645] <nicolo-ribaudo>
+Did Chris change which diff he's showing?
+
+[09:54:46.0548] <Michael Ficarra>
+yes
+
+[09:57:35.0768] <Michael Ficarra>
+whoever is doing notes right now, please refer to https://github.com/tc39/notes/blob/main/delegates.txt for abbreviations, don't just make something up
+
+[10:15:32.0849] <Michael Ficarra>
+@eemeli:mozilla.org please add a link to the slides in the notes
+
+[10:22:30.0844] <nicolo-ribaudo>
+I always assumed the motivation on this proposal was about ergonomics and not really about performance
+
+[10:22:37.0172] <nicolo-ribaudo>
+ * I always assumed the motivation for this proposal was about ergonomics and not really about performance
+
+[10:27:36.0120] <eemeli>
+> <@michaelficarra:matrix.org> @eemeli:mozilla.org please add a link to the slides in the notes
+
+There were no slides. The presented material was the readme of the proposal repo.
+
+[10:28:26.0775] <eemeli>
+https://github.com/eemeli/proposal-intl-currency-display-choices
+
+[10:29:51.0544] <rbuckton>
+We don't throw when you mutate a Map while iterating. I'd almost rather `getOrInsertComputed` just overwrites the key, whether it was set or deleted during the callback. If you want full locking, you can implement it yourself?
+
+[10:30:10.0744] <shu>
+rbuckton: that IS my understanding of the non-throwing approach
+
+[10:30:11.0704] <shu>
+is it not?
+
+[10:31:41.0742] <bakkot>
+the four options:
+
+```
+// common prefix
+if (map.has(key)) return key;
+let value = callback(key);
+
+// option 1
+if (map.has(key)) throw;
+
+// option 2
+map.set(key, value);
+return value;
+
+// option 3 (not proposed)
+if (map.has(key)) return map.get(key);
+map.set(key, value);
+return value;
+
+// option 4 (not proposed): change `Map.prototype.set` to check if we're currently in a `getOrInsertComputed` for this map
+```
+
+sounds like people 
+
+[10:31:55.0553] <bakkot>
+ * the four options:
+
+```
+// common prefix
+if (map.has(key)) return key;
+let value = callback(key);
+
+// option 1
+if (map.has(key)) throw;
+
+// option 2
+map.set(key, value);
+return value;
+
+// option 3 (not proposed)
+if (map.has(key)) return map.get(key);
+map.set(key, value);
+return value;
+
+// option 4 (not proposed): change `Map.prototype.set` to check if we're currently in a `getOrInsertComputed` for this map
+```
+
+sounds like people like option 2 (which I'm also happy with)
+
+[10:32:05.0426] <nicolo-ribaudo>
+I dislike these names but I have no constructive suggestion
+
+[10:32:49.0647] <rbuckton>
+I personally prefer `getOrAdd`/`getOrCreate`, but I've been too busy over the last few weeks to comment on the issue :/
+
+[10:33:02.0763] <ljharb>
+bakkot: option 3 would basically be "actual upsert"?
+
+[10:33:16.0343] <ljharb>
+ * bakkot: option 3 would basically be "actual upsert"? or is that something else
+
+[10:33:25.0049] <bakkot>
+no
+
+[10:33:36.0429] <bakkot>
+we're accounting for mutation during the callback
+
+[10:33:40.0165] <bakkot>
+not passing new values to the callback
+
+[10:33:53.0660] <ljharb>
+ah k
+
+[10:35:14.0071] <bakkot>
+ * the four options:
+
+```
+// common prefix
+if (map.has(key)) return key;
+let value = callback(key);
+
+// option 1
+if (map.has(key)) throw;
+map.set(key, value);
+return value;
+
+// option 2
+map.set(key, value);
+return value;
+
+// option 3 (not proposed)
+if (map.has(key)) return map.get(key);
+map.set(key, value);
+return value;
+
+// option 4 (not proposed): change `Map.prototype.set` to check if we're currently in a `getOrInsertComputed` for this map
+```
+
+sounds like people like option 2 (which I'm also happy with)
+
+[10:35:43.0363] <rbuckton>
+Regarding the naming, neither of these methods are actually an "upsert", which normally consists of either "updating an existing value" or "inserting a new value", hence the portmanteau of "update" and "insert". 
+
+[10:45:12.0149] <Mikhail Barash>
+University of Bergen's students have written a tutorial on `upsert` proposal prototype implementations in SpiderMonkey and V8. The current preliminary (rough) draft is available here: https://github.com/bldl/emplace-spidermonkey . It currently lacks the description of the implementation in V8; this will be added soon. 
+
+[10:47:30.0897] <ljharb>
+https://github.com/tc39/proposal-is-error/issues/7
+
+[10:47:52.0013] <bakkot>
+chairs: can you make sure my "iterator helpers close receiver on argument validation failure (10m, Kevin Gibbons)" topic doesn't get lost? currently it's up above the other items on the agenda
+
+[10:48:07.0265] <bakkot>
+ * chairs: can you make sure my "iterator helpers close receiver on argument validation failure (10m, Kevin Gibbons)" topic doesn't get lost? currently it's up with the already-presented items on the agenda
+
+[11:00:04.0429] <Aki>
+ljharb: reminder to record your summary/conclusion
+
+[11:00:27.0138] <Aki>
+bakkot: see 👆🏻
+
+[11:01:24.0594] <nicolo-ribaudo>
+You can get an AsyncContext candy
+
+[11:58:43.0486] <Rob Palmer>
+Plenary resumes in one minute!
+
+[12:08:42.0184] <nicolo-ribaudo>
+Can we get the transcriptioner to disable automatic-newline?
+
+[12:09:03.0388] <ryzokuken 🇷🇸>
+how bad is it? should I file a POO?
+
+[12:09:16.0131] <nicolo-ribaudo>
+It's just annoying
+
+[12:09:27.0092] <nicolo-ribaudo>
+Because if I add a newline anywhere then the line is too short and looks  bad
+
+[12:09:28.0109] <ljharb>
+(also more than one space after a period)
+
+[12:20:14.0479] <nicolo-ribaudo>
+This note taker is very good
+
+[12:20:19.0831] <nicolo-ribaudo>
+They are even adding parentheses in function calls
+
+[12:43:13.0211] <nicolo-ribaudo>
+The results of the temp check are "we should flip a coin"
+
+[12:45:34.0586] <bakkot>
+I can't speak but note:
+
+[12:45:40.0228] <rbuckton>
+My concern is that reuse promotes weird corner cases
+
+[12:45:48.0242] <bakkot>
+htis means can't implement concat with a generator
+
+[12:45:58.0944] <rbuckton>
+i.e., accessors, proxies, etc.
+
+[12:45:58.0948] <bakkot>
+ * this means you can't implement concat with a generator
+
+[12:46:05.0578] <shu>
+yeah i'm confused by the flipped polarity
+
+[12:46:17.0927] <shu>
+why are agoric folks okay with concat doing reuse?
+
+[12:46:23.0975] <nicolo-ribaudo>
+> <@bakkot:matrix.org> this means you can't implement concat with a generator
+
+```js
+function* concat(...iterators) {
+  for (const it of iterators) yield* it;
+}
+```
+
+[12:46:29.0253] <nicolo-ribaudo>
+Since yield re-uses
+
+[12:46:34.0907] <nicolo-ribaudo>
+ * Since yield* re-uses
+
+[12:46:38.0161] <bakkot>
+ah, true
+
+[12:46:41.0877] <shu>
+oh i see
+
+[12:46:54.0865] <bakkot>
+ok then i am indifferent
+
+[12:46:55.0483] <rbuckton>
+> <@bakkot:matrix.org> this means you can't implement concat with a generator
+
+If we don't reuse, we can use a generator but not `yield*`
+
+[12:47:07.0329] <bakkot>
+though `return` is trickier
+
+[12:47:19.0302] <bakkot>
+ * though `return` is a little trickier
+
+[12:47:25.0454] <rbuckton>
+```js
+function* concat(...iterators) {
+  for (const it of iterators) 
+    for (const el of it)
+      yield el;
+}
+```
+
+[13:00:07.0739] <Michael Ficarra>
+> <@nicolo-ribaudo:matrix.org> Since yield* re-uses
+
+(except in JSC and LibJS)
+
+[13:02:04.0143] <Chris de Almeida>
+https://github.com/tc39/proposal-shadowrealm/issues/393
+
+[13:17:57.0274] <nicolo-ribaudo>
+waldemar There is also random which is technically I. I guess the actual principle is "web APIs don't expose I/O other than what is already exposed by ECMAScript itself"
+
+[13:28:53.0762] <shu>
+brother i don't know of any API that doesn't allocate memory
+
+[13:30:45.0063] <Richard Gibson>
+> <@shuyuguo:matrix.org> brother i don't know of any API that doesn't allocate memory
+
+`destroy()`
+
+[13:31:04.0838] <shu>
+where do you think the stack space needed to push the frames to make the call comes from?
+
+[13:31:19.0205] <Richard Gibson>
+lol
+
+[13:33:04.0049] <Chris de Almeida>
+should we consider elaborating on stage 3 acceptance criteria re: tests being merged?
+
+[13:33:24.0809] <shu>
+Chris de Almeida: i honestly thought that was already the case
+
+[13:33:32.0091] <Chris de Almeida>
+it's hand-wavy
+
+[13:33:34.0948] <shu>
+like what's the point of having tests that are floating out there but not merged
+
+[13:33:36.0814] <Chris de Almeida>
+> The feature has sufficient testing and appropriate pre-implementation experience
+
+[13:34:02.0203] <shu>
+sorry, i meant i thought it was the case that being merged is a necessary condition for being considered "sufficient testing"
+
+[13:34:09.0927] <shu>
+not just that some tests were written, somewhere
+
+[13:34:42.0361] <Chris de Almeida>
+I understand; the question is, would it help to make the text more explicit?
+
+[13:34:53.0875] <ljharb>
+i think we've generally considered merging a requirement
+
+[13:35:18.0184] <ljharb>
+but we also don't usually block advancements on procedural things that are unambiguous - we usually grant conditional advancement pending that thing
+
+[13:35:31.0932] <ljharb>
+ * but we also don't usually block advancements on procedural things whose completion is unambiguous - we usually grant conditional advancement pending that thing
+
+[13:36:13.0063] <ljharb>
+ * but we also don't usually block advancements on procedural things whose completion is unambiguous - we usually grant conditional advancement pending that thing (a PR review, a PR merge, etc)
+
+[13:36:23.0887] <ljharb>
+ * but we also don't usually block advancements on procedural things whose completion is unambiguous - we usually grant conditional advancement pending that thing (a PR review, a PR merge, resolving an open question between known stakeholders, etc)
+
+[13:40:11.0670] <Chris de Almeida>
+generally speaking, is the status quo that tests have been merged before asking for stage 3?  
+
+[13:40:21.0522] <ljharb>
+for non-large proposals, yes.
+
+[13:40:47.0907] <ljharb>
+ * for non-large proposals, yes, i believe so
+
+[13:42:19.0749] <shu>
+i think how much leniency we give definitely will vary case-by-case. in the particular case of ShadowRealms, it got to stage 3 the first time on that promise that the integration work will be done, and the ball got dropped
+
+[13:52:46.0154] <bakkot>
+ptomato I am happy to open an issue about crypto.subtle somewhere if you'd like. is the shadowrealm proposal the right place for that kind of bikeshedding issue? also if you want to just look at it without bothering with an issue that's fine
+
+[14:10:48.0879] <ptomato>
+> <@bakkot:matrix.org> ptomato I am happy to open an issue about crypto.subtle somewhere if you'd like. is the shadowrealm proposal the right place for that kind of bikeshedding issue? also if you want to just look at it without bothering with an issue that's fine
+
+thanks! in proposal-shadowrealm is fine, but if you don't want to bother with an issue that's also fine; I've got it on my todo list
+
+[14:13:39.0271] <bakkot>
+dminor: mozilla doesn't usually bother with standards-positions on TC39 proposals, yeah? https://github.com/mozilla/standards-positions/issues/1133
+
+[15:04:41.0795] <Michael Ficarra>
+> <@shuyuguo:matrix.org> sorry, i meant i thought it was the case that being merged is a necessary condition for being considered "sufficient testing"
+
+IMO, the (significantly) more important bit is just that someone has done the elaboration of all of the edge cases and confirmed that we are indeed specifying the thing we want to specify
+
+[15:07:04.0845] <Michael Ficarra>
+and if someone has reviewed and said "yes, these look both correct and exhaustive to me", then it has met that criterion
+
+[15:15:18.0680] <shu>
+i'm hoping the delta between that last bit, where someone has reviewed and +1'd it, and merging it into a test suite, is trivial
+
+[15:15:26.0712] <shu>
+if it isn't then we should rework the test suite workflow
+
+[15:29:07.0450] <Michael Ficarra>
+well atm the test262 maintainers group holds those keys and they may have additional criteria that they need to review for before it gets merged
+
+[15:37:22.0207] <dminor>
+> <@bakkot:matrix.org> dminor: mozilla doesn't usually bother with standards-positions on TC39 proposals, yeah? https://github.com/mozilla/standards-positions/issues/1133
+
+Correct, we don't normally do this
+
+
+2024-12-03
+[08:53:42.0611] <littledan>
+Should we do this for ShadowRealms though?
+
+[09:12:50.0865] <dminor>
+https://github.com/mozilla/standards-positions/issues/997
+
+[09:22:07.0676] <shu>
+i thought porffor was an engine, it's a runtime as well?
+
+[09:22:50.0650] <ljharb>
+what's the difference between those two to you?
+
+[09:23:10.0690] <ljharb>
+ * what's the difference between those two, to you?
+
+[09:23:13.0195] <shu>
+the difference between Node and V8
+
+[09:23:34.0587] <ljharb>
+d8 is a runtime tho, no?
+
+[09:23:42.0164] <shu>
+hahahahaha
+
+[09:23:42.0715] <shu>
+no
+
+[09:24:04.0644] <snek>
+you could call d8 a test262 runtime
+
+[09:24:05.0865] <littledan>
+I think porffor is working on developing into a runtime, yes
+
+[09:24:12.0849] <littledan>
+canadahonk: ^
+
+[09:24:27.0078] <ljharb>
+so what's the concrete rubric that node passes but d8 doesn't?
+
+[09:24:38.0435] <ljharb>
+(genuinely asking, tbc)
+
+[09:24:39.0220] <littledan>
+the intentions of the maintainers?
+
+[09:24:54.0260] <shu>
+at the very least, a desire and goal to actually support workloads beyond "the bare minimum needed to run tests"
+
+[09:24:54.0787] <ljharb>
+i mean if that's all it is then that's simple enough
+
+[09:25:20.0864] <littledan>
+in particular, TC55 is for server-type environments, which Node is intended to be, and d8 isn't
+
+[09:25:33.0406] <shu>
+like there is little rhyme or reason for "features" that exist in d8, how they work, beyond "whatever's bare minimum needed to run our tests and the test262 harness"
+
+[09:25:38.0245] <ljharb>
+porffor tho makes standalone executables, so is that not a runtime?
+
+[09:25:59.0386] <shu>
+no, IMO it needs a set of APIs and intention as dan says
+
+[09:26:05.0076] <shu>
+otherwise every engine is also a runtime
+
+[09:26:06.0922] <shu>
+and obviously we're not
+
+[09:26:07.0545] <Chris de Almeida>
+porffor famously does not ship a runtime
+
+[09:26:22.0446] <snek>
+unless you reference `globalThis`
+
+[09:26:33.0663] <littledan>
+yeah porffor isn't ready yet; this is about goals
+
+[09:26:34.0342] <Rob Palmer>
+Technically Porffor refers to itself as a compiler, rather than an engine.  And the resulting programs are more useful than base ecma262 allows, e.g.  io.
+
+https://porffor.dev/
+
+[09:26:47.0622] <canadahonk>
+oh no I regret not joining the call now
+
+[09:27:11.0901] <littledan>
+please come to the GA and vote in favor of chartering TC55, everyone!
+
+[09:27:16.0186] <nicolo-ribaudo>
+The definition of "runtime" is "whatever people consider to be a runtime"
+
+[09:27:26.0939] <Rob Palmer>
+Don't worry canadahonk , it was barely mentioned in plenary.
+
+[09:27:28.0314] <canadahonk>
+currently I would call it a compiler and engine
+
+[09:27:43.0318] <canadahonk>
+it is as much a runtime as d8 currently
+
+[09:27:54.0958] <Rob Palmer>
+(the conversation here in the matrix is the main part)
+
+[09:28:23.0943] <ljharb>
+ok thanks, that clarifies the meanings for me
+
+[09:28:34.0940] <ljharb>
+(and "runtime" clearly has a very hand-wavy one)
+
+[09:29:35.0545] <canadahonk>
+(long-term yeah I'd like it to be more like node in terms of api/io capability but that is far away for now)
+
+[09:30:03.0506] <canadahonk>
+ * (long-term yeah I'd like it to be more like node in terms of api/io capability but that is far away for now. there a few apis providing i/o but they are largely proof-of-concept rather than nice for now)
+
+[09:31:51.0915] <canadahonk>
+on this point yeah, it will not include anything engine or runtime unless you use it. eg, if you have no usage of `Map`, in the binary there will be 0 checks for if the type as you know it wasn't used at compile-time
+
+[09:31:57.0851] <Michael Ficarra>
+@canadahonk:matrix.org you gonna just implement the wasi APIs?
+
+[09:32:35.0268] <canadahonk>
+I'd like to have node(/deno/etc)-like wrappers to make them nicer ideally
+
+[09:32:56.0063] <canadahonk>
+ * I'd like to have node(/deno/etc)-like wrappers to make them nicer ideally (also to provide stability with my own API since WASI isn't)
+
+[09:32:56.0743] <littledan>
+It will be great to have people working on the correspondence between these things!
+
+[09:34:14.0559] <Michael Ficarra>
+personally, I would rather the engine just provide the wasi primitives and then I can pull in a library that adapts them to the high-level node/deno/whatever APIs
+
+[09:34:38.0718] <canadahonk>
+fair enough that makes sense to me too, we'll see :)
+
+[09:36:24.0821] <canadahonk>
+also fun fact, even worst case using `globalThis`, so including 100% of engine, the output Wasm is still only <500kb ;)
+
+[09:37:13.0206] <canadahonk>
+ * also fun fact, even worst case using `globalThis`, so including 100% of engine, the output Wasm is still only \<500kb and native \<300kb ;)
+
+[09:39:28.0718] <bakkot>
+that reminds me I need to pester the wasi people about https://github.com/WebAssembly/wasi-clocks/pull/71 again
+
+[09:39:52.0755] <bakkot>
+wasi v2 seems promising but there's still a bunch of warts and it doesn't seem to be moving as fast as I'd hoped
+
+[09:49:13.0070] <Rob Palmer>
+I did not realize that return-override stamping objects with private fields degrades their performance.
+
+[09:50:11.0646] <littledan>
+Note that the current semantics of private fields was heavily based on Mark's strongly stated goal of private fields being consistently analogous to WeakMaps in semantics.
+
+[09:53:30.0430] <bakkot>
+all of these things mark is proposing are things where, it would be nice if the language worked like this, but I am not convinced adding a new and less convenient kind of object with the new semantics is worth doing
+
+[09:59:59.0468] <keith_miller>
+Did anyone else's audio fall out?
+
+[10:00:16.0333] <ljharb>
+i mean i'd definitely make every object i ever produce non-trapping, because i don't want people to use proxy :-p
+
+[10:16:49.0670] <shu>
+bakkot: what are your thoughts on changing non-extensible to include no-private-field-stamping? is that an extra bit of complexity in your view?
+
+[10:17:47.0409] <ljharb>
+that would mean sealed and frozen also have that trait, which seems a lot more likely to cause issues
+
+[10:17:53.0916] <shu>
+that's correct
+
+[10:18:05.0761] <shu>
+right, it's all contingent on being web compat
+
+[10:18:11.0619] <shu>
+i don't know of people who are actually doing that
+
+[10:18:18.0983] <ljharb>
+private field stamping?
+
+[10:18:26.0388] <shu>
+on non-extensibles?
+
+[10:18:37.0765] <ljharb>
+oh true, that's a subset of a subset if anything
+
+[10:18:44.0544] <shu>
+right
+
+[10:18:56.0076] <ljharb>
+but like, if that's low enough that it's web compat, what about return override from `class` constructors itself?
+
+[10:19:12.0157] <shu>
+i'm open to that but i think that _does_ break stuff
+
+[10:19:16.0975] <shu>
+with people subclassing html elements or some crap
+
+[10:19:50.0792] <ljharb>
+gotcha
+
+[10:20:17.0069] <ljharb>
+yeah custom elements seems to need a lot of really weird userland code :-/
+
+[10:21:17.0793] <Ashley Claymore>
+> <@robpalme:matrix.org> I did not realize that return-override stamping objects with private fields degrades their performance.
+
+My understand is that it's another shape change (in v8 at least) as it's adding a hidden symbol prop. I had assumed it the same perf hit as adding a public symbol. Maybe that's not the case
+
+[10:21:35.0367] <Ashley Claymore>
+> <@robpalme:matrix.org> I did not realize that return-override stamping objects with private fields degrades their performance.
+
+ * My understand is that it's another shape change (in v8 at least) as it's adding a hidden symbol prop. I had assumed it is the same perf hit as adding a public symbol. Maybe that's not the case
+
+[10:22:12.0703] <shu>
+yeah i don't think it's any worse than adding any other property
+
+[10:23:31.0097] <bakkot>
+> <@shuyuguo:matrix.org> bakkot: what are your thoughts on changing non-extensible to include no-private-field-stamping? is that an extra bit of complexity in your view?
+
+I think the whole private-field-stamping thing is something we should simply not tell developers about, so changing how it works does not particularly add complexity
+
+[10:23:38.0055] <bakkot>
+so I'm fine with that
+
+[10:24:36.0590] <Ashley Claymore>
+I have been wondering if we could have a way to disable proxy hooks, and if that would allow proxies to get a stable shape for ICs.
+like
+const [proxy, disableTraps] = Proxy.temporary(target, handler);
+...
+disableTraps();
+
+[10:24:56.0435] <Mathieu Hofman>
+I am really worried that people out there, possibly in libraries, did build WeakMap equivalent widgets that use the return override private field stamping trick, and that it would break if we unilaterally prevented return overrides proxy stamping. It's possible that non extensible objects are currently rare enough that they wouldn't break any deployed code. 
+
+[10:25:57.0890] <bakkot>
+> <@aclaymore:matrix.org> I have been wondering if we could have a way to disable proxy hooks, and if that would allow proxies to get a stable shape for ICs.
+> like
+> const [proxy, disableTraps] = Proxy.temporary(target, handler);
+> ...
+> disableTraps();
+
+I would prefer we just tell people to stop using proxies ever, instead of adding new methods which try to make them a little bit more performant
+
+[10:27:03.0534] <Jack Works>
+> <@aclaymore:matrix.org> I have been wondering if we could have a way to disable proxy hooks, and if that would allow proxies to get a stable shape for ICs.
+> like
+> const [proxy, disableTraps] = Proxy.temporary(target, handler);
+> ...
+> disableTraps();
+
+you can remove proxy traps after the creation.
+
+```js
+const trap = { ... }
+const proxy = new Proxy(obj, trap)
+// after some time
+delete trap.get
+```
+
+[10:27:32.0583] <ljharb>
+yeah that live binding behavior is bonkers to me
+
+[10:27:48.0515] <ljharb>
+i wonder if it'd be web compatible to eagerly cache the traps at proxy creation time
+
+[10:28:45.0915] <Mathieu Hofman>
+Proxies are an integral part of being able to construct transparent membranes.
+
+[10:29:13.0143] <ljharb>
+sure but that's a thing that likely only double digits of humans on the planet ever need to think about
+
+[10:29:17.0075] <Ashley Claymore>
+Yeah. But engines wouldn't know that the trap isn't going to be added back. Even if it has prevent extensions the handler itself could be a proxy with a get trap 🙁
+
+[10:29:43.0813] <ljharb>
+ * sure but that's a thing that likely only double digits of humans on the planet ever need to think about (not that we'd remove proxies, just tell the majority not to use them)
+
+[10:29:46.0436] <bakkot>
+> <@mhofman:matrix.org> Proxies are an integral part of being able to construct transparent membranes.
+
+I am aware of that and nevertheless strongly stand by my position.
+
+[10:30:04.0564] <Mathieu Hofman>
+Guilty of making the handler a proxy. However the engine does know if the handler is a proxy and could opt out of optimizations in that case
+
+[10:30:39.0092] <Jack Works>
+> <@ljharb:matrix.org> sure but that's a thing that likely only double digits of humans on the planet ever need to think about
+
+I use proxy to trap `[[Get]]` to provide object that every property is defined and functional based on their name
+
+[10:31:26.0771] <Ashley Claymore>
+yeah. Maybe the spec already allows engines to optimize for the case I'm interested in. But that doesn't mean it's worth implementing, and even having a dedicated API for it doesn't mean that it has to be implemented in a way that adds a performance win 
+
+[10:31:37.0388] <ljharb>
+i'd be curious to see it, but i still don't think there's even 100 people on the planet that need to be using proxy directly
+
+[10:31:38.0516] <Jack Works>
+> <@jackworks:matrix.org> I use proxy to trap `[[Get]]` to provide object that every property is defined and functional based on their name
+
+in a library called async-call-rpc to provide good DX
+
+[10:32:13.0240] <ljharb>
+ah, i have… feelings … about RPC and SOAP and whatnot so i probably wouldn't be able to be objective :-)
+
+[10:32:47.0499] <bakkot>
+you can definitely do a lot of cool stuff with proxies, don't get me wrong
+
+[10:32:48.0130] <Ashley Claymore>
+Immer is quite popular? Thought maybe that doesn't fall under "using proxies directly"
+
+[10:32:52.0796] <Jack Works>
+also immer.js uses proxy too 😇
+
+[10:35:18.0380] <Mathieu Hofman>
+Yeah I have a half dozen use cases of Proxy that are not part of a membrane. I still find Proxy very useful, but we just need a way to be able to better reason about their hooks.
+
+[10:48:04.0966] <ljharb>
+right but that's just 1 maintainer, the users don't count because they don't know about proxy :-)
+
+[10:49:25.0500] <bakkot>
+nicolo-ribaudo I found this presentation very helpful!
+
+[10:49:34.0413] <bakkot>
+I have not been following all the various things and it was good to catch up
+
+[10:50:16.0144] <nicolo-ribaudo>
+Ok thank you! :)
+
+[11:58:22.0876] <Rob Palmer>
+We resume plenary in 1 minute!!!
+
+[12:15:12.0513] <bakkot>
+nicolo-ribaudo: question about the upcoming `import.defer` topic. how does the "hiding `then`" solution work given the "`'unknown' in ns` triggers evaluation" resolution from earlier in the slides?
+
+[12:17:09.0862] <nicolo-ribaudo>
+> <@bakkot:matrix.org> nicolo-ribaudo: question about the upcoming `import.defer` topic. how does the "hiding `then`" solution work given the "`'unknown' in ns` triggers evaluation" resolution from earlier in the slides?
+
+`'then'` would actually be handled like symbols and _not_ trigger in that case. The idea is that wether something triggers or not depends only on the key you are checking, and not wether or not that key is exposed by the module
+
+[12:17:27.0449] <nicolo-ribaudo>
+> <@bakkot:matrix.org> nicolo-ribaudo: question about the upcoming `import.defer` topic. how does the "hiding `then`" solution work given the "`'unknown' in ns` triggers evaluation" resolution from earlier in the slides?
+
+ * `'then'` would actually be handled like symbols and _not_ trigger in that case (same as `ns[Symbol.toStringTag]` does not trigger). The idea is that wether something triggers or not depends only on the key you are checking, and not wether or not that key is exposed by the module
+
+[12:17:42.0065] <bakkot>
+ah, ok, so it's special-cased in the evaluation logic, not just the namespace object MOP
+
+[12:17:43.0394] <bakkot>
+cool
+
+[12:17:53.0656] <nicolo-ribaudo>
+Yes
+
+[12:18:27.0221] <nicolo-ribaudo>
+Well, mechanically it's special cased in the MOP, as it's the various methods that decide when to evaluate based
+
+[12:18:30.0511] <nicolo-ribaudo>
+But yes
+
+[12:18:57.0391] <nicolo-ribaudo>
+ * Well, mechanically it's special cased in the MOP, as it's the various methods that decide when to evaluate based on the key you pass them
+
+[12:20:13.0451] <bakkot>
+ah, sure
+
+[12:20:30.0002] <bakkot>
+I do like the "hiding `then`" solution best of the considered options
+
+[12:27:59.0767] <snek>
+how is this different from subarray if the source is immutable?
+
+[12:28:42.0192] <bakkot>
+subarray on TAs gives you access to the full underlying buffer
+
+[12:29:18.0987] <bakkot>
+(and there is no subarray on ArrayBuffer)
+
+[12:31:28.0750] <snek>
+ok
+
+[13:00:44.0821] <bakkot>
+I may not be able to speak for my topic; if I'm not responding someone please read the following: "I like having a way to check if a deferred NS object is evaluated yet, but really don't like having a new well-known symbol like `Symbol.evaluated` for this. I'd be happier with a new global function, or a new DeferredModuleNamespace class with a static "isEvaluated" method or something. also we could add this capability in a followup; doesn't need to be included immediately if we're not sure it's worth doing."
+
+[13:09:26.0605] <hax (HE Shi-Jun)>
+nicolo-ribaudo: dynamic import only behave strange if `then` export is a function. But hiding `then` exclude all values.
+
+[13:09:57.0424] <ljharb>
+in my testing in the past, thenable ESM modules don't even work properly in node (i can't remember if they fail in the repl and work outside, or the reverse, but they def don't work in both)
+
+[13:10:04.0935] <ljharb>
+ * in my testing in the past, thenable ESM modules don't even work properly - meaning, can't be imported - in node (i can't remember if they fail in the repl and work outside, or the reverse, but they def don't work in both)
+
+[13:10:12.0272] <ljharb>
+ * in my testing in the past, thenable ESM modules don't even work properly - meaning, can't be imported - in node (i can't remember if they fail in the repl and work outside, or the reverse, but they def didn't work in both when i tested)
+
+[13:12:48.0661] <Ashley Claymore>
+reading any export of a deferred namespace triggers it's evaluation, which is the issue for this proposal
+
+[13:16:26.0686] <hax (HE Shi-Jun)>
+Yeah, I know. I'm ok with hiding `then`, I just want to point out this new weirdness is not 100% same as the weirdness of dynamic import. 👾 
+
+[13:16:47.0934] <bakkot>
+ljharb: isDeferredModuelNSEvaluated would solve this :)
+
+[13:16:59.0256] <ljharb>
+i saw your queue item but i don't know what that is
+
+[13:17:07.0751] <bakkot>
+the thing I was talking about in my item earlier
+
+[13:17:18.0995] <ljharb>
+ah i think i was distracted during that part then
+
+[13:17:23.0532] <bakkot>
+a top-level global function of that name which tells you if a deferred module NS has been evaluated already
+
+[13:17:35.0913] <bakkot>
+if that existed, and throws given an input which is not a deferred module NS, then it gives you the brand check you want
+
+[13:17:39.0230] <ljharb>
+makes sense to me.
+
+[13:21:11.0201] <Michael Ficarra>
+I want standard error stacks just so I can deny (read) access to the call stack in a standardised way
+
+[13:22:32.0905] <shu>
+i don't think we can unship the current non-standard APIs though?
+
+[13:22:35.0777] <nicolo-ribaudo>
+> <@bakkot:matrix.org> ljharb: isDeferredModuelNSEvaluated would solve this :)
+
+Yeah this might be a nice way to sneak in the brand check. What I'm hoping for is through one of the `Module` methods, or maybe even as `ModuleSource.isModuleNamespace` is `Module` takes too long to come
+
+[13:22:57.0546] <nicolo-ribaudo>
+And I would want a brand check for _either_ namespace, and then once you know that it's a namespace you branch on the @@toStringTag
+
+[13:23:49.0698] <bakkot>
+is `@@toStringTag` unforgeable on module namespaces?
+
+[13:25:30.0081] <Michael Ficarra>
+> <@shuyuguo:matrix.org> i don't think we can unship the current non-standard APIs though?
+
+don't need to, just define them in terms of the standard API and once it's denied, they are also denied
+
+[13:26:06.0101] <shu>
+i don't know if that's possible?
+
+[13:26:21.0820] <ljharb>
+you can't change it on the namespace. but you can def make an object that fakes being a module namespace, yes
+
+[13:29:16.0116] <nicolo-ribaudo>
+> <@bakkot:matrix.org> is `@@toStringTag` unforgeable on module namespaces?
+
+Yes
+
+[13:33:31.0963] <ljharb>
+mgaudet: what doesn't match the repo?
+
+[13:34:11.0011] <mgaudet>
+Are you or are you not trying to spec the textual representation? 
+
+[13:34:23.0399] <mgaudet>
+because what you -said- sounded like no, but what the repo -says- is yes
+
+[13:35:00.0034] <ljharb>
+i'm trying to spec the format. not the contents.
+
+[13:35:42.0481] <ljharb>
+meaning, the actual text, line numbers, etc is not part of it, but the way it's put together is. all of which has been in the repo since before 2019
+
+[13:35:56.0196] <mgaudet>
+.... "Return the string-concatenation of the code unit 0x0020 (SPACE), ... ' 
+
+[13:36:11.0833] <mgaudet>
+isn't that the actual contents of of the frame textually represented? 
+
+[13:36:28.0639] <ljharb>
+in the places where we know it's a number, with a colon, etc, yes, it has text
+
+[13:36:40.0532] <ljharb>
+but the hard part is in all the text that's not present
+
+[13:36:55.0880] <ljharb>
+"name", "source", etc
+
+[13:37:00.0215] <ljharb>
+that's the contents i'm not specifying
+
+[13:41:30.0365] <Rob Palmer>
+- name
+- source
+- span
+  - startPosition
+    - line
+    - column
+  - endPosition
+    - line
+    - column
+
+[13:44:18.0333] <Devin Rousso>
+ljharb  id be happy to help with the WebKit "side" of standardizing `error.stack` 🙂
+
+[13:55:23.0195] <hax (HE Shi-Jun)>
+I just realize that function name can contain any char, because people can redefine `name` property of a function 🤔
+
+[13:58:49.0291] <ljharb>
+yep. it can even be a non-string (altho it'd be stringified for the stack trace)
+
+[13:59:58.0029] <ljharb>
+mgaudet: filed https://github.com/tc39/proposal-error-stacks/issues/51 re "at"
+
+[14:00:55.0753] <snek>
+idk why we even want to specify the contents of error stack strings. structured data seems useful though.
+
+[14:03:10.0034] <Devin Rousso>
+FYI WebKit also uses `@` <https://github.com/WebKit/WebKit/blob/main/Source/JavaScriptCore/runtime/StackFrame.cpp#L161>
+
+[14:04:06.0553] <ljharb>
+huh, did it used to?
+
+[14:04:29.0546] <Devin Rousso>
+pretty sure it's always been `@`
+
+[14:04:38.0651] <snek>
+yeah
+
+[14:04:53.0869] <ljharb>
+alrighty. i designed the spec 5-7 years ago based on research from SES, so i'm not sure how i totally missed the "@" stuff. an obvious spec bug i'll need to fix :-)
+
+[14:05:40.0937] <eemeli>
+As a European TC39 participant, I find skipping the "afternoon" sessions of virtual meetings much more pleasant, given that they are always based in a North American timezone, and e.g. this week we're finishing at my local midnight.
+
+[14:06:40.0989] <snek>
+i'm awake anyway so i don't mind these at all. its the early morning ones that kill me.
+
+[14:07:16.0629] <hax (HE Shi-Jun)>
+Yeah, it's good news, I can go to bed at 3am next two days.
+
+[14:07:17.0384] <eemeli>
+Ugh, yeah, PT at 4pm is 2am for me.
+
+[14:09:55.0584] <Aki>
+PSA in case you quit the meeting before I spoke up: If you're not actively reading/editing the notes, please do close that tab! (fully disregard if you're doing either activity—i'm not trying to lock them down or anything. just need to know what i'm working with.)
+
+[14:17:56.0207] <Mathieu Hofman>
+That's a big reason why the `get stack` property is in annex B in this proposal, and that the getters are static functions which could be more easily restricted
+
+[14:24:10.0447] <snek>
+i can understand specifying the location and attributes of the property, but idk why the string contents should be specified. in fact i kind of prefer they aren't, it would be annoying to constrain debugging.
+
+[15:00:07.0979] <waldemar>
+When is the May 2025 meeting? The date currently listed for it, Tuesday 2025‑05-28, does not exist — May 28 is not a Tuesday in 2025.
+
+[15:04:07.0402] <nicolo-ribaudo>
+It's meant to be Wed-Fri
+
+[15:59:32.0720] <Rob Palmer>
+It is now fixed.  Thank you for highlighting Waldemar.
+
+
+2024-12-04
+[16:27:29.0368] <leobalter>
+as I missed the discussions about **ShadowRealm** yesterday, some async comments post reading the meeting notes.
+
+*For clarity and for the records, I no longer speak as a champion of the proposal, but as a regular delegate.*
+
+It seems the only real blocker for Stage advancement is getting agreement from DOM vendors, which I agree. I don't think - and I hope I'm right - that stage 2.7 or stage 3 would change how DOM vendors would react or accept the proposal.
+
+The challenge for DOM vendors to accept is having the design (resolved), tests (resolved), and **capacity for implementation**. 
+
+I don't think DOM vendors would be able to prioritize or willing to implement it just for the sake of releasing a new feature. I believe this one is up to the champions finding sponsorship for the implementation. That's something I no longer control or can exercise much leverage.
+
+Given all the facts and where we are at with ShadowRealm, offering funding for implementation of ShadowRealm is the best chance to get it accepted, and then yes, move it up to stages 3 and 4. This may still require vendors spending some cycles on review, but I think it's doable. 
+
+cc ptomato dminor shu Michael Saboff 
+
+[18:01:47.0529] <ljharb>
+it doesn’t, only immer’s maintainers
+
+[06:36:41.0420] <dminor>
+I don't think the problem is capacity for implementation but rather that people remain unconvinced that ShadowRealm is a good idea for the web. In that case, even if the implementation of ShadowRealm was externally funded, there's no guarantee that patches would be reviewed and landed.
+
+[08:58:44.0115] <Devin Rousso>
+i unfortunately am likely gonna miss plenary today and tomorrow 😭
+
+but something i wanted to just throw out there regarding error stacks
+
+rather than trying to standardize (or at least codify) what already exists, what if we created a new `Error.prototype.get standardizedStack` or something which we can build entirely from scratch (i.e. a uniform format across engines)?
+
+to be clear this wouldn't preclude engines from having their own `stack` that contains whatever details the engine wants to provide
+
+instead it would give an opportunity for all of us to agree on at least some minimal meaning for "what does a stack look like?" and "how do i get one?"
+
+[09:07:56.0340] <snek>
+is TLA considered harmful at this point
+
+[09:08:43.0524] <ljharb>
+🌏️🔫🧑‍🚀
+
+[09:09:36.0929] <snek>
+you mean standardized string, or standardized structured dataa?
+
+[09:09:42.0571] <snek>
+if the former, why?
+
+[09:09:51.0318] <snek>
+ * you mean standardized string, or standardized structured data?
+
+[09:20:37.0873] <Chris de Almeida>
+PSA: we will be ending for the day at the break.  no afternoon session today
+
+[09:29:00.0550] <Richard Gibson>
+cf. https://matrix.to/#/!WgJwmjBNZEXhJnXHXw:matrix.org/$3kN3Fbul5yr4xdcqDvHKLhEzv9fQrgow7d_JyqG48_c / https://matrixlogs.bakkot.com/TC39_Delegates/2024-12-03#L118
+> I want standard error stacks just so I can deny (read) access to the call stack in a standardised way
+
+[09:32:51.0527] <keith_miller>
+Sorry I missed some of this. Is import.sync + source modules insufficient for Node.js? Or is evaluation not going to permitted in import.sync if you already have the source?
+
+[09:33:21.0348] <nicolo-ribaudo>
+What's insufficient is if `import.sync("./a/file.js")` throws for a non-already-imported file
+
+[09:36:51.0777] <leobalter>
+I understand maintenance is also a concern, but I believe we went through years of cycles on how realm access would be good for the web. 
+
+ShadowRealm is the form that was proposed using direct feedback from vendors and it still resolves the business proposition.
+
+[09:37:55.0197] <leobalter>
+we don't need to rediscuss this here, we can agree to disagree. It should be up to the champions to move the proposal forward.
+
+[09:39:39.0120] <keith_miller>
+For what reason? Because it's not possible to know all the files users want to import? Otherwise the bundling pass could just gather all the imports and replace `import.sync("./a.js");` with a prepass that exposes a bunch of `aSourceModule`s and does `import.sync(aSourceModule)`
+
+[09:42:09.0007] <nicolo-ribaudo>
+There is no bundling pass in Node.js, it runs modules directly. The use cases for `import.meta.require("./a/file.js")` is synchronous conditional loading, for example to only load a polyfill when running in Node.js and not when running in the browser
+
+[09:50:00.0079] <Ashley Claymore>
+some of which could be done with an import map? Though I guess a library can't easily 'ship' an import map that it expects the final app to pull in
+
+[09:50:16.0163] <Ashley Claymore>
+would have to express via package.json
+
+[09:50:52.0446] <keith_miller>
+Sure, I guess I was thinking of `package.json` as the "bundling pass" 
+
+[09:52:17.0071] <keith_miller>
+It seems like it wouldn't be crazy or insurmountable to specify all the conditional packages your project uses in `package.json`. Or if you do some sync importing for some other package to require that package to list the ones it uses
+
+[09:52:33.0147] <keith_miller>
+That would be a good security practice anyway, IMO
+
+[09:54:00.0071] <keith_miller>
+Perhaps there's some details I'm missing though
+
+[09:54:40.0533] <nicolo-ribaudo>
+So, assuming that they are all in package.json (I was assuming the same), then what happens? Are you assuming that Node.js loads all the dependencies defined in package.json at startup, so they then they are already pre-loaded when you try to sync import them?
+
+[09:55:14.0988] <keith_miller>
+Yeah, effectively.
+
+[09:55:50.0050] <keith_miller>
+If it's just an fopen call that's probably sufficiently equivalent from a spec compliance PoV
+
+[09:55:59.0323] <keith_miller>
+ * If it's just an fopen call at sync import time that's probably sufficiently equivalent from a spec compliance PoV
+
+[09:56:30.0056] <nicolo-ribaudo>
+Well, it also requires parsing to recourse into the dependencies of the modules you list as dependencies in package.json
+
+[09:57:30.0290] <nicolo-ribaudo>
+This solution seems fine, but then it's equivalent to "we allow Node.js to have different behavior from browsers"
+
+[09:57:40.0982] <nicolo-ribaudo>
+Since browsers don't pre-load the import map
+
+[09:57:52.0608] <keith_miller>
+Why would have to parse the source? It seems like that data should be transitively visible from the package.json
+
+[09:58:50.0634] <nicolo-ribaudo>
+package.json dependencies point to a "group of modules". Only the entrypoints of each library are listed
+
+[09:59:01.0119] <nicolo-ribaudo>
+Not the modules they load within the same package
+
+[09:59:52.0987] <keith_miller>
+Yeah but those entrypoints also have a package.json(?) So that would tell you what modules are needed for that package, recursively
+
+[10:00:08.0633] <ljharb>
+not necessarily, because package.json doesn't have to list every entrypoint unless it's using `exports`
+
+[10:00:25.0554] <ljharb>
+also, even with using `exports`, each entrypoint could be importing other files that aren't externally accessible
+
+[10:00:30.0053] <ljharb>
+ * also, even with using `exports`, each entrypoint could be importing other relative files that aren't externally accessible
+
+[10:00:36.0495] <nicolo-ribaudo>
+> <@ljharb:matrix.org> also, even with using `exports`, each entrypoint could be importing other relative files that aren't externally accessible
+
+^ this is my point
+
+[10:01:58.0711] <nicolo-ribaudo>
+If you have a dependency `my-lib` that has entrypoint `./a.js`, and `./a.js` imports `./b.js` within my-lib, `./b.js` is not listed in the dependencies of `my-lib`
+
+[10:02:08.0651] <nicolo-ribaudo>
+Because dependencies are _packages_, not individual modules
+
+[10:02:54.0568] <keith_miller>
+Is that fundamental? Couldn't during their `import.sync` transition they add a new field to `package.json` that's all the private modules?
+
+[10:03:11.0986] <ljharb>
+there's no way to mandate that
+
+[10:03:17.0985] <nicolo-ribaudo>
+Well it could
+
+[10:03:22.0487] <keith_miller>
+Sure, import.sync fails
+
+[10:03:31.0787] <keith_miller>
+ * Sure, import.sync fails if you don't add the field lol
+
+[10:03:36.0611] <ljharb>
+it's a language syntax feature
+
+[10:04:04.0226] <ljharb>
+node has no ability to make it fail
+
+[10:04:26.0301] <ljharb>
+but also, the number of people who would want to do that rounds to zero
+
+[10:04:29.0611] <nicolo-ribaudo>
+Well it can fail the same way as it can fail in browsers
+
+[10:04:35.0891] <keith_miller>
+Node has the ability to not provide the source module if you don't specify it?
+
+[10:04:42.0696] <ljharb>
+that requirement would basically guarantee nobody adopts it
+
+[10:04:59.0092] <keith_miller>
+Wild...
+
+[10:05:08.0759] <keith_miller>
+It could be done by node for you even lol
+
+[10:05:15.0188] <nicolo-ribaudo>
+I think what keith_miller would work, but it's effectively like saying that Node.js and browsers can diverge? Node.js could just say "we pre-load all the files we find in the folder"
+
+[10:05:15.0534] <keith_miller>
+or some other script
+
+[10:05:33.0043] <ljharb>
+node definitely should never be touching package.json, and if it's done by a script then i'd have to run that every time i add or remove a file inside the package
+
+[10:05:36.0786] <nicolo-ribaudo>
+ * I think what keith_miller proposes would work, but it's effectively like saying that Node.js and browsers can diverge? Node.js could just say "we pre-load all the files we find in the folder"
+
+[10:05:53.0064] <keith_miller>
+I mean Node.js is completely allowed to put whatever source modules it wants into some namespace?
+
+[10:05:54.0389] <ljharb>
+ * node definitely should never be modifying package.json, and if it's done by a script then i'd have to run that every time i add or remove a file inside the package
+
+[10:06:05.0361] <ljharb>
+i'm not sure what you mean by "allowed"
+
+[10:06:25.0753] <ljharb>
+node _can_ do anything. what it could do that would be deemed acceptable is a much smaller list
+
+[10:07:08.0153] <ljharb>
+and forcing me to change package.json every time i make a small refactor to extract something to a file, or rename/move a file, is an insanely onerous ask
+
+[10:07:20.0096] <ljharb>
+even if it's automated, the git diff churn is prohibitive
+
+[10:07:29.0733] <keith_miller>
+What in the TC-39 spec prevents node from `ls`ing your directory and providing a bunch of variables in your module via `import.meta` or something?
+
+[10:07:41.0739] <ljharb>
+nothing
+
+[10:08:03.0481] <ljharb>
+but node doesn't just have ESM, they also have CJS, and `import.sync` would presumably work in CJS also
+
+[10:08:08.0191] <ljharb>
+ * but node doesn't just have ESM, they also have CJS, and `import.sync` would presumably work in CJS (Script) also
+
+[10:08:13.0947] <ljharb>
+ * but node doesn't just have ESM, they also have CJS, and `import.sync` would presumably work in CJS (Script) also, just like `import()` does
+
+[10:08:14.0998] <keith_miller>
+Great then it doesn't even need to be in the package.json
+
+[10:08:38.0419] <ljharb>
+i doubt the performance of that would be something node would ever want to implement, hitting the filesystem is expensive
+
+[10:09:22.0078] <ljharb>
+put another way, we could have made ESM fully sync, and browser devs would have been required to use a tool to generate a complete list of imported modules up front. would that be acceptable DX to you for browser devs? that's what you're asking for here.
+
+[10:09:39.0316] <ljharb>
+ * put another way, we could have made ESM fully sync, and browser devs would have been required to use a tool to generate a complete list of imported modules up front. would that be acceptable DX to you for browser devs? it seems like that's what you're asking for here.
+
+[10:09:51.0983] <nicolo-ribaudo>
+Is it observable wether Node.js does that eagerly upfront or lazily as needed, other than performance?
+
+[10:10:02.0405] <keith_miller>
+I don't think so
+
+[10:10:09.0564] <ljharb>
+yes, because the fs isn't static, and the program can make changes to it
+
+[10:10:26.0262] <keith_miller>
+Other than for reasons outside of TC-39's control
+
+[10:10:27.0326] <ljharb>
+ * yes, because the fs isn't static, and the program (and the rest of the machine) can make changes to it
+
+[10:10:42.0891] <ljharb>
+"the filesystem" is a concept that doesn't exist in tc39 :-p
+
+[10:12:03.0099] <keith_miller>
+This API could just be a window proxy like object that vends you back the source module for the file you specify synchronously?
+
+[10:12:10.0332] <keith_miller>
+Or just a function
+
+[10:12:12.0809] <ljharb>
+also, that would be effectively a discouragement of having many small files, which would definitely be bringing us back to "all the code is in one file"
+
+[10:12:43.0271] <ljharb>
+ * also, that would be effectively a discouragement of having many small files, which would definitely be bringing us back to "all the code is in one file" (referencing a TDZ discussion)
+
+[10:12:50.0058] <snek>
+how does this coalescing work, is relative resolution not preserved in module sources?
+
+[10:12:52.0277] <keith_miller>
+So you'd just do `import.sync(nodeJSSpecificThingThatFindsYourSourceModule("./a.js"))`
+
+[10:12:59.0016] <ljharb>
+like even if there were no technical issues with it, i don't think enumerating files is a viable path
+
+[10:13:11.0815] <ljharb>
+"./a.js" is your source module tho, it's a file path
+
+[10:13:18.0673] <snek>
+oh the specifier is part of the key ok
+
+[10:13:32.0418] <ljharb>
+and since that node-specific thing wouldn't exist in browsers, that wouldn't get us to the goal of being able to write universal code
+
+[10:13:45.0456] <ljharb>
+(with import maps, file paths work fine in browsers)
+
+[10:14:20.0698] <keith_miller>
+Then `nodeJSSpecificThingThatFindsYourSourceModule` could be `nodeJSSpecificThingThatFindsYourSourceModule(a) { return a; }` in browsers?
+
+[10:14:55.0210] <keith_miller>
+Presumably with a different name lol
+
+[10:16:19.0913] <nicolo-ribaudo>
+Can `nodeJSSpecificThingThatFindsYourSourceModule` be called `import.meta.resolve`? 🙏
+
+[10:16:47.0051] <keith_miller>
+I'm just saying Node.js has workarounds to specifying everything up front. For browsers 99% of devs do bundling so that seems like it could handle gathering this data for them.
+
+[10:17:21.0694] <nicolo-ribaudo>
+> <@keith_miller:matrix.org> I'm just saying Node.js has workarounds to specifying everything up front. For browsers 99% of devs do bundling so that seems like it could handle gathering this data for them.
+
+So you would be ok with an `import.sync` working automatically in Node.js due to Node's magic, but not in browsers without extra user work?
+
+[10:17:36.0148] <keith_miller>
+Personally, sure
+
+[10:17:40.0572] <ljharb>
+lol, a lot of devs on social media got very angry about the implication that 99% of devs use bundlers and that the language should build in that assumption
+
+[10:18:05.0412] <keith_miller>
+They don't have to use bundlers but then they have to do their own bookkeeping
+
+[10:18:20.0926] <ljharb>
+if it's onerous without a tool, then a lot of folks will be angry about it
+
+[10:18:37.0713] <keith_miller>
+So we should make everyone's experience bad?
+
+[10:18:38.0652] <Ashley Claymore>
+Should the language build in that we also minify?
+
+[10:18:51.0688] <ljharb>
+no, we should be designing so tools can work, but not designing assuming users have to use the tools
+
+[10:19:15.0128] <keith_miller>
+Then, IMO, we'll likely have nothing
+
+[10:19:31.0193] <keith_miller>
+And Node.js will end up doing it's own thing
+
+[10:20:28.0562] <ljharb>
+that may indeed be the case
+
+[10:20:43.0682] <ljharb>
+that's what we'll explore in stage 1
+
+[10:20:51.0433] <keith_miller>
+That seems worse than providing something which works for most folks, IMO
+
+[10:22:04.0623] <keith_miller>
+I agree we should aim to provide things that work without tools but I don't think we should let that be the enemy of good
+
+[10:22:08.0134] <ljharb>
+you may be overestimating how many users use bundlers, is all
+
+[10:22:28.0281] <ljharb>
+(unless you have actual data on that, which would be very valuable to have publicly but doesn't exist afaik)
+
+[10:30:43.0907] <nicolo-ribaudo>
+Chairs, I would prefer that we disallow saying "you can jump in in my presentation", because it's very difficult for me to interact
+
+[10:31:06.0628] <nicolo-ribaudo>
+I either have the choice to jump in all the time too, or addmyself to the queue for after this back-and-forth is done
+
+[10:31:49.0095] <nicolo-ribaudo>
+ * Chairs, I would prefer that we disallow saying "you can jump in in my presentation", because it's very difficult for others to interact
+
+[10:32:01.0752] <nicolo-ribaudo>
+ * I either have the choice to jump in all the time too, or add myself to the queue for after this back-and-forth is done and we are three topics past it
+
+[10:32:33.0734] <bakkot>
+> <@ljharb:matrix.org> you may be overestimating how many users use bundlers, is all
+
+My job requires me to read a lot of code for random retailers and etc and I am confident in the claim that almost all production JS on the web is bundled (or has no dependencies)
+
+[10:34:17.0485] <Chris de Almeida>
+there's something to be said for the importance of timely clarifications -- meaning while we're on the slide, rather than waiting till the end.  so I think it's ok if the presenter wants to do that.  but to your point, it is better if we say to still use `clarifying question` in TCQ, with the understanding that the chairs will interrupt immediately during the presentation in this mode
+
+[10:35:40.0523] <nicolo-ribaudo>
+Ok that seems like an ok approach, if chairs would facilitate in that way
+
+[10:35:58.0017] <nicolo-ribaudo>
+Ideally we should encourage presenters to keep an eye on the queue while presenting, but I understand that it can be difficult
+
+[10:40:40.0212] <nicolo-ribaudo>
+Kris Kowal I think I disagree with the idea that we need to pass hook to the source constructor. Instead, I'd like to have module instances being implicitly created from sources by inheriting the same options bag from the referred module instance
+
+[10:40:53.0196] <nicolo-ribaudo>
+Effectively, the hook are only defined in the entry point of the graph
+
+[10:41:20.0746] <nicolo-ribaudo>
+And they have to receive the referrer instance as an argument to do proper resolution (I liked seeing it unexpectedly in the slides)
+
+[10:41:33.0381] <nicolo-ribaudo>
+ * Kris Kowal I think I disagree with the idea that we need to pass hook to the source constructor. Instead, I'd like to have module instances being implicitly created from sources by inheriting the same options bag from the referrer module instance
+
+[10:45:22.0567] <nicolo-ribaudo>
+ * And they have to receive the referrer source (which has metadata, such as the base URL) as an argument to do proper resolution (I liked seeing it unexpectedly in the slides)
+
+[10:45:39.0876] <nicolo-ribaudo>
+ * And they have to receive the referrer source (which has (virtual-)host-specific metadata, such as the base URL) as an argument to do proper resolution (I liked seeing it unexpectedly in the slides)
+
+[11:04:28.0117] <snek>
+did the meeting end or is it lunch? 
+
+[11:04:40.0677] <snek>
+oh i see the calendar was just edited, nvm
+
+[11:04:40.0732] <nicolo-ribaudo>
+end
+
+[14:35:59.0185] <Chris de Almeida>
+PSA: barring any late additions/requests for continuations, if we don't make up any time tomorrow, we are going to ask that we continue the meeting for 15 minutes into the scheduled lunch break to close out the meeting.  (this avoids taking an hour break only to come back for 15 minutes)
+
+
+2024-12-05
+[16:31:18.0949] <Chris de Almeida>
+it has been brought to my attention that the above may not be as clear as it can be, so to be clear:
+
+we MAY still need to use the afternoon session tomorrow if the need arises by way of continuations or last-minute additions.
+
+if we do NOT have any additional content, then we will continue up to 15 minutes into the scheduled lunch break, and then end the meeting at that point.
+
+[09:12:07.0779] <shu>
+what
+
+[09:12:17.0265] <shu>
+there is no way people are training models on decimal
+
+[09:20:21.0648] <bakkot>
+I would believe _someone_ is doing it but only because people like doing weird stuff
+
+[09:20:33.0487] <bakkot>
+that's like a "make a computer out of redstone in minecraft" sort of an exercise
+
+[09:20:47.0746] <shu>
+i'd sooner believe people are training LLMs in minecraft
+
+[09:26:08.0958] <nicolo-ribaudo>
+eemeli .sumPrecise _minimizes_ binary-floating-point errors, but still does binary math
+
+[09:26:22.0640] <nicolo-ribaudo>
+i.e. `Math.sumPrecise(0.1, 0.2)` is the same as `0.1 + 0.2`, and not `0.3`
+
+[09:26:35.0750] <nicolo-ribaudo>
+ * eemeli .sumPrecise _minimizes_ binary-floating-point errors by adding them in the optimal order, but still does binary math
+
+[09:28:41.0174] <Michael Ficarra>
+> by adding them in the optimal order
+
+I don't think it's quite that simple lol
+
+[09:31:01.0438] <Michael Ficarra>
+it's easier to think of sumPrecise as a magic function that gives you the closest float to the inputs' actual sum than ever actually doing any intermediate arithmetic
+
+[09:31:08.0895] <bakkot>
+> <@shuyuguo:matrix.org> i'd sooner believe people are training LLMs in minecraft
+
+not an LLM, but https://www.youtube.com/watch?v=DQ0lCm0J3PM
+
+[09:34:11.0692] <shu>
+google maps got like "4.7 stars" don't it
+
+[09:34:54.0079] <bakkot>
+I don't know if you can actually rate something as 4.7 stars though
+
+[09:34:58.0830] <bakkot>
+it might just be an average
+
+[09:35:17.0603] <shu>
+it is, but at presentation time, the number of stars is definitely more granular than half-star increments
+
+[09:35:22.0679] <shu>
+(was narrowly responding to that)
+
+[09:36:43.0346] <ljharb>
+true, that's a fair point
+
+[09:38:49.0443] <snek>
+users should know that it's actually 4.70000000000000017763568394002504646778106689453125
+
+[09:40:28.0719] <shu>
+it's actually the string "4.7"
+
+[09:44:39.0940] <nicolo-ribaudo>
+There was a paper by somebody about using just 1 bit for weights in ML models
+
+[09:44:53.0505] <shu>
+yeah float1s are cool
+
+[09:45:37.0066] <nicolo-ribaudo>
+Sorry I prefer int1
+
+[10:42:29.0304] <Michael Ficarra>
+I actually find that argument by DLM pretty convincing
+
+[11:00:54.0227] <snek>
+is schema referring to the shape of the strings or the shape of the objects
+
+[11:01:12.0210] <shu>
+the shape of the objects
+
+[11:01:17.0172] <shu>
+the shape of the strings is just a nonstarter i feel like
+
+[11:09:30.0359] <Michael Ficarra>
+I continue to not understand why anybody would put 👀 on the temp check
+
+[11:09:32.0728] <Michael Ficarra>
+what does that mean?!
+
+[11:11:09.0893] <hax (HE Shi-Jun)>
+I can't see the temp check on tcq...
+
+[11:12:01.0165] <Chris de Almeida>
+temp check is over
+
+[11:13:34.0152] <ljharb>
+i think it's a way to explicitly abstain
+
+[11:26:24.0294] <Rob Palmer>
+(I agree - I see it as "I will follow whatever the temperature-experiencing crowd go with")
+
+[11:30:54.0460] <Chris de Almeida>
+it's also helpful to know that those folks saw the interface and participated
+
+[12:04:26.0674] <Aki>
+I've always read 👀 as "the outcome of this is relevant to me, but I do not have a meaningful opinion on where it should go"
+
+[12:11:28.0674] <Rob Palmer>
+It's amazing how much semantic information is packed into a single Unicode character.
+
+[13:21:53.0559] <Richard Gibson>
+...but being subjective, it's not great for this purpose
+
+[13:26:57.0331] <shu>
+wait, i always thought the eyes was to express astonishment
+
+[13:27:00.0395] <shu>
+since they're like, opened really wide
+
+[13:28:08.0074] <shu>
+that's embarrassment
+
+[13:28:12.0691] <shu>
+that's uwu
+
+[13:28:19.0024] <nicolo-ribaudo>
+Damn
+
+[13:29:11.0910] <Aki>
+i mean it says "Following"
+
+[13:29:21.0696] <shu>
+where does it say that?
+
+[13:29:36.0522] <Aki>
+directly above the emoji
+
+[13:29:49.0174] <shu>
+the unicode name is "Eyes" though
+
+[13:32:01.0560] <Aki>
+okay?
+
+[13:32:48.0404] <shu>
+okay
+
+[13:32:52.0083] <Aki>
+I was just pointed out that it's captioned for clarity. like, a temp check works with zero emoji because each option is a word
+
+[13:33:17.0926] <shu>
+oh, you meant it says that above the emoji in the temp check UI
+
+[13:33:35.0512] <shu>
+i thought you were saying, like, in the hover thing for the reaction in matrix
+
+[13:34:56.0776] <Aki>
+oh, no, in that case your embarrassment and uwu are "flushed" and "pleading face"
+
+[13:37:07.0437] <shu>
+seems consistent, you get flushed when you are embarrassed, or have endocrine disorders
+
+[13:47:40.0595] <Richard Gibson>
+Likert scale (TC39's version): Strong Positive, Positive, Following, Confused, Indifferent, Unconvinced
+
+[14:32:52.0222] <Aki>
+Reminder to record summary & conclusion. even if you think the transcript itself is sufficient. as a record-keeper I assure you it is not.
+
+- Chris de Almeida Process document fixes and corrections
+- eemeli More Currency Display Choices
+- Michael Ficarra iterator sequencing for Stage 3
+- nicolo-ribaudo Module Harmony: where we are
+- Mark Miller Immutable ArrayBuffer to stage 2
+- ljharb Error Stacks Structure for Stage 2
+- guybedford Import Sync discussion, request for Stage 1?
+
+[14:33:15.0961] <Aki>
+additionally, if you dictated a summary please pop in and lightly edit it for readability
+
+[14:33:27.0769] <Aki>
+it's easier to do this all now than two weeks from now when i'm pestering y'all again
+
+[14:33:38.0954] <Aki>
+thank you!
+
+[14:38:31.0968] <Aki>
+also add your slides links to the notes and/or agenda if they're missing. (notes is out of kindness to me, agenda is canonical)
+
+
+2024-12-06
+[06:12:21.0649] <rkirsling>
+100% agreement; even when I know somebody happened to mean otherwise, 👀 is "wide-eyed", i.e. omg
+
+[06:13:54.0040] <rkirsling>
+ * 100% agreement; even when I know somebody happened to mean otherwise, 👀 is "wide-eyed", so basically "wow they just said that"
+
+[06:14:27.0532] <rkirsling>
+ * 100% agreement; even when I know somebody happened to mean otherwise, 👀 is "wide-eyed", so basically "wow they just said that" or "intense stare for comedic purposes"
+
+[06:16:18.0339] <rkirsling>
+the fact that it's one of the GH emoji reaction set has never made any sense to me; there is no facial expression that means "I have seen this", because that's literally not an emotion
+
+[06:18:53.0882] <Ashley Claymore>
+I think it has to be wide eyed, to make it clear that it's not "I am suspicious of this"
+
+[06:20:25.0584] <rkirsling>
+:+1: and ✅️ are both appropriate for "noted", but they're contextually ambiguous with approval; I guess you resolve that you'd literally need a :cool: that reads "READ"
+
+[06:20:45.0400] <rkirsling>
+ * 👍️ and ✅️ are both appropriate for "noted", but they're contextually ambiguous with approval; I guess you resolve that you'd literally need a 🆒 that reads "READ"
+
+[06:20:53.0152] <rkirsling>
+ * 👍️ and ✅️ are both appropriate for "noted", but they're contextually ambiguous with approval; I guess to resolve that you'd literally need a 🆒 that reads "READ"
+
+[06:22:14.0209] <Josh Goldberg 💖>
+FWIW I've typically seen 👀 used to indicate "looking". E.g. for PRs indicating a comment is being looked at / worked on. Which I've assumed is why GitHub included them in their emoji reactions.
+
+[06:22:50.0480] <rkirsling>
+indeed. I understand it logically but it doesn't make sense visually
+
+[06:23:27.0031] <rkirsling>
+actually, 👁️ would be just fine
+
+[06:23:34.0078] <rkirsling>
+because that's "watching"
+
+[06:23:43.0677] <rkirsling>
+which is close enough to "looking"
+
+[06:24:46.0052] <nicolo-ribaudo>
+👁️ makes me feel like somebody is "keeping an eye" on me, in a negative way
+
+[06:25:18.0701] <rkirsling>
+right. but at least they're not appalled 😆
+
+[07:28:27.0944] <nicolo-ribaudo>
+What do we use for build previews of PRs in the 262 repo? I'd like to do the same for source maps
+
+[08:04:11.0828] <Ashley Claymore>
+> <@nicolo-ribaudo:matrix.org> 👁️ makes me feel like somebody is "keeping an eye" on me, in a negative way
+
+The full pair is even worse
+👁️ 👁️ 
+
+[08:30:23.0755] <shu>
+👁️👄👁️
+
+[08:36:54.0730] <nicolo-ribaudo>
+...🎩
+👁️👃👁️
+...👄
+
+[08:37:08.0501] <nicolo-ribaudo>
+ * ...🎩
+👁️👃👁️
+    👄
+
+[08:37:12.0039] <nicolo-ribaudo>
+ *     🎩
+👁️👃👁️
+    👄
+
+[08:37:24.0945] <nicolo-ribaudo>
+ * 
+\   🎩
+👁️👃👁️
+    👄
+
+[08:37:39.0445] <nicolo-ribaudo>
+ * \     🎩
+\ 👁️👃👁️
+\     👄
+
+[09:10:27.0897] <bakkot>
+we use something bespoke but I recommend using ron's workflow for just using github pages instead: https://github.com/tc39/template-for-proposals/issues/30#issuecomment-2377649626
+
+[09:10:36.0309] <bakkot>
+ * we use something bespoke but I recommend using ron's workflow for just using github pages instead: https://github.com/tc39/template-for-proposals/issues/30
+
+[09:18:51.0310] <nicolo-ribaudo>
+Oh we currently have a PR with something very similar to that, but I was annoyed by the fact that it doesn't clean up the gh-pages folder once the PR gets merged/closed.
+
+[09:23:23.0126] <bakkot>
+ah
+
+[09:23:32.0638] <bakkot>
+yeah we're pushing to AWS I think
+
+[09:23:43.0287] <bakkot>
+I recommend simply deciding not to care about the contents of the gh-pages folder
+
+[09:24:26.0872] <bakkot>
+but that said it would be pretty easy to have an another action to clean it up for you with https://github.com/marketplace/actions/github-list-pull-requests
+
+[09:24:42.0787] <bakkot>
+(or whatever)
+
+
+2024-12-18
+[16:30:33.0182] <Rob Palmer>
+On the Melanesian islands, many years ago, we found that people created Doodle invites ahead of each TC39 plenary meeting.  And so we keep that tradition going.  Folk sign up to show they are going to attend ahead of time.  And the cargo dutifully arrives, i.e. those people happily attend the meeting.  Everyone is happy and we repeat the cycle next time.
+
+This practice was established way before we introduced Interest Surveys and accepted scheduling constraints onto the agenda.  And probably at a time when Doodles had fewer banner ads.
+
+I'm interested in finding out if the Doodle has value today, or if you think we should introduce an alternative system. Or maybe we just stop doing them?
+
+[16:45:08.0369] <Rob Palmer>
+Please sign up if you wish to attend the 106th TC39 Plenary hosted by F5 in Seattle, US 🇺🇸
+
+- [**Plenary Invite**](https://github.com/tc39/Reflector/issues/547)
+
+The **In-Person Reservation form** is mandatory for in-person attendees.  I await feedback from the crowd to decide how mandatory the Doodle is.
+
+[16:45:46.0939] <Rob Palmer>
+ * Please sign up if you wish to attend the 106th TC39 Plenary in February hosted by F5 in Seattle, US 🇺🇸
+
+- [**Plenary Invite**](https://github.com/tc39/Reflector/issues/547)
+
+The **In-Person Reservation form** is mandatory for in-person attendees.  I await feedback from the crowd to decide how mandatory the Doodle is.
+
+
+2024-12-23
+[02:13:10.0081] <Rob Palmer>
+Aki: Thank you for your diligence on [making sure the notes are complete.](https://github.com/tc39/notes/pull/360#issuecomment-2559265704)  This has been a missing activity in the past so it's great to have you on the case.
+
+
+2024-12-25
+[10:55:28.0277] <Mathieu Hofman>
+> <@robpalme:matrix.org> On the Melanesian islands, many years ago, we found that people created Doodle invites ahead of each TC39 plenary meeting.  And so we keep that tradition going.  Folk sign up to show they are going to attend ahead of time.  And the cargo dutifully arrives, i.e. those people happily attend the meeting.  Everyone is happy and we repeat the cycle next time.
+> 
+> This practice was established way before we introduced Interest Surveys and accepted scheduling constraints onto the agenda.  And probably at a time when Doodles had fewer banner ads.
+> 
+> I'm interested in finding out if the Doodle has value today, or if you think we should introduce an alternative system. Or maybe we just stop doing them?
+
+Knowing who else will be there in-person is nice. Except that Doodle apparently decided to disallow `+` in the email address so I cannot login into my account anymore...
+

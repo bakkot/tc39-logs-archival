@@ -1,0 +1,186 @@
+<!DOCTYPE html><html><head>
+  <title>TC39 Async Context on 2024-11-14</title>
+  <link rel="stylesheet" href="../style.css">
+  <script>window.room = "TC39 Async Context";</script><script src="../render-roomlist.js"></script>
+  <script src="../logs.js"></script>
+</head>
+<body><div class="wrapper">
+<div class="sidebar">
+<div class="title">TC39 Async Context<br>2024-11-14<br><a href="plaintext/">plaintext logs</a></div>
+<div class="nav">
+<a href="2024-11-13" class="nav-link"><span>prev</span></a>
+<a href="2024-11-18" class="nav-link"><span style="float:right">next</span></a>
+</div>
+    <div class="all-rooms"><noscript>JavaScript is required to load the channel index, but you can go to <a href="../..">the static index</a> directly.</noscript></div>
+<div class="footer"><a href="https://github.com/bakkot/matrix-archive-bot">source on github</a></div>
+</div>
+<div class="rhs">
+<div class="rhs-header">
+<span id="error" style="color: red; display:none">error</span>
+
+<input type="text" id="query" size="25" placeholder="Search TC39 Async Context">
+<a id="search-submit" class="button icon-link" title="Search">
+  <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M505 442.7L405.3 343c-4.5-4.5-10.6-7-17-7H372c27.6-35.3 44-79.7 44-128C416 93.1 322.9 0 208 0S0 93.1 0 208s93.1 208 208 208c48.3 0 92.7-16.4 128-44v16.3c0 6.4 2.5 12.5 7 17l99.7 99.7c9.4 9.4 24.6 9.4 33.9 0l28.3-28.3c9.4-9.4 9.4-24.6.1-34zM208 336c-70.7 0-128-57.2-128-128 0-70.7 57.2-128 128-128 70.7 0 128 57.2 128 128 0 70.7-57.2 128-128 128z"></path></svg>
+</a>
+</div>
+
+<div class="log"><table id="log-table"><tbody id="log-tbody">
+
+  <tr class="msg" id="L0"><td class="ts-cell"><a class="ts" href="#L0" alt="Wed Nov 13 2024 16:48:09 GMT-0800 (Pacific Standard Time)">00:48</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">If it's limited to scoped <code>using</code> and not general mutability, I think you can polyfill on top of <code>AsyncContext</code> and only instrument <code>await</code> and <code>yield</code> statements.</td></tr>
+  <tr class="msg" id="L1"><td class="ts-cell"><a class="ts" href="#L1" alt="Wed Nov 13 2024 16:49:33 GMT-0800 (Pacific Standard Time)">00:49</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">I know we talked about this before and I said otherwise, but I can't remember why I said it wasn't possible before.</td></tr>
+  <tr class="msg" id="L2"><td class="ts-cell"><a class="ts" href="#L2" alt="Wed Nov 13 2024 20:18:11 GMT-0800 (Pacific Standard Time)">04:18</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@stephenhicks:matrix.org">Steve Hicks</span>&gt;</div></td><td class="msg-cell"><p>But I think that's the problem - it can't be limited to scoped <code>using</code> because of composability: you need to be able to write</p>
+<pre><code class="language-javascript">function enterSpan(id) {
+  const span = new Span({id, parent: currentSpan.get()});
+  span[Symbol.dispose] = currentSpan.enter(span)[Symbol.dispose];
+  log('new span', currentSpan.get());
+  return span;
+}
+</code></pre>
+<p>That function gives no syntactic indication that it needs any extra transpilation... in fact, thinking about it further, it violates the principle that functions you call shouldn't be able to change your context.</p>
+</td></tr>
+  <tr class="msg" id="L3"><td class="ts-cell"><a class="ts" href="#L3" alt="Wed Nov 13 2024 20:23:43 GMT-0800 (Pacific Standard Time)">04:23</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">That example wouldn't be possible, but using <code>using span = enterSpan(…)</code> could be</td></tr>
+  <tr class="msg" id="L4"><td class="ts-cell"><a class="ts" href="#L4" alt="Wed Nov 13 2024 20:24:04 GMT-0800 (Pacific Standard Time)">04:24</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@stephenhicks:matrix.org">Steve Hicks</span>&gt;</div></td><td class="msg-cell">how would you define <code>enterSpan</code> in that case?</td></tr>
+  <tr class="msg" id="L5"><td class="ts-cell"><a class="ts" href="#L5" alt="Wed Nov 13 2024 20:35:00 GMT-0800 (Pacific Standard Time)">04:35</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">The same?</td></tr>
+  <tr class="msg" id="L6"><td class="ts-cell"><a class="ts" href="#L6" alt="Wed Nov 13 2024 20:35:56 GMT-0800 (Pacific Standard Time)">04:35</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">The difference is you expected <code>enterSpan</code> to cause the mutation, and I'm expecting the <code>using span …</code> to do it</td></tr>
+  <tr class="msg" id="L7"><td class="ts-cell"><a class="ts" href="#L7" alt="Thu Nov 14 2024 09:06:08 GMT-0800 (Pacific Standard Time)">17:06</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@stephenhicks:matrix.org">Steve Hicks</span>&gt;</div></td><td class="msg-cell">This is the <code>disposable[Symbol.enter]()</code> idea, but AIUI, it's a non-starter if it only works syntactically - i.e. you still need to be able to call it reflectively for composability.</td></tr>
+  <tr class="msg" id="L8"><td class="ts-cell"><a class="ts" href="#L8" alt="Thu Nov 14 2024 09:07:12 GMT-0800 (Pacific Standard Time)">17:07</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@stephenhicks:matrix.org">Steve Hicks</span>&gt;</div></td><td class="msg-cell">Case in point: <code>Span.prototype[Symbol.enter]</code> would need to call <code>AsyncContext.Mutation.prototype[Symbol.enter]</code> transitively.</td></tr>
+  <tr class="msg" id="L9"><td class="ts-cell"><a class="ts" href="#L9" alt="Thu Nov 14 2024 09:07:20 GMT-0800 (Pacific Standard Time)">17:07</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@stephenhicks:matrix.org">Steve Hicks</span>&gt;</div></td><td class="msg-cell">and it couldn't use <code>using</code> syntax for that.</td></tr>
+  <tr class="msg" id="L10"><td class="ts-cell"><a class="ts" href="#L10" alt="Thu Nov 14 2024 09:27:56 GMT-0800 (Pacific Standard Time)">17:27</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-9" title="@nicolo-ribaudo:matrix.org">nicolo-ribaudo</span>&gt;</div></td><td class="msg-cell"><p>For <code>using</code> with <code>Symbol.enter</code>/<code>Symbol.dispose</code>, I don't think we need to enforce it syntactically. Does this provide enough guarantees, or are there still ways to mess up the context and not get an explicit error about it?</p>
+<pre><code class="language-js">function enterWith(variable, value) {
+  let oldContext, updatedContext
+
+  return {
+    [Symbol.enter]() {
+      if (oldContext) throw new Error("Cannot enter twice");
+      oldContext = AsyncContextSnapshot();
+      updatedContext = { ...oldContext, [variable]: value };
+
+      AsyncContextSwap(updatedContext);
+    },
+    [Symbol.dispose]() {
+      if (!oldContext) throw new Error("Cannot dispose before entering");
+
+      const current = AsyncContextSnapshot();
+      if (current !== updatedContext) {
+        throw new Error("Cannot dispose, as it's not the current context");
+      }
+
+      AsyncContextSwap(oldContext);
+    }
+  }
+}
+
+AsyncContext.Variable.prototype.run = function (value, callback) {
+  const oldContext = AsyncContextSnapshot();
+  const updatedContext = { ...oldContext, [this]: value };
+
+  AsyncContextSwap(updatedContext);
+  try {
+    return callback();
+  } finally {
+    const current = AsyncContextSnapshot();
+    AsyncContextSwap(oldContext);
+
+    if (current !== updatedContext) {
+      throw new Error(".run ended before that its context was restored");
+    }
+  }
+}
+
+{
+  // context: root
+
+  x1[Symbol.enter]();
+  // context: x1
+
+  x2[Symbol.enter]();
+  // context: x2
+
+  x1[Symbol.dispose](); // error: "Cannot dispose, as it's not the current context"
+}
+
+
+{
+  // context: root
+
+  x1[Symbol.enter]();
+  // context: x1
+
+  myVar.run("foo", () =&gt; {
+    // context: foo
+
+    x1[Symbol.dispose](); // error: "Cannot dispose, as it's not the current context"
+  })
+}
+
+{
+  // context: root
+
+  myVar.run("foo", () =&gt; {
+    // context: foo
+
+    x1[Symbol.enter]();
+    // context: x1
+  }); // closes the foo context, then error: ".run ended before that its context was restored"
+}
+</code></pre>
+</td></tr>
+  <tr class="msg" id="L11"><td class="ts-cell"><a class="ts" href="#L11" alt="Thu Nov 14 2024 09:33:10 GMT-0800 (Pacific Standard Time)">17:33</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-9" title="@nicolo-ribaudo:matrix.org">nicolo-ribaudo</span>&gt;</div></td><td class="msg-cell"><p>And you can still leak <em>a little bit</em>, but:</p>
+<ul>
+<li><code>.run</code> is a hard boundary you cannot leak accross</li>
+<li>if you leak, basically as soon as some other context ends you'll get an error</li>
+</ul>
+</td></tr>
+  <tr class="msg" id="L12"><td class="ts-cell"><a class="ts" href="#L12" alt="Thu Nov 14 2024 09:33:39 GMT-0800 (Pacific Standard Time)">17:33</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-9" title="@nicolo-ribaudo:matrix.org">nicolo-ribaudo</span>&gt;</div></td><td class="msg-cell">And the error could point to the stack trace of where you did <code>enter</code> without then disposing it</td></tr>
+  <tr class="msg" id="L13"><td class="ts-cell"><a class="ts" href="#L13" alt="Thu Nov 14 2024 09:34:17 GMT-0800 (Pacific Standard Time)">17:34</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@stephenhicks:matrix.org">Steve Hicks</span>&gt;</div></td><td class="msg-cell">I think you need to store two locals - one for <code>oldContext</code> and one for <code>updatedContext</code> and then line 15 wants to compare <code>current !== updatedContext</code></td></tr>
+  <tr class="msg" id="L14"><td class="ts-cell"><a class="ts" href="#L14" alt="Thu Nov 14 2024 09:34:40 GMT-0800 (Pacific Standard Time)">17:34</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-9" title="@nicolo-ribaudo:matrix.org">nicolo-ribaudo</span>&gt;</div></td><td class="msg-cell">True, right (updated)</td></tr>
+  <tr class="msg" id="L15"><td class="ts-cell"><a class="ts" href="#L15" alt="Thu Nov 14 2024 09:37:57 GMT-0800 (Pacific Standard Time)">17:37</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@stephenhicks:matrix.org">Steve Hicks</span>&gt;</div></td><td class="msg-cell"><p>And then the idea is that</p>
+<pre><code class="language-javascript">async function f() {
+  using _ = enterWith(v, 2);
+  await 1;
+}
+{
+  using _ = enterWith(v, 1);
+  f();
+}
+</code></pre>
+<p>would work because the suspension would restore the entry context?  But if <code>f</code> were an ordinary function that leaked then the dispose after <code>f()</code> would fail.</p>
+</td></tr>
+  <tr class="msg" id="L16"><td class="ts-cell"><a class="ts" href="#L16" alt="Thu Nov 14 2024 09:38:43 GMT-0800 (Pacific Standard Time)">17:38</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-9" title="@nicolo-ribaudo:matrix.org">nicolo-ribaudo</span>&gt;</div></td><td class="msg-cell">Yes and yes</td></tr>
+  <tr class="msg" id="L17"><td class="ts-cell"><a class="ts" href="#L17" alt="Thu Nov 14 2024 09:38:50 GMT-0800 (Pacific Standard Time)">17:38</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@stephenhicks:matrix.org">Steve Hicks</span>&gt;</div></td><td class="msg-cell">And any non-syntactic access to the protocol <em>should</em> still at least be sound</td></tr>
+  <tr class="msg" id="L18"><td class="ts-cell"><a class="ts" href="#L18" alt="Thu Nov 14 2024 09:39:14 GMT-0800 (Pacific Standard Time)">17:39</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-9" title="@nicolo-ribaudo:matrix.org">nicolo-ribaudo</span>&gt;</div></td><td class="msg-cell">And the whole program should also have a check at the end that checks you didn't forget to close anything</td></tr>
+  <tr class="msg" id="L19"><td class="ts-cell"><a class="ts" href="#L19" alt="Thu Nov 14 2024 09:39:16 GMT-0800 (Pacific Standard Time)">17:39</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@stephenhicks:matrix.org">Steve Hicks</span>&gt;</div></td><td class="msg-cell">I don't think you strictly need <code>Symbol.enter</code> for these checks.</td></tr>
+  <tr class="msg" id="L20"><td class="ts-cell"><a class="ts" href="#L20" alt="Thu Nov 14 2024 09:39:29 GMT-0800 (Pacific Standard Time)">17:39</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-9" title="@nicolo-ribaudo:matrix.org">nicolo-ribaudo</span>&gt;</div></td><td class="msg-cell">So that even a program that just does <code>x1[Symbol.enter]()</code> throws when it ends</td></tr>
+  <tr class="msg" id="L21"><td class="ts-cell"><a class="ts" href="#L21" alt="Thu Nov 14 2024 09:39:49 GMT-0800 (Pacific Standard Time)">17:39</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@stephenhicks:matrix.org">Steve Hicks</span>&gt;</div></td><td class="msg-cell">though it would certainly be nicer to have</td></tr>
+  <tr class="msg" id="L22"><td class="ts-cell"><a class="ts" href="#L22" alt="Thu Nov 14 2024 09:39:52 GMT-0800 (Pacific Standard Time)">17:39</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-9" title="@nicolo-ribaudo:matrix.org">nicolo-ribaudo</span>&gt;</div></td><td class="msg-cell"><mx-reply><blockquote> I don't think you strictly need <code>Symbol.enter</code> for these checks.</blockquote></mx-reply>Yeah, you can also just have two functions that you call to activate and deactivate the context</td></tr>
+  <tr class="msg" id="L23"><td class="ts-cell"><a class="ts" href="#L23" alt="Thu Nov 14 2024 09:43:39 GMT-0800 (Pacific Standard Time)">17:43</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@stephenhicks:matrix.org">Steve Hicks</span>&gt;</div></td><td class="msg-cell">So does <code>run</code> also verify that the "outgoing" context hasn't changed?</td></tr>
+  <tr class="msg" id="L24"><td class="ts-cell"><a class="ts" href="#L24" alt="Thu Nov 14 2024 09:44:30 GMT-0800 (Pacific Standard Time)">17:44</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@stephenhicks:matrix.org">Steve Hicks</span>&gt;</div></td><td class="msg-cell">And is there any precedent for this sort of behavior where we allow the unsound thing to happen, but only throw an error later after it becomes more obvious?</td></tr>
+  <tr class="msg" id="L25"><td class="ts-cell"><a class="ts" href="#L25" alt="Thu Nov 14 2024 09:45:14 GMT-0800 (Pacific Standard Time)">17:45</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-9" title="@nicolo-ribaudo:matrix.org">nicolo-ribaudo</span>&gt;</div></td><td class="msg-cell"><mx-reply><blockquote> So does <code>run</code> also verify that the "outgoing" context hasn't changed?</blockquote></mx-reply>Yes, but still restores the correct one before throwing, so that try/catch+run always guarantees that a bad function can be run properly without it messing anything up</td></tr>
+  <tr class="msg" id="L26"><td class="ts-cell"><a class="ts" href="#L26" alt="Thu Nov 14 2024 09:49:52 GMT-0800 (Pacific Standard Time)">17:49</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@stephenhicks:matrix.org">Steve Hicks</span>&gt;</div></td><td class="msg-cell">This would work fine with generators if <code>yield</code> had the same behavior as <code>await</code>; otherwise, it would effectively make a <code>yield</code> within an <code>enterWith</code> block be an error.</td></tr>
+  <tr class="msg" id="L27"><td class="ts-cell"><a class="ts" href="#L27" alt="Thu Nov 14 2024 09:50:26 GMT-0800 (Pacific Standard Time)">17:50</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@stephenhicks:matrix.org">Steve Hicks</span>&gt;</div></td><td class="msg-cell">unless the generator was fully iterated in a single outer context</td></tr>
+  <tr class="msg" id="L28"><td class="ts-cell"><a class="ts" href="#L28" alt="Thu Nov 14 2024 09:52:50 GMT-0800 (Pacific Standard Time)">17:52</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@stephenhicks:matrix.org">Steve Hicks</span>&gt;</div></td><td class="msg-cell">one could imagine a weird solution where the <code>yield</code> would somehow capture the mutations and replay them on top of the new re-entered context, but that doesn't seem reasonable</td></tr>
+  <tr class="msg" id="L29"><td class="ts-cell"><a class="ts" href="#L29" alt="Thu Nov 14 2024 09:55:11 GMT-0800 (Pacific Standard Time)">17:55</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-9" title="@nicolo-ribaudo:matrix.org">nicolo-ribaudo</span>&gt;</div></td><td class="msg-cell">Agree — I think we need to make yield capture/restore if we don't want to prevent enterWith from happening in the future </td></tr>
+  <tr class="msg" id="L30"><td class="ts-cell"><a class="ts" href="#L30" alt="Thu Nov 14 2024 09:55:44 GMT-0800 (Pacific Standard Time)">17:55</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@stephenhicks:matrix.org">Steve Hicks</span>&gt;</div></td><td class="msg-cell">This makes it impossible to implement dispatch-context iterator helpers (in userland) as generators</td></tr>
+  <tr class="msg" id="L31"><td class="ts-cell"><a class="ts" href="#L31" alt="Thu Nov 14 2024 09:56:48 GMT-0800 (Pacific Standard Time)">17:56</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-9" title="@nicolo-ribaudo:matrix.org">nicolo-ribaudo</span>&gt;</div></td><td class="msg-cell">In a world with enterWith, could we do something like this with a metaproperty?
+
+```
+let x = yield foo;
+using _ = yield.nextCallerContext
+```</td></tr>
+  <tr class="msg" id="L32"><td class="ts-cell"><a class="ts" href="#L32" alt="Thu Nov 14 2024 09:57:14 GMT-0800 (Pacific Standard Time)">17:57</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-9" title="@nicolo-ribaudo:matrix.org">nicolo-ribaudo</span>&gt;</div></td><td class="msg-cell">Where yield.nextCallerContext gives you the context of the .next call</td></tr>
+  <tr class="msg" id="L33"><td class="ts-cell"><a class="ts" href="#L33" alt="Thu Nov 14 2024 09:57:19 GMT-0800 (Pacific Standard Time)">17:57</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-9" title="@nicolo-ribaudo:matrix.org">nicolo-ribaudo</span>&gt;</div></td><td class="msg-cell">And you can "enter a snapshot"</td></tr>
+  <tr class="msg" id="L34"><td class="ts-cell"><a class="ts" href="#L34" alt="Thu Nov 14 2024 09:58:55 GMT-0800 (Pacific Standard Time)">17:58</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@stephenhicks:matrix.org">Steve Hicks</span>&gt;</div></td><td class="msg-cell">that seems feasible</td></tr>
+  <tr class="msg" id="L35"><td class="ts-cell"><a class="ts" href="#L35" alt="Thu Nov 14 2024 10:12:11 GMT-0800 (Pacific Standard Time)">18:12</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@stephenhicks:matrix.org">Steve Hicks</span>&gt;</div></td><td class="msg-cell">So I guess that leaves ^ as my main concern - do we think this sort of thing could actually land?</td></tr>
+  <tr class="msg" id="L36"><td class="ts-cell"><a class="ts" href="#L36" alt="Thu Nov 14 2024 10:13:07 GMT-0800 (Pacific Standard Time)">18:13</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-9" title="@nicolo-ribaudo:matrix.org">nicolo-ribaudo</span>&gt;</div></td><td class="msg-cell">I don't know, nothing comes immediately to my mind </td></tr>
+  <tr class="msg" id="L37"><td class="ts-cell"><a class="ts" href="#L37" alt="Thu Nov 14 2024 10:13:12 GMT-0800 (Pacific Standard Time)">18:13</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-9" title="@nicolo-ribaudo:matrix.org">nicolo-ribaudo</span>&gt;</div></td><td class="msg-cell">I'll look around </td></tr>
+  <tr class="msg" id="L38"><td class="ts-cell"><a class="ts" href="#L38" alt="Thu Nov 14 2024 10:13:37 GMT-0800 (Pacific Standard Time)">18:13</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@stephenhicks:matrix.org">Steve Hicks</span>&gt;</div></td><td class="msg-cell">(and aside, I'm a little sad that I won't be able to rip out the over-complicated transpilation for generators)</td></tr>
+  <tr class="msg" id="L39"><td class="ts-cell"><a class="ts" href="#L39" alt="Thu Nov 14 2024 10:18:24 GMT-0800 (Pacific Standard Time)">18:18</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-9" title="@nicolo-ribaudo:matrix.org">nicolo-ribaudo</span>&gt;</div></td><td class="msg-cell">Instead of transpiling the generator, could you wrap it in a function that calls .next setting the original generator  context first?</td></tr>
+  <tr class="msg" id="L40"><td class="ts-cell"><a class="ts" href="#L40" alt="Thu Nov 14 2024 11:49:28 GMT-0800 (Pacific Standard Time)">19:49</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@stephenhicks:matrix.org">Steve Hicks</span>&gt;</div></td><td class="msg-cell">That's an interesting idea, I'll need to look into that.</td></tr>
+  <tr class="msg" id="L41"><td class="ts-cell"><a class="ts" href="#L41" alt="Thu Nov 14 2024 11:51:20 GMT-0800 (Pacific Standard Time)">19:51</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@stephenhicks:matrix.org">Steve Hicks</span>&gt;</div></td><td class="msg-cell">it's a little awkward for class methods, but I think we do something similar when downleveling async methods</td></tr>
+  <tr class="msg" id="L42"><td class="ts-cell"><a class="ts" href="#L42" alt="Thu Nov 14 2024 14:19:51 GMT-0800 (Pacific Standard Time)">22:19</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@stephenhicks:matrix.org">Steve Hicks</span>&gt;</div></td><td class="msg-cell">I prototyped a quick proof-of-concept that it's possible to leverage most of an existing implementation and add a disposable <code>enterWith</code> by just replacing <code>AsyncContext.Variable</code> with a new implementation that indirects through a single "real" variable: <a href="https://gist.github.com/shicks/0cd7e9b06535793c137934cc52ed12ce">https://gist.github.com/shicks/0cd7e9b06535793c137934cc52ed12ce</a></td></tr>
+  <tr class="msg" id="L43"><td class="ts-cell"><a class="ts" href="#L43" alt="Thu Nov 14 2024 14:20:50 GMT-0800 (Pacific Standard Time)">22:20</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@stephenhicks:matrix.org">Steve Hicks</span>&gt;</div></td><td class="msg-cell"><p>I don't think an analogous approach would work for <code>yield.nextCallerContext</code> - you'd be forced to at least go back to transpiling all generators (to wrap with a function that set the nextCallerContext in some reasonable way)</p>
+<p>Scratch that - you need to transpile the keyword anyway, and if you do so, you only need to wrap that particular generator.</p>
+</td></tr>
+
+</tbody></table></div></div></div>
+</body></html>

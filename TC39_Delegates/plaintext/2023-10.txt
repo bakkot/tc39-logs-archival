@@ -1,0 +1,446 @@
+2023-10-01
+[17:08:53.0045] <Jack Works>
+if a proxy returns configurable: false for property "x", why future calls return true throws an error? (I know it is maintaining invariant) it can also silently change configurable to false IMO
+
+[17:45:12.0405] <Jack Works>
+https://github.com/Jack-Works/proposal-module-sync-assert
+
+[21:05:09.0877] <ljharb>
+Why would it be better to silently fail to recognize a bug?
+
+[21:05:41.0726] <ljharb>
+arguably it could have just not called the trap once the value wouldn’t change, but here we are
+
+[02:58:19.0222] <Ashley Claymore>
+My understanding is that Proxies don't have a memory. The invariants that involve time are enforced by comparing the result to the same call made to the target object. So the invariants would be broken if the target object has broken the invariant, but hosts are not supposed to create objects that break the invariants  
+
+[15:35:51.0123] <Mathieu Hofman>
+> <@littledan:matrix.org> What if we made a function like Error.raise instead of adding syntax?
+
+rbuckton: I'd like to bring to your attention a TypeScript limitation that seriously impedes the usage of any function call that unconditionally throws like this. I suspect it would also be a problem that needs to be solved for throw expressions in general: https://github.com/microsoft/TypeScript/issues/50739
+
+
+2023-10-02
+[00:55:04.0548] <Ashley Claymore>
+> <@mhofman:matrix.org> rbuckton: I'd like to bring to your attention a TypeScript limitation that seriously impedes the usage of any function call that unconditionally throws like this. I suspect it would also be a problem that needs to be solved for throw expressions in general: https://github.com/microsoft/TypeScript/issues/50739
+
+Maybe it might be easier to solve for throw expressions, as the TypeScript AST control-flow-node can be determined without any binding lookup or type-information, the throw is right there in the syntax.  
+
+
+2023-10-03
+[12:21:59.0410] <bakkot>
+littledan etc: is there a types-as-comments chat room or call or something I could join? I have a followup thesis from the discussion earlier:
+
+- Making almost all of TS runnable is a bad goal.
+  - It's too big to reasonably specify.
+  - TS adds new keywords more frequently than our process would allow, and that's good. The constraints on evolving the grammar of TS are genuinely different from the constraints on evolving the grammar of JS.
+  - And given the existence of things like Svelte, JSX, `--experimentalDecorators`, etc, you're never going to reach a point where almost all TS projects can stop using transpilers anyway, so there's nothing particularly special about "almost all of TS".
+- Making it more practical to use type checkers without transpilation is a good goal. The current jsdoc support in TS is bad enough that people will put up with the cost of transpilation rather than use it except in extreme cases (e.g. Svelte), and that could be improved.
+  - But that only helps people in specific circumstances (i.e., those who otherwise would not have a transpilation step).
+  - Flow's comment syntax actually gets used, which means that there's room for something between "only jsdoc-style comments" and "all of TS".
+  - By far the largest painpoint with Flow's comment syntax is inline type annotations on variables and parameters. Multiline comment syntax is verbose and awkward to type for something used so frequently.
+- Therefore, the proposal ought to drop the "un-fork JS" goal and instead set a goal of 80-20'ing the types-without-transpilation experience using a more minimal grammar, omitting (e.g.) any keywords other than maybe `type`. There's a handful of issues on the repo already proposing something like this. Those users who would benefit can opt in without much more pain, and those who would not can continue to benefit from TypeScript's full syntax being able to evolve outside our process.
+  - This doesn't need to be a subset of the TS grammar, particularly if automated translation from full-TS to this subset is easy (which it ought to be).
+  - This should be general enough to allow ~any type system to opt in to using only this grammar, but shouldn't aim to have parity with the grammar of any existing type systems. It's OK if this grammar is somewhat more awkward than those available when using a transpiler.
+  - Concretely, this might look like `:: [nlth] (.? IdentifierName [nlth])* MatchedBraces` being allowed in a few places, and maybe a new top-level `type` declaration form. Possibly with one or two more forms for e.g. imports, but only a couple more at most.
+    - This solves some but not all of the ambiguities in the current grammar; the remaining ones (e.g. FunctionBody braces) would need fixing either way.
+    - Yes, this means a lot of nontrivial types will need parentheses. That is a significant cost. I think the cost is worth it.
+
+[13:54:44.0496] <littledan>
+Yeah, there is a Matrix room, I will try to get it more open to TC39 in general (I don’t have permission to add you). Thanks for the thoughtful comment, interesting stuff to consider. May be good to file an issue for too.
+
+[14:14:47.0865] <TabAtkins>
+Strong agree with bakkot's thesis, as someone who has no idea how TS works but is very familiar with Python's types-as-comments.
+
+
+2023-10-04
+[20:08:05.0456] <littledan>
+I think we would be better off with O(5) constructs, with the aim of not enabling avoiding all type /* */comment formats, rather than literally just parameters and return values. It sounds like you are open to this possibility, right?
+
+But I am also not yet sure if the whole thing should be reduced as much as bakkot suggests—we should talk more about overall motivation/usage modes in the next presentation.
+
+[20:52:55.0473] <bakkot>
+I'm open to that possibility. Also to be clear I didn't mean to suggest this would only cover parameters and return values - for example, `let x = y ::as string;` would be legal under my suggested grammar (assuming the `::` comment form is allowed in the appropriate places). And I think that's better than having a separate `as` production even though that means you can't use TypeScript casts as they're written today.
+
+[21:40:51.0957] <Jack Works>
+/// interface X {
+///     either(x: this): this
+/// }
+
+/// <T extends X>(i: T, j: T): T
+function f(i, j) {
+    let next = i.either(j) /// T
+    return next
+}
+
+[23:45:59.0349] <littledan>
+One issue with magic comments is that it’s unclear how tools should handle errors—was that comment just a comment?
+
+[23:47:09.0017] <littledan>
+I remember having a thought about `::` being problematic grammatically, but I can’t remember what the problem was…
+
+[23:48:14.0781] <littledan>
+The main reason I am a little hesitant about that particular grammar is that some things will want to take an argument and some won’t. This is the kind of thing to work out case-by-case when developing encodings of type systems into JS grammar
+
+[00:30:39.0150] <bakkot>
+Uhhh yeah I guess it would be something like `:: [nlth] (.? IdentifierName [nlth])+ MatchedBraces?` or `:: MatchedBraces`
+
+[00:30:48.0966] <bakkot>
+ * Uhhh yeah I guess it would be something like `:: [nlth] (.? IdentifierName [nlth])+ MatchedBraces?` plus also `:: MatchedBraces`
+
+[00:31:10.0389] <bakkot>
+And yes this still has the `FunctionBody` ambiguity
+
+[00:37:07.0851] <littledan>
+yeah this seems like it'd have ambiguities about when it ends but I understand what you're getting at.
+
+[00:37:14.0776] <littledan>
+Anyway I'm not sure we should give up on the "easy transition from existing type systems" goal because, if migration to a minimal grammar is difficult or the grammar is seen as ugly, then the ecosystem may be split.
+
+
+2023-10-10
+[04:15:44.0739] <eemeli>
+As I'm trying to figure out how to set up incubator calls, it looks like the initial steps aren't really clear atm. To start, is it on me as an interested party to file a new "Chartered Proposals" issue in the incubator-agendas repo, or should I expect someone else like shu to be doing so?
+
+[07:25:12.0414] <shu>
+eemeli: that's a link to what's on the incubator call schedule between meetings
+
+[07:25:25.0727] <shu>
+i haven't updated that in a while -- it should be safe enough to ignore
+
+[07:59:43.0362] <eemeli>
+Ok, so the first step for me is presumably then to put together a Doodle and submit a reflector issue, yes?
+
+[08:02:38.0489] <shu>
+yep, the important parts are 1) get a voting sheet out to find a time and 2) set an agenda for discussion items -- IME you can't handle more than 1 or 2 in depth
+
+[08:02:59.0328] <shu>
+"can't" meaning no time to in an hour
+
+[09:35:47.0748] <eemeli>
+Is there a Google Docs template somewhere for the notes doc for an incubator call, or should I just copy and trim the contents of a previous meeting's notes?
+
+[09:40:47.0373] <shu>
+i always just copy previous docs and delete the actual contents
+
+[09:40:51.0861] <shu>
+in fact i do that for everything
+
+[09:41:00.0384] <shu>
+fork is life
+
+[09:50:35.0761] <eemeli>
+Also a good answer if your run out of spoons.
+
+[10:42:42.0617] <shu>
+i gotta say we always run out of spoons and forks but never knives
+
+[10:42:49.0397] <shu>
+knives are not very useful utensils
+
+[10:43:04.0866] <shu>
+in any case i don't even want to cut my food just in time, i want my food pre-cut
+
+[10:52:50.0634] <eemeli>
+Chopsticks are quite often the safer option.
+
+But I think I finally did get my incubator call PR & issue filed relatively smoothly. This could definitely be streamlined a bit, as the cross-references meant that I needed to predict not only which incubator-agendas PR number I'd get, but also the reflector issue number.
+
+[10:55:50.0608] <eemeli>
+Here, have a reflector link that leads on to the proposed agenda and the doodle poll: https://github.com/tc39/Reflector/issues/508
+
+[10:58:10.0686] <shu>
+agreed, could certainly use streamlining
+
+
+2023-10-11
+[02:35:22.0309] <Michael Ficarra>
+shu: an example of a spec-level vulnerability (as opposed to a vulnerability in any particular implementation): https://nvd.nist.gov/vuln/detail/CVE-2023-44487
+
+[02:37:24.0846] <Michael Ficarra>
+> Because the attack abuses an underlying weakness in the HTTP/2 protocol, we believe any vendor that has implemented HTTP/2 will be subject to the attack. This included every modern web server.
+
+[07:37:58.0329] <shu>
+ah okay, i can see the case for protocols having such vulnerabilities
+
+
+2023-10-12
+[21:45:20.0647] <bakkot>
+littledan: another occasion to note that the current "register as a contributor" process is absurd and I think ought to be revised https://github.com/tc39/ecma262/pull/3192#issuecomment-1758898371
+
+[21:45:48.0067] <bakkot>
+ecma262 editors should have discretion to mark a contribution as not substantial and merge without getting the CLA signed
+
+[06:47:59.0484] <Michael Ficarra>
+Please remember to review and fix up your notes from the last meeting: https://github.com/tc39/Reflector/issues/506. Publish date is *tomorrow*.
+
+[07:00:04.0336] <littledan>
+> <@bakkot:matrix.org> littledan: another occasion to note that the current "register as a contributor" process is absurd and I think ought to be revised https://github.com/tc39/ecma262/pull/3192#issuecomment-1758898371
+
+I don't really see how that thread is evidence of anything being absurd; the contributor registered immediately without complaint.
+
+[07:00:23.0928] <littledan>
+> <@bakkot:matrix.org> ecma262 editors should have discretion to mark a contribution as not substantial and merge without getting the CLA signed
+
+This could be OK; could you propose concrete guidelines for which things are trivial, so I can ask lawyers to review it?
+
+[12:03:50.0987] <Michael Ficarra>
+non-technical contributions seem like a very conservative place to start drawing that line
+
+[12:21:13.0560] <littledan>
+yeah, so if you write some policy down, I'll go talk to Bloomberg's lawyers about it. I think "nontechnical" isn't really concrete enough, though (clearly there are nontechnical things in the world which copyright applies to).
+
+[12:36:26.0723] <Andreu Botella>
+I wonder if "non-technical and not subject to copyright" (because the contribution is small/trivial enough) might be an acceptable policy as far as lawyers are concerned
+
+[12:37:12.0935] <Andreu Botella>
+though the lawyers won't be the ones judging whether the contribution is subject to copyrihgt
+
+[13:16:23.0782] <bakkot>
+ljharb: can you put a conclusion for the "export default from" item in the notes?
+
+[13:16:43.0523] <ljharb>
+yes, i'll do that when i review them later today
+
+[13:16:55.0655] <bakkot>
+great
+
+[13:17:27.0810] <ljharb>
+> <@littledan:matrix.org> yeah, so if you write some policy down, I'll go talk to Bloomberg's lawyers about it. I think "nontechnical" isn't really concrete enough, though (clearly there are nontechnical things in the world which copyright applies to).
+
+wouldn't ecma's lawyers be the ones that need to approve it?
+
+
+2023-10-13
+[20:15:04.0783] <littledan>
+> <@ljharb:matrix.org> wouldn't ecma's lawyers be the ones that need to approve it?
+
+Ecma tends to call out to several company’s lawyers when these things come up. I would ask Bloomberg‘s first before bothering others.
+
+[20:15:49.0639] <littledan>
+Ecma can also contact their lawyer on retainer for advice but these IPR questions are not handled by only that
+
+[10:46:22.0936] <bakkot>
+where did all of these people come from all of a sudden https://github.com/tc39/proposal-array-grouping/issues/62
+
+[10:46:29.0369] <bakkot>
+did the proposal get linked somewhere
+
+[10:53:13.0090] <shu>
+"
+I tried explaining the issue to my small (kindergarten~) son, and to summarize him after explaining it a few times at different levels of complexity:
+"It feels like a cute little penguin swimming against the flow of other array functions, breaking the chain of function chaining possibilities and hiding its cuteness from discoverability"
+"
+
+[10:53:14.0608] <shu>
+is this satire
+
+[15:18:06.0022] <TabAtkins>
+I mean they're right that having it be a static function really sucks, but yeah our hands our tied. Just means we need the pipeline operator.
+
+[15:36:41.0586] <ljharb>
+lol seems like LLM drivel
+
+
+2023-10-15
+[23:45:03.0491] <eemeli>
+Have progressed to my next incubator call setup question: How do I create a calendar event with a videocall link for it? Can I create the event on my own calendar, and then invite the TC39 public & private calendars to it along with the Doodle poll participants, or would that mess something up?
+
+[00:39:26.0944] <eemeli>
+On a somewhat related note, it looks like the only public place that I could find pointing at the public calendar is still this [how-we-work issue comment](https://github.com/tc39/how-we-work/issues/94#issuecomment-1518375862). So I guess it's not very public yet?
+
+
+2023-10-16
+[07:02:39.0240] <Chris de Almeida>
+> <@eemeli:mozilla.org> Have progressed to my next incubator call setup question: How do I create a calendar event with a videocall link for it? Can I create the event on my own calendar, and then invite the TC39 public & private calendars to it along with the Doodle poll participants, or would that mess something up?
+
+no, you'll need someone with edit access to the calendar to do it
+
+[07:09:12.0327] <Chris de Almeida>
+> <@eemeli:mozilla.org> On a somewhat related note, it looks like the only public place that I could find pointing at the public calendar is still this [how-we-work issue comment](https://github.com/tc39/how-we-work/issues/94#issuecomment-1518375862). So I guess it's not very public yet?
+
+yes, it's on our list..  we were hoping to get some more events added to the public calendar first; as it stands we would be publicizing a mostly blank calendar. (only module harmony appears on it.) movement on the public calendar issues has been slow.  in any case, we will make it more visible very soon.
+
+
+2023-10-17
+[00:16:32.0514] <eemeli>
+Chris de Almeida: It turns out that I was able to add the event myself at least to the private calendar by inviting it with its calendar id.
+
+[00:18:05.0375] <eemeli>
+So I guess its access control is currently working thanks to security by obscurity.
+
+[00:36:36.0398] <eemeli>
+It looks like the public calendar doesn't auto-accept invites.
+
+[06:00:32.0162] <Chris de Almeida>
+> <@eemeli:mozilla.org> Chris de Almeida: It turns out that I was able to add the event myself at least to the private calendar by inviting it with its calendar id.
+
+generally what will happen when you do this, is that the meeting will disappear some time later
+
+[07:54:28.0836] <eemeli>
+> <@softwarechris:matrix.org> generally what will happen when you do this, is that the meeting will disappear some time later
+
+Oh. Ok. That is rather surprising. I'll reach out to someone with edit access.
+
+[08:15:06.0390] <Chris de Almeida>
+`Promise.race(yulia, chris)`
+
+[08:15:38.0972] <yulia>
+haha
+
+[08:15:50.0747] <Chris de Almeida>
+I deleted mine, but you might want to update to use the built-in google meet
+
+[08:16:37.0634] <Chris de Almeida>
+also updated to add the public calendar
+
+[08:16:39.0070] <yulia>
+I asked eemeli, and he said that people invited via another invite have the meeting id
+
+[08:17:04.0839] <yulia>
+so he prefers to use the original one
+
+[08:17:19.0288] <yulia>
+i changed the settings on the calendar
+
+[08:17:30.0541] <Chris de Almeida>
+ah sure, if he's keeping that calendar item, then g2g
+
+[08:17:46.0996] <yulia>
+it will no longer show invites, but i suppose we could have someone accepting those invites and then they would show up
+
+[08:18:28.0171] <yulia>
+we can discuss this during facilitation planning
+
+[09:28:45.0309] <ptomato>
+in spec language, if you have an AO with arguments (_required_, [ _optional_ ]), can you pass the absent argument to another AO where it is also optional? e.g. Perform OtherOperation(_required_, _optional_)
+
+[09:29:20.0321] <ptomato>
+or do you have to do something like this? If _optional_ is present, perform OtherOperation(_required_, _optional_). Else, perform OtherOperation(_required_).
+
+[09:29:37.0920] <shu>
+i have always done the latter
+
+[09:29:55.0304] <shu>
+i think it is too confusing if _optional_ is present in the text, but actually means "perfect forwarding"
+
+[09:30:20.0435] <shu>
+we could invent new perfect forwarding syntax but i don't think the case comes up often enough to warrant it
+
+
+2023-10-19
+[13:52:12.0348] <ljharb>
+can anyone come up with an `x` and `y` where `Object.prototype.isPrototypeOf.call(x, y)` and `Object.prototype.isPrototypeOf.call(y, x)` are both `true`?
+
+[13:52:41.0704] <ljharb>
+ * can anyone come up with an `x` and `y` where `Object.prototype.isPrototypeOf.call(x, y)` and `Object.prototype.isPrototypeOf.call(y, x)` are both `true`, and `x !== y`?
+
+because i've got one in IE 8 that defies my understanding
+
+[14:04:21.0787] <ljharb>
+ * can anyone come up with an `x` and `y` (without using `Proxy`)where `Object.prototype.isPrototypeOf.call(x, y)` and `Object.prototype.isPrototypeOf.call(y, x)` are both `true`, and `x !== y`?
+
+because i've got one in IE 8 that defies my understanding
+
+[15:06:28.0382] <shu>
+like, is it possible to legitimately construct a cycle with [[Prototype]] without "spoofing" the answer with proxies?
+
+[15:06:30.0503] <shu>
+i... hope not?
+
+[15:09:05.0763] <bakkot>
+OrdinarySetPrototypeOf checks for cycles so you can't do it as a user without exotics https://tc39.es/ecma262/multipage/ordinary-and-exotic-objects-behaviours.html#sec-ordinarysetprototypeof
+
+[15:09:53.0353] <bakkot>
+but nothing strictly forbids a host from providing a pair of ordinary objects where each is the other's [[Prototype]]
+
+[15:10:33.0064] <shu>
+i feel like things would just iloop
+
+[15:11:03.0990] <shu>
+afaik v8 or other engines don't implement cycle checking everywhere we do a prototype walk, even as a debug assert
+
+
+2023-10-20
+[19:03:36.0708] <Jack Works>
+haha, IE
+
+
+2023-10-21
+[21:41:16.0510] <Jack Works>
+I want to create a new matrix room for JSX (no proposal yet, just want to gather interest and discuss before we make a proposal), how can I do that?
+
+[22:54:29.0858] <ljharb>
+> <@jackworks:matrix.org> I want to create a new matrix room for JSX (no proposal yet, just want to gather interest and discuss before we make a proposal), how can I do that?
+
+https://matrix.to/#/#jsx:matrix.org
+
+
+2023-10-25
+[14:19:21.0701] <bakkot>
+spectre without timers, fun https://ileakage.com/
+
+[14:22:21.0295] <shu>
+:o
+
+[14:42:58.0355] <TabAtkins>
+:(
+
+[14:44:27.0664] <ljharb>
+so i guess we can all get high resolution timers now
+
+[16:40:23.0413] <snek>
+> Remarkably, we show that distinguishing cache misses from cache hits can be done without time measurements, replacing timing based primitives with timerless and architecture-agnostic counterparts based on race conditions
+
+
+2023-10-26
+[17:00:44.0220] <Mathieu Hofman>
+This seems to be based on multiple threads, which is the equivalent of timers. I don't understand the claim it's timerless
+
+[17:02:02.0359] <Mathieu Hofman>
+Also existing web mitigations to prevent sharing SAB between workers should prevent this. Unless safari loads privileged data in processes that allow SAB and workers?
+
+[17:49:07.0207] <bakkot>
+It does not appear to me to be based on multiple threads?
+
+[17:49:20.0112] <bakkot>
+It's using this mechanism https://leaky.page/plru.html
+
+[17:50:54.0284] <bakkot>
+And I don't see why preventing sharing SABs would have anything to do with preventing this - sharing SABs mainly prevents having a ns-precision timer, which the paper very explicitly does not reply on
+
+[17:57:10.0857] <bakkot>
+oh, the timerless part does rely on multiple threads, ok
+
+[17:57:50.0577] <bakkot>
+it only says "a shared variable", though; from that description it could well be be localStorage or IndexDB or something
+
+[18:10:08.0669] <Mathieu Hofman>
+I'm a bit rusty on my Web APIs, are there other shared storage besides SAB available from different agents in the same process?
+
+[18:12:36.0721] <Mathieu Hofman>
+Looks like IndexDB is. And potentially not covered by site isolation
+
+[18:13:29.0664] <Mathieu Hofman>
+Anyway, multiple threads effectively creates a timer, that has been known for a while. SAB a high precision one. I guess IndexDB a slightly lower precision one.
+
+[18:19:25.0967] <Mathieu Hofman>
+ * Looks like IndexDB is. And not covered by the COOP/COEP site isolation opt-in
+
+[18:19:45.0705] <Mathieu Hofman>
+ * Anyway, multiple threads effectively creates a timer, that has been known for a while. SAB a high precision one. I guess IndexedDB may help create a slightly lower precision timer.
+
+
+2023-10-31
+[11:25:14.0620] <bakkot>
+chrome shipping Array.fromAsync soon, nice https://groups.google.com/a/chromium.org/g/blink-dev/c/8-BdTuYXFH0/m/4IgqlFy_BgAJ
+
+[11:26:19.0408] <bakkot>
+Firefox shipped a while ago so I think this should be sufficient for stage 4, assuming the outstanding editorial issue gets resolved https://github.com/tc39/proposal-array-from-async/issues/33
+
+[12:03:22.0568] <shu>
+it is the most incomprehensible builtin in V8
+
+[12:03:37.0021] <shu>
+on account of the manual control flow transform to do it explicitly with promises
+

@@ -1,0 +1,2697 @@
+2021-12-02
+[22:25:38.0679] <ljharb>
+Justin Ridgewell: it doesn't seem like there's any test262 PR yet for array grouping, am i missing it?
+
+[12:54:23.0354] <Justin Ridgewell>
+Correct
+
+[12:54:54.0368] <Justin Ridgewell>
+I think @yulia volunteered a her grad students to write them?
+
+[13:18:07.0917] <ljharb>
+i was going to crib them for my polyfill packages, but ended up writing my own (but they won't be pushed up til stage 3, which hopefully is this month)
+
+[13:52:50.0980] <mpcsh>
+how does one create a meeting on 8x8.vc under the /tc39 slug? we have 8x8.vc/tc39/inclusion, so I know it's possible; I'd like to make one for the pattern matching champions' call
+
+[13:53:14.0345] <mpcsh>
+(cc Rob Palmer who I thiiink has been managing 8x8?)
+
+[15:20:56.0063] <Rob Palmer>
+8x8 has many mysteries. For me, it seems I can just use any name under the TC39 space. So you could try making one up. If that does not work I can make you an admin to see if that makes a difference. 
+
+[15:43:30.0490] <mpcsh>
+> <@robpalme:matrix.org> 8x8 has many mysteries. For me, it seems I can just use any name under the TC39 space. So you could try making one up. If that does not work I can make you an admin to see if that makes a difference.
+
+yeah I did try just visiting `8x8.vc/tc39/pattern-matching` and got a 404. got your invite link though, thank you!
+
+
+2021-12-03
+[01:32:41.0595] <yulia>
+ljharb maybe we can combine efforts (but i want them to write their own)
+
+[01:32:49.0416] <yulia>
+I will see where they are with them today
+
+[01:33:09.0991] <yulia>
+but we don't have to exclusively use the students tests
+
+[11:04:24.0309] <ljharb>
+test262 tests aren’t quite as easy to write as tape tests :-p but I’ll def review what they put up to make sure I’m not missing anything
+
+
+2021-12-07
+[15:48:16.0325] <ljharb>
+Ashley Claymore:  lol that `with` is a keyword is making the polyfill more annoying, so i should have thought of that before making the unscopables PR
+
+
+2021-12-08
+[16:36:15.0545] <Mathieu Hofman>
+Trying to unscope `with` is pretty meta.
+
+[21:15:31.0940] <Ashley Claymore>
+> <@ljharb:matrix.org> Ashley Claymore:  lol that `with` is a keyword is making the polyfill more annoying, so i should have thought of that before making the unscopables PR
+
+Ha! Yeah I only noticed because the find/replace method rename introduced a syntax error into the test https://github.com/tc39/proposal-change-array-by-copy/blob/77494051d1fca9f1ee878ae567f89e79af636609/polyfill.test.js#L135
+tdd spec writing ftw
+
+[06:57:47.0277] <nicolo-ribaudo>
+I uploaded a new version of the Records and Tuples slides, so if anyone already read them you might want to quickly read them again (I only changed the wording of some concepts, but the contents are the same; also, I flipped the "decision tree").
+
+[07:01:02.0146] <nicolo-ribaudo>
+ * I uploaded a new version of the Records and Tuples slides, so if anyone already read them you might want to quickly read them again (I only changed the wording of some concepts, but the contents are the same; also, I flipped the "decision tree").
+
+
+2021-12-09
+[08:22:53.0560] <Rob Palmer>
+The Ecma GA has acknowledged Aki  with an Ecma Recognition award for her contributions serving as Chair for three years  🎉
+
+[08:25:37.0700] <Rob Palmer>
+André Bargull was also acknowleged with an Ecma Recognition award for his contributions to the quality of the JavaScript language over 7 years  🎉
+
+[08:41:53.0674] <Rob Palmer>
+(thanks to Yulia for pulling together the evidence for these awards, and the contributors who passed on feedback)
+
+
+2021-12-12
+[09:05:12.0669] <ljharb>
+https://es.discourse.group/t/atomics-wait-waitasync-as-native-settimeout/1120 seems interesting; cc erights - would it maybe be possible to specify setTimeout in the language?
+
+[09:06:06.0860] <Jack Works>
+> <@ljharb:matrix.org> https://es.discourse.group/t/atomics-wait-waitasync-as-native-settimeout/1120 seems interesting; cc erights - would it maybe be possible to specify setTimeout in the language?
+
+I thought that idea was already rejected
+
+[09:08:28.0006] <Jack Works>
+This post is interesting but it requires SAB and worker (?) so it isn't so useful
+
+[09:19:14.0444] <ljharb>
+It doesn’t appear to require a worker
+
+[09:20:16.0563] <ljharb>
+it was rejected for a number of reasons, but one was that there’s no concept of time like this in the spec - but if Atomics.waitAsync already provided it - iow, if setTimeout can be polyfilled without using new Date/Date.now, and with only things in 262 - I’m not sure what the remaining reasons would be to reject it.
+
+[09:22:07.0586] <Jack Works>
+So his polyfill dont need current thread to be blockable? 
+
+[09:22:33.0626] <Jack Works>
+And is Atomics normative optional? 
+
+[09:24:25.0556] <bakkot>
+`waitAysnc` works on the main thread, yeah; that's the point of it
+
+[09:24:51.0376] <bakkot>
+and no, atomics is not normative optional
+
+[09:26:00.0502] <Jack Works>
+Hmm. SAB is normative optional and Atomics only works with SAB, is that true? 
+
+[09:30:44.0870] <bakkot>
+SAB is not exactly normative optional, though it's complicated
+
+[09:31:45.0878] <bakkot>
+the "SharedArrayBuffer" property of the global object is normative optional in hosts which do not provide multithreading, and that's the only built-in way to get access to a SAB in ES, but other hosts provide other mechanisms to get at it
+
+[09:32:12.0497] <bakkot>
+also the only reason we made that change was web-compat when everyone turned off SABs for a while because of spectre
+
+[09:34:53.0872] <Jack Works>
+Is there any case that SAB is not exposed on global but will be returned by a host API? 
+
+[09:35:31.0684] <bakkot>
+yes, let me dig it up
+
+[09:36:13.0227] <bakkot>
+`new WebAssembly.Memory({ shared:true, initial:0, maximum:0 }).buffer.constructor`
+
+[09:36:33.0885] <Jack Works>
+And it can be called to create new SAB? 
+
+[09:36:33.0945] <bakkot>
+works even when multithreading is disabled
+
+[09:36:38.0594] <bakkot>
+yes
+
+[09:36:46.0550] <Jack Works>
+It's crazy
+
+[09:37:17.0598] <Jack Works>
+Then what's the meaning of hiding it... 
+
+[09:37:39.0497] <bakkot>
+web compat
+
+[09:37:41.0741] <bakkot>
+like I said
+
+[09:38:10.0161] <bakkot>
+a lot of code assumes that if the SAB constructor was present then they could do multithreading, and had a fallback for when it was not available
+
+[09:38:18.0868] <bakkot>
+ * a lot of code assumes that if the SAB constructor was present then they could do multithreading, and had a fallback for when it was not available
+
+[09:38:38.0185] <bakkot>
+so when browsers turned of multithreading, for spectre, they needed to also remove the SAB property of the global
+
+[09:38:46.0632] <bakkot>
+note that just getting an SAB doesn't give you the ability to do multithreading
+
+[09:38:56.0896] <Jack Works>
+I mean, if they want to hide SAB, why not hide it completely but leave an escape path in WebAssembly
+
+[09:39:03.0798] <bakkot>
+they don't want to hide SAB
+
+[09:39:14.0211] <bakkot>
+that was not the goal
+
+[09:40:00.0323] <bakkot>
+the goal was, "remove multithreading, and do not break websites which assume that the existence of the SAB property on the global implies the ability to do multithreading"
+
+[09:40:27.0470] <Jack Works>
+Isn't Shared WebAssembly memory is used for multithreading? 
+
+[09:40:37.0640] <bakkot>
+(sorry, and by "multithreading" I mean specifically "multhreaded access to shared memory", not just the ability to spawn workers)
+
+[09:40:55.0488] <bakkot>
+yes, but what browsers did is disabled the ability to pass a SAB between workers
+
+[09:41:20.0982] <bakkot>
+if you can't pass an SAB between workers, you don't have shared memory
+
+[09:41:51.0693] <bakkot>
+but the WASM api is spec'd to be backed by an SAB regardless of whether multithreading is enabled
+
+[09:42:42.0012] <Jack Works>
+Aren't WebAssembly also affected by spectre when necessary methods provided? 
+
+[09:44:08.0627] <bakkot>
+if the necessary methods (i.e. the ability to use multithreaded access to shared memory to make a high-res timer) are provided, yes
+
+[09:44:50.0757] <bakkot>
+but I believe this ability is not provided in the relevant case
+
+[09:45:25.0549] <bakkot>
+you can read more of the discussion in https://github.com/whatwg/html/issues/4175, 
+https://github.com/whatwg/html/issues/3740,
+https://github.com/tc39/ecma262/issues/1435, https://github.com/tc39/ecma262/pull/1903
+
+[09:45:26.0565] <Jack Works>
+Okay I guess I understand what happened to SAB now... 
+
+[09:47:23.0817] <Jack Works>
+So back to Atomics was added, how the committee decided about adding a clock API? Was there any security concerns raised? Is that possible to add things like Promise.timeout?
+
+[09:48:05.0421] <bakkot>
+honestly I think people may have just not noticed at the time waitAsync was being added
+
+[09:48:45.0262] <bakkot>
+unfortunately it's hard to get in touch with erights, short of making a proposal and bringing it to plenary
+
+[09:48:56.0146] <bakkot>
+I think it's worth a shot
+
+[09:49:24.0332] <Jack Works>
+😰
+
+[09:50:36.0477] <bakkot>
+oh, or just asking him during plenary, at the lunch break
+
+[09:50:39.0268] <bakkot>
+that's what I usually do
+
+[10:00:40.0857] <devsnek>
+I'm down for timers in the stdlib
+
+[10:06:04.0510] <bakkot>
+`let delay = ms => new Promise(res => setTimeout(res, ms))` is one of those incantations I put at the top of many of my scripts; would be nice to not do that
+
+[10:09:00.0506] <bakkot>
+though looking around some, it seems like chrome (or at least Domenic) is of the opinion that it would need to be in HTML instead of ES and also that it would need to have AbortController integration: https://github.com/whatwg/html/issues/617#issuecomment-702774052
+
+[10:09:05.0587] <bakkot>
+so I guess it's not gonna happen anyway
+
+[10:09:06.0084] <bakkot>
+sigh
+
+[10:09:58.0196] <devsnek>
+don't worry in 15 years half of html will be merged with 262
+
+[10:10:43.0697] <bakkot>
+that is gonna depend highly on the specifics of the individuals working on these specs in the next decade, is my feeling
+
+[10:11:28.0058] <bakkot>
+though, abortcontroller is probably the thing most likely to end up in 262, I guess
+
+[11:18:55.0177] <bterlson>
+I like Ron's proposal around this personally. A protocol would be useful.
+
+[11:20:24.0947] <bterlson>
+cancelSignal and dispose would be so nice in my world
+
+[11:59:05.0222] <rbuckton>
+A protocol is the most flexible approach, but I've been getting push back against it in favor of a host hook instead. 
+
+
+2021-12-13
+[22:52:42.0133] <ljharb>
+abortcontroller is grossly named and should never be in 262
+
+[22:55:38.0779] <legendecas>
+> <@ljharb:matrix.org> abortcontroller is grossly named and should never be in 262
+
+That's a strong word, could you elaborate why do you think so?
+
+[22:56:31.0929] <ljharb>
+i mean, one big part of it is that a past delegate has insisted that it inherit from DOMException, and DOMException categorically doesn't belong in 262 - and the alternative, a host-defined exception type, is imo way too much nonportable determinism to put in the spec
+
+[22:57:35.0453] <ljharb>
+there's more to my opinion but i don't think i want to write about it further in a public setting
+
+[23:19:56.0406] <legendecas>
+Thanks for sharing the thoughts!
+
+[23:40:01.0412] <Jack Works>
+and we also don't have EventTarget yet.
+
+[08:59:40.0840] <Michael Ficarra>
+are there really 2 delegates named Sebastian McKenzie (SMK and SME)?
+
+[09:25:29.0364] <devsnek>
+i think that's the same person
+
+[09:26:23.0531] <Michael Ficarra>
+if it is, can we remove one of their abbreviations?
+
+[09:46:11.0730] <shu>
+i don't recall our ever having done that before so there's no procedure AFAIK
+
+[09:46:39.0244] <shu>
+it seems reasonable for to reach out to them with a reasonable deadline (1mo?) and then make an arbitrary decision after that if no resopnse
+
+[10:39:54.0749] <ljharb>
+https://github.com/tc39/notes/pull/135 added SME recently, and i think they haven't spoken at a meeting since then, so i think you could just revert that PR now?
+
+[10:41:10.0313] <Rob Palmer>
+my bad - I will revert
+
+[10:44:59.0585] <Rob Palmer>
+Please could I get a review:  https://github.com/tc39/notes/pull/173
+
+
+2021-12-14
+[18:31:35.0347] <Mathieu Hofman>
+> <@bakkot:matrix.org> honestly I think people may have just not noticed at the time waitAsync was being added
+
+I think you're right, it might be one of those things that slipped through.
+
+First, my understanding is that `waitAsync` is still at Stage 3. And while `Atomics` is not normative optional, it relies on `SharedArrayBuffer`, for which the constructor being added to the global object is currently normative optional. That means from an ECMA262 point of view, even when `waitAsync` reaches stage 4, the host is not obligated to offer a clock API, as it can simply deny SAB.
+
+Now I'd go even further, and say there is a way to reconcile a clock API with the requirement some environments have to not allow time measurement of any sort. Let's assume a clock API is modeled like `waitAsync`, i.e. the host resolves a promise after a certain time has elapsed. The promise job queue works by requiring the host to eventually execute promise jobs in the same order as they were enqueued. There is no requirement that the host must instantly make forward progress in processing the promise queue. What a host (or virtualization of one) can do is stop processing any more promise jobs until the wait time has elapsed, then enqueue the resolution of the clock promise. As long as the program doesn't have another way to observe the elapsing of time, that behavior is entirely within spec.
+
+That means that without a `Date` or other API which reveals elapsing time, then a `Promise.timeout = () => Promise.resolve().then(() => {})` would be spec compliant (modulo ordering of multiple `Promise.timeout` calls with different timeout values within the same synchronous execution, or infinite timeouts). You can even fake the value of `Date` based on the clock API (e.g. with all code executing "instantly" until it reaches a wait).
+
+Now of course that doesn't mean all code using a clock API would be compatible with such behavior, as some would expect consistent forward progress to continue during the wait time. I'd argue however such code would be prone to async race conditions.
+
+[18:39:28.0019] <Mathieu Hofman>
+And of course some programs would expect the Web behavior of `setTimeout` which drains the promise job queue before processing I/O jobs (which clocks are)
+
+[19:28:09.0868] <shu>
+Mathieu Hofman: `Atomics` relies on SABs only for `wait` and `waitAsync`. the rest was made to work with ABs (not that there's a way to observe that it's atomic with a single thread of execution)
+
+[19:28:39.0448] <shu>
+but your point still stands for `wait` that even if it isn't explicitly marked as normative optional, the fact that SABs can be denied makes it so in practice
+
+[19:29:17.0002] <shu>
+actually, i take that back
+
+[19:29:46.0599] <shu>
+there is a way to observe something is atomic with a single thread of execution, if you count looking at compiled code output in your model of observability, to see that there's never any unfriendly reorderings
+
+[19:31:05.0155] <Mathieu Hofman>
+> looking at compiled code output in your model of observability
+
+My model of observability is the program at runtime, so I don't think that counts?
+
+[19:31:11.0774] <Mathieu Hofman>
+ * > looking at compiled code output in your model of observability
+
+My model of observability is the program at runtime, so I don't think that counts?
+
+[19:33:04.0386] <shu>
+anyway i'm missing the broader context
+
+[19:33:14.0231] <shu>
+you want to add a clock API? or just thinking through the exercise?
+
+[19:34:19.0037] <Mathieu Hofman>
+Thinking through the exercise since people were asking why not if there is `waitAsync`. Also justifying why the presence of `waitAsync` is not such a problem
+
+[19:36:56.0450] <shu>
+it's not a problem for the web platform at least because the timeout value is pretty detached from wall clock time in when the promise handler gets run
+
+[19:37:20.0372] <shu>
+the extent to which it is it not a problem for mark is, i suspect, along the lines of what kevin said :)
+
+[19:37:29.0854] <shu>
+ * the extent to which it is it not a problem for mark is, i suspect, along the lines of what kevin said :)
+
+[19:44:57.0543] <Mathieu Hofman>
+Right, and I'm arguing that you can, according to the way job enqueuing is specified, offer a clock API to "schedule" future promise resolutions that does not in fact allow the program to observe time passing or how complex the code executed in-between was, as long as there is not an independent way to observe time passing.
+
+[19:46:23.0214] <shu>
+i'm inclined to agree at first blush
+
+[07:57:15.0316] <Rob Palmer>
+TC39 plenary meeting begins in two hours time.  Details are [here.](https://github.com/tc39/Reflector/issues/402)
+
+[08:51:11.0455] <yulia>
+Aki: Rob Palmer bterlson hey folks -- i have someone who would like to be at the regexp set notation presentation but... they can't make it from 11 - 12... which is exactly when mattias wants to present
+
+[08:51:22.0070] <yulia>
+is there a chance (i know this is slim) to do it during lunch?
+
+[09:02:59.0540] <bterlson>
+This will not be possible unfortunately,  it's a locked item and others might not be able to attend if we move it now. 
+
+[09:09:07.0295] <yulia>
+ok, no problem, thanks!
+
+[09:34:49.0329] <Rob Palmer>
+if anyone feels like being the first guinea pig to try the sign-in process and meeting password, please follow the link in [the reflector post.](https://github.com/tc39/Reflector/issues/402) and let me know how it goes - I am in the room.
+
+And a reminder:  please don't post the URLs to anything privileged here like the sign-in form - it gets logged!  Only the Reflector post is safe.
+
+[09:35:08.0544] <jschoi>
+I already did the form, and it seemingly worked for me.
+
+[09:36:44.0739] <Rob Palmer>
+Nicolo has proven the sign-in works!
+
+[09:48:06.0761] <nicolo-ribaudo>
+When will the next meetings be added to the calendar?
+
+[09:52:11.0245] <ljharb>
+the google calendar? i can add them now
+
+[09:52:45.0247] <nicolo-ribaudo>
+Yes that one, thanks!
+
+[09:57:38.0901] <Rob Palmer>
+We are starting the meeting in 3 minutes.  So far 13 people have joined.
+
+[10:00:41.0068] <ljharb>
+nicolo-ribaudo: calendar's updated with all scheduled dates. lmk if you (or anyone) wants to be added to the event so it pops up automatically on your own calendar
+
+[10:00:51.0436] <ljharb>
+ * nicolo-ribaudo: calendar's updated with all scheduled dates. lmk if you (or anyone) wants to be added to the event so it pops up automatically on your own calendar
+
+[10:03:38.0108] <Robin Ricard>
+No bot, no note takers
+
+[10:04:11.0674] <Robin Ricard>
+ot active thanks bakkot 
+
+[10:04:38.0662] <ljharb>
+Aki: it's now 1.5 hours (i updated the draft schedule to remove an item that was deferred on the agenda)
+
+[10:04:53.0632] <ljharb>
+ * Aki: it's now 1.5 hours (i updated the draft schedule to remove an item that was deferred on the agenda)
+
+[10:05:51.0978] <rkirsling>
+Rob Palmer: ironically, your display name is just an email address :P but it does make the affiliation clear
+
+[10:06:08.0722] <rkirsling>
+ * Rob Palmer: ironically, your display name is just an email address :P but it does make the affiliation clear
+
+[10:06:11.0704] <rkirsling>
+ * .
+
+[10:10:12.0578] <rkirsling>
+always is amusing how recognizable everyone is in kid form
+
+[10:14:53.0657] <bterlson>
+Nostalgia: that computer I was using was a pentium 150MHz overclocked to 166MHz with dual voodoo 2 graphics cards
+
+[10:15:39.0835] <rkirsling>
+I once had _a_ voodoo 2, but it was in a PowerPC
+
+[10:23:24.0586] <rkirsling>
+good clap UI
+
+[10:23:35.0008] <bterlson>
+lol the clapping crashed my browser
+
+[10:26:25.0861] <bakkot>
+_excellent_ clapping ui, if you clap hard enough it causes audience members to pass out
+
+[10:38:52.0339] <bterlson>
+Way to go editors, these changes are really cool. Love to see more "spec as an app" features.
+
+[10:39:33.0653] <shu>
+get ready for launch of ecma262+
+
+[10:40:05.0412] <Michael Ficarra>
+bterlson: can't wait to show you what the research group from KAIST has been working on at the next meeting
+
+[10:40:17.0154] <rickbutton>
+very excited for that Michael Ficarra 
+
+[10:40:22.0161] <bterlson>
+Coming in 2022: meta262
+
+[10:40:30.0937] <Michael Ficarra>
+among other things ,they are generating a reference implementation from the spec
+
+[10:40:34.0661] <bterlson>
+> <@michaelficarra:matrix.org> bterlson: can't wait to show you what the research group from KAIST has been working on at the next meeting
+
+oooo I can't wait
+
+[10:40:49.0436] <shu>
+does the ecma IPR prohibit TCs from charging for premium subscriptions
+
+[10:41:02.0235] <ryzokuken>
+would folks be interested in a #test262:matrix.org room in this space?
+
+[10:41:51.0679] <ljharb>
+bterlson:  fwiw i refreshed and it still says test262 status
+
+[10:42:42.0496] <bterlson>
+it was on that item
+
+[10:42:46.0311] <bterlson>
+ * it was on that item
+
+[10:42:54.0564] <bterlson>
+rob was a few items back
+
+[10:43:00.0930] <bterlson>
+everyone should see that we're on item 7
+
+[10:46:00.0064] <ljharb>
+looks good to me now, thanks
+
+[10:48:17.0803] <bterlson>
+It feels like Rob's websocket got dropped. I blame Bloomberg's firewall.
+
+[10:51:28.0702] <Rob Palmer>
+i'm not behind a firewall!
+
+[10:52:02.0057] <bterlson>
+* that you know of
+
+[11:17:02.0712] <Michael Ficarra>
+what's wrong with setting a precedent of not changing the meaning of `\d`, `\w`, and `\b`?
+
+[11:17:12.0755] <Michael Ficarra>
+ * what's wrong with setting a precedent of not changing the meaning of `\d`, `\w`, and `\b`?
+
+[11:17:23.0980] <Michael Ficarra>
+I think that's the right precedent to set
+
+[11:18:40.0613] <jschoi>
+I recall that Perl 6 / Rakudo includes escape sequences for both ASCII digits, word characters, etc. and full-Unicode digits, word characters, etc.
+
+[11:18:45.0048] <jschoi>
+And maybe Perl 5 now too.
+
+[11:19:09.0093] <bakkot>
+for the notes, who's speaking?
+
+[11:19:19.0173] <bakkot>
+ * for the notes, who's speaking?
+
+[11:19:32.0700] <bakkot>
+apparently MDS, thanks to whoever put that in
+
+[11:21:16.0460] <jschoi>
+ * I recall that Perl 6 / Rakudo includes escape sequences for both ASCII digits, word characters, etc. and full-Unicode digits, word characters, etc.—in the same regex mode.
+
+[11:21:17.0552] <Michael Ficarra>
+nope, it is MED (Mark E Davis)
+
+[11:21:25.0486] <Michael Ficarra>
+MDS isn't assigned to anyone
+
+[11:21:30.0530] <Robin Ricard>
+updating my delegates.txt pr
+
+[11:21:37.0099] <bakkot>
+I feel like JS people generally don't assume things will change out from under them
+
+[11:22:00.0510] <Michael Ficarra>
+tip for note takers: if you don't know an abbreviation, just leave it empty or write the full name until we get the right one
+
+[11:22:11.0329] <jschoi>
+Is there precedent for “stability policies” in the spec?
+
+[11:22:41.0811] <jschoi>
+Like https://www.unicode.org/policies/stability_policy.html, but for Ecma-262.
+
+[11:22:52.0504] <jschoi>
+ * Like https://www.unicode.org/policies/stability_policy.html, but for Ecma-262.
+
+[11:23:07.0997] <bakkot>
+the policy is "we won't break the web"
+
+[11:23:17.0938] <bakkot>
+no more, no less
+
+[11:23:26.0986] <jschoi>
+Yeah, so no precedent for formal stability policies.
+
+[11:23:30.0601] <bakkot>
+yeah
+
+[11:23:53.0766] <jschoi>
+I figure that Mark Davis is coming from that sort of Unicode-stability-policy mindset.
+
+[11:24:07.0318] <jschoi>
+Just guessing though.
+
+[11:24:12.0403] <Michael Ficarra>
+the presence of a stability policy implies there is some instability somewhere
+
+[11:25:10.0337] <bakkot>
+there is, sometimes we add new properties to things and somethings that breaks things
+
+[11:25:29.0287] <bakkot>
+if we could say "please do not assume the absence of properties on built-ins" that would be nice
+
+[11:25:37.0662] <bakkot>
+but it's not really a policy because we'll still back things out if someone does
+
+[11:26:46.0770] <Michael Ficarra>
+sounds like 100% stability (modulo observability) to me
+
+[11:27:16.0393] <bakkot>
+sometimes we're still willing to break stuff if it's only a small fraction of things or the need is sufficiently great, though
+
+[11:27:20.0626] <jschoi>
+Related: https://matrixlogs.bakkot.com/WHATWG/2021-11-11#L29
+
+[11:27:21.0159] <bakkot>
+e.g. we backed out SAB
+
+[11:27:35.0744] <jschoi>
+Like extending addEventListener’s third argument and XMLHttpRequest’s send.
+
+[11:27:37.0946] <jschoi>
+ * Like addEventListener’s third argument.
+
+[11:28:45.0008] <jschoi>
+ * Like extending addEventListener’s third argument and XMLHttpRequest’s send.
+
+[11:28:47.0806] <jschoi>
+Also see also https://github.com/tc39/proposal-bigint-math/issues/17#issuecomment-966426554.
+
+[11:29:26.0196] <jschoi>
+Then again, smooshgate.
+Anyways, no Unicode-style formal stability policy right now…and maybe there can’t be.
+
+[11:30:27.0998] <bakkot>
+yeah, there can't be, really
+
+[11:32:36.0432] <jschoi>
+ * Related from HTML’s side of not breaking the web: https://matrixlogs.bakkot.com/WHATWG/2021-11-11#L29
+
+[11:33:01.0231] <Michael Ficarra>
+RIP smooshMap, the best method name ever
+
+[11:37:00.0650] <bakkot>
+you have write access to 262, you could make it happen
+
+[11:38:01.0754] <bterlson>
+Rick Waldron: are you ready to go with shadow realm after Array Grouping?
+
+[11:38:14.0515] <bterlson>
+we may have enough time to fit in a 10 minute item
+
+[11:44:11.0053] <rbuckton>
+`groupByIntoMap`?
+
+[11:44:51.0003] <TabAtkins>
+Justin Ridgewell: having the README contain at least a skeleton of all the proposed methods would be nice, as would having a link to the rendered spec in the README. I didn't realize `groupByMap()` was in the proposal at all.
+
+[11:45:19.0206] <TabAtkins>
+`groupForByIntoOverMap`
+
+[11:45:40.0264] <Kris Kowal>
+I like *ToMap on the toString precedent
+
+[11:47:04.0245] <bakkot>
+oh, `toString` is a great example
+
+[11:47:11.0096] <rbuckton>
+`groupBy(..., collector)` where `collector` is something like `{ create(), add(...), finish() }`? I think it was considered and abandoned (or delayed) by the iterator helpers proposal.
+
+[11:48:10.0430] <rbuckton>
+Or `groupBy(...) -> GroupedIterator` where `GroupedIterator` has `.toObject(), .toMap()` and is iterable for `[key, values]`
+
+[11:50:12.0670] <TabAtkins>
+I don't think the default function being an indirection object would be good, but we can extend the method to allow a collector later.
+
+[11:52:20.0296] <Michael Ficarra>
+rbuckton: https://matrixlogs.bakkot.com/TC39_Delegates/2021-08-31#L558-L561
+
+[11:53:04.0987] <Michael Ficarra>
+rbuckton: I plan to introduce a proposal for a builder protocol, and it will be pull, not push, for that reason
+
+[11:53:48.0732] <rbuckton>
+A `Map` builder is essentially `new Map(iterable)` though? 
+
+[11:54:15.0551] <Michael Ficarra>
+yes because Map is simple
+
+[12:04:23.0655] <bakkot>
+Rick Waldron: deleted my queue item, it was "sounds good as a follow up, want to confirm no compat risk because it's not primitive" - just want to confirm that trying to share a SAB right now will necessarily throw
+
+[12:05:01.0972] <shu>
+yeah
+
+[12:05:05.0687] <shu>
+like any other non-callable object
+
+[12:05:17.0820] <shu>
+ * like any other non-callable object
+
+[12:05:36.0218] <shu>
+so what you want is to wrap your SAB in a callable proxy!
+
+[12:06:48.0551] <Rick Waldron>
+> <@bakkot:matrix.org> Rick Waldron: deleted my queue item, it was "sounds good as a follow up, want to confirm no compat risk because it's not primitive" - just want to confirm that trying to share a SAB right now will necessarily throw
+
+Yeah, it will 100%
+
+[12:45:21.0428] <ljharb>
+Justin Ridgewell: did you delete that twitter account you made once upon a time?
+
+[12:56:58.0783] <Justin Ridgewell>
+Shhh, I don't have a twitter.
+
+[12:57:18.0000] <Justin Ridgewell>
+I use that for DMs at conferences and lurking only, I never post.
+
+[12:58:07.0490] <Rick Waldron>
+bterlson: in the future, you could go with a 4 minute warning. https://www.youtube.com/watch?v=6eyUrpOl40k
+
+[12:59:10.0972] <ljharb>
+> <@jridgewell:matrix.org> Shhh, I don't have a twitter.
+
+lol i was trying to credit you for array grouping but couldn't remember or locate the username :-p
+
+[13:01:07.0139] <Justin Ridgewell>
+I've seen some just use my real name when tweeting, but don't feel like you need to credit me
+
+[13:01:36.0831] <Justin Ridgewell>
+Essentially I only recognize my GH handle as a public account
+
+[13:01:38.0937] <ljharb>
+real names aren't as idiomatic and quippy ¯\\\_(ツ)_/¯
+
+[13:01:42.0534] <ljharb>
+ * real names aren't as idiomatic and quippy ¯\\\_(ツ)_/¯
+
+[13:04:14.0934] <ljharb>
+msaboff: can you mute jitsi?
+
+[13:14:29.0228] <ljharb>
+i'd prefer it go in "notational conventions" or something, so it's in the actual spec
+
+[13:35:49.0643] <ljharb>
+what is the "m" in "Chrome m99"?
+
+[13:37:52.0294] <jschoi>
+I will note that “documenting invariants” _is_ sort of formally stating something about stability in the specification. Although it’s not quite as all-encompassing as a Unicode-style full stability policy.
+
+[13:38:05.0627] <jschoi>
+ * I will note that “documenting invariants” _is_ sort of formally stating something about stability in the specification. Although it’s not quite as all-encompassing as a Unicode-style full stability policy.
+
+[13:38:47.0944] <ljharb>
+sffc: is that wind chimes?
+
+[13:43:05.0203] <sffc>
+yeah, sorry, is it too loud?  I'm sitting outside and it's windy
+
+[13:43:19.0508] <yulia>
+jschoi: would you be ready to go next?
+
+[13:43:45.0913] <ljharb>
+> <@sffc:mozilla.org> yeah, sorry, is it too loud?  I'm sitting outside and it's windy
+
+nah i was just curious. i could still hear you fine :-)
+
+[13:44:17.0989] <yulia>
+also ptomato would you be ready after?
+
+[13:44:45.0077] <ptomato>
+sure, I think I can make that work
+
+[13:45:54.0905] <yulia>
+ill just wait to see if jschoi is ready as the next presenter... else i might rely on you going really soon
+
+[13:46:08.0164] <jschoi>
+yulia: I am ready.
+
+[13:46:28.0367] <yulia>
+cool
+
+[14:01:24.0181] <Kris Kowal>
+The measure of my support for Array.fromAsync is that I hope it gets to stage 4 as fast or faster than Error cause :-)
+
+[14:05:07.0956] <bakkot>
+whoops, posted in the wrong channel, but
+
+[14:05:12.0509] <bakkot>
+there is no Set.from or Map.fromEntries
+
+[14:06:10.0349] <ljharb>
+Mathieu Hofman: it awaits the entry, why would it await either the key or the value (ie, it would take in an async iterable of entries)
+
+[14:06:32.0294] <ljharb>
+ * Mathieu Hofman: it awaits the entry, why would it await either the key or the value (ie, it would take in an async iterable of entries)
+
+[14:06:59.0179] <bakkot>
+that is not obviously the right thing, to me
+
+[14:07:12.0568] <Mathieu Hofman>
+Awaiting an entry would rarely be valuable
+
+[14:07:16.0720] <ljharb>
+all the more reason to have it be a separate proposal :-)
+
+[14:07:39.0326] <Mathieu Hofman>
+awating a value would more often be useful, but I've heard of use cases wanting to await the key as well
+
+[14:09:19.0704] <Mathieu Hofman>
+agreed, and that's why I wanted to avoid looping in anything entries related in this proposal, too many questions to resolve
+
+[14:10:50.0032] <bakkot>
+my laptop just crashed
+
+[14:10:52.0648] <bakkot>
+so notes bot is down
+
+[14:10:57.0719] <ljharb>
+https://github.com/tc39/proposal-setmap-offrom (cc erights )
+
+[14:13:07.0438] <ljharb>
+ * https://github.com/tc39/proposal-setmap-offrom (cc @erights)
+
+[14:13:20.0274] <ljharb>
+ * https://github.com/tc39/proposal-setmap-offrom (cc erights )
+
+[14:13:33.0477] <yulia>
+Justin Ridgewell: 
+
+[14:13:40.0625] <yulia>
+are you available to go next?
+
+[14:13:47.0578] <Justin Ridgewell>
+Sure
+
+[14:14:03.0594] <Justin Ridgewell>
+When does today's session end?
+
+[14:14:14.0970] <Michael Ficarra>
+46 minutes
+
+[14:15:02.0108] <bakkot>
+notes bot should be back up
+
+[14:15:24.0453] <yulia>
+nicolo-ribaudo: do you still need morre note takers?
+
+[14:15:35.0473] <nicolo-ribaudo>
+No, it's working now!
+
+[14:15:38.0868] <yulia>
+cool
+
+[14:22:24.0647] <Kris Kowal>
+The time of the Temporal proposal has changed, and the slides are arriving after they’re presented. Coincidence!? 🤔
+
+[14:24:21.0902] <bakkot>
+wait, instant doesn't require a timezone? I know it doesn't carry one, but doesn't instant need to know the offset in the string to figure out what instant it actually represents?
+
+[14:24:32.0805] <bakkot>
+I guess I can go read the docs...
+
+[14:30:13.0399] <yulia>
+aight, who else wants to go next, chris garrett ? or rbuckton ?
+
+[14:30:41.0545] <yulia>
+I don't know if chris is in this chat..
+
+[14:30:52.0358] <ptomato>
+bakkot: it requires a "Z" or a UTC offset like "+03:00" but it doesn't require a name
+
+[14:30:55.0030] <yulia>
+so, rbuckton would you be able to fill the last 15 min?
+
+[14:31:02.0949] <rbuckton>
+I can go. 
+
+[14:31:14.0869] <yulia>
+great, thank you
+
+[14:31:23.0893] <bakkot>
+ptomato: I think the example in the slides was `2021-12-14T10:00[Mars/Olympus_Mons]` which has neither, no?
+
+[14:31:28.0047] <bakkot>
+or maybe the parser in my head is broken
+
+[14:31:31.0485] <bakkot>
+or I misread
+
+[14:32:21.0735] <bakkot>
+oh, it's on the slide twice, and the second time has a Z
+
+[14:32:22.0703] <ptomato>
+oh, let me double check
+
+[14:32:25.0616] <bakkot>
+ok
+
+[14:34:01.0230] <ptomato>
+ah, right, `2021-12-14T10:00[America/Vancouver]` without Z or UTC offset is a valid string for ZonedDateTime, meaning "that wall-clock time in that time zone". but it is not valid for Instant
+
+[14:35:11.0516] <bakkot>
+and contrariwise `2021-12-14T10:00[Mars/Olympus_Mons]` without Z is valid for... I guess PlainDateTime? but neither ZonedDateTime (because unknown time zone) or Instant (because no Z or known time zone)
+
+[14:35:28.0404] <bakkot>
+I was just confused by it being different in the two places it appeared on the slide
+
+[14:35:30.0604] <bakkot>
+wait, three places
+
+[14:35:30.0920] <ptomato>
+correct
+
+[14:41:32.0617] <danielrosenwasser>
+👍 with how confusing cover grammars are to understand during implementation
+
+[14:42:02.0264] <bakkot>
+cover grammars are closer to how you'd implement though, I think
+
+[14:42:13.0010] <bterlson>
+I feel like the cover grammar is useful for implementers, otherwise you don't know what to speculatively parse to avoid unbounded lookahead? What  syntax is valid in the cover feels hard and possibly error prone to recover given just a token to lookahead for?
+
+[14:42:13.0124] <danielrosenwasser>
+Depends on the implementation
+
+[14:42:23.0505] <bakkot>
+does anyone have an implementation which is not recursive descent?
+
+[14:42:42.0613] <yulia>
+we have the parser generator to a table but we aren't shipping it
+
+[14:43:21.0007] <yulia>
+our production parser is recursive descent
+
+[14:43:25.0569] <danielrosenwasser>
+So IIRC, for our object literals we do a cover grammar implementation, and for arrow functions we use a speculative parse / unbounded lookahead
+
+[14:43:39.0494] <danielrosenwasser>
+ * So IIRC, for our object literals we do a cover grammar implementation, and for arrow functions we use a speculative parse / unbounded lookahead
+
+[14:43:49.0058] <danielrosenwasser>
+But we are not an engine team
+
+[14:44:02.0634] <nicolo-ribaudo>
+Babel uses a cover gammar both for objects and for arrows. Being able to follow the spec helps with implementation correctness.
+
+[14:44:25.0688] <bakkot>
+danielrosenwasser: is your impl public? I'd enjoy looking at it probably
+
+[14:44:34.0290] <danielrosenwasser>
+> <@bakkot:matrix.org> danielrosenwasser: is your impl public? I'd enjoy looking at it probably
+
+lol no you wouldn't
+
+[14:44:46.0542] <danielrosenwasser>
+it's gross and awful
+
+[14:44:47.0551] <shu>
+danielrosenwasser: i specifically didn't say engine team for that reason :)
+
+[14:44:49.0683] <yulia>
+ * we have the parser generator to a table but we aren't shipping it
+
+[14:44:51.0019] <danielrosenwasser>
+https://github.com/microsoft/TypeScript/blob/main/src/compiler/parser.ts
+
+[14:44:53.0869] <bakkot>
+I chose to be maintainer of the JS spec, I like gazing into the abyss :P
+
+[14:47:08.0716] <danielrosenwasser>
+https://github.com/microsoft/TypeScript/blob/main/src/compiler/parser.ts#L4502
+
+This is the start of the abyss. Keep in mind we have to parse out annotations
+
+[14:47:22.0516] <danielrosenwasser>
+Feel free to DM me complaints
+
+[14:47:58.0857] <bakkot>
+oh I've read this before
+
+[14:48:00.0326] <bakkot>
+I forget why
+
+[14:48:20.0794] <bterlson>
+parser.ts is hardly an abyss
+
+[14:48:33.0710] <bterlson>
+I mean, if it is, I don't know what that makes checker.ts
+
+[14:49:32.0767] <danielrosenwasser>
+> <@bakkot:matrix.org> I forget why
+
+There was one time where we were the odd-one-out of parsing and it was because every other implementation had a parsing bug
+
+[14:50:00.0398] <bakkot>
+yeah I've filed a few bugs with the parser
+
+[14:51:41.0751] <danielrosenwasser>
+> <@bterlson:matrix.org> I mean, if it is, I don't know what that makes checker.ts
+
+<3 checker.ts
+
+[14:52:02.0564] <danielrosenwasser>
+Ctrl+F any function name you need and you immediately find it
+
+[14:52:39.0017] <danielrosenwasser>
+(quarter-joking)
+
+[14:53:05.0052] <yulia>
+this sounds like my workflow
+
+[14:55:52.0988] <shu>
+a ridiculous workflow i actually like is jumping-to-definition ecma262 source: Ctrl+F AbstractOperationName<space>(
+
+[14:56:45.0535] <danielrosenwasser>
+it would be nice if the spec had an easy way to Ctrl+F in specific ways for this
+
+[14:57:01.0943] <shu>
+in the rendered version, you mean?
+
+[14:57:12.0573] <yulia>
+i find the above is really useful -- i use it all the time as well
+
+[14:57:21.0407] <danielrosenwasser>
+Yeah - I don't want to load the page, but IIRC abstract operations don't have an easy way to Ctrl+F similarly
+
+[14:57:30.0346] <danielrosenwasser>
+ * Yeah - I don't want to load the page, but IIRC abstract operations don't have an easy way to Ctrl+F similarly
+
+[14:57:51.0829] <shu>
+yeah that'd be nice
+
+[14:57:56.0452] <shu>
+though the searchbar is pretty good
+
+[14:58:26.0919] <ptomato>
+I was just thinking the other day that a keyboard shortcut to jump focus to the searchbar would be nice
+
+[14:58:46.0042] <yulia>
+wait doesn't tab work?
+
+[14:59:03.0537] <bakkot>
+`/`
+
+[14:59:04.0300] <ptomato>
+so it does!
+
+[14:59:09.0980] <danielrosenwasser>
+`/`! TIL
+
+[14:59:31.0091] <danielrosenwasser>
+ * `/`! TIL
+
+[14:59:45.0661] <danielrosenwasser>
+Don't know why I didn't think to try that
+
+[14:59:50.0698] <ptomato>
+apparently I should've just asked here earlier 😛
+
+[14:59:58.0221] <yulia>
+oh nice, `/`
+
+[15:00:56.0271] <shu>
+there is a sliver of truth in what Ron says about some things being obscure _and_ consistent cross-languages. in my wheelhouse, memory ordering names mean more or less the same thing
+
+[15:01:09.0092] <shu>
+whether that applies to regular expressions though, my hunch is no?
+
+[15:08:02.0650] <rbuckton>
+Thinking about the number of times I've written a RegExp with `(?:\r\n?|\n)`, how that's missing the other line terminator cases, and how that'll still be easier to type than `\p{NewLine_Sequence}`. Even if we had `\p{NewLine_Sequence}`, I feel line terminators are common enough that having `\R` as a shorthand would be preferable.
+
+[15:08:21.0778] <rbuckton>
+ * Thinking about the number of times I've written a RegExp with `(?:\r\n?|\n)`, how that's missing the other line terminator cases, and how that'll still be easier to type than `\p{NewLine_Sequence}`. Even if we had `\p{NewLine_Sequence}`, I feel line terminators are common enough that having `\R` as a shorthand would be preferable.
+
+[15:08:53.0235] <jschoi>
+I will say that newline sequences are pretty common in my code too.
+
+[15:11:20.0224] <bakkot>
+if the thing you want is to match `(?:\r\n?|\n)`, surely you'd write that, rather than `\R`? `\R` means a different thing which readers have to learn; I would think you'd only use it when you actually wanted that other thing explicitly
+
+[15:12:25.0994] <rbuckton>
+That's why I said "how that's missing the other line terminator cases". Only matching CR, LF, CRLF isn't very unicode friendly.
+
+[15:13:58.0226] <rbuckton>
+TR18 specifies what characters should match RL1.6 Line Boundaries, and strongly recommends "that there be a regular expression meta-character, such as "\R", for matching all line ending characters and sequences" https://www.unicode.org/reports/tr18/#Line_Boundaries
+
+[15:14:11.0524] <nicolo-ribaudo>
+It also happened to me to forget about the two other line terminators, or to review PRs where they have been forgotten (example: https://github.com/babel/babel/pull/10884#pullrequestreview-333658177)
+
+[15:15:51.0718] <rbuckton>
+I can look into how to request the addition of a sequence property for this, though the Unicode standard recommends using `\R`
+
+[15:16:42.0119] <nicolo-ribaudo>
+(I don't have a proper opinion yet regarding `\R` vs `\p{...}`, but I agree that it would be nice to solve this in the language)
+
+[15:24:00.0155] <bakkot>
+nicolo-ribaudo: to be clear, neither `\R` or a hypothetical `\p{newline_sequence}` would actually correspond to JS newlines, since unicode line terminators include `\v` and `\f`
+
+[15:24:19.0931] <nicolo-ribaudo>
+Oh thanks, I missed it
+
+[15:25:44.0405] <rbuckton>
+> <@bakkot:matrix.org> nicolo-ribaudo: to be clear, neither `\R` or a hypothetical `\p{newline_sequence}` would actually correspond to JS newlines, since unicode line terminators include `\v` and `\f`
+
+I strongly disagree. The source text you are parsing isn't necessarily JavaScript code.
+
+[15:26:07.0953] <bakkot>
+I mean to say that in the PR linked it was JavaScript code
+
+[15:26:10.0052] <nicolo-ribaudo>
+In my specific example it was
+
+[15:26:46.0158] <rbuckton>
+Ah, I misunderstood.
+
+[15:36:20.0283] <rbuckton>
+It looks like support for sequence properties will require `v` mode, while `\R` would only require `u`
+
+[15:36:36.0231] <rbuckton>
+ * It looks like support for sequence properties will require `v` mode, while `\R` would only require `u`
+
+
+2021-12-15
+[21:39:04.0457] <bakkot>
+given that both `'\u{1F468}\u{1F3FE}'` and `'\u{1F468}\u{1F3FE}\u200D\u2695\uFE0F'` are RGI_Emoji, does `/\p{RGI_Emoji}.../u` match `'\u{1F468}\u{1F3FE}\u200D\u2695\uFE0F'`?
+
+[21:39:09.0246] <bakkot>
+ * given that both `'\u{1F468}\u{1F3FE}'` and `'\u{1F468}\u{1F3FE}\u200D\u2695\uFE0F'` are RGI_Emoji, does `/\p{RGI_Emoji}.../u` match `'\u{1F468}\u{1F3FE}\u200D\u2695\uFE0F'`?
+
+[07:16:52.0263] <Rob Palmer>
+Hey all, yesterday's plenary went faster than planned.  As a result there is now 25min of spare time at the end of today's session.  So HE Shi-Jun could choose to bring back Class brand checks, or we could just end the meeting early.
+
+[08:22:21.0238] <shu>
+as it is a PT-time meeting this time, either is fine with me
+
+[08:23:13.0461] <shu>
+you may get stronger opinions from EMEA or APAC folks
+
+[08:23:26.0855] <shu>
+3pm PT is like 7am or something China time? guess if folks are pulling all nighters for this...
+
+[09:31:10.0836] <msaboff>
+When I join the meeting, I'm in a room by myself.  I have tried several times.
+
+[09:31:56.0865] <TabAtkins>
+If we have some leftover time I wouldn't mind giving a pattern-matching update; I can prepare quick slides with the latest form of the proposal. Happy to yield for anyone with more important needs tho.
+
+[09:32:52.0145] <TabAtkins>
+msaboff: There shouldn't be anyone in the room yet, the meeting doesn't start until the next hour.
+
+[09:35:50.0051] <Rick Waldron>
+Is it still appropriate practice to correct notes?
+
+[09:36:43.0007] <Rick Waldron>
+Nevermind, I see that it is. 
+
+[09:44:32.0640] <TabAtkins>
+yup, please do so liberally
+
+[09:46:11.0295] <msaboff>
+> <@tabatkins:matrix.org> msaboff: There shouldn't be anyone in the room yet, the meeting doesn't start until the next hour.
+
+I figured there may have been people early.  Guess not.
+
+[09:51:52.0989] <nicolo-ribaudo>
+msaboff I'm in now, if you want to see if it actually put you in  a different room
+
+[09:59:30.0445] <Rob Palmer>
+we are starting the meeting in 1 minutes
+
+[09:59:39.0482] <Rob Palmer>
+11 attendees so far
+
+[10:03:07.0541] <Rob Palmer>
+31 attendees - we are starting with Record & Tuple
+
+[10:20:03.0119] <Michael Ficarra>
+maybe this invariant (and its importance to us) would be a good short topic for a TG3 meeting
+
+[10:24:37.0849] <shu>
+copying over what i said from TDZ: not a fan of membranes being design constraints for JS in perpetuity
+
+[10:25:17.0826] <shu>
+my recollection is most features contorted specifically to accommodate membranes have not been well received at large
+
+[10:25:35.0045] <Michael Ficarra>
+okay maybe it would be a long topic
+
+[10:25:56.0537] <shu>
+and i count Proxies under that umbrella
+
+[10:26:29.0598] <jschoi>
+The debate over this invariant will block how to work with mutable objects in records/tuples, but should it block records/tuples themselves?
+
+[10:26:44.0017] <shu>
+up to the champions to remove support for this use case
+
+[10:27:01.0913] <shu>
+if they want to not support mutable objects to start, then that seems to sidestep this issue?
+
+[10:29:09.0674] <Robin Ricard>
+to be clear this is not about mutability only but the ability to reference things mutable or not 
+
+[10:29:20.0812] <Robin Ricard>
+ * to be clear this is not about mutability only but the ability to reference things mutable or not 
+
+[10:29:21.0116] <jschoi>
+Yes, sorry, that’s what I mean.
+
+[10:29:43.0897] <jschoi>
+Is that needed for the minimal viable product of records/tuples? What’s the risk of punting?
+
+[10:29:51.0608] <Robin Ricard>
+main use cases for OPs are fn handlers and host objects I like to think
+
+[10:30:39.0491] <Robin Ricard>
+We've been told those use cases are very important and would virtually make this proposal uselss without a way to reference
+
+[10:31:09.0940] <jschoi>
+Records and tuples would still be useful for me, but I guess I’m used to working with immutable data all the time, heh.
+
+[10:32:00.0160] <Robin Ricard>
+(originally the proposal did not let you ref, because we kinda had that vision as well!)
+
+[10:32:31.0022] <jschoi>
+Things like Clojure tend to promote putting large globs of immutable data structures in single root references and isolating external mutability to separate structures. Although there are styles in which references are embedded within immutable structures, I’ve never had to do that.
+
+[10:32:46.0070] <jschoi>
+* Things like Clojure tend to promote putting large globs of immutable data structures in a single root reference and isolating mutability to separate structures. Although there are styles in which references are embedded within immutable structures; I’ve never had to do that.
+
+[10:32:54.0526] <jschoi>
+* Things like Clojure tend to promote putting large globs of immutable data structures in a single root reference and isolating external mutability to separate structures. Although there are styles in which references are embedded within immutable structures; I’ve never had to do that.
+
+[10:33:21.0030] <Robin Ricard>
+to your point, we had clojure devs tell us they need to be able to reference because clojure can do it
+
+[10:33:23.0726] <jschoi>
+* Things like Clojure tend to promote putting large globs of immutable data structures in single root references and isolating external mutability to separate structures. Although there are styles in which references are embedded within immutable structures, I’ve never had to do that.
+
+[10:34:11.0373] <jschoi>
+Heh, I wonder how often they really need to embed references (atoms, etc. in Clojure) deeply in immutable structures rather than at the top level.
+
+[10:36:12.0128] <jschoi>
+Anyways, having no external-object references yet would make this proposal useless to many people, but not all people (certainly not me). I wonder if this issue really should be considered a blocker for the MVP, given the controversy over fundamental cross-cutting invariants.
+
+[10:39:05.0959] <jschoi>
+* Anyways, having no external-object references yet would make this proposal useless to many people, but not all people (certainly not me). I wonder if this issue really should be considered a blocker for the MVP, given the controversy over fundamental cross-cutting invariants.
+
+[10:42:36.0132] <yulia>
+to be completely clear: the invariants we write down are subject to consensus of the committee
+
+[10:44:00.0371] <shu>
+i was going to object that usage of "invariant"
+
+[10:44:06.0185] <ljharb>
+when writing them down, we should definitely differentiate for each invariant which:
+ - are true at the moment
+ - were intentionally held vs accidentally held
+ - has committee consensus to be held moving forward
+
+[10:44:21.0977] <shu>
+my contention is that it sounds like the "invariants" that some of these membrane libraries depend on are just "properties"
+
+[10:44:25.0504] <shu>
+yeah, what ljharb said
+
+[10:44:44.0371] <ljharb>
+we have many invariants that are true now, were accidentally held, and have no consensus to be held moving forward.
+
+[10:45:01.0849] <bakkot>
+tbf this is an invariant which mark has been carefully ensuring continues to hold
+
+[10:45:08.0208] <bakkot>
+ * tbf this is a property which mark has been carefully ensuring continues to hold
+
+[10:45:08.0237] <ljharb>
+it's important that we get explicit consensus, or note explicit lack of, for that third point for all the invariants we write down
+
+[10:45:12.0756] <bakkot>
+which is like being an invariant, kind of
+
+[10:45:23.0219] <ljharb>
+right - that makes it intentional, but doesn't necessarily have consensus
+
+[10:45:28.0895] <shu>
+bakkot: i think my disagreement is that the _actual_ property is only in mark's head
+
+[10:45:43.0281] <shu>
+and how he has been ensuring it to hold is to give targeted pushback
+
+[10:45:55.0333] <bakkot>
+again tbf he has said he'd like to write it down
+
+[10:46:01.0391] <shu>
+so it has not been a part of the larger design lexicon except very vaguely, in terms of "is mark going to object"
+
+[10:46:02.0505] <shu>
+fair
+
+[10:46:03.0166] <waldemar>
+Did someone rearrange the queue?
+
+[10:46:09.0489] <ljharb>
+i think so; my topic is now a reply
+
+[10:46:18.0836] <Rob Palmer>
+Brian rearranged to group topics, waldemar
+
+[10:50:52.0672] <shu>
+ObjectPlaceholder is just not a good primitive
+
+[10:50:56.0694] <yulia>
+bterlson: my two topics are on this subject as well, should i wait or directly respond?
+
+[10:51:14.0268] <shu>
+the fact it ticks all the right boxes for a particular scenario is not convincing if i don't find the scenario convincing
+
+[10:52:18.0972] <bakkot>
+can we just make `object(tuple) === tuple`, then declare that the invariant is specifically in terms of "things for which `object(x) !== x`"?
+
+[10:52:23.0228] <bakkot>
+I guess I should ask mark that question
+
+[10:52:52.0104] <ljharb>
+`Object(x) === x` is already an invariant for any object, and it also must be false or any primitive
+
+[10:53:14.0879] <bakkot>
+right, so this amounts to a proposal that records/tuples be somewhere between objects and primitives, not either thing in particular
+
+[10:53:45.0555] <shu>
+cf waldemar's "there is a continuum between primitives and objects"
+
+[10:53:59.0443] <bakkot>
+which I trust we will get to someday
+
+[10:54:14.0038] <bakkot>
+at least I hope we do
+
+[10:54:19.0491] <shu>
+i think i agree
+
+[10:55:15.0072] <ljharb>
+i would object to any proposal that adds a third category to "objects, primitives" - nothing should be in between if avoidable. (obv i have to be flexible for R&T, since they always blur the lines somewhat)
+
+[10:55:21.0213] <ljharb>
+ * i would object to any proposal that adds a third category to "objects, primitives" - nothing should be in between if avoidable.
+
+[10:55:38.0979] <bakkot>
+ok, then this amounts to a proposal that "it must be false for any primitive" stop being true for these primitives
+
+[10:55:49.0757] <ljharb>
+ * i would object to any proposal that adds a third category to "objects, primitives" - nothing should be in between if avoidable. (obv i have to be flexible for R&T, since they always blur the lines somewhat)
+
+[10:55:58.0457] <bakkot>
+that is a property which current holds, not an invariant which is written in stone
+
+[10:56:02.0527] <ljharb>
+that would break far more code than any membrane breakage.
+
+[10:56:07.0330] <bakkot>
+would it though
+
+[10:56:24.0819] <bakkot>
+and what level of 'break' are we talking here
+
+[10:56:26.0228] <ljharb>
+i mean i can pull out my list of npm packages and download counts and audit it if you want, but i'm pretty confident
+
+[10:56:48.0546] <bakkot>
+a lot of code breaks when we add a new `typeof` value, in the sense of "no longer interoperates with new code"
+
+[10:56:50.0114] <ljharb>
+"what level" i can't really say without actually looking at the code, to be fair
+
+[10:56:52.0213] <bakkot>
+but that is fine
+
+[10:57:00.0180] <bakkot>
+don't use new code without updating
+
+[10:57:08.0779] <shu>
+we need clarity on evolution
+
+[10:57:22.0213] <ljharb>
+"don't use new code without updating" is just not practical. browsers update things all the time
+
+[10:57:29.0922] <yulia>
+i would really like to get to my comments, they were related to this topic but were not moved up. I would like a timebox extension
+
+[10:57:35.0984] <bakkot>
+browsers do not start injecting new javascript onto the page
+
+[10:57:38.0668] <shu>
+because it increasingly sounds like there are some folks who have interpreted "don't break the web" to not evolve the language?
+
+[10:57:47.0710] <ljharb>
+since basically nobody's code is entirely first party, there's never just one author involved
+
+[10:58:10.0457] <ljharb>
+which does mean that new app code will exist with old libraries often
+
+[10:58:15.0624] <ljharb>
+ * which does mean that new app code will exist with old libraries often
+
+[10:58:21.0649] <bakkot>
+yeah, but that app has not already shipped
+
+[10:58:25.0412] <bakkot>
+so it isn't an existing thing we can break
+
+[10:58:38.0965] <bakkot>
+if the user tries to write the new feature, they'll discover it doesn't work with the old library
+
+[10:58:40.0104] <bakkot>
+and that's fine
+
+[10:58:44.0431] <bakkot>
+the existing page will work
+
+[10:58:58.0541] <ljharb>
+i see what you're saying and i completely agree there's many scenarios where the breakage isn't a problem. i think the object/primitive thing is not one of those scenarios.
+
+[10:59:17.0624] <bakkot>
+i am open to being convinced, but nothing said so far has convinced me
+
+[11:00:02.0086] <shu>
+things that have been said have convinced me less, if anyhing!
+
+[11:00:40.0807] <ljharb>
+bakkot: i'll check some libraries. so to be clear, you're suggesting that tuple be a primitive but `Object(tuple) === tuple` and the same for Record?
+
+[11:00:55.0558] <ljharb>
+ * bakkot: i'll check some libraries. so to be clear, you're suggesting that tuple be a primitive but `Object(tuple) === tuple` and the same for Record?
+
+[11:02:21.0734] <waldemar>
+Is the slide on the screen coming through jitsi as unreadable low-res for others as well?
+
+[11:02:30.0110] <rickbutton>
+yes low res
+
+[11:02:35.0865] <ryzokuken>
+yeah
+
+[11:02:38.0272] <rickbutton>
+the slides link is in the doc and schedule i believe
+
+[11:03:18.0984] <waldemar>
+I don't know what's special about this one, because in other presentations jitsi was showing full resolution
+
+[11:03:36.0064] <ryzokuken>
+I think it dropped the quality on Nicolo's side?
+
+[11:03:49.0068] <ryzokuken>
+maybe weak connection?
+
+[11:05:46.0589] <yulia>
+My feeling is that we should use symbols for the objectPlaceholder -- i don't see what objectplaceholder as a new primitive would do that we cannot do with symbol
+
+[11:06:27.0386] <yulia>
+I would also say that we can introduce a light syntax sugar on records to make the pattern easy for developers -- this is what i heard as the main objection to the weakmap solution
+
+[11:06:55.0203] <waldemar>
+I tend to agree with yulia here
+
+[11:07:16.0849] <shu>
+i think ObjectPlaceholders are needless complexity and might bite us later
+
+[11:07:23.0099] <yulia>
+for example `x = #{... y: Symbol.tie("symName", objRef) }`
+
+[11:07:41.0361] <Justin Ridgewell>
+Is the conclusion for R&T that no conclusion was made?
+
+[11:08:01.0786] <yulia>
+this also alleviates the issue of the memory leak, as we can specify Symbol.tie as we like
+
+[11:09:21.0133] <yulia>
+cc nicolo-ribaudo Robin Ricard  ^
+
+[11:09:24.0361] <rickbutton>
+`Symbol.tie` would be interesting but hits the same realm/membrane invariant
+
+[11:09:45.0160] <yulia>
+it would respond the same way as the weakmap
+
+[11:09:46.0221] <rickbutton>
+but +1 on all of this, I can sign on to symbols in WM on the argument that it is much simpler
+
+[11:09:52.0146] <yulia>
+symbol.tie is just sugar for that pattern
+
+[11:10:00.0697] <rickbutton>
+well, where is the weakmap?
+
+[11:10:25.0485] <ljharb>
+bakkot: so here's an example, admittedly in the es5-shim for bind (first lib i checked), where `new` of a bound function would fail in the presence of a shimmed bind function and a bound constructor that returns an R/T: https://github.com/es-shims/es5-shim/blob/master/es5-shim.js#L254
+
+[11:15:04.0353] <yulia>
+rickbutton: this is something we decide -- i would say it is in the realm that creates it (if i understood the slides -- this is to be in line with the goals of the champions, apologies if i got it wrong)
+
+[11:16:03.0818] <yulia>
+obviously this needs to be fully fleshed out -- for example the retreival, but this is fundamentally sugar
+
+[11:16:28.0632] <rickbutton>
+no that makes sense, but my point is that it runs into the exact problem that some folks have with ObjectPlaceholders across realms, the symbol lookup on the other side of a realm needs to have that weakmap, so either it is shared across all realms or per-realm
+
+[11:16:45.0181] <bakkot>
+ljharb: right, so that library will not interoperate with new code written with this feature, but no existing pages will break
+
+[11:16:47.0713] <bakkot>
+seems fine
+
+[11:17:03.0471] <rickbutton>
+ultimately the problem is "who owns the weakmap", some don't want the realm itself to own a weakmap per realm
+
+[11:17:26.0910] <yulia>
+rickbutton: that can be addressed, but the requirements need to be clearer about what the SES group wants. this isn't something that R&T should be beholden to
+
+[11:17:39.0442] <rickbutton>
+> <@yulia:mozilla.org> rickbutton: that can be addressed, but the requirements need to be clearer about what the SES group wants. this isn't something that R&T should be beholden to
+
+I certainly agree.
+
+[11:20:04.0554] <ljharb>
+bakkot: existing pages would break when they try to use the new types in that manner tho, which is not fine
+
+[11:20:45.0469] <ljharb>
+"don't break the web" doesn't just mean "don't break pages that are never touched"
+
+[11:20:46.0521] <bakkot>
+how is that not fine
+
+[11:21:04.0174] <bakkot>
+yes it does
+
+[11:21:06.0037] <bakkot>
+that's what that means
+
+[11:21:24.0972] <bakkot>
+"if your page currently works, it keeps working", not "if you start writing new code, it will keep working"
+
+[11:21:27.0116] <bakkot>
+we cannot make that promise
+
+[11:21:35.0172] <shu>
++5
+
+[11:21:40.0606] <ljharb>
+i do see your argument and largely agree
+
+[11:21:49.0764] <shu>
+SML/NJ is there if you want an ossified language
+
+[11:21:53.0594] <ljharb>
+but i think that pre-existing invariants should not be casually broken
+
+[11:22:10.0774] <ljharb>
+and `Object(x) === x` meaning "is an object" is an ancient one that tons of code relies on
+
+[11:22:37.0311] <ljharb>
+especially since ES6, when everything using a list of typeof values for that concept switched to using `Object(x) === x` to avoid future additions breaking them like symbol did (and bigint)
+
+[11:23:10.0247] <bakkot>
+I'm not being casual about it
+
+[11:23:21.0122] <bakkot>
+I just think that tuples are _genuinely_ something between primitives and objects
+
+[11:23:29.0044] <bakkot>
+and it's ok for them to behave like primitives in some ways and objects in others
+
+[11:24:00.0768] <ljharb>
+in a general sense i don't agree that that is ok
+
+[11:24:23.0441] <bakkot>
+well, they do: like objects, they contain other values; like primitives, they are forgeable
+
+[11:24:26.0660] <ljharb>
+i'm sure there's some specific ways that i'll agree it's fine, but in a general sense, objects need to behave like objects and primitives like primitives, and i don't want that line blurred
+
+[11:24:46.0186] <ljharb>
+forgeability isn't a primitive property; non-global symbols aren't.
+
+[11:25:08.0376] <bakkot>
+"like primitives they can't be used in a map", then
+
+[11:25:15.0478] <bakkot>
+or "like primitives they compare by value"
+
+[11:25:17.0327] <bakkot>
+or whatever
+
+[11:25:21.0425] <ljharb>
+weakmap, sure
+
+[11:25:37.0268] <ljharb>
+and how do i write my code to branch on whether it'll throw or not? by using Object(x) === x
+
+[11:25:59.0705] <bakkot>
+that won't work if we let you put symbols in weakmaps
+
+[11:26:02.0712] <bakkot>
+and that's _fine_
+
+[11:26:02.0751] <jschoi>
+> <@bakkot:matrix.org> well, they do: like objects, they contain other values; like primitives, they are forgeable
+
+Insofar that strings can be considered to “contain” other strings, I don’t think that “containing” values is a unique feature of non-primitives.
+
+[11:26:05.0482] <ljharb>
+give me an actual "is an object" or "is a primitive" predicate, and time to migrate everything to use it, and i think there'll be a much stronger case to break those invariants
+
+[11:26:17.0091] <bakkot>
+jschoi I do not regard strings as containing other strings
+
+[11:26:19.0120] <ljharb>
+sure it'll work - it'll avoid the throwing. it just won't use the ideal path, and the symbol will go in the fallback Map
+
+[11:26:30.0336] <ljharb>
+> <@bakkot:matrix.org> that won't work if we let you put symbols in weakmaps
+
+ * sure it'll work - it'll avoid the throwing. it just won't use the ideal path, and the symbol will go in the Map
+
+[11:26:33.0976] <ljharb>
+ * sure it'll work - it'll avoid the throwing. it just won't use the ideal path, and the symbol will go in the fallback Map
+
+[11:26:44.0814] <jschoi>
+> <@bakkot:matrix.org> jschoi I do not regard strings as containing other strings
+
+I mean like my own mental model is that sometimes you can compose primitives into primitives.
+
+[11:26:50.0127] <rickbutton>
+fallback Map?
+
+[11:27:17.0788] <ljharb>
+rickbutton: in my code where i want to key on any value, and i use a weakmap for objects and a Map for everything else, so i can provide a maximally weak unified collection interface
+
+[11:27:19.0773] <bakkot>
+yoru code is now going down the wrong branch. just because it happens to still work doesn't mean `Object(x) === x` is actually the check you wanted.
+
+[11:27:34.0016] <ljharb>
+it's not wrong - my code still functions properly. it's just putting the symbol in a Map instead of a WeakMap
+
+[11:27:47.0752] <ljharb>
+and i agree, that in that case the Object comparison isn't the check i want - but that check doesn't exist yet
+
+[11:28:18.0365] <bakkot>
+`let canBePlacedInWeakMap = x => object(x) === x` is certainly wrong.
+
+[11:28:19.0840] <ljharb>
+when a semantic lacks a first-class predicate, code will and does abuse an existing property to provide that semantic.
+
+[11:28:31.0580] <ljharb>
+it's not wrong right now. it just may become wrong in the future.
+
+[11:28:40.0370] <bakkot>
+it will become wrong if we put symbols in weakmaps
+
+[11:28:42.0463] <bakkot>
+and that is ok
+
+[11:28:53.0648] <bakkot>
+ * `let canBePlacedInWeakMap = x => object(x) === x` is certainly wrong.
+
+[11:29:23.0767] <ljharb>
+whether it's OK or not depends heavily on the context that predicate is used in
+
+[11:29:37.0226] <ljharb>
+as a builtin predicate tho, then it would be updated in sync with the engine, and then it's always OK
+
+[11:30:08.0078] <bakkot>
+it's just unconditionally OK. there is no promise that old code continues to behave identically when provided with new values.
+
+[11:30:46.0134] <ljharb>
+it is a very broad spectrum
+
+[11:30:49.0902] <rickbutton>
+will your old code not do the exact same thing in this case? it will put the symbol into a map, the old behavior
+
+[11:30:58.0238] <rickbutton>
+i'm misunderstanding the actual problem here
+
+[11:31:25.0340] <ljharb>
+rickbutton: yes, this is a use case where it's fine, when i have the fallback map
+
+[11:31:39.0863] <bakkot>
+the question is whether it is acceptable for `object(x) === x` to hold for tuples
+
+[11:31:40.0228] <ljharb>
+i'm talking generally about that axiom being relied on in a myriad of ways
+
+[11:31:47.0859] <bakkot>
+I think it's fine
+
+[11:31:53.0134] <bakkot>
+jordan thinks otherwise
+
+[11:32:29.0287] <rickbutton>
+I have no opinion on this, I think
+
+[11:32:41.0757] <rickbutton>
+(the best opinion :) )
+
+[11:34:42.0950] <shu>
+wait, is the decorator presenter here?
+
+[11:34:56.0031] <shu>
+did i hear right that _static_ field initializers aren't symmetric with _instance_ field initializers?
+
+[11:35:12.0928] <shu>
+static field initializers have `addInitializer` but instance fields can only do replacement?
+
+[11:35:21.0047] <shu>
+(no opinion, just clarifying)
+
+[11:35:40.0526] <ptomato>
+pzuraq: I've been meaning to examine in more detail how the current version of the proposal interacts with how GNOME would like to use decorators. hence the question about static fields. if you plan to go to stage 3 soon I'll make sure I do that in January
+
+[11:35:51.0552] <bterlson>
+strong font game on this preso
+
+[11:36:13.0144] <waldemar>
+I see corruption on the top right of the slides. Anyone else?
+
+[11:36:17.0678] <shu>
+agree, game gotta respect game
+
+[11:36:48.0573] <yulia>
+best font since shu's presentations
+
+[11:36:53.0117] <yulia>
+waldemar: me too
+
+[11:39:37.0165] <jschoi>
+The slide corruption changed…
+
+[11:39:39.0406] <Mathieu Hofman>
+> <@yulia:mozilla.org> for example `x = #{... y: Symbol.tie("symName", objRef) }`
+
+How would you retrieve `objRef` from `y` when consuming the record? If you have an equivalent `Symbol.fromTie(y)`, then what you have is effectively `ObjectPlaceholder`. Or did I miss something ?
+
+[11:40:10.0662] <yulia>
+Mathieu Hofman: its kind of my point actually
+
+[11:41:18.0271] <Michael Ficarra>
+I look forward to never using Kahan's summation again
+
+[11:41:45.0583] <jschoi>
+I once read one of Kahan’s papers on why IEEE floats are designed the way they are. It was illuminating albeit confusing.
+
+[11:43:15.0810] <Michael Ficarra>
+jschoi: if you liked that, I highly recommend https://www.amazon.com/End-Error-Computing-Chapman-Computational/dp/1482239868
+
+[11:44:33.0575] <jschoi>
+What I remember from Kahan: We should have had many distinguishable NaN values. Heh.
+
+[11:44:37.0495] <jschoi>
+This book looks cool.
+
+[11:45:05.0601] <shu>
+many indistiguishable NaN values is responsible for your iphone's web engine being fast yo
+
+[11:45:17.0733] <Michael Ficarra>
+jschoi: there's some shorter papers that pretty much sum it up, with lots of great figures, if you want me to dig those links up for you
+
+[11:45:27.0707] <TabAtkins>
+Okay, a five minute slide deck for updating on Pattern Matching: https://docs.google.com/presentation/d/1D6rJzRRxf235sQH6JUXeKdJk5QLnYu66_gH5lpvcbwI/edit
+
+[11:45:52.0598] <bakkot>
+instead of the book, start with https://en.wikipedia.org/wiki/Unum_(number_format)
+
+[11:45:57.0411] <jschoi>
+> <@shuyuguo:matrix.org> many indistiguishable NaN values is responsible for your iphone's web engine being fast yo
+
+I imagine Kahan shedding a tear at this. 🥲
+
+[11:46:32.0884] <jschoi>
+> <@bakkot:matrix.org> instead of the book, start with https://en.wikipedia.org/wiki/Unum_(number_format)
+
+Oh, I heard about this too. I remember seeing a debate on YouTube between the creator of this and Kahan, in fact…
+
+[11:46:38.0915] <Michael Ficarra>
+nah, that wikipedia article isn't great
+
+[11:48:47.0672] <ljharb>
+i'm confused; is it harder to reason about code using BigInt than integer Numbers, due to the lack of finite precision?
+
+[11:48:56.0244] <ljharb>
+ * i'm confused; is it harder to reason about code using BigInt than integer Numbers, due to the lack of finite precision?
+
+[11:49:21.0111] <ljharb>
+or wait, that's bit size, not decimal precision, so maybe that's an unrelated question
+
+[11:49:25.0654] <shu>
+well, yes, it is
+
+[11:49:27.0520] <Michael Ficarra>
+to be clear, I think there's probably too much buy-in to IEEE-754 to ever replace it with Unums, but I have been convinced they are better in every way, and it would have been a better alternative timeline if we had had them instead
+
+[11:49:49.0894] <jschoi>
+Imagine hardware accelerated unums.
+
+[11:50:01.0409] <Michael Ficarra>
+shu: yes I am completely lost whenever I don't run into overflow/underflow
+
+[11:50:41.0048] <Michael Ficarra>
+jschoi: people have done it! just not mass produced
+
+[11:51:07.0214] <yulia>
+Is anyone else having issues with matrix?
+
+[11:51:10.0587] <shu>
+i mean i think using numbers qua numbers is fairly rare in what i do?
+
+[11:51:24.0963] <shu>
+i'm tagging stuff, composing it with other stuff
+
+[11:51:40.0508] <bakkot>
+yulia: no. I suspect it's an issue with the federation with mozilla's homeserver?
+
+[11:51:55.0834] <TabAtkins>
+yeah precision blow-up from repeated mults is non-obvious if you're not paying attention.
+
+[11:53:25.0788] <Michael Ficarra>
+:-( sad to hear that bigints are mostly only used for crypto fraud
+
+[11:53:34.0742] <bakkot>
+unsurprised though
+
+[11:53:57.0082] <jschoi>
+I use BigInts in my work. 🥲
+Though most recently it was with Node’s high-resolution performance API…
+
+[11:54:37.0518] <bakkot>
+but hey, the fact that bigints are mostly used for cryptominers does mean their usage probably went up 10x in the five days or so!
+
+[11:54:45.0606] <TabAtkins>
+i suspect it's just because they need 128bit ints?
+
+[11:55:20.0910] <jschoi>
+Probably. Either way, it needs to be beyond MAX_SAFE_INTEGER.
+
+[11:55:22.0379] <ljharb>
+imo the reason bigints suck to use is that they don't interoperate with numbers well, so libraries don't support both, and don't bother to switch wholesale
+
+[11:55:30.0592] <jschoi>
+ * Probably. Either way, it needs to be beyond MAX_SAFE_INTEGER.
+
+[11:55:40.0964] <ljharb>
+my hope would be that Decimal would make a better decision there
+
+[11:55:48.0705] <bakkot>
+fwiw I would naively expect bigint usage to vastly exceed decimal usage
+
+[11:55:55.0516] <bakkot>
+ * fwiw I would naively expect bigint usage to vastly exceed decimal usage
+
+[11:56:09.0445] <bakkot>
+it's true that lots of code needs to deal with money, but that doesn't mean it needs decimal
+
+[11:56:21.0813] <bakkot>
+code which needs decimal to deal with money is relatively obscure in my experience
+
+[11:57:14.0302] <shu>
+not if web3 takes off! /s
+
+[11:58:04.0878] <rkirsling>
+oof
+
+[11:58:18.0820] <ljharb>
+Justin Ridgewell: you need like 3-6 digits to handle all fiat currencies iirc, you need many more than that to handle crypto
+
+[11:58:29.0221] <rickbutton>
+gonna need infinite precision numbers to track how much money I lose from gambling on a sha of a png
+
+[11:58:35.0020] <shu>
+what if we simply lobbied central banks to _un_decimalize their financial system
+
+[11:58:39.0238] <ljharb>
+Twitter Ads used "microdollars" (1e-9) everywhere to avoid floating point issues in all global fiat currencies
+
+[11:58:50.0132] <ljharb>
+ * Twitter Ads used "microdollars" (1e-9) everywhere to avoid floating point issues in all global fiat currencies
+
+[11:58:59.0971] <bakkot>
+web3 money is specified in floats, not to worry
+
+[11:59:05.0996] <shu>
+lol
+
+[11:59:12.0134] <shu>
+ * lol
+
+[11:59:32.0948] <yulia>
+I do believe we are shitposting ? 
+
+[11:59:35.0756] <danielrosenwasser>
+Bring web3 back to the gold standard!
+
+[11:59:54.0357] <danielrosenwasser>
+uh might be 
+
+[11:59:56.0053] <Michael Ficarra>
+yeah this kinda devolved into #tdz
+
+[12:00:01.0334] <bakkot>
+whoops sorry
+
+[12:00:27.0667] <Mathieu Hofman>
+yulia: sorry I was catching up on all the earlier discussions. My point is that you have the same problems with `Symbol.tie` of a global implicit `WeakMap` and are still subject to primitives-dont-give-you-direct-access-to-objects assumptions by deployed code. From what I understand, the only difference you have with `ObjectPlaceholder` is a different `typeof`. Is there a concern with introducing a different `typeof` primitive? It feels weird to overload even more symbols.
+
+[12:00:53.0348] <Michael Ficarra>
+> <@yulia:mozilla.org> I do believe we are shitposting ?
+
+btw that's the most Yulia way to moderate a channel
+
+[12:01:30.0583] <yulia>
+It’s true
+
+[12:05:38.0689] <yulia>
+Mathieu Hofman: im on my phone and can’t type fully. But: in terms of what was presented, the concept of objectplaceholder is not independently useful as a primitive. It is functionally a variable name with restrictions. This is nicely represented as a symbol in a weak map relation. We have the building blocks for that, we don’t need to invent a new primitive. It aligns with other independent use cases for symbols in a weak map. A new primitive should be something that justifies the implementation complexity of adding it. 
+
+[12:12:17.0940] <Mathieu Hofman>
+I suppose I don't understand where the complexity is, as what I'm basically arguing for is explicitly identifying with a new `typeof` a primitive which can be used in `WeakMap`, and has the same properties of a direct mapping between an Object and values of this new primitive like `Symbol.for` has for a string/number.
+
+[12:13:10.0532] <bakkot>
+new primitives are a lot of complexity even for language users, much less engines
+
+[12:13:56.0303] <Mathieu Hofman>
+I believe that overloading Symbol further is a lot of complexity for user having to wonder which kind of symbol they're holding
+
+[12:14:28.0519] <Mathieu Hofman>
+is it a forgeable value, a unique value, a value representing some object?
+
+[12:14:54.0913] <yulia>
+I would say that the symbol is a normal symbol. The tie just puts it in a weak map
+
+[12:14:59.0307] <yulia>
+There is no overloading
+
+[12:15:40.0657] <Mathieu Hofman>
+But the intent of using that symbol is different
+
+[12:15:41.0597] <yulia>
+New primitives are a sizable implementation burden 
+
+[12:16:16.0652] <yulia>
+Don’t think I agree about the intent
+
+[12:17:24.0389] <rickbutton>
+strings can be used as keys and as values, that intent is not expressed in a typeof
+
+[12:17:49.0220] <rickbutton>
+typeof seems a bit strong on only the "it expresses additional intent" argument
+
+[12:19:17.0202] <sarahghp>
+Thank you for shitposting. It makes me feel good. 😆
+
+[12:21:42.0688] <Justin Ridgewell>
+Re the earlier `Promise.prototype.finally` discussion, I mixed up `.then` and thenable access.
+
+[12:21:46.0707] <Justin Ridgewell>
+But the same power still holds
+
+[12:21:52.0759] <Justin Ridgewell>
+```
+var iframe = document.createElement('iframe');
+iframe.src = location.href;
+document.body.appendChild(iframe)
+
+var final = iframe.contentWindow.eval('(onThen, onCatch) => { window.data = {onThen, onCatch}; }')
+
+var thenFinally, catchFinally;
+Promise.prototype.finally.call({
+  then(thenFinally_, catchFinally_) {
+    thenFinally = thenFinally_;
+    catchFinally = catchFinally_;
+  }
+}, final);
+
+console.log('thenFinally', thenFinally.constructor === Function);
+console.log('catchFinally', catchFinally.constructor === Function);
+
+Promise.resolve({
+  then: final
+});
+Promise.resolve().then(() => {
+  console.log('onThen', iframe.contentWindow.data.onThen.constructor === Function);
+  console.log('onCatch', iframe.contentWindow.data.onCatch.constructor === Function);
+});
+```
+
+[12:22:03.0467] <Mathieu Hofman>
+One thing I didn't get into is how having an explicit intent for an ObjectPlaceholder being an exit from the immutable structure is that it allows predicates that compare the immutable shape of a record/tuple oblivious of the exits, without running into the collision issues that strings have (and for which unique symbols were created in the first place):
+```
+const eventHandlerTag = Symbol('EventHandler');
+const domElementTag = Symbol('Element');
+const rec1 = #{type: eventHandlerTag, ref: ObjectPlaceholder(() => {})};
+const rec2 = #{type: eventHandlerTag, ref: ObjectPlaceholder(() => {})};
+const rec3 = #{type: domElementTag, ref: ObjectPlaceholder(document)};
+assert(rec1 !== rec2);
+assert(sameShape(rec1, rec2) === true);
+assert(sameShape(rec1, rec3) === false);
+```
+
+[12:22:28.0585] <Mathieu Hofman>
+ * One thing I didn't get into is how having an explicit intent for an ObjectPlaceholder being an exit from the immutable structure is that it allows predicates that compare the immutable shape of a record/tuple oblivious of the exits, without running into the collision issues that strings have (and for which unique symbols were created in the first place):
+```
+const eventHandlerTag = Symbol('EventHandler');
+const domElementTag = Symbol('Element');
+const rec1 = #{type: eventHandlerTag, ref: ObjectPlaceholder(() => {})};
+const rec2 = #{type: eventHandlerTag, ref: ObjectPlaceholder(() => {})};
+const rec3 = #{type: domElementTag, ref: ObjectPlaceholder(document)};
+assert(rec1 !== rec2);
+assert(sameShape(rec1, rec2) === true);
+assert(sameShape(rec1, rec3) === false);
+```
+
+[12:22:46.0474] <shu>
+Mathieu Hofman: that is why the proposal is symbols, instead of strings
+
+[12:22:49.0657] <rickbutton>
+assuming that there was a predicate like `Symbol.isTie` you could do the same
+
+[12:23:00.0482] <rickbutton>
+or just try to unwrap every symbol
+
+[12:24:31.0384] <Mathieu Hofman>
+Unwrapping test wouldn't work in the no-unwrap-if-different realm case
+
+[12:24:41.0522] <Mathieu Hofman>
+which is still relevant for both approaches
+
+[12:24:55.0505] <Mathieu Hofman>
+ * Unwrapping test wouldn't work in the no-unwrap-if-different realm case
+
+[12:25:43.0676] <rickbutton>
+well sure, but we are ignoring that because symbols in weakmaps doesn't have this problem, that problem would need to be solve if/when Symbol.tie was a thing, or a proposal attempted to add ObjectPlaceholder
+
+[12:26:01.0116] <rickbutton>
+(in this theoretical example of symbols as weakmap keys)
+
+[12:26:56.0286] <yulia>
+I would see this restriction as a benefit. In the absence of use cases that need this, weakmap symbols remove the objection on security grounds
+
+[12:27:14.0596] <rickbutton>
+and I think the general sense after the update is that the worse ergonomics of symbols in weakmaps > the general complexity of objectplaceholders, at least that was voiced by several people
+
+[12:27:16.0956] <Mathieu Hofman>
+I think we lost the fact that `Symbol.tie` was explicitely mentioned to help user-land solve the re-invent the wheel issue, and to improve debuggability.
+
+[12:27:22.0443] <yulia>
+And object placeholder is unnecessary to achieve the goals of records and Tupfes
+
+[12:27:45.0195] <yulia>
+No, we don’t need it for either case
+
+[12:27:49.0037] <rickbutton>
+I don't think Symbol.tie would be needed for debuggabilitry
+
+[12:28:05.0768] <yulia>
+It is a nice shorthand in the language but the same is achievable with a library
+
+[12:28:45.0086] <Mathieu Hofman>
+> <@yulia:mozilla.org> I would see this restriction as a benefit. In the absence of use cases that need this, weakmap symbols remove the objection on security grounds
+
+I believe this would make the implementation of transparent membrane a lot more complicated
+
+[12:29:24.0433] <yulia>
+That is a concern for a membranes proposal
+
+[12:29:32.0069] <rickbutton>
+how so? symbols as weakmap keys are transparent to the membrane, if you need access to the weakmap on the other side, wrap it with the membranea
+
+[12:29:46.0993] <rickbutton>
+if anything, zero work needs to be done to fit symbols as weakmap keys into current membranes, it would just work
+
+[12:29:52.0486] <Mathieu Hofman>
+> <@yulia:mozilla.org> It is a nice shorthand in the language but the same is achievable with a library
+
+A library that all users of records/tuples have to agree on using
+
+[12:30:53.0947] <rickbutton>
+the lack of a built-in coordination point is certainly a downside sure
+
+[12:30:58.0752] <rickbutton>
+but imo not fatal
+
+[12:31:02.0466] <Mathieu Hofman>
+If the weakmap holder is explicit, sure, if it's implicit and hidden within `Symbol.tie` then no
+
+[12:31:20.0532] <Mathieu Hofman>
+> <@rick.button:matrix.org> how so? symbols as weakmap keys are transparent to the membrane, if you need access to the weakmap on the other side, wrap it with the membranea
+
+ * If the weakmap holder is explicit, sure, if it's implicit and hidden within `Symbol.tie` then no
+
+[12:31:21.0692] <yulia>
+They don’t need to all agree on using it to be fair
+
+[12:31:22.0567] <rickbutton>
+> <@mhofman:matrix.org> If the weakmap holder is explicit, sure, if it's implicit and hidden within `Symbol.tie` then no
+
+any restrictions around implicit maps would need to be handled in that proposal
+
+[12:31:50.0290] <rickbutton>
+we aren't suggesting implcit maps as a part of R&T, simply as a strawman for a possible followon proposal
+
+[12:32:04.0817] <rickbutton>
+%s/we/yulia/gc and feel free to correct me
+
+[12:32:12.0542] <yulia>
+Yep, you got it right
+
+[12:33:12.0218] <yulia>
+I would say there is much more motivation for a syntax sugar on symbols in weakmap than object placeholder. They are functionally the same. If you like we can even call it the same. 
+
+[12:33:56.0225] <Mathieu Hofman>
+Again, I repeat my use case earlier, if you allow all unique symbols as weakmap keys, you can't build a generic predicate that test the shape of a record/tuple for mutable exits while still allowing other unique symbols as unique value, unless that predicate synchronizes with the weakmap
+
+[12:34:30.0005] <rickbutton>
+making that predicate sync with the weakmap in the case where the map is explicit seems perfect fine to me
+
+[12:34:38.0587] <rickbutton>
+WeakMap.prototype.has, in fact
+
+[12:34:41.0066] <Mathieu Hofman>
+you put the burden of synchronization for a generic concept (mutable data referenced by immutable structure) on the user land
+
+[12:35:04.0840] <rickbutton>
+you need the WeakMap to get the values in any case anyway, seems fine to also need the WeakMap to find out which ones are values
+
+[12:35:07.0494] <yulia>
+Can you show me a library on npm with a ton of downloads that does this?
+
+[12:35:50.0526] <Mathieu Hofman>
+I'm deriving this use case from questions that were asked on Discourse and github issues
+
+[12:36:28.0770] <Mathieu Hofman>
+One of them is https://es.discourse.group/t/tagged-records-and-variants/1058
+
+[12:36:55.0350] <rickbutton>
+something else important to note: symbols as weakmap keys does not preclude the future addition of ObjectPlaceholder in a future proposal that has all of these concerns ironed out
+
+[12:38:36.0025] <yulia>
+I don’t think this is a good example for objectplaceholder
+
+[12:38:50.0883] <yulia>
+It is making use of the ability to box objects for something else: brandchecking
+
+[12:39:46.0710] <Mathieu Hofman>
+There is some of these requests sprinkled around https://github.com/tc39/proposal-record-tuple/issues/258#issuecomment-947115796, mostly around the use case of vdom referencing user data
+
+[12:40:30.0721] <rickbutton>
+there is already an extremely well developed pattern for branding values, I use WeakMaps all the time for this
+
+[12:41:04.0408] <yulia>
+I am more and more convinced that expanding on symbols in weakmap is the way to go here
+
+[12:41:05.0607] <rbuckton>
+I am due to present after the break, but there is a significant amount of noise outside my house at the moment. While I'm not specifically asking to be rescheduled, I apologize in advance if the noise makes it difficult to hear. I have some background noise removal running for my microphone right now which I hope will help.
+
+[12:41:21.0244] <yulia>
+Like, even for the cases you are presenting now
+
+[12:41:32.0028] <Mathieu Hofman>
+The idea here is to have the unique brand information be part of the shape test of the record.
+
+[12:42:23.0864] <Mathieu Hofman>
+symbols are unique values that can participate in shape tests.
+
+[12:43:26.0880] <shu>
+as an aside v8 continues to have the opinion the vdom use case should not be overindexed on
+
+[12:43:47.0528] <Mathieu Hofman>
+if symbols are also unique values that can represent an exit, which should be ignored by the shape test, the shape test needs to be coupled to the weakmap that can differentiate the 2
+
+[12:43:49.0429] <shu>
+symbols in weakmaps are literally more expressive than ObjectPlaceholder
+
+[12:43:50.0108] <yulia>
+Which hasn’t yet been established as a need that should be integrated into engines as a primitive
+
+[12:43:55.0567] <rbuckton>
+Regarding debuggability and symbols as weakmap keys vs object placeholder: Some debuggers allow you to control watch window behavior to overcome this. Notably, VS Code has `customDescriptionGenerator` and `customPropertiesGenerator` configuration settings you can specify in `launch.json` that allows you to run custom code to generate your own descriptions and property expansion in watch/locals. Its a bit of extra work for the user, but it does allow you to work around the debug concerns.
+
+[12:44:47.0482] <shu>
+what is a "shape test" in that context?
+
+[12:45:07.0346] <rickbutton>
+"are these two records the same ignoring the object placholders"
+
+[12:45:11.0890] <shu>
+like what is the actual consequence, you have to type a bit more in some use cases?
+
+[12:45:24.0923] <rickbutton>
+ * "are these two records the same ignoring the object placholders"
+
+[12:45:32.0606] <rickbutton>
+is what i understand it as
+
+[12:45:36.0639] <rickbutton>
+ * is what i understand it as
+
+[12:46:17.0384] <shu>
+i mean, seems like a safe simplifying assumption to make that, if you use symbols, that symbols-as-object-placeholders are globally unique. if it ain't, and you have to couple it to a weakmap, that's a choice you can make as a framework too
+
+[12:46:36.0795] <shu>
+ * i mean, seems like a safe simplifying assumption to make that, if you use symbols, that symbols-as-object-placeholders are globally unique. if it ain't, and you have to couple it to a weakmap, that's a choice you can make as a framework too
+
+[12:46:52.0768] <Mathieu Hofman>
+I think it all boils down to whether the synchronization point is a user library that everyone agrees to use, or if the platform provides this synchronization point in some way
+
+[12:47:19.0625] <shu>
+that comes back to a point raised from the last meeting
+
+[12:47:34.0629] <yulia>
+Not everyone uses the same membrane implementation. This seems fine
+
+[12:47:34.0736] <rickbutton>
+well, it would be very simple for the platform to provide the coordination point, except that some don't want that coordination point to be cross realm
+
+[12:48:39.0014] <bakkot>
+easy to provide a per-realm coordination point if we want that
+
+[12:49:04.0973] <rickbutton>
+yes but others -dont- want that, therein lies the problem
+
+[12:49:05.0016] <bakkot>
+a per-realm `WeakMap.sharedMap` which is just a `new WeakMap`
+
+[12:49:06.0694] <bakkot>
+e.g.
+
+[12:50:13.0242] <shu>
+let me zoom out even more. like, what are you hoping to get out of immutable data structures? if it's mutable exit points, the main use case is templates. is it for easier reasoning of templates? if so, just do it in your framework, seems fine to me, not like you can compare templates across frameworks anyway. is it for faster performance of templates? we (V8) still don't think we can use R&T to make that use case fast anyway
+
+[12:51:46.0161] <rbuckton>
+We also could consider introducing something like a `debugger.meta` meta-property to facilitate debuggability, i.e.:
+```js
+// assumes `debugger.meta` is ECMA262-defined, but a debugger can add their own methods to it
+
+const placeholders = new WeakMap();
+export function box(value) {
+  const sym = Symbol();
+  placeholders.set(sym, value);
+  return sym;
+}
+debugger.meta?.addCustomDescriptionGenerator((value, describe) => {
+  if (typeof value === "symbol" && placeholders) {
+    return `Placeholder (${describe(placeholders.get(value))})`;
+  }
+});
+```
+
+[12:52:05.0092] <rbuckton>
+ * We also could consider introducing something like a `debugger.meta` meta-property to facilitate debuggability, i.e.:
+```js
+// assumes `debugger.meta` is ECMA262-defined, but a debugger can add their own methods to it
+
+const placeholders = new WeakMap();
+export function box(value) {
+  const sym = Symbol();
+  placeholders.set(sym, value);
+  return sym;
+}
+debugger.meta?.addCustomDescriptionGenerator((value, describe) => {
+  if (typeof value === "symbol" && placeholders) {
+    return `Placeholder (${describe(placeholders.get(value))})`;
+  }
+});
+```
+
+[12:52:26.0495] <yulia>
+There is a debugger working grou
+
+[12:52:30.0484] <shu>
+is a chair around to say what's up next after lunch? wondering if i have time to actually have lunch
+
+[12:52:39.0913] <yulia>
+As part of wasm but the goal was both wasm and js
+
+[12:53:42.0907] <ljharb>
+shu: looks like "regexp modifiers for stage 2"
+
+[12:54:03.0698] <shu>
+perfect. no offense meant to regexp abyss gazers, i've just chosen a different pit
+
+[12:56:03.0096] <rickbutton>
+we all need something to scare us to sleep at night
+
+[12:56:08.0963] <rickbutton>
+some chose regex, others ieee
+
+[12:57:46.0318] <bakkot>
+module loading... unicode...
+
+[12:57:48.0769] <bakkot>
+there are many options here
+
+[12:58:36.0001] <ljharb>
+prototype pollution, ohno.jpg
+
+[12:59:48.0137] <yulia>
+Module loading indeed…
+
+[13:00:03.0737] <yulia>
+Promises and proxies
+
+[13:00:49.0867] <Rob Palmer>
+We are starting the meeting!
+
+[13:06:27.0841] <Michael Ficarra>
+I appreciate that Ron has individually justified each modifier, and I am now convinced that each one in the proposal is useful
+
+[13:07:17.0267] <bakkot>
+ljharb: he is about to answer your question, but see also https://github.com/tc39/proposal-regexp-modifiers/issues/2
+
+[13:07:35.0386] <ljharb>
+i read that too and still wasn't sure i understood :-)
+
+[13:07:53.0733] <bakkot>
+the justification given is a.) he thinks it's simpler and b.) it's very widely precedented
+
+[13:08:03.0935] <bakkot>
+though I guess I should just wait for the next slide
+
+[13:11:00.0264] <Michael Ficarra>
+for regexp proposals, I do not respect precedent very much
+
+[13:11:17.0112] <Michael Ficarra>
+most regexp engines are an insane grab bag of any features someone thought to add
+
+[13:12:04.0158] <bakkot>
+in support of ^, I invite anyone to peruse https://github.com/kkos/oniguruma/blob/master/doc/RE
+
+[13:12:39.0141] <bakkot>
+ * in support of ^, I invite anyone to peruse https://github.com/kkos/oniguruma/blob/master/doc/RE
+
+[13:21:06.0880] <bakkot>
+oh backrefs are a good question
+
+[13:21:25.0086] <bakkot>
+I agree with rbuckton's intuition though, that it has to be an exact match
+
+[13:25:16.0263] <bakkot>
+re: yulia, ignorecase is definitely the one I expect to use, but given that we're doing that it seems worth adding the other reasonable ones as well
+
+[13:29:34.0828] <TabAtkins>
+Yeah backrefs are abso a match for the exact substring, you never reevaluate the pattern. `/(...)\1/` doesn't match any random six character, only things like "foofoo"
+
+[13:31:48.0570] <Justin Ridgewell>
+`/(...)\1/i.exec('abcABC')` matches
+
+[13:31:55.0295] <Justin Ridgewell>
+It's not exact
+
+[13:33:59.0782] <bakkot>
+TIL
+
+[13:34:23.0545] <TabAtkins>
+oh huh, that's weird
+
+[13:34:35.0987] <TabAtkins>
+only allowing x in regex strings is a good idea
+
+[13:34:59.0909] <Justin Ridgewell>
+I would think `/(…)(?i:\1)/.exec('abcABC')` would also match
+
+[13:35:07.0580] <Justin Ridgewell>
+ * I would think `/(...)(?i:\1)/.exec('abcABC')` would also match
+
+[13:35:38.0684] <Justin Ridgewell>
+But `/(?i:(...))\1/.exec('abcABC')` wouldn't.
+
+[13:35:45.0301] <TabAtkins>
+given the above, i guess so sure
+
+[13:35:55.0886] <Justin Ridgewell>
+Eg, the backreference controls the case sensitivity, not the match
+
+[13:38:10.0604] <ljharb>
+just curious - has anyone actually explored what would happen to the web if we changed non-u-mode regexes so that invalid character escapes threw?
+
+[13:38:43.0469] <Justin Ridgewell>
+There are regex escapers which escape _everything_
+
+[13:38:43.0990] <bakkot>
+i have written code that would break
+
+[13:38:49.0103] <ljharb>
+ok
+
+[13:39:17.0964] <ljharb>
+there's been an autofixing eslint rule in most styleguides for many years that removes any invalid escapes' backslash, so i was wondering if there was any chance it'd be viable
+
+[13:39:44.0520] <bakkot>
+gotta remember runtime too, though
+
+[13:42:25.0160] <ljharb>
+true
+
+[13:45:04.0713] <bakkot>
+I wonder what fraction of shipped JS follows one of the top three styleguides
+
+[13:45:14.0010] <bakkot>
+10%, maybe?
+
+[13:45:24.0745] <ljharb>
+it's probably way lower than i assume, and way higher than anyone expects
+
+[13:45:28.0507] <bakkot>
+depends on how you count bundled dependencies, I assume
+
+[13:49:28.0426] <sarahghp>
+> <@bakkot:matrix.org> I wonder what fraction of shipped JS follows one of the top three styleguides
+
+It would be interesting to see how it breaks down by project type. I assume "active corporate JS" is more like 99%.
+
+[13:49:54.0570] <sarahghp>
+Academic, 1%.
+
+[13:50:02.0998] <sarahghp>
+generative art NFTs ...
+
+[13:50:32.0816] <sarahghp>
+first three days of advent of code before quitting ...
+
+[13:50:48.0686] <ljharb>
+that last one, ouch, true TDZ material
+
+[13:53:12.0297] <rbuckton>
+`"use regexp u"` /s
+
+[13:54:08.0701] <bakkot>
+sarahghp: view-source on amazon.com sometime
+
+[13:55:33.0724] <Michael Ficarra>
+"currently-developed enterprise JS" which follows a style guide is definitely closer to 0% than to 99%
+
+[13:59:00.0143] <sarahghp>
+Hm maybe enterprise goes into the other side of the horseshoe. My previous milieux have all been very strict, but I guess that's mid-size.
+
+[13:59:31.0805] <bakkot>
+i think those teams which members of tc39 end up on are unusually likely to follow such practices
+
+[14:00:11.0429] <bakkot>
+as part of my actual job I spend a lot of time looking at websites shipped by businesses
+
+[14:00:16.0466] <bakkot>
+things are... not... good
+
+[14:00:21.0084] <sarahghp>
+maybe I'm just too optimstic
+
+[14:00:22.0083] <sarahghp>
+:D
+
+[14:26:40.0064] <shu>
+i missed the shape of Miles's concern, it's about houdini?
+
+[14:27:20.0161] <jschoi>
+> <@shuyuguo:matrix.org> i missed the shape of Miles's concern, it's about houdini?
+
+Basically that people who care about line breaking usually care about text layout in general, which Houdini is already trying to solve.
+
+[14:27:31.0059] <shu>
+thank you
+
+[14:27:46.0617] <jschoi>
+I personally think that it is reasonable to put it in Intl, rather than Houdini, because plain-text line breaking without other graphical text layout is a concern of many CLI apps.
+
+[14:27:57.0855] <jschoi>
+ * I personally think that it is reasonable to put it in Intl because line breaking alone is a concern of many CLI apps.
+
+[14:28:28.0376] <jschoi>
+ * I personally think that it is reasonable to put it in Intl because plain-text line breaking without other graphical text layout is a concern of many CLI apps.
+
+[14:28:57.0314] <jschoi>
+ * I personally think that it is reasonable to put it in Intl, rather than Houdini, because plain-text line breaking without other graphical text layout is a concern of many CLI apps.
+
+[14:30:40.0770] <jschoi>
+ * I personally think that it is reasonable to put it in Intl, rather than Houdini, because plain-text line breaking in a plain-text grid, without other graphical text layout being involved, is a concern of many CLI apps.
+
+[14:40:57.0418] <Michael Ficarra>
+are those all jschoi proposals?
+
+[14:41:18.0273] <jschoi>
+> <@michaelficarra:matrix.org> are those all jschoi proposals?
+
+Oof, yes, they are.
+
+[14:41:29.0196] <Michael Ficarra>
+nice
+
+[14:41:44.0635] <jschoi>
+See also https://github.com/tc39/incubator-agendas/issues/21
+
+[14:42:15.0303] <shu>
+i'm glad jschoi is taking advantage of the sanctioned time
+
+[14:43:00.0413] <Michael Ficarra>
+thank you, note-takers!
+
+
+2021-12-16
+[17:21:29.0082] <rbuckton>
+> <@jridgewell:matrix.org> But `/(?i:(...))\1/.exec('abcABC')` wouldn't.
+
+Thanks for looking into this. I took another look over the spec, and BackreferenceMatcher (https://tc39.es/ecma262/#sec-backreference-matcher) does indeed compare each character using `Canonicalize`. Per the proposal for modifiers, the backreference would be checked using the canonicalization based on the *current* setting for ignoreCase, so this is correct.
+
+[17:22:34.0714] <rbuckton>
+In addition, `/(...)(?-i:\1)/i.exec('abcABC')` would also fail to match.
+
+[17:23:24.0987] <rbuckton>
+The proposal specifies this behavior here: https://tc39.es/proposal-regexp-modifiers/#sec-backreference-matcher (step 2.l)
+
+[17:27:39.0328] <Justin Ridgewell>
+ * Ie, the backreference controls the case sensitivity, not the match
+
+[12:56:13.0086] <ljharb>
+bakkot: it'd be cool if the log search was in newest-first order; and also if there was a way to search across all of the rooms at once
+
+[15:46:25.0359] <Luca Casonato>
+Could someone with the relevant permissions on the tc39 GH org change the "evaluator attributes" in the "About" text on this repo (https://github.com/tc39/proposal-import-reflection) to "import reflection attributes"? We renamed the proposal, but forgot to update this text before moving the repo.
+
+
+2021-12-17
+[16:49:03.0743] <bakkot>
+ljharb: I don't think I can make logs newest-first given the constraint of needing to run on github pages, unfortunately
+
+[16:49:14.0664] <bakkot>
+and don't really want to figure out how to host them on a non-static server
+
+[16:50:14.0681] <bakkot>
+actually, hm.
+
+[16:55:43.0754] <bakkot>
+yeah, no, can't do it
+
+[16:55:53.0685] <bakkot>
+ * ljharb: I don't think I can make search newest-first given the constraint of needing to run on github pages, unfortunately
+
+[16:58:15.0601] <ljharb>
+hm, it can’t be reversed either for everyone, or as an alternate set of pages?
+
+[16:58:33.0810] <bakkot>
+nope
+
+[16:58:39.0140] <bakkot>
+I didn't implement my own search, it's just FTS5
+
+[16:58:46.0431] <bakkot>
+and I get responses in the order it gives them to me
+
+[17:02:29.0471] <bakkot>
+though
+
+[17:02:38.0023] <bakkot>
+hm.
+
+[17:02:50.0558] <bakkot>
+this probably is possible actually.
+
+[17:02:53.0030] <bakkot>
+let me get back to you.
+
+[17:04:32.0933] <bakkot>
+yeah I can just `order by rowid desc`
+
+[17:04:51.0486] <bakkot>
+I am astonished that works, given that the sql engine is running _in the browser_
+
+[17:04:53.0806] <bakkot>
+but it evidently does
+
+[17:05:04.0418] <bakkot>
+will add a checkbox later
+
+[19:03:14.0848] <Justin Ridgewell>
+Is there not a timestamp in the DB?
+
+[19:40:41.0638] <bakkot>
+there is, but the DB is on the server, and I can't just fetch all the rows from the DB
+
+[19:40:54.0062] <bakkot>
+(well, our chat history is small enough that I probably could, but I don't want to rely on that)
+
+[13:52:12.0360] <ljharb>
+i'd love folks' thoughts on https://github.com/tc39/process-document/pull/33
+
+
+2021-12-18
+[23:04:13.0718] <rkirsling>
+hasn't this dude already been banned from other repos or something
+
+[23:12:56.0375] <ljharb>
+not that i know of. altho bear in mind this is public and they do read these logs.
+
+[23:17:48.0872] <rkirsling>
+sigh
+
+[23:27:51.0819] <ryzokuken>
+Oh wow, that's quite a thread. 
+
+[23:54:41.0484] <ljharb>
+anyone who prefers not to engage in that thread, but has concrete suggestions, is more than welcome to DM them to me and i'll update the PR
+
+[01:14:46.0254] <nicolo-ribaudo>
+I agree with the intention of that PR, but I don't think it will accomplish much. As far as I know, core-js is the only polyfill that has ever been mentioned in "this will break the web" discussions (because it's super popular?), and zloirock is free to ignore the "only stage 3" recommendation.
+
+[01:16:39.0650] <nicolo-ribaudo>
+Maybe something better would be to suggest "early stage polyfills should never rely on feature detection, and unconditionally install the polyfilled version": this highly reduces the chances of "breaking the web" because changes to the environment don't affect how the polyfill behaves 
+
+[01:17:58.0134] <nicolo-ribaudo>
+It would become similar to transpilers, that cause way less problems because they unconditionally transform the code regardless of what's supported at runtime.
+(But transpilers are on a whole other level anyway, because they work ahead of time)
+
+[08:08:18.0317] <ljharb>
+es5-shim and es6-shim have come up in those discussions too, but not for this reason, true
+
+[08:09:35.0000] <ljharb>
+everyone is free to ignore the recommendation, thats why it’s a recommendation - but he used the process doc as a justification for publishing polyfills for stage 1 features. I don’t want anyone else thinking it’s ok in the future, even if it has no impact on his choices.
+
+[09:54:23.0826] <jschoi>
+> <@nicolo-ribaudo:matrix.org> Maybe something better would be to suggest "early stage polyfills should never rely on feature detection, and unconditionally install the polyfilled version": this highly reduces the chances of "breaking the web" because changes to the environment don't affect how the polyfill behaves
+
+I think the point about conditional mutation based on feature detection is a good point. Maybe even the crucial point.
+
+[09:54:52.0551] <jschoi>
+Even production code can safely mutate globals however they want, _as long as it is not conditional on feature detection_.
+
+[09:55:03.0948] <jschoi>
+ * Even production code can safely mutate globals however they want, _as long as it is not conditional on feature detection_.
+
+[09:55:17.0636] <jschoi>
+ * Even production code can safely mutate globals however it wants, _as long as the mutation is not conditional on feature detection_.
+
+[09:55:37.0781] <jschoi>
+I submitted some code-review suggestions to that effect.
+
+[09:57:35.0820] <jschoi>
+ * Even production code can safely mutate globals however it wants, _as long as the mutation is not conditional on feature detection_. The library-publication thing might be a non sequitur, in that production code that conditionally mutates globals (even without relying on a library) is unsafe, and libraries that mutate globals unconditionally without relying on feature detection are safe (as far as I can tell).
+
+[10:01:57.0673] <justingrant>
+One thing we did (and are still doing) with Temporal was to emit a console log warning when the polyfill was loaded to remind folks not to use it in production.   Not sure if this makes sense to be a general recommendation, but IMHO it's a helpful signal that's highly visible without preventing usage. Should something like this also be recommended in the doc, esp. for early-stage polyfills?
+
+
+[10:02:18.0183] <jschoi>
+ * Even production code can safely (safe = doesn’t break if a proposal changes) mutate globals however it wants, _as long as the mutation is not conditional on feature detection_. The library-publication thing might be a non sequitur, in that production code that conditionally mutates globals (even without relying on a library) is unsafe, and libraries that mutate globals unconditionally without relying on feature detection are safe (as far as I can tell).
+
+[10:03:10.0836] <justingrant>
+I wasn't suggesting a warning is an alternative to whatever's being argued about in that thread; it's orthogonal. 
+
+[10:04:20.0853] <jschoi>
+Jack Works mentioned doing that too for their Number.range implementation in https://github.com/tc39/process-document/pull/33#issuecomment-997147848.
+
+[10:10:27.0659] <Mathieu Hofman>
+The problem with unconditionally mutating or using a global is that it has to be pervasive. Imagine the following scenario: a feature has reached stage 3-4 with significant changes from stage 1-2, a large code base uses a stage 1-2 version of a feature and unconditionally mutates the global. A dependency uses the same feature, but has been updated to leverage the stage 3-4 so it conditionally uses the feature if available or fallsback to a bundled non global modifying shim. Unless the feature detection is thorough (not simple presence test), the dependency will break. Arguably this is only a problem when you explicitly update your dependency without updating your application code base, or the dependency is dynamically updating. This kind of issues somewhat happened with promises.
+
+[10:11:34.0522] <jschoi>
+That is true. Interoperability with community precedent was a large inertial force there, although it shaped the feature since its early stages of planning.
+
+[10:11:37.0207] <jschoi>
+ * That is true. Interoperability with community precedent was a large inertial force there, although it shaped the feature since its early stages.
+
+[10:11:40.0913] <jschoi>
+ * That is true. Interoperability with community precedent was a large inertial force there, although it shaped the feature since its early stages of planning.
+
+[10:13:01.0412] <Mathieu Hofman>
+That said, I agree we should be recommending against conditional global mutation or usage before stage 3.
+
+[10:16:41.0661] <Mathieu Hofman>
+Then early adopters need to be conscious of the dependencies they have and make sure if their application adopts a feature early they need to follow updates to the feature or risk compatibility problems when updating their dependencies.
+
+[10:20:00.0815] <Mathieu Hofman>
+Stage 3 is a little murky tho. There is always a risk the API shape will break during that stage. The bar is higher for these changes but they do happen.
+
+[11:15:40.0791] <ljharb>
+They can happen after stage 4 too. The issue is risk, not certainty.
+
+
+2021-12-20
+[17:18:54.0262] <bakkot>
+ljharb: logbot search now supports sort order
+
+[17:19:00.0576] <bakkot>
+it should remember your preference also
+
+[21:51:49.0661] <ljharb>
+oh yay thanks!
+
+
+2021-12-23
+[06:09:38.0224] <Jack Works>
+Is the tc39 research call cancelled today? (It's Christmas 🎄
+
+
+2021-12-26
+[14:32:16.0697] <ljharb>
+My reading of https://tc39.es/ecma262/#sec-performpromiseany says that:
+```js
+var poison = new EvalError();
+var promise = new Promise(function () {});
+promise.then = function () { throw poison; };
+Promise.any([promise]) // should reject with an AggregateError
+```
+However, all the implementations I've tested reject with `poison`. Can someone either help me understand which behavior is correct, and why?
+
+
+2021-12-27
+[19:42:55.0074] <bakkot>
+ljharb: PerformPromiseAny step 4.s is `Perform ? Invoke(nextPromise, "then", [etc])`, which calls your `throw poison` function, which throws, and then the error propagates because of the `?` without any further wrapping
+
+[20:38:56.0149] <ljharb>
+aha, thanks 
+

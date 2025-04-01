@@ -1,0 +1,795 @@
+2022-04-01
+[20:55:09.0684] <jschoi>
+Probably not, but just in case…
+Is there a way for ecmarkup to become aware of definitions from Ecma262 pull requests? I want a proposal spec to refer to the Decorator productions from #2417—and I want to suppress the grammar-shape errors resulting from the spec referring to those productions.
+
+[21:02:37.0396] <jschoi>
+* Probably not, but just in case…
+Is there a way for ecmarkup to become aware of definitions from Ecma262 pull requests? I want a proposal spec to refer to the Decorator productions from #2417—and I want to prevent the grammar-shape errors resulting from the spec referring to those productions.
+
+[21:15:42.0453] <bakkot>
+jschoi: check out the pr, run `ecmarkup --verbose --write-biblio whatever.json spec.html > /dev/null`; this will produce a `whatever.json` biblio file. in your proposal, do `ecmarkup --load-biblio ./whatever.json your-proposal.html`.
+
+[21:16:09.0033] <bakkot>
+that said I am halfway through making a breaking change to the biblio format so you might want to wait a couple days
+
+[21:16:21.0122] <bakkot>
+ * jschoi: check out the pr, run `ecmarkup --verbose --write-biblio whatever.json spec.html > /dev/null`; this will produce a `whatever.json` biblio file. in your proposal, do `ecmarkup --load-biblio ./whatever.json your-proposal.html`.
+
+[21:16:54.0710] <bakkot>
+(the `./` is import because otherwise ecmarkup will attempt to load a node module named `whatever.json` which is not the thing you want)
+
+[21:17:24.0349] <bakkot>
+this requires a recent (v10/v11) version of ecmarkup, I should mention
+
+[21:17:45.0353] <bakkot>
+uh, but that might not actually fix your problem
+
+[21:18:00.0025] <bakkot>
+because some of the checks are from grammarkdown, which doesn't really know about the biblio
+
+[21:20:23.0621] <jschoi>
+Thank you very much! I think the PR’s biblio file will be sufficient. Looking forward to the biblio-format upgrade. 
+
+[21:20:46.0989] <bakkot>
+it is just a small tweak to make it better for other tooling: https://github.com/tc39/ecmarkup/pull/425
+
+[21:21:03.0960] <jschoi>
+This will be a v12?
+
+[21:21:18.0841] <bakkot>
+https://github.com/tc39/ecmarkup/releases/tag/v12.0.0
+
+[21:21:36.0504] <bakkot>
+but there's a bug to do with https://github.com/tc39/ecmarkup/pull/426 that I gotta fix before this is actually usable
+
+[21:21:41.0717] <bakkot>
+so stick with 11 for now
+
+[07:20:50.0355] <ryzokuken>
+https://twitter.com/DasSurma/status/1509835337295609865
+
+[07:25:17.0923] <Ashley Claymore>
+The different between imports and destructuring seems to come up more 
+
+[07:25:43.0276] <nicolo-ribaudo>
+That's not imports and destructuring, but imports vs exports!
+
+[07:27:00.0686] <nicolo-ribaudo>
+ * That's not imports and destructuring, but imports vs exports
+
+[07:27:04.0410] <nicolo-ribaudo>
+ * That's not imports and destructuring, but imports vs exports!
+
+[07:28:23.0469] <Ashley Claymore>
+yes, I mean how default is treated different here:
+
+`import x from "path"`
+And 
+`const x = v`;
+
+when 
+
+`import {x} from "path"`
+and
+`const {x} = v;`
+
+[07:28:39.0564] <guybedford>
+This was also discussed via https://github.com/tc39/notes/blob/main/meetings/2016-11/nov-29.md#12iid-proposal-to-reform-the-spec-to-include-default-export-in-export--from-module around creating an aliasing pattern (since redirects have instancing issues)
+
+[07:28:53.0681] <Ashley Claymore>
+I find more people get confused about that, vs using `export *`
+
+[07:29:16.0126] <guybedford>
+it could be worth considering an `export **` in future, bradleymeck previously suggested that alternative
+
+[07:30:17.0915] <Ashley Claymore>
+the default export can always be chosen explicitly right; just requires a second import 
+
+[07:30:25.0927] <nicolo-ribaudo>
+Yes
+
+[07:30:26.0288] <Ashley Claymore>
+Or am I missing something?
+
+[07:30:37.0023] <Ashley Claymore>
+* Or am I missing something?
+
+[07:31:07.0821] <Ashley Claymore>
+* yes, I mean how default is treated different here:
+
+`import x from "path"`
+And 
+`const x = v`;
+
+compared to here:
+
+`import {x} from "path"`
+and
+`const {x} = v;`
+
+[07:42:21.0899] <jschoi>
+There’s no formal specification yet for function decorators, right? Are there plans to allow arrow functions to be decorated? 
+
+[07:44:15.0729] <nicolo-ribaudo>
+I don't think there is even a proposal yet, it's mostly a desire
+
+[07:44:32.0112] <nicolo-ribaudo>
+(btw, we created a decorators room if you are interested)
+
+[08:35:05.0326] <ljharb>
+There’s a proposal for export default from, so you could do `export default, * from ‘f’` - still stage 1
+
+[08:46:42.0963] <Rob Palmer>
+I'm assuming you need to know if the target has a default, else that will early error. 
+
+[09:38:40.0601] <ljharb>
+ah true, that's a good point
+
+[09:38:52.0093] <ljharb>
+altho tbf i'd hope you do always know what you're re-exporting :-)
+
+[10:03:37.0168] <Rob Palmer>
+I tripped up on this when trying to create a monorepo build tool using ES modules as redirects for inter-package links. It was annoying that those link modules could not be stable, and instead needed to be regenerated based on the target's content. 
+
+[10:05:12.0749] <bakkot>
+yeah, I generally feel like `export *` is only useful for glue code, and the glue code should not need to be updated when the thing it's re-exporting is updated; that's the whole point of it
+
+[10:33:01.0673] <Ashley Claymore>
+```
+export * from "./mod.mjs";
+import * as NS from "./mod.mjs";
+export default NS.default ?? "💥";
+```
+
+[10:33:59.0202] <rbuckton (OOF thru Apr. 1st)>
+`export { default } from "./mod.js";`?
+
+[10:35:28.0748] <Ashley Claymore>
+that throws if mod doesn't have a default export. Going for agnostic glue code with a cryptic error when you use it wrong
+
+[10:43:52.0717] <Ashley Claymore>
+```
+export * from "./mod.mjs";
+import * as NS from "./mod.mjs";
+export default NS.default ?? "nothing to see here";
+
+export function then(cb) {
+    cb({
+        ...Object.fromEntries(Object.entries(NS).filter(([n]) => n !== 'default')),
+        get default() {
+            if ('default' in NS) return NS.default;
+            throw new Error("not the module you were looking for");
+        }
+    });
+}
+```
+
+[10:46:47.0250] <Ashley Claymore>
+And this is also enough April 1st things from me
+
+[10:48:20.0445] <Ashley Claymore>
+ * ```
+export * from "./mod.mjs";
+import * as NS from "./mod.mjs";
+export default NS.default ?? "nothing to see here";
+
+export function then(cb) {
+    cb({
+         ...Object.fromEntries(Object.keys(NS).filter((n) => n !== 'default').map(n => [n, NS[n]])),
+        get default() {
+            if ('default' in NS) return NS.default;
+            throw new Error("not the module you were looking for");
+        }
+    });
+}
+```
+
+[10:48:25.0030] <Ashley Claymore>
+ * And this is also enough April 1st things from me
+
+[11:09:11.0054] <Mathieu Hofman>
+Problem with using any expression is that you'd not be able to have default be re-exported live binding
+
+[12:14:58.0702] <ljharb>
+Defaults don’t have live bindings anyways, i thought
+
+[12:16:22.0288] <nicolo-ribaudo>
+They do, if you use { x as default } both to import and to export
+
+[12:17:54.0658] <Mathieu Hofman>
+Yeah that one is a pesky little corner case
+
+[12:18:38.0131] <nicolo-ribaudo>
+Also I think `export default function a() {}` is live?
+
+[12:47:47.0897] <Mathieu Hofman>
+and `export default class A {}`
+
+[12:48:06.0110] <Mathieu Hofman>
+but arguably most people don't re-assign these ;)
+
+[16:52:15.0666] <jschoi>
+I saw that you released 12.0.1; thanks for your hard work.
+FYI: I’m still getting some warnings even with a biblio file.
+
+That is: I tried upgrading ecmarkup to 12.0.1, running `ecmarkup --verbose --write-biblio biblio-decorators.json spec.html > /dev/null` in ecma262’s #2417 branch (“decorators”), moved biblio-decorators.json to the pipe operator’s #268 branch (“at-sign”), and then (in that pipe branch) ran `ecmarkup --verbose spec.html --load-biblio ./biblio-decorators.json dist/index.html`.
+
+The biblio file is definitely doing something; without it I also get a bunch of extra “can't find clause, production, note or example with id” warnings.
+But it’s still giving me “could not find definition corresponding to production Decorator” warnings; I’m not sure why.
+
+[16:52:39.0435] <jschoi>
+> <@bakkot:matrix.org> but there's a bug to do with https://github.com/tc39/ecmarkup/pull/426 that I gotta fix before this is actually usable
+
+ * I saw that you released 12.0.1; thanks for your hard work. 
+FYI: I tried upgrading ecmarkup to 12.0.1, running `ecmarkup --verbose --write-biblio biblio-decorators.json spec.html > /dev/null` in ecma262’s #2417 branch (“decorators”), moved biblio-decorators.json to the pipe operator’s #268 (“at-sign”), and then ran `ecmarkup --verbose spec.html --load-biblio ./biblio-decorators.json dist/index.html`.
+
+(The biblio file is definitely doing something; without it I also get a bunch of extra “can't find clause, production, note or example with id” warnings.)
+
+But it’s still giving me “could not find definition corresponding to production Decorator” warnings; I’m not sure why.
+
+[16:52:58.0979] <jschoi>
+ * I saw that you released 12.0.1; thanks for your hard work.
+FYI: I’m still getting some warnings even with a biblio file.
+That is: I tried upgrading ecmarkup to 12.0.1, running `ecmarkup --verbose --write-biblio biblio-decorators.json spec.html > /dev/null` in ecma262’s #2417 branch (“decorators”), moved biblio-decorators.json to the pipe operator’s #268 (“at-sign”), and then ran `ecmarkup --verbose spec.html --load-biblio ./biblio-decorators.json dist/index.html`.
+
+(The biblio file is definitely doing something; without it I also get a bunch of extra “can't find clause, production, note or example with id” warnings.)
+
+But it’s still giving me “could not find definition corresponding to production Decorator” warnings; I’m not sure why.
+
+[16:54:10.0082] <jschoi>
+ * I saw that you released 12.0.1; thanks for your hard work.
+FYI: I’m still getting some warnings even with a biblio file.
+
+That is: I tried upgrading ecmarkup to 12.0.1, running `ecmarkup --verbose --write-biblio biblio-decorators.json spec.html > /dev/null` in ecma262’s #2417 branch (“decorators”), moved biblio-decorators.json to the pipe operator’s #268 branch (“at-sign”), and then (in that pipe branch) ran `ecmarkup --verbose spec.html --load-biblio ./biblio-decorators.json dist/index.html`.
+
+The biblio file is definitely doing something; without it I also get a bunch of extra “can't find clause, production, note or example with id” warnings.
+But it’s still giving me “could not find definition corresponding to production Decorator” warnings; I’m not sure why.
+
+
+2022-04-02
+[17:19:05.0304] <bakkot>
+jschoi: ah, yeah, that's the "because some of the checks are from grammarkdown, which doesn't really know about the biblio" thing
+
+[17:19:25.0507] <bakkot>
+I will look into suppressing that warning or conveying the necessary information to grammarkdown sometime soon
+
+[17:24:36.0422] <bakkot>
+oh actually that one is not from grammarkdown
+
+[17:24:56.0247] <bakkot>
+anyway should be easy enough to fix
+
+[19:16:22.0242] <bakkot>
+jschoi: https://github.com/tc39/ecmarkup/releases/tag/v12.0.2
+
+[19:16:39.0613] <bakkot>
+this also hopefully makes it possible to use `--lint-spec` in proposals which add syntax, like this one
+
+
+2022-04-03
+[18:51:19.0907] <bakkot>
+do we think anyone has written code along the lines of `/(?<a>x)|\k<a>/` since the introduction of named capturing groups
+
+[18:51:42.0494] <bakkot>
+i.e. where there's a named backreference to a capturing group in a different alternative
+
+[18:51:48.0473] <bakkot>
+ * i.e. where there's a named backreference to a capturing group in a different alternative
+
+[18:51:59.0511] <bakkot>
+I want to make this illegal for reasons but realized it would technically be a breaking change
+
+[18:55:09.0412] <bakkot>
+there's no reason _to_ write this, as I understand things, since the `\k` can never refer to anything (since you can't match both arms of the disjunction at the same time)
+
+[20:40:30.0274] <devsnek>
+it does seem unlikely that code exists in the real world but who knows
+
+[20:41:07.0994] <devsnek>
+maybe one of the browsers can do an analytic for it
+
+[12:32:02.0527] <bakkot>
+https://github.com/tc39/ecma262/pull/2721
+
+
+2022-04-05
+[16:07:03.0737] <bakkot>
+temporal spec now has user-code annotations, available by pressing `u`: https://tc39.es/proposal-temporal/
+
+[16:07:07.0087] <bakkot>
+(cc shu ^)
+
+[16:54:35.0979] <shu>
+nice! but also man that's a lot of UC
+
+
+2022-04-06
+[17:07:17.0590] <ptomato>
+I'll have to audit it for call sites that should change from `?` to `!`, like CreateTemporalDate without passing newTarget (to repeat the example I discussed with bakkot)
+
+[17:07:31.0161] <ptomato>
+likely after that it'll still be a lot of UC
+
+[17:08:28.0602] <ptomato>
+the main decision that's responsible for that is to accept strings or property bags in addition to Temporal objects at API entry points
+
+[17:09:45.0207] <ptomato>
+that's responsible for Get in the case of a non-Temporal object being passed, and ToString in the case of a primitive being passed, which makes coercion operations like ToTemporalDate potentially call UC
+
+[17:09:56.0049] <ptomato>
+nonetheless, I believe it was a good decision
+
+[17:25:08.0600] <shu>
+fair, apologies if it came off like a stronger value judgment than it was intended to be
+
+[17:25:18.0716] <shu>
+i am not the domain expert in the room
+
+[17:29:32.0016] <ptomato>
+no worries, I didn't take it that way
+
+[17:29:40.0328] <ptomato>
+but it did seem like something that warranted an explanation
+
+
+2022-04-07
+[01:40:39.0544] <Jack Works>
+🤔
+
+[01:41:07.0018] <Jack Works>
+take use of `AbortSignal` into the language without bring `EventTarget` into the language. How do you think this
+
+[01:41:20.0562] <Jack Works>
+FYI, it happens at https://github.com/ajvincent/proposal-mass-proxy-revocation/pull/12
+
+[04:18:45.0445] <annevk>
+Jack Works: why not use the contract from DOM? As in you hand the abort signal some set of steps to run upon aborting
+
+[04:19:49.0101] <annevk>
+Jack Works: also a slot containing a slot seems dubious
+
+[04:45:03.0891] <Jack Works>
+> <@annevk:mozilla.org> Jack Works: why not use the contract from DOM? As in you hand the abort signal some set of steps to run upon aborting
+
+DOM contract uses async callback which we want to avoid
+
+[04:49:04.0478] <Jack Works>
+And it's more dubious if we write ? Get(signal, "addEventListener")
+
+[05:06:09.0687] <annevk>
+Jack Works: that would be dubious, but there's a non-script-exposed mechanism which is what I was referring to
+
+[05:07:26.0279] <annevk>
+And if you want this to be useful beyond this API you'd need some kind of callback-style thing I'd think, not everything can lazily check whether the signal is aborted
+
+[05:34:02.0660] <Jack Works>
+Yeah I agree. Since it will be much harder to design a general signal (with callback) I think it's somehow ok since we don't have anywhere else that requires a signal
+
+[07:04:27.0841] <rbuckton>
+I've wanted to push cancellation forward, but I keep getting the same response from Domenic and he seems to have no interest in discussing the point further. 
+
+[07:07:26.0450] <rbuckton>
+There are multiple issues with AbortController that make it not ideal for inclusion in ECMA-262
+
+[07:08:15.0390] <rbuckton>
+> <@jackworks:matrix.org> Yeah I agree. Since it will be much harder to design a general signal (with callback) I think it's somehow ok since we don't have anywhere else that requires a signal
+
+There are other places where it would be useful
+
+[08:52:10.0154] <annevk>
+I think Domenic gave a reasonable way forward that Jack Works seems to be pursuing? You make the signal host-supplied and define a compatible not-script-visible contract with it.
+
+[08:55:13.0165] <rbuckton>
+Wasn't part of Jack Works concern that AbortSignal is an async callback? IIRC, AbortSignal also uses EventTarget for abort registration, which holds onto the callback even after the signal is aborted, which can prevent GC
+
+[08:56:28.0267] <annevk>
+You can add a callback to an AbortSignal but you can also lazily check whether it's aborted. I think Jack Works said that for their thing the latter is sufficient.
+
+[08:56:57.0209] <annevk>
+The callback is a spec-concept btw, it's not exposed. Any event listeners would be user code.
+
+[08:57:29.0668] <rbuckton>
+I was able to make a version of `@esfx/async-canceltoken` that works with the DOM but uses my proposed cancellation API, so I may end up going with Domenic's suggestion despite my reservations
+
+[08:58:13.0425] <rbuckton>
+But I find it very unfortunate we can't have an actual cancellation primitive in the core language because of this
+
+[08:59:52.0841] <rbuckton>
+(my "compatible" CancelToken just creates an AbortSignal and repoints the prototype so that it has the correct internal slots the DOM expects)
+
+[09:00:14.0374] <annevk>
+It doesn't seem inconceivable for JS to embrace EventTarget one day, but I personally don't get super excited about artificial boundaries imposed by standards bodies 🙂 
+
+[09:00:30.0387] <rbuckton>
+And, honestly, that might be an alternative to a host hook as well... 
+
+[09:01:49.0262] <rbuckton>
+It's not just EventTarget, it's the exceptions that are thrown as well. I had the same issue looking into bringing a portion of the Web crypto api to TC39 
+
+[09:03:49.0084] <rbuckton>
+I'd like to bring a slew of async coordination primitive proposals to committee as well, but they need a cancellation primitive to be useful. 
+
+[09:05:40.0648] <rbuckton>
+About 70% of `@esfx/*` are prototypes and proofs-of-concept for existing and future proposals 
+
+[09:34:48.0673] <Jack Works>
+> <@rbuckton:matrix.org> There are multiple issues with AbortController that make it not ideal for inclusion in ECMA-262
+
+Yes. I cannot bring it into the language, but the massive proxy revocation needs a "revoke controller". The author of this proposal wants to add a synchronous revoke controller that is only used for Proxy revocation, but I don't want to have many different styles of controllers in the language meanwhile in the Host.
+
+This is my answer, I didn't add it, but borrow it from the host
+
+[09:38:55.0915] <Jack Works>
+> <@annevk:mozilla.org> The callback is a spec-concept btw, it's not exposed. Any event listeners would be user code.
+
+Yes. In our case it is enough. Once aborted, the engine can revoke and GC all proxies.
+
+[09:40:26.0427] <Jack Works>
+> <@annevk:mozilla.org> It doesn't seem inconceivable for JS to embrace EventTarget one day, but I personally don't get super excited about artificial boundaries imposed by standards bodies 🙂 
+
+I heard EventTarget is heavily connected to the whole DOM stuff... 
+
+[09:41:44.0722] <Jack Works>
+> <@rbuckton:matrix.org> It's not just EventTarget, it's the exceptions that are thrown as well. I had the same issue looking into bringing a portion of the Web crypto api to TC39 
+
+Yeah, DOMException right? 😂 Maybe "throw a host defined error" 
+
+[09:46:16.0559] <annevk>
+(https://dom.spec.whatwg.org/#interface-eventtarget isn't really, though some stuff could be abstracted more I suppose.)
+
+[09:47:13.0474] <annevk>
+But fair point about DOMException, I wish they had used TypeError for everything, but alas, Java was important to the W3C back in the day.
+
+[09:47:14.0302] <Luca Casonato>
+> <@jackworks:matrix.org> I heard EventTarget is heavily connected to the whole DOM stuff...
+
+It's pretty easy to implement in a DOM-less environment. We do it in Deno, and Node does it too. There is just no bubbling then.
+
+[10:04:45.0813] <annevk>
+And bubbling is somewhat abstracted, just not userland-exposed atm
+
+[10:20:01.0768] <annevk>
+rbuckton: FWIW, I tend to agree with Domenic that we don't want competing primitives. I see where you're coming from, but JS does not exist in a vacuum. We've had similar arguments about TextEncoder/TextDecoder and they'll undoubtedly resurface from time-to-time. In practice Deno and Node.js have demonstrated that these APIs can be adopted by other non-browser hosts.
+
+[10:26:58.0120] <rbuckton>
+Its unfortunate that AbortSignal couldn't have been written as a primitive that *didn't* leverage EventTarget, because it uses almost none of the EventTarget capabilities, and those that it does use are problematic (re: the GC issue)
+
+[10:28:54.0911] <rbuckton>
+Before `Promise` was adopted into ECMA-262 it was originally proposed as `Future` for DOM, and `Future` didn't leverage EventTarget (likely due to the prevalence of Promise/A+ libraries), but at least there was precedent for a non-EventTarget-based callback mechanism
+
+[10:29:43.0157] <Kris Kowal>
+Yeah, I remember Alex made an attempt to bypass TC39.
+
+[10:30:43.0983] <Kris Kowal>
+I know that our boss at Agoric, Dean Tribble had some experience with something like an abort primitive in Microsoft’s Midori. His opinion in general is that there should be a primitive for a cancellation token, since it affords certain optimization oportunities.
+
+[10:30:59.0689] <rbuckton>
+I understand there was frustration at the slow pace of TC39 wrt cancellation (I dealt with it myself when I took up the banner for a cancellation proposal), but I do think we could have resolved it back in 2017/2018.
+
+[10:31:41.0389] <Kris Kowal>
+Same. I tried to pave a cow path for cancellation in Q, but it proved to be a bad design. We’re in a better place with AbortController than we would have been getting cancellation into promises.
+
+[10:31:57.0764] <rbuckton>
+The cancellation proposal explainer has a number of quotes from Dean about cancellation.
+
+[10:32:40.0633] <rbuckton>
+I was opposed to cancelable promises from the get-go, hence https://github.com/tc39/proposal-cancellation.
+
+[10:34:22.0624] <rbuckton>
+The two things that held up cancellation were: a) WHATWG pushing hard on AbortController while I was trying to get CancelToken through committee, and b) Yehuda wanting some kind of syntax and automatic flow-through 
+
+[10:34:32.0173] <Kris Kowal>
+As was Mark. I had to learn the hard way as usual, in order to know how to articulate why it was a bad idea: promises broadcast to multiple consumers, so no individual producer should be in a position to interfere with all of the consumers.
+
+[10:35:40.0337] <rbuckton>
+And the caller of the async operation should control when something can be canceled, not the consumers of the result. If you need the consumer to have that responsibility, you let them pass on the token explicitly (which is also why I was opposed to automatic flow-through)
+
+[10:36:10.0245] <Kris Kowal>
+Yeah, we’re on the same page.
+
+[10:36:59.0548] <Kris Kowal>
+I also naively believed all this could be done by passing a promise-to-throw as a cancel token, but Dean’s pretty adamant about being able to synchronously test the token. We’re all adamantly opposed to synchronous notification.
+
+[10:37:22.0296] <Kris Kowal>
+And also…opportunities to optimize if it’s special.
+
+[10:38:00.0880] <Kris Kowal>
+This topic came up at recent SES meetings regarding bulk proxy revocation, by the by. Bradley and Alex have a proposal brewing.
+
+[10:38:31.0996] <rbuckton>
+I would be fine with AbortSignal (and a host hook) if it didn't hold onto the registered callback after the signal was canceled (the GC issue). I know you can pass something like `{ once: true }` to `addEventListener`, but that should be the default behavior for an event that can fire at most once (aside from user's manually dispatching the event)
+
+
+[10:38:46.0751] <rbuckton>
+> <@kriskowal:matrix.org> This topic came up at recent SES meetings regarding bulk proxy revocation, by the by. Bradley and Alex have a proposal brewing.
+
+That's also how the topic came up here :)
+
+[10:40:28.0993] <rbuckton>
+AbortController and AbortSignal are getting close to the API I proposed for CancelToken/Source back in 2018, but AbortSignal still feels way to heavy to me due to `EventTarget`.
+
+[10:41:07.0188] <Kris Kowal>
+Agreed.
+
+[10:43:53.0070] <rbuckton>
+I may just end up proposing the host hook approach for cancellation. If we ever decide an actual primitive is worthwhile (despite the duplication between 262 and DOM), we can always change it.
+
+[10:47:19.0326] <rbuckton>
+My current approach to "compatibility" for my own CancelToken (using an AbortSignal but changing its prototype) works with that approach in the DOM and NodeJS, since both use instance-specific state rather than calling methods on the prototype
+
+[10:47:23.0811] <rbuckton>
+ * My current approach to "compatibility" for CancelToken (using an AbortSignal but changing its prototype) works with that approach in the DOM and NodeJS, since both use instance-specific state rather than calling methods on the prototype
+
+[10:47:33.0615] <rbuckton>
+ * My current approach to "compatibility" for my own CancelToken (using an AbortSignal but changing its prototype) works with that approach in the DOM and NodeJS, since both use instance-specific state rather than calling methods on the prototype
+
+[10:48:01.0593] <Kris Kowal>
+And can coëxist under different names in every options bag that accepts either. Yeah, it’s a good approach.
+
+[10:49:00.0675] <Kris Kowal>
+I did not take the time to scroll up. Is there a possibility that cancel token and bulk revocation token are the same thing?
+
+[10:50:55.0231] <rbuckton>
+I do wonder if it makes sense to define a Host hooks for the whole thing, or move some of the logic into ECMA-262 with a host hook for allocating the prototype chain. That would allow us to internally spec and use cancellation without relying on a host hook
+
+[10:52:01.0468] <rbuckton>
+> <@kriskowal:matrix.org> I did not take the time to scroll up. Is there a possibility that cancel token and bulk revocation token are the same thing?
+
+I'd have to look at the proposal, but it sounds likely. I consider cancellation a "primitive" for a reason. It's not directly tied to async execution/promises, but is a general purpose mechanism for canceling things.
+
+[10:53:24.0293] <rbuckton>
+I think the issue with using AbortSignal for proxy revocation is the async callback nature of EventTarget. When you revoke a proxy you want it revoked immediately. Yes, a proxy can check if the AbortSignal has been aborted when the proxy is used, but that still introduces GC issues.
+
+[10:54:18.0887] <rbuckton>
+Ideally, when you would use `abort` for bulk revocation, not only should everything be revoked immediately but you should be able to clean up references to targets and proxy handlers so they can be garbage collected.
+
+[10:55:02.0795] <rbuckton>
+You could do both, but if EventTarget callbacks are async, there's a delay in that cleanup.
+
+[10:55:14.0095] <Kris Kowal>
+Agreed. I think we’re aligned and would support your proposal.
+
+[10:56:03.0999] <rbuckton>
+Something could be spec'd internally that could support both sync abort and deferred callbacks, with host hooks for things the DOM needs
+
+[10:56:36.0338] <Kris Kowal>
+It might also be worth scanning ahead for how deadline, timeout, and distributed context propagation might work with your primitive. Valid answers include 'no'
+
+[10:57:12.0937] <rbuckton>
+So maybe user code can't have synchronous notification of cancellation, but spec operations could.
+
+[10:57:44.0120] <rbuckton>
+> <@kriskowal:matrix.org> It might also be worth scanning ahead for how deadline, timeout, and distributed context propagation might work with your primitive. Valid answers include 'no'
+
+Is there something specific I should be looking at for these topics?
+
+[10:57:57.0076] <Kris Kowal>
+But derivation of child contexts and propagation of cancelation to children but not to parents would be a useful primitive. Also being able to walk the parent chain.
+
+[10:58:21.0549] <Kris Kowal>
+Yeah, Go has a `context` package that it uses for cancelation propagation and all these other things.
+
+[10:58:29.0956] <rbuckton>
+I'm not sure about walking the parent chain, unless its only walking the parent signals (and not the sources/controllers)
+
+[10:58:37.0858] <Kris Kowal>
+The one thing we’d want to do differently for sure would keeping the prototype powerless wrt timers.
+
+[10:58:54.0012] <Kris Kowal>
+Yes, just the signals.
+
+[10:59:07.0463] <Kris Kowal>
+https://pkg.go.dev/context
+
+[10:59:36.0153] <rbuckton>
+> <@kriskowal:matrix.org> The one thing we’d want to do differently for sure would keeping the prototype powerless wrt timers.
+
+Can you expand on this?
+
+[11:01:58.0349] <Kris Kowal>
+Yeah, suppose we had `token`, we would not want `const {cancel, token: childToken} = token.withTimeout(100)` because that would mean `Token.prototype.withTimeout` would provide a timing side-channel that’s hard to scour in a `lockdown()`. We already do this kind of work for `Date.now` and `Math.random`, but not growing that burden is ideal. For this reason, there’s no reasonable way to get `Intl` into a lockdown environment. The API has to be different almost entirely so the prototype can’t be shared. Something like `Token.withTimeout(token, ms)` is better for this purpose.
+
+[11:02:46.0815] <Kris Kowal>
+Pardon, `const childToken = token.withTimeout(ms)` and `const {cancel, childToken} = token.spawn()` is a more coherent strawman.
+
+[11:04:37.0330] <Kris Kowal>
+In any case, `withTimeout` is trivial to implement in userspace in terms of `token`, as long as you have something like `token.spawn()` to create a child that gets synchronously cancelled when its parent is cancelled.
+
+[11:05:57.0527] <Kris Kowal>
+Tragically, what you end up with is a subset of a Promise implementation, but that particular subset is good because it can be sync where Promise cannot 😅
+
+[11:06:00.0605] <rbuckton>
+The way I do it in `@esfx/async-canceltoken` would be something like:
+
+```js
+const timeoutToken = CancelToken.timeout(ms);
+const childToken = CancelToken.race([token, timeoutToken]);
+```
+
+[11:06:52.0061] <rbuckton>
+Or just
+```js
+const childToken = CancelToken.race([token, CancelToken.timeout(ms)]);
+```
+
+[11:07:19.0147] <rbuckton>
+No new source is created in this case.
+
+[11:07:28.0235] <Kris Kowal>
+Yeah, likewise, it’s analogous to `Promise.race([Promise.delay(ms, context), context])`, where `Promise.delay` is also cancellable.
+
+[11:07:50.0557] <rbuckton>
+(see `@esfx/async-delay`, same idea)
+
+[11:09:08.0739] <Kris Kowal>
+I’d suggest `CancelToken.timeout(ms, token)` to cancel the timeout if the parent gets cancelled faster.
+
+[11:09:13.0885] <rbuckton>
+Though I really need to rename `@esfx/async-canceltoken` to just `@esfx/canceltoken` (since, like I said, cancellation isn't solely for async operations)
+
+[11:10:02.0529] <rbuckton>
+> <@kriskowal:matrix.org> I’d suggest `CancelToken.timeout(ms, token)` to cancel the timeout if the parent gets cancelled faster.
+
+That's fair, esp. since one of my biggest concerns has been GC and cleanup. 
+
+[11:10:52.0844] <rbuckton>
+I also have a `.close()` (nee. `Symbol.dispose`) method on a cancellation source so you can indicate a token can never be canceled (and thus also clean up callbacks that will never be invoked).
+
+[15:09:28.0064] <rbuckton>
+Kris Kowal: I've started on a rough sketch of a host-hook version of cancellation: https://gist.github.com/rbuckton/0ad3ba02baff1f45a0fd0729c9bcb76a
+
+[15:13:37.0004] <rbuckton>
+Its fairly simplistic, and nothing is exposed to the end user. Essentially, when the DOM would create an `AbortController`/`AbortSignal`, they would call `CreateAbortCapability()` and store that in the object, and replace some of the algorithms in AbortController with calls to AddAbortReaction and Abort. This gives the ECMAScript spec enough room to support cancellation as a Spec-only primitive regardless of host, but allows the host to control operations (such as the DOM triggering an `abort` event), etc.
+
+[15:32:43.0794] <rbuckton>
+ * Kris Kowal: I've started on a rough sketch of a host-hook version of cancellation: https://github.com/tc39/proposal-cancellation/issues/31
+
+
+2022-04-08
+[22:53:53.0221] <Jack Works>
+> <@rbuckton:matrix.org> I think the issue with using AbortSignal for proxy revocation is the async callback nature of EventTarget. When you revoke a proxy you want it revoked immediately. Yes, a proxy can check if the AbortSignal has been aborted when the proxy is used, but that still introduces GC issues.
+
+it's not observable in the user land. so "check signal when use" is equal to "GC on aborted"
+
+[22:55:11.0894] <rbuckton>
+I took another look at the DOM spec. "abort algorithms" that are added by the Host (not by the user) are synchronously executed and aren't part of the `abort` event dispatch.
+
+[22:56:32.0380] <rbuckton>
+I'm not sure what you mean by "not observable in user-land". If I create a function closure over an object graph that takes up a lot of memory and add that closure to an AbortSignal, the AbortSignal will hold the whole object graph in memory as long as the abort signal is alive, even if the signal is already aborted.
+
+[23:06:01.0091] <Jack Works>
+For the massive proxy revoke proposal, we don't need (and don't want) a callback (for each proxy).
+
+The RS in the spec will be: next time when the proxy is accessed, check the AbortSignal flag, if aborted, revoke it now.
+
+But for the Proxy revoke, it is just drop the Proxy.[[Target]] and Proxy.[[Handler]], which means once it is aborted, the engine can do GC immediately (no need to "check the AbortSignal flag on the next access" so there is no memory leak).
+
+[23:35:48.0718] <Ashley Claymore>
+If the main goal is reducing revoke function allocations. Could the API be:
+
+```
+let [proxyFactory, revokeAll] = Proxy.collection();
+
+let p = proxyFactory(t, h);
+revokeAll();
+Array.isArray(p); // Error!
+```
+
+[23:36:36.0492] <Ashley Claymore>
+That way GC could be specced that the references are dropped immediately, but if that actually happens is an implementation detail (best effort)
+
+[23:38:08.0286] <Ashley Claymore>
+* That way GC could be specced that the references are dropped immediately, but if that actually happens is an implementation detail
+
+[23:38:42.0530] <Ashley Claymore>
+* That way GC could be specced that the references are dropped immediately, but if that actually happens is an implementation detail (best effort)
+
+[00:06:17.0688] <annevk>
+rbuckton: I have to say I don't understand the hangup around event listeners. You'd only add an event listener to an AbortSignal if you implemented the aborting in userland. Web platform features use "abort algorithms" instead.
+
+[00:35:48.0108] <rbuckton>
+And I imagine the web platform has reasons it depends on synchronous dispatch of "abort algorithms"? What I don't understand is why only the web platform has that privilege while user code has to rely on asynchronous notification. 
+
+[00:40:04.0531] <rbuckton>
+My other concern is that an AbortSignal can only be aborted once, but an `abort` event can be raised many times (even if only once by the system) due to dispatchEvent. Unlike how `Promise` ensures callbacks are evaluated once, an `abort` event could theoretically be executed multiple times, and most `abort` handlers probably aren't written to be robust enough to handle that case.
+
+[00:41:44.0252] <rbuckton>
+So my concern is that the mechanism is inconsistent and fragile, and works until it doesn't. The web platform doesn't have to worry about any of this because internally it gets to do the *right* thing (synchronous "abort algorithms" that are only executed once). User code isn't so lucky, and that's 90% of my use case for cancellation.
+
+[00:43:11.0841] <rbuckton>
+ * My other concern is that an AbortSignal can only be aborted once, but an `abort` event can be raised many times (even if only once by the system) due to dispatchEvent. Unlike how `Promise` ensures callbacks are evaluated once, an `abort` event could theoretically be executed multiple times, and most `abort` handlers probably aren't written to be robust enough to handle that case.
+
+[02:57:52.0546] <Jack Works>
+> <@aclaymore:matrix.org> If the main goal is reducing revoke function allocations. Could the API be:
+> 
+> ```
+> let [proxyFactory, revokeAll] = Proxy.collection();
+> 
+> let p = proxyFactory(t, h);
+> revokeAll();
+> Array.isArray(p); // Error!
+> ```
+
+Interesting, maybe we can do this
+
+[10:02:05.0647] <shu>
+checking my memory because the notes don't seem super clear: for `toSorted()` in the change array by copy proposal, the consensus is that `toSorted()`, unlike `sort()`, _does not_ distinguish holes from `undefined`
+
+[10:02:07.0104] <shu>
+is that right?
+
+[10:02:26.0244] <annevk>
+rbuckton: asynchronous? Event dispatch is synchronous.
+
+[10:02:42.0059] <shu>
+cc Ashley Claymore for `toSorted()` question
+
+[10:03:13.0816] <nicolo-ribaudo>
+You remember correctly: toSorted always performs Get without checking if it's an own property
+
+[10:03:55.0090] <nicolo-ribaudo>
+* You remember correctly: toSorted always performs Get without checking if it's an own property
+
+[10:04:47.0438] <shu>
+thank you
+
+[10:08:36.0037] <annevk>
+rbuckton: synthetic events are an interesting concern. I don't think it has been a problem in practice. In general the platform has many such one-off events. And it's not that hard to do the right thing in userland given the features that exist around event listeners.
+
+[10:32:16.0217] <shu>
+hm how do i test for the difference between skipping holes and not skipping holes without using a Proxy with a [[HasProperty]] trap?
+
+[10:33:22.0985] <shu>
+the special `undefined` handling in sort() is stumping me
+
+[10:49:33.0231] <Ashley Claymore>
+ If you put something on the prototype?
+
+[10:49:51.0960] <Ashley Claymore>
+Also there shouldn’t be holes in the newly created array 
+
+[10:50:34.0449] <Ashley Claymore>
+just more undefineds at the end 
+
+[10:50:49.0062] <shu>
+how do you test by putting something on the prototype?
+
+[10:50:58.0970] <shu>
+[[HasProperty]] looks through the prototype. the check isn't a "has own" check
+
+[10:54:33.0097] <Ashley Claymore>
+Ah yes ofc.
+
+[10:55:46.0712] <Ashley Claymore>
+So [,,].toSorted()
+
+[10:56:01.0897] <Ashley Claymore>
+Should return [undefined, undefined]
+
+[10:56:28.0096] <Ashley Claymore>
+But if want to be sure it didn’t check there was the property then I think you’re right that would need a proxy 
+
+[10:57:01.0549] <Ashley Claymore>
+* Should return [undefined, undefined]
+
+[10:59:50.0892] <Ashley Claymore>
+If useful Nicolò has test262 test here: https://github.com/tc39/test262/pull/3464#issuecomment-1089355249
+
+[11:00:08.0289] <Ashley Claymore>
+* If useful Nicolò has test262 test here: https://github.com/tc39/test262/pull/3464
+
+[14:23:20.0845] <ljharb>
+shu: https://github.com/es-shims/Array.prototype.toSorted/blob/main/test/tests.js#L137-L149 (copied from nicolo's PR and ported to tape)
+
+[14:23:46.0698] <ljharb>
+ * shu: https://github.com/es-shims/Array.prototype.toSorted/blob/main/test/tests.js#L137-L149 (copied from nicolo's PR and ported to tape)
+
+
+2022-04-19
+[05:45:51.0509] <yulia>
+Hey everyone. Sascha from the "State of JS" survey is joining the research call this week. We have an alternated time this week, we will be meeting CEST morning / Late evening SF time
+
+[05:46:05.0587] <yulia>
+We will be discussing what we want from the survey this coming year, please join if you are interested!
+

@@ -1,0 +1,594 @@
+2024-06-03
+[15:16:28.0016] <Steve Hicks>
+I was thinking a bit more about this.  In my diagrams, merge points generally have a solid line and a dashed line going into them.  The solid line represents the causal (or "flow") context, while the dashed like is what I'd call the lexical context.  For an `await`, flow context is "flow-through", while lexical context is "flow-around".  For a callback, flow context is "call-time", while lexical context is "registration-time".  The current proposed semantics are heavily tilted toward merging into the lexical context, while Stephen is advocating for merging into the flow context.  Is there _any way_ we can put these two contexts on more equal footing?  I think the one obvious option to me would be to define two types of async variables: `LexicalVariable` and `FlowVariable`, and at any given merge point, we copy the flow context from the flow side and the lexical context from the lexical side.  I'm not seeing any other way to unite these two defaults... does anyone else?
+
+[15:23:48.0466] <littledan>
+Here in A Coruña at the Igalia Web Engines hackfest, we got a chance to talk with Anne van Kesteren, who continues to have the (personal, not necessarily Apple) position that we should consistently run all callbacks at registration time, unless we can explain a very strong reason, because this will be the most regular guarantee for developers and simplest to specify and implement. Flow variables require a lot of bookkeeping at a lot of points scattered through the specs, and it is unclear how js devs should even build a mental model around them, it could be argued
+
+[15:25:05.0704] <littledan>
+> <@stephenhicks:matrix.org> I was thinking a bit more about this.  In my diagrams, merge points generally have a solid line and a dashed line going into them.  The solid line represents the causal (or "flow") context, while the dashed like is what I'd call the lexical context.  For an `await`, flow context is "flow-through", while lexical context is "flow-around".  For a callback, flow context is "call-time", while lexical context is "registration-time".  The current proposed semantics are heavily tilted toward merging into the lexical context, while Stephen is advocating for merging into the flow context.  Is there _any way_ we can put these two contexts on more equal footing?  I think the one obvious option to me would be to define two types of async variables: `LexicalVariable` and `FlowVariable`, and at any given merge point, we copy the flow context from the flow side and the lexical context from the lexical side.  I'm not seeing any other way to unite these two defaults... does anyone else?
+
+Yeah I don’t have a better solution. For flow advocates: how bad would it be if we called LexicalVariable “Variable” and did FlowVariable in a follow-on proposal?
+
+[15:27:10.0433] <littledan>
+Anne was also not 100% on the motivation for the whole feature, so that may point to room for improvement in documentation 
+
+[15:37:42.0732] <Chengzhong Wu>
+Yeah, agreed that two type of variables could be a solution. Have you talked about  `run(value, fn)` vs `set(value)` styles? Would it be too conservative to have strong scope guarantee in Web API designs?
+
+[15:38:07.0078] <Chengzhong Wu>
+ * Yeah, agreed that two type of variables could be a solution. Did you have a chance talking about  `run(value, fn)` vs `set(value)` styles? Would it be too conservative to have strong scope guarantee in Web API designs?
+
+
+2024-06-04
+[18:50:02.0565] <Steve Hicks>
+> <@littledan:matrix.org> Yeah I don’t have a better solution. For flow advocates: how bad would it be if we called LexicalVariable “Variable” and did FlowVariable in a follow-on proposal?
+
+Would we expose any way to access the flow context from a callback?  It may not be particularly relevant from most DOM APIs, but `Promise`'s resolution context is quite relevant, and I worry about userland APIs from a consistency standpoint (either they'll use `Snapshot.wrap` for consistency's sake with all the builtins, or else they cause a lot of confusion).  And many users of userland APIs (signals, etc) _will_ want to expose the flow context.  If all we have is lexical context for everything, it's not particularly useful for us, nor for APM - I'm not sure who the user would be at that point.
+
+[18:50:34.0971] <Steve Hicks>
+> <@littledan:matrix.org> Yeah I don’t have a better solution. For flow advocates: how bad would it be if we called LexicalVariable “Variable” and did FlowVariable in a follow-on proposal?
+
+ * Would we expose any way to access the flow context from a callback?  It may not be particularly relevant from most DOM APIs, but `Promise`'s resolution context is quite relevant, and I worry about userland APIs from a consistency standpoint (either they'll use `Snapshot.wrap` for consistency's sake with all the builtins, or else they cause a lot of confusion).  And many users of userland APIs (signals, etc) _will_ want access to the flow context.  If all we have is lexical context for everything, it's not particularly useful for us, nor for APM - I'm not sure who the user would be at that point.
+
+[23:55:58.0161] <littledan>
+> <@stephenhicks:matrix.org> Would we expose any way to access the flow context from a callback?  It may not be particularly relevant from most DOM APIs, but `Promise`'s resolution context is quite relevant, and I worry about userland APIs from a consistency standpoint (either they'll use `Snapshot.wrap` for consistency's sake with all the builtins, or else they cause a lot of confusion).  And many users of userland APIs (signals, etc) _will_ want access to the flow context.  If all we have is lexical context for everything, it's not particularly useful for us, nor for APM - I'm not sure who the user would be at that point.
+
+Yes, I think (at a minimum) we should do this for a number of Events, make an extra property which is an AsyncContext.Snapshot taken from when it was resolved. So this would be for "lexical" variables as well.
+
+[23:56:25.0870] <littledan>
+then APMs can patch all entry points to set event listeners to watch for a particular variable on that other snapshot and do something with it
+
+[00:22:27.0196] <littledan>
+> <@legendecas:matrix.org> Yeah, agreed that two type of variables could be a solution. Did you have a chance talking about  `run(value, fn)` vs `set(value)` styles? Would it be too conservative to have strong scope guarantee in Web API designs?
+
+We didn’t discuss this; I will mention it. But I don’t know if I can represent the arguments for set() well, and I am pretty sure this all would not form much of an interesting argument in favor of flow-through.
+
+[10:16:10.0775] <Steve Hicks>
+> <@littledan:matrix.org> Yes, I think (at a minimum) we should do this for a number of Events, make an extra property which is an AsyncContext.Snapshot taken from when it was resolved. So this would be for "lexical" variables as well.
+
+I really dislike finding heterogeneous places to put the flow snapshot for each different system.  What about promises?  Assuming `await` and `Promise.then` are both lexically bound (which I mostly agree with - the former somewhat moreso than the latter, but overall I think it makes sense), there's no way to get at the promise's resolution context, and that's very relevant for understanding "follows from".  Would we expose some sort of static function to grab it?  `Promise.resolutionSnapshot(promise)`?  `Snapshot.fromPromise(promise)`?  Could something like that work more generally for other cases like events?
+
+[10:20:41.0848] <Steve Hicks>
+Assuming promises store their resolution context somewhere, is there a reasonable way to preserve it when operating on the promise?  I'm imagining wanting to wrap a function `fn` such that `Snapshot.from(p1.then(fn)) === Snapshot.from(p1)` and `Snapshot.from(p2.then(fn)) === Snapshot.from(p2)`... but without having access to the promise itself (just the resolved value), I don't see any way to write such a function.
+
+[10:21:50.0016] <Steve Hicks>
+This seems to still argue for something more general, like `Snapshot.cause` or something
+
+[10:22:05.0523] <Steve Hicks>
+ * This seems to still argue for something more general, like a nullary `Snapshot.cause()` or something
+
+[10:22:49.0392] <Steve Hicks>
+(which then sends us back down the rabbit-hole of whether this is a stack of contexts or just a back-and-forth previous context, etc)
+
+[10:27:40.0887] <Steve Hicks>
+Finally, I do think it's worth seriously considering the likely real-world ramifications of the default-lexical decision in terms of what concrete code will be written in the 1-2 years after the standard lands.  Where will pepole be adding `wrap()` calls, and where will people be digging up causal snapshots, etc?  Would having rolled all that out cause undue problems in the future if we decided to make a FlowVariable, since now everybody is mucking with these global snapshots everywhere, which (as Stephen Belanger points out) is the thing you shouldn't be doing in order for the flow context to actually do the right thing and not get wrecked.
+
+[10:27:57.0528] <Steve Hicks>
+ * Finally, I do think it's worth seriously considering the likely real-world ramifications of the default-lexical decision in terms of what concrete code will be written in the 1-2 years after the standard lands.  Where will pepole be adding `wrap()` calls, and where will people be digging up causal snapshots, etc?  Would having rolled all that out cause undue problems in the future if we decided to make a FlowVariable, since now everybody is mucking with these global snapshots everywhere, which (as Stephen Belanger points out) is the thing you shouldn't be doing in order for the flow context to actually do the right thing and not get wrecked by intermediate calls.
+
+[10:28:08.0516] <Steve Hicks>
+ * Finally, I do think it's worth seriously considering the likely real-world ramifications of the default-lexical decision in terms of what concrete code will be written in the 1-2 years after the standard lands.  Where will pepole be adding `wrap()` calls, and where will people be digging up causal snapshots, etc?  Would having rolled all that out cause undue problems in the future if we decided to make a FlowVariable, since now everybody is mucking with these global snapshots everywhere, which (as Stephen Belanger points out) is the thing you shouldn't be doing in order for the flow context to actually do the right thing and not get wrecked by intermediate subtask calls.
+
+[14:16:19.0031] <littledan>
+I suggest we come up with a common name to use for the instance method/getter where the originating context is
+
+[14:18:46.0533] <littledan>
+My preference is that promises, in particular, would *not* maintain this information, at least at first. We could consider adding it later, but it might be more burden to implement than its value
+
+[14:19:24.0365] <littledan>
+There are a few cases where it is very important to present this information, eg unhandled rejections
+
+[14:19:54.0371] <littledan>
+> <@stephenhicks:matrix.org> Finally, I do think it's worth seriously considering the likely real-world ramifications of the default-lexical decision in terms of what concrete code will be written in the 1-2 years after the standard lands.  Where will pepole be adding `wrap()` calls, and where will people be digging up causal snapshots, etc?  Would having rolled all that out cause undue problems in the future if we decided to make a FlowVariable, since now everybody is mucking with these global snapshots everywhere, which (as Stephen Belanger points out) is the thing you shouldn't be doing in order for the flow context to actually do the right thing and not get wrecked by intermediate subtask calls.
+
+Yes, it is important to analyze this. How should we do so?
+
+[14:21:07.0020] <Steve Hicks>
+Right, so we already need to keep track of resolution context for rejected promises - do you anticipate it's much harder to keep for all promises?
+
+[14:23:56.0067] <Steve Hicks>
+I don't know how far a common name will get us.  It only makes sense when you've got an object to look it up on.  What about mutation observers?  Its callback is passed an array and the observer itself, neither of which has a convenient place to hang a flow snapshot.
+
+[14:25:42.0630] <Steve Hicks>
+The underlying concept of "what was the context before this callback was run?" is pretty general and has no specificity to events (though it's not quite the right concept for restoring the resolution context of promises...) - so it seems a bit unnatural to tie it to that.
+
+[14:27:48.0707] <littledan>
+> <@stephenhicks:matrix.org> I don't know how far a common name will get us.  It only makes sense when you've got an object to look it up on.  What about mutation observers?  Its callback is passed an array and the observer itself, neither of which has a convenient place to hang a flow snapshot.
+
+Isn’t it an array of objects? Each of these objects could have the property
+
+[14:29:12.0071] <Andreu Botella>
+> <@stephenhicks:matrix.org> Right, so we already need to keep track of resolution context for rejected promises - do you anticipate it's much harder to keep for all promises?
+
+the way this currently works in the spec and in V8 is that an embedder function is called *synchronously* when the unhandled rejection happens
+
+[14:29:24.0155] <Andreu Botella>
+and that function then enqueues a task on the event loop that fires the event
+
+[14:29:32.0266] <Andreu Botella>
+so it happens outside of the JS engine
+
+[14:30:04.0402] <littledan>
+> <@stephenhicks:matrix.org> Right, so we already need to keep track of resolution context for rejected promises - do you anticipate it's much harder to keep for all promises?
+
+I would sort of assume that, for built-in methods, we would generally use the “registration-time” context for that. But then this makes me wonder if we should generally return to the Node.js ALS semantics where rejection is always reported to the allocation-time context…. Now I confused myself 
+
+[14:30:53.0314] <littledan>
+> <@abotella:igalia.com> the way this currently works in the spec and in V8 is that an embedder function is called *synchronously* when the unhandled rejection happens
+
+How does this collect the right context? What if no JS is on the stack?
+
+[14:31:45.0966] <Andreu Botella>
+for a promise-returning web API, you mean?
+
+[14:32:00.0878] <Andreu Botella>
+the context would be set when rejecting the promise
+
+[14:56:10.0938] <littledan>
+> <@abotella:igalia.com> the context would be set when rejecting the promise
+
+Sure but there might not be JS on the stack when rejecting the promise, so at some point earlier you need to save off the context
+
+[16:05:30.0131] <Steve Hicks>
+You lost me with the bit about allocation-time.  I think polyfilling the causal snapshots is going to be a nightmare, but I guess I can _maybe_ see an argument for exposing these different causal snapshots in different ways if they end up meaning different things.  That said, I know for sure that signals will want access to causal context and there's no event object there - we should consider what precedent this sets and what options would be open to that proposal to be consistent.
+
+
+2024-06-05
+[22:43:40.0317] <littledan>
+Who is advocating for “in different ways”?
+
+[22:45:01.0944] <littledan>
+Oh I guess you mean, there are different base objects to look it up off of, and signals don’t have any base object at all (unlike the AsyncContext.currentContext API)
+
+[22:47:07.0079] <littledan>
+For Signals: is there any way we could take advantage of the fact that you’re trying to trace something which happens completely synchronously when reconstructing the “what access caused which computeds to be synchronously evaluated” relation (which I take it was the reason for the non-registration-time semantics)?
+
+[09:46:08.0191] <Steve Hicks>
+Yah, "in different ways" is an automatic result of piggybacking off of the Event object - it shifts the question down to the underlying scheduling API, since each such API will necessarily have a different shape and thus a different way to access the causal context.
+
+[09:47:42.0802] <Steve Hicks>
+Many/most/(all?) userland schedulers will be synchronous, so the casual context would generally be the immediately previous one.  That said, if one were to double-wrap a callback, then it wouldn't be quite as "immediate" anymore, and I assume we'd like `wrap` to really be idempotent.
+
+[15:09:29.0037] <ljharb>
+do you want me to cancel yalls meeting next week, since it's plenary week?
+
+[15:25:30.0601] <littledan>
+> <@ljharb:matrix.org> do you want me to cancel yalls meeting next week, since it's plenary week?
+
+Yes, thanks, we were discussing in our previous meeting how this one would be cancelled 
+
+
+2024-06-10
+[22:09:14.0317] <littledan>
+Can we land this PR? https://github.com/tc39/proposal-async-context/pull/87#pullrequestreview-2106646155
+
+[22:33:56.0462] <Andreu Botella>
+> <@littledan:matrix.org> Can we land this PR? https://github.com/tc39/proposal-async-context/pull/87#pullrequestreview-2106646155
+
+I don't know if we decided in the end to have the meetings in the public calendar
+
+[22:34:10.0188] <Andreu Botella>
+if you go to the link in that PR, there are no AsyncContext meetings
+
+[22:36:33.0776] <Andreu Botella>
+I guess I haven't considered enough the context of module evaluations
+
+[22:37:21.0005] <Andreu Botella>
+I've mostly been looking at APIs in the web integration
+
+[00:22:21.0821] <nicolo-ribaudo>
+> <@abotella:igalia.com> I guess I haven't considered enough the context of module evaluations
+
+Is there any option other than "the same as async functions"?
+
+[01:01:57.0216] <Andreu Botella>
+> <@nicolo-ribaudo:matrix.org> Is there any option other than "the same as async functions"?
+
+I suspect not, but haven't looked at it enough
+
+[01:06:45.0980] <Steve Hicks>
+I've been researching past discussions and dug up this one (which Qard participated in many years ago): https://github.com/othiym23/node-continuation-local-storage/issues/64
+
+Some interesting and relevant perspectives.
+
+[02:20:57.0317] <littledan>
+> <@abotella:igalia.com> if you go to the link in that PR, there are no AsyncContext meetings
+
+OK, let’s land a version of this patch that omits the meetings but includes the other parts 
+
+[02:21:17.0801] <littledan>
+I think we decided to tell people, there are regular meetings at these times, join the chat to get the zoom link
+
+[02:21:35.0867] <littledan>
+So let’s make that be reflected in both the PR and calendar
+
+[02:21:38.0528] <Chengzhong Wu>
+yeah, the calendar item was not added yet. I'll move that part out
+
+[02:23:15.0741] <littledan>
+> <@abotella:igalia.com> I guess I haven't considered enough the context of module evaluations
+
+You’re thinking about https://github.com/tc39/proposal-async-context/issues/93 ?
+
+[02:31:06.0214] <Andreu Botella>
+> <@littledan:matrix.org> You’re thinking about https://github.com/tc39/proposal-async-context/issues/93 ?
+
+yeah
+
+[02:33:13.0564] <littledan>
+What do you think of my suggestion there, that we make modules always run in an “original” (empty) context associated with the realm? (And this should apply for import defer as well)
+
+[10:14:42.0854] <Stephen Belanger>
+> <@littledan:matrix.org> Yeah I don’t have a better solution. For flow advocates: how bad would it be if we called LexicalVariable “Variable” and did FlowVariable in a follow-on proposal?
+
+I'm fine with through flow being a follow-on, so long as what lands _first_ is very clearly communicated as _not_ providing that flow type. I feel the naming should more clearly communicate the flow type as `AsyncContext.Variable` alone does not communicate how it flows _at all_.
+
+[10:24:18.0882] <Stephen Belanger>
+> <@littledan:matrix.org> Sure but there might not be JS on the stack when rejecting the promise, so at some point earlier you need to save off the context
+
+In flow-through semantics you're modelling causality, so you'd just trace back through directly _causal_ code until you reach JS again. In many cases this may just be the construction of an object which emits events or something like that. If you think of it as tracing _all_ execution and not just _JS_ execution then you can always trace a path back through the code to what logically caused it. That could even be something initiated _before_ any JS ran, which would just be a root context.
+
+[10:39:44.0777] <Stephen Belanger>
+> <@littledan:matrix.org> What do you think of my suggestion there, that we make modules always run in an “original” (empty) context associated with the realm? (And this should apply for import defer as well)
+
+I find it easiest to think of everything as descending from a root context like that, even if it's empty. OTel does the same thing too with `ROOT_CONTEXT` being an empty map.
+
+[11:03:59.0290] <Andreu Botella>
+> <@stephenbelanger:matrix.org> I'm fine with through flow being a follow-on, so long as what lands _first_ is very clearly communicated as _not_ providing that flow type. I feel the naming should more clearly communicate the flow type as `AsyncContext.Variable` alone does not communicate how it flows _at all_.
+
+I worry that there might be developers that might want *any* kind of async propagation for their own use cases, and might not understand or care much about the difference between flow-through and flow-around
+
+[11:04:25.0286] <Andreu Botella>
+not sure how realistic that situation is though
+
+[11:05:08.0297] <Andreu Botella>
+(and I might be taking worries from the other project I'm working on and applying them to AsyncContext when they don't really apply)
+
+[11:23:23.0223] <Stephen Belanger>
+I think people generally will have a particular flow in mind for their use case. Likely lacking _nuance_ in the details, but they'll have a general flow in mind, I would think.
+
+[11:24:27.0292] <Stephen Belanger>
+I _do_ expect people might make mistakes between the two at first due to lack of understanding though.
+
+[11:25:27.0166] <Stephen Belanger>
+The call-only flow _does_ seem like a reasonable starting point though, given the simpler scoping of only flowing _into_ calls and not _back out_ though.
+
+[11:25:36.0077] <Stephen Belanger>
+ * The call-only flow _does_ seem like a reasonable starting point though, given the simpler scoping of only flowing _into_ calls and not _back out_.
+
+[11:26:35.0820] <Stephen Belanger>
+I'm just not sure exactly how to _describe_ that succinctly to users. As always, one of the hardest problems in CS is _naming things_. 😅
+
+[13:44:21.0174] <Steve Hicks>
+Just thinking out loud here - it feels a little bit like the difference between `const` and `var` w.r.t. for loops.  We all remember the bad old days when you'd write `for (var key in obj) { tasks.push(function() { console.log(key); }); }` and get ten copies of the same key since they all closed over the same reference.  So that would be the flow-through case (not making the analogy to be pejorative), while the lexical/block-scoped version is flow-around.
+
+[13:44:47.0282] <Steve Hicks>
+Does that help at all with naming?  Maybe not.
+
+[13:50:58.0016] <Steve Hicks>
+Thinking about people making mistakes or not knowing how to reason about it, or which to pick - I generally expect this to be more of an advanced user feature.  I know Shu and others were concerned about the possibility of detrimental performance due to propagating way too many variables.  This may not be as "here be dragons" as, say, FinalizationRegistry, but a _caveat emptor_ may still be in order for anyone considering introducing a new variable.  I think a bigger concern is cargo-culting snapshot calls everywhere, and given that even we don't know what the right context is, it seems highly unlikely ordinary users will be able to make heads or tails of it.
+
+[13:51:16.0276] <Steve Hicks>
+ * Thinking about people making mistakes or not knowing how to reason about it, or which to pick - I generally expect this to be more of an advanced user feature.  I know Shu and others were concerned about the possibility of detrimental performance due to propagating way too many variables.  This may not be as "here be dragons" as, say, FinalizationRegistry, but a _caveat emptor_ may still be in order for anyone considering introducing a new variable.  I think a bigger concern is cargo-culting snapshot/wrap calls everywhere, and given that even we don't know what the right context is, it seems highly unlikely ordinary users will be able to make heads or tails of it.
+
+[14:03:07.0040] <littledan>
+> <@stephenbelanger:matrix.org> In flow-through semantics you're modelling causality, so you'd just trace back through directly _causal_ code until you reach JS again. In many cases this may just be the construction of an object which emits events or something like that. If you think of it as tracing _all_ execution and not just _JS_ execution then you can always trace a path back through the code to what logically caused it. That could even be something initiated _before_ any JS ran, which would just be a root context.
+
+I get that this is the intuition, but an actual implementation would have to save and propagate the snapshot forward from the last time JS runs, right?
+
+[14:03:53.0809] <littledan>
+> <@stephenbelanger:matrix.org> I find it easiest to think of everything as descending from a root context like that, even if it's empty. OTel does the same thing too with `ROOT_CONTEXT` being an empty map.
+
+Sounds like we’re agreeing? (Except I would say that the browser could put stuff in the root context, and different realms could have different root contexts)
+
+[14:07:48.0336] <Stephen Belanger>
+> <@stephenhicks:matrix.org> Thinking about people making mistakes or not knowing how to reason about it, or which to pick - I generally expect this to be more of an advanced user feature.  I know Shu and others were concerned about the possibility of detrimental performance due to propagating way too many variables.  This may not be as "here be dragons" as, say, FinalizationRegistry, but a _caveat emptor_ may still be in order for anyone considering introducing a new variable.  I think a bigger concern is cargo-culting snapshot/wrap calls everywhere, and given that even we don't know what the right context is, it seems highly unlikely ordinary users will be able to make heads or tails of it.
+
+Propagating too many variables? It propagates exactly as many as flow-around does. It just flows in a different way. 🤷
+
+[14:08:27.0687] <Stephen Belanger>
+> <@littledan:matrix.org> I get that this is the intuition, but an actual implementation would have to save and propagate the snapshot forward from the last time JS runs, right?
+
+Yes. You follow the causality back to the last point JS was running and capture _there_.
+
+[14:08:45.0710] <Steve Hicks>
+Sorry, I meant Shu's concern with AsyncContext at all, not with a specific flow type
+
+[14:10:00.0462] <Stephen Belanger>
+> <@littledan:matrix.org> Sounds like we’re agreeing? (Except I would say that the browser could put stuff in the root context, and different realms could have different root contexts)
+
+Yes, generally agreeing. Though I don't feel I'm familiar enough with the intricacies of realms to say if each should get its _own_ context or if it should be considered an _additional_ empty node which _descends_ from the root which initiated the realm?
+
+[14:10:57.0498] <Stephen Belanger>
+> <@stephenhicks:matrix.org> Sorry, I meant Shu's concern with AsyncContext at all, not with a specific flow type
+
+Ah, yeah, that's why a few userland implementations had gone for the Context Frame idea so you only need to propagate a single frame which contains a bunch of variable states within.
+
+[14:11:12.0035] <Stephen Belanger>
+With that it's just a pointer copy.
+
+[14:11:39.0256] <Stephen Belanger>
+Which, from what I understand, is roughly what AsyncContext is doing too.
+
+[15:59:28.0292] <Steve Hicks>
+> <@stephenbelanger:matrix.org> Which, from what I understand, is roughly what AsyncContext is doing too.
+
+Right, I think that's one of the major concerns with anything more involved.  In theory, it would be great if we could define complex merge strategies to get exactly the correct value all the time, but in practice the budget we're working with is very small and if it costs more than a simple pointer copy (regardless of the number of vars) then the budget's already gone.
+
+[16:07:23.0930] <Stephen Belanger>
+Well, through flow only needs a pointer copy too. It's when you want to mix flows where it gets more expensive. That having been said though, I don't really agree with the assertion that it _always_ needs to be that absolute minimum cost as if the flow that produces doesn't match the user need then it's just pushing the cost out to the edges where it typically is _even more_ expensive.
+
+[16:09:00.0351] <Stephen Belanger>
+Literally _every_ Fortune 500 company is doing context management with Node.js at the _least_ via an installed APM product. Optimizing for the cost of those expected flows will _significantly_ benefit cloud costs across the industry.
+
+[16:09:17.0655] <Stephen Belanger>
+ * Literally _every_ Fortune 500 company is doing context management with Node.js at the _least_ via an installed APM product. Optimizing for the cost of those expected flows will _significantly_ reduce cloud costs across the industry.
+
+
+2024-06-11
+[23:42:17.0918] <littledan>
+> <@stephenbelanger:matrix.org> Yes. You follow the causality back to the last point JS was running and capture _there_.
+
+Sure, just important to understand that you are describing something which won’t be as simple from an implementation/specification perspective. So it raises the question of how/whether other specification authors will be able to do it. Or, arguably, even how developers will build a mental model around it.
+
+[23:42:57.0103] <littledan>
+> <@stephenbelanger:matrix.org> Yes, generally agreeing. Though I don't feel I'm familiar enough with the intricacies of realms to say if each should get its _own_ context or if it should be considered an _additional_ empty node which _descends_ from the root which initiated the realm?
+
+I can’t think of an observable difference between these two options
+
+[23:43:37.0577] <littledan>
+> <@stephenbelanger:matrix.org> Which, from what I understand, is roughly what AsyncContext is doing too.
+
+Yes, AsyncContext.Snapshot is the context frame and we just need to copy the pointer. This is really important.
+
+[23:44:24.0974] <littledan>
+> <@stephenbelanger:matrix.org> Literally _every_ Fortune 500 company is doing context management with Node.js at the _least_ via an installed APM product. Optimizing for the cost of those expected flows will _significantly_ reduce cloud costs across the industry.
+
+Every single one of these are using flow around though, right?
+
+[09:27:33.0364] <Stephen Belanger>
+Yes, only because ALS _presently_ does flow-around with promises/awaits. Almost every one of the Fortune 500 companies I've talked to about it has complained about it though.
+
+[09:28:55.0972] <Stephen Belanger>
+And it's all APM vendors which are the ones using it in most of those companies, which I've talked to folks from all the APM vendors and they're mostly all in agreement that flow-through is the correct semantic for their use case.
+
+[09:43:33.0371] <littledan>
+> <@stephenbelanger:matrix.org> Yes, only because ALS _presently_ does flow-around with promises/awaits. Almost every one of the Fortune 500 companies I've talked to about it has complained about it though.
+
+Right so this is the thing you need to get more concrete on—scenarios where this complaint happens. Specific cases, not generic
+
+[09:44:19.0401] <littledan>
+> <@stephenbelanger:matrix.org> And it's all APM vendors which are the ones using it in most of those companies, which I've talked to folks from all the APM vendors and they're mostly all in agreement that flow-through is the correct semantic for their use case.
+
+And/or bring some of those people to this chat room (we haven’t had much engagement with Matteo since he joined unfortunately)
+
+[13:28:04.0000] <Stephen Belanger>
+I just had a call with Matteo earlier actually about a user case where both flow-through and set/get semantics are needed. He said he would share the example from our call here later.
+
+[13:29:08.0484] <Stephen Belanger>
+And I'm trying to get more APM folks into the conversation. Unfortunately the APM space has historically been fairly bad at open source involvement so it's not so easy to get them to engage on stuff like this.
+
+
+2024-06-18
+[15:01:33.0157] <Steve Hicks>
+Hoping we can get this discussion going again now that plenary is over...  I was talking with a colleague about our tracing use case and stumbled on a question about the "empty context".  In particular, our current spec is that we don't allow creating a new root trace if there's already an open trace in the current context.  We can obviously change that restriction, but it may at least hint at a use case where you're in a context and might actually _want_ to run a subtask in an empty context - but if everything always tries as hard as possible to avoid running callbacks in the empty context and if you don't happen to have taken a snapshot before setting any variables, then it may be very difficult to access.  It's not clear to me whether that's a bug or a feature.
+
+
+2024-06-19
+[23:07:37.0776] <littledan>
+Can you say more about the use case?
+
+[23:08:10.0856] <littledan>
+I have been suggesting that the API for this should be, make a snapshot at the top level of your module, and then .run it
+
+[11:41:54.0256] <snek>
+i would assume that a snapshot at the top of a module would still include the context of whatever initiated the import (especially relevant for dynamic import ig)? idk whether this matters for steve's case though. 
+
+[12:08:48.0814] <Chengzhong Wu>
+it matters if it needs to grab a snapshot at the top level of the module as an empty snapshot. A deterministic API would be required
+
+
+2024-06-20
+[03:54:58.0406] <littledan>
+Yes, I think we should specify that, at the top level of the module, it's always a host-provided context (not necessarily empty--the host can put things there) and *not* based on what dynamic import triggered it (which would be racy)
+
+[03:55:48.0054] <littledan>
+in some super high level way, this is 'registration time' rather than 'call time' (it's the context of the module registry, not the dynamic import)
+
+[10:18:32.0619] <Steve Hicks>
+The empty use case is definitely hypothetical - I see it as a possible counterexample to Daniel's axiom that we should never use the root/empty context if there's any possible non-empty one available.
+
+The race condition for dynamic imports is interesting, and I think it speaks to a more general principle that registration context just generally tends to be less racy than causal context.  That said, despite the raciness, I think it's still important to be able to _access_ the causal context on-demand, even if it's not the context that's exposed by default.
+
+[10:19:32.0037] <Steve Hicks>
+I assume that would maybe apply to module loading just as well as anything else?  If we're going with the approach of adding a causal context property to the event object, would that translate to adding a property to import.meta?
+
+[10:20:37.0609] <Steve Hicks>
+(and if so, would you also expect it to be usable in function scopes? that would keep the causal context alive unexpectedly longer)
+
+[11:09:47.0597] <littledan>
+> <@stephenhicks:matrix.org> I assume that would maybe apply to module loading just as well as anything else?  If we're going with the approach of adding a causal context property to the event object, would that translate to adding a property to import.meta?
+
+agreed, import.meta seems like a good place to put the causal context *if* we decide that that's a good idea. And this would make it stay alive as long as the module's alive
+
+[12:45:45.0605] <Steve Hicks>
+I guess my point is that I'd still rather have it hung on AsyncContext.callingContext, which would limit the lifetime better.
+
+
+2024-06-22
+[19:37:39.0231] <snek>
+> <@littledan:matrix.org> Yes, I think we should specify that, at the top level of the module, it's always a host-provided context (not necessarily empty--the host can put things there) and *not* based on what dynamic import triggered it (which would be racy)
+
+otoh if you're using asynccontext for apm, you probably want the dynamic import to inherit the trace context, since it is logically part of whatever operation you're tracing and relevant to the performance of it.
+
+[04:09:51.0017] <littledan>
+Maybe, but it’s also possible that this proposal just won’t solve all APM problems and that we need to make tradeoffs between competing goals. Fundamentally, when you consider the merge case, preserving all of the calling contexts will take processing time, which is bad for APMs.
+
+[04:12:03.0461] <littledan>
+In this case, maybe specialized tooling based on transforming code could be better, as in https://github.com/nicolo-ribaudo/import-defer-polyfill
+
+[04:17:18.0172] <littledan>
+I don’t understand a principled way that we should decide which calling contexts to preserve. And the SES folks have made it clear that they see some cases of implicitly propagating the calling contexts to be an unacceptable information leak. But I don’t think losing the calling context in cases like this is a bad enough result to abandon the proposal entirely.
+
+
+2024-06-23
+[00:53:49.0316] <Chengzhong Wu>
+> <@littledan:matrix.org> I don’t understand a principled way that we should decide which calling contexts to preserve. And the SES folks have made it clear that they see some cases of implicitly propagating the calling contexts to be an unacceptable information leak. But I don’t think losing the calling context in cases like this is a bad enough result to abandon the proposal entirely.
+
+Are these cases public accessible?
+
+[01:01:39.0620] <nicolo-ribaudo>
+There are multiple SES AsyncContext meetings published at https://youtube.com/playlist?list=PLzDw4TTug5O1jzKodRDp3qec8zl88oxGd&si=iNtVVedsxGL8PGyb
+
+[01:53:44.0451] <Chengzhong Wu>
+Thanks! The meetings I found in the list are 1 year ago. I thought Dan was saying that there were recent discussions about the proposal
+
+[06:33:17.0374] <littledan>
+it'd be great if someone who is advocating for this sort of change could attend one of the TG3 meetings and discuss their point of view
+
+
+2024-06-24
+[06:35:10.0865] <Andreu Botella>
+while checking out https://github.com/tc39/proposal-async-context/pull/94, I noticed that the (current) `AsyncContext.Variable` semantics *also* has merge points
+
+[06:35:29.0805] <Andreu Botella>
+except you can only observe them from in `unhandledrejection`
+
+[06:35:36.0057] <Andreu Botella>
+ * except you can only observe them from the `unhandledrejection` event
+
+[06:44:19.0970] <Chengzhong Wu>
+Would you mind elaborating on it? Can a property on `PromiseRejectionEvent` liked mentioned at https://matrixlogs.bakkot.com/TC39_General/2024-06-21#L2-L5 address that?
+
+[06:48:47.0135] <Andreu Botella>
+I think the background for littledan's comment there was that, when discussing events with Anne and other web platform folks in the Web Engines Hackfest, we agreed that the originating context should be exposed as a (maybe null) property on all events
+
+[06:49:56.0135] <Andreu Botella>
+and for `ErrorEvent`, that would just be the regular property, but it would need special tracking across the abrupt completions to be able to get the context in which the exception was thrown
+
+[06:50:18.0131] <Andreu Botella>
+but I guess for `PromiseRejectionEvent`, that property could be an array instead
+
+[06:50:57.0900] <Andreu Botella>
+```js
+function createRejectionInContext(value) {
+    ctx.run(value, () => Promise.reject());
+}
+
+ctx.run("main", () => {
+    // don't await or do anything with the result
+    Promise.all([
+        createRejectionInContext("task-0"),
+        createRejectionInContext("task-1"),
+        createRejectionInContext("task-2"),
+        createRejectionInContext("task-3"),
+    ]);
+});
+
+window.onunhandledrejection = (evt) => {
+    evt.originatingContext.run(() => {
+        // Could be task-[0123]. Can't be main.
+        console.log(ctx.get());
+    })
+}
+```
+
+[06:52:59.0913] <Andreu Botella>
+well, I guess in that example, with the current spec, it would always be `task-0`
+
+[06:54:05.0004] <Andreu Botella>
+but for `allSettled` you would definitely have a merge
+
+[06:54:07.0541] <Chengzhong Wu>
+There should be only one rejection event for the promise of `Promise.all`, and the `evt.promise` is the promise of `Promise.all`
+
+[06:54:56.0857] <Andreu Botella>
+yeah, you're right
+
+[06:55:10.0465] <Andreu Botella>
+but for `Promise.allSettled` and `Promise.any` you would have a merge
+
+[06:58:38.0505] <Andreu Botella>
+if you implemented the current spec as is, you'd get the context of the last promise to resolve
+
+[06:58:54.0802] <Andreu Botella>
+even if that last promise succeeds
+
+[06:58:58.0811] <Andreu Botella>
+ * even if that last promise fulfills
+
+[06:59:04.0085] <Andreu Botella>
+ * even if that last promise is fulfilled
+
+[07:02:16.0534] <Andreu Botella>
+that's for `Promise.any`
+
+[07:02:25.0572] <Andreu Botella>
+I didn't realize `Promise.allSettled` never rejected
+
+[07:03:08.0352] <Chengzhong Wu>
+Yeah, `Promise.allSettled` never rejects
+
+[07:05:59.0187] <Chengzhong Wu>
+> <@abotella:igalia.com> if you implemented the current spec as is, you'd get the context of the last promise to resolve
+
+https://tc39.es/ecma262/#sec-performpromiseany 27.2.4.3.1 step 4.n performs `then` on the iterated promises, how would it be different from a `Promise.prototype.then` in this case?
+
+[07:08:26.0281] <Andreu Botella>
+...I might need to trace through the algorithm steps after all
+
+[07:09:10.0429] <Andreu Botella>
+yeah, maybe there's no way to observe that after all, since you'd end up with the context in which `Promise.any` was called in any case
+
+[07:09:52.0607] <Chengzhong Wu>
+Yeah, if I understand it correctly, this is what the document described
+
+[07:12:23.0218] <Andreu Botella>
+...is it? Sorry, I haven't been doing any work on this proposal for the past few weeks (because of other obligations and a break I took), and enough things changed shortly before that that I'm not so sure where things stand right now
+
+[07:14:12.0135] <Chengzhong Wu>
+We didn't make any normative changes yet. It just wraps up the comparison of semantics.
+
+[07:42:18.0408] <littledan>
+> <@abotella:igalia.com> I think the background for littledan's comment there was that, when discussing events with Anne and other web platform folks in the Web Engines Hackfest, we agreed that the originating context should be exposed as a (maybe null) property on all events
+
+Once nice property of this solution, as opposed to AsyncContext.currentComputed(), is that it gives us a clear way to add more originating contexts over time without risk of breaking anyone. OTOH with currentComputed, if it would sloppily leave the previous originating context in place until the next time that there's a relevant originating context, then it would change the behavior of existing programs to add more information later. I do see the downside that it's more difficult to use, though.
+
+[09:37:43.0906] <snek>
+> <@littledan:matrix.org> I don’t understand a principled way that we should decide which calling contexts to preserve. And the SES folks have made it clear that they see some cases of implicitly propagating the calling contexts to be an unacceptable information leak. But I don’t think losing the calling context in cases like this is a bad enough result to abandon the proposal entirely.
+
+i saw a suggestion on the repo to have multiple kinds of variables, which seems like it could be reasonable? in theory each variable kind represents a separate list that an agent has to track so not horrifying to implement at least. i will need to learn more about these specific SES concerns though.
+
+[10:50:19.0146] <Steve Hicks>
+Ultimately as far as DOM APIs go, I think not having access to causal context is not a dealbreaker.  I'm a little uneasy about  not being able to access the resolution context for promises, but I don't have a concrete use case where we would need it.  Most of the places we need access to causal context are userland scheduling APIs, and we can just implement them to preserve causal context as needed.  Where this falls down is that (1) it makes it a lot harder to reason about when most builtin schedulers automatically snapshot the registration context, but many userland schedulers (seemingly arbitrarily) depart from that convention, and (2) it will be an adoption blocker for builtin signals if we implement causal context for our own signals' computeds/effects, but the eventual builtin goes along with the pattern of only exposing the registration context.
+
+[11:05:57.0134] <Andreu Botella>
+We've discussed the `unhandledrejection` event a lot, but I don't think we've ever looked at `rejectionhandled` in much detail
+
+[11:06:33.0870] <Andreu Botella>
+since that event is always queued from `PerformPromiseThen`, it'd have the context that's active when `.then` is called, right?
+
+[11:06:48.0099] <Andreu Botella>
+or would it make sense to do something else?
+
+[11:07:28.0945] <Steve Hicks>
+I didn't even realize such an event even existed... though I'd also like to see resolution context for fulfilled promises
+
+[11:08:25.0119] <Steve Hicks>
+(I've been gradually reading the spec but haven't gotten to Promise, yet... so I can't say anything intelligent about the details unfortunately)
+
+[11:08:35.0645] <Steve Hicks>
+ * (I've been gradually reading the spec but haven't gotten to Promise yet... so I can't say anything intelligent about the details unfortunately)
+
+[13:10:31.0837] <littledan>
+I like the multiple variable idea, especially if we can separate them into two proposals and allow the causal one to come later.
+
+
+2024-06-25
+[09:04:24.0316] <Chengzhong Wu>
+We are having the bi-weekly call right now
+
+[09:04:47.0657] <Chengzhong Wu>
+Agenda and note: https://docs.google.com/document/d/1pi-NMbqVhg2UuxQAZ4jOGDeHLlZGD_DJ7fyxHt_C2hs/edit
+

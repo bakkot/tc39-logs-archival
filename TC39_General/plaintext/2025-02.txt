@@ -1,0 +1,277 @@
+2025-02-02
+[02:56:29.0670] <Aapo Alasuutari>
+> <@ljharb:matrix.org> i mean it’s a data property, not sure that’s where I’d draw the silly line personally
+
+I mean, it's an unconfigurable, unenumerable but writable property that mostly assumes you're only writing integers into it, but allows you to write anything whatsoever into it and then observe that write going through. If you were to define RegExp today, I would assume you'd use a setter kind of system that coerces to integer during writing instead of like it works now where coercion happens when the value gets used.
+
+I definitely think it's silly :)
+
+[09:25:43.0250] <bakkot>
+if we were to define it today there would not be a mutable `lastIndex` property on regexps because that is an insane thing to exist
+
+[09:26:50.0875] <bakkot>
+but given the current design, the coercion (or at least validation) needs to happen on read rather than on write because you can make your own totally bespoke regexps and the machinery has to be tolerant of your bespoke regexp having a non-integral `lastIndex`
+
+[09:30:19.0803] <Andreu Botella>
+surely everyone agrees that thenables and matchables are a great idea
+
+
+2025-02-04
+[15:37:26.0629] <Meghan Denny>
+what is the "order of property creation" for function objects
+
+[15:37:45.0946] <Meghan Denny>
+* what is the property creation order of property creation for functions
+
+[15:37:55.0189] <Meghan Denny>
+* what is the property creation order for functions
+
+[15:40:52.0773] <Meghan Denny>
+`Object.keys(Object.getOwnPropertyDescriptors(function () {}))` yields something different in chrome than it does firefox and safari 
+
+
+2025-02-05
+[16:20:02.0671] <iain>
+Note that SpiderMonkey lazily initializes properties on functions, so you will get a different result if you access a property before enumerating them (eg `function foo() {}; foo.name; Object.keys(...` will give `["name", "prototype", "length"]`)
+
+[18:41:54.0553] <ljharb>
+sounds like we have potentially 3 different behaviors then, and we should make some test262 tests
+
+[18:45:14.0780] <ljharb>
+in chrome/node i get `[ 'length', 'name', 'arguments', 'caller', 'prototype' ]` and in safari `["length", "name", "prototype"]` and firefox `[ "prototype", "length", "name" ]`, which is 2 orders, and 2 sets of names, in what's probably a fun little venn diagram
+
+[19:22:02.0462] <Meghan Denny>
+another fun point: discovered this because i separately ran into that on safari the first time you call it it'll return `["length", "name", "prototype"]` and if you call it again on the same function it'll return `["prototype", "name", "length"]` hehe
+
+[19:22:12.0623] <Meghan Denny>
+* another fun point: discovered this because i separately ran into that on safari atm the first time you call it it'll return `["length", "name", "prototype"]` and if you call it again on the same function it'll return `["prototype", "name", "length"]` hehe
+
+[23:11:37.0363] <snek>
+this is giving me some serious deja vu
+
+[23:15:58.0225] <snek>
+maybe this one https://github.com/tc39/ecma262/pull/2116
+
+[23:17:22.0055] <snek>
+oh no it was this one https://github.com/tc39/ecma262/pull/1490
+
+
+2025-02-07
+[10:17:24.0272] <rickbutton>
+does anyone off top-of-head recall the historical reasons behind why the Array prototype methods always throw when attempting to assign a non-writable length property, regardless of strictness, unlike the runtime semantics of an `Assignment
+
+[10:17:31.0386] <rickbutton>
+* does anyone off top-of-head recall the historical reasons behind why the Array prototype methods always throw when attempting to assign a non-writable length property, regardless of strictness, unlike the runtime semantics of an `AssignmentExpression`?
+
+[10:50:03.0827] <bakkot>
+all built-in functions are supposed to be imagined to be implemented in strict mode code
+
+[10:50:59.0411] <bakkot>
+it would be more strange if their behavior differed depending on whether they were called from strict mode or not, so it has to be one or the other, and behaving as if they were strict seems like the obvious choice
+
+
+2025-02-11
+[10:58:58.0789] <Michael Ficarra>
+I love this research into making JIT-generated code more secure: https://dl.acm.org/doi/10.1145/3694715.3695949
+
+[10:59:07.0685] <Michael Ficarra>
+it actually seems surprisingly practical as well
+
+
+2025-02-12
+[23:51:37.0552] <snek>
+Chengzhong Wu: why does the import source call in v8 assert that the object is a wasm module object?
+
+[01:00:46.0707] <Chengzhong Wu>
+> <@devsnek:matrix.org> Chengzhong Wu: why does the import source call in v8 assert that the object is a wasm module object?
+
+Wasm module is the only type of module source at the moment
+
+[01:02:42.0303] <Chengzhong Wu>
+There is no host defined module source yet
+
+[01:05:11.0665] <Chengzhong Wu>
+* The first stage of implementation does not expose host defined module source yet 
+
+[01:13:05.0042] <snek>
+I mean it can be any object right? wasm spec defines wasm module objects but other specs can define other ones.
+
+[01:13:27.0061] <snek>
+* I mean from a js engine perspective it can be any object right? wasm spec defines wasm module objects but other specs can define other ones.
+
+[01:20:27.0200] <Chengzhong Wu>
+Yes, it can be other objects, when it’s defined in other specs.
+
+[02:17:49.0330] <nicolo-ribaudo>
+It'd be nice if, for example, Node.js was able to support sources for .node modules even if there is no spec for it
+
+[02:44:41.0058] <Chengzhong Wu>
+are you referring to addons?
+
+[02:46:53.0801] <Chengzhong Wu>
+It's the [second stage](https://docs.google.com/document/d/1yetUlxl_yHk0ooT-hg9ylJeQ6Q77_Ttm777tHbclwqg/edit?tab=t.0#heading=h.itgu4eyjjulj) in the design
+
+[02:51:56.0990] <Chengzhong Wu>
+* are you referring to addons? I'd doubt it will be a cross-platform feature to load an addon from memory without writing to fs.
+
+[02:52:09.0110] <Chengzhong Wu>
+* are you referring to addons? I'd doubt it will be a cross-platform feature to load an addon from memory without writing to fs first.
+
+[03:10:54.0150] <Chengzhong Wu>
+At the moment, Node.js module loader does not support providing source for an addon `.node` module: https://nodejs.org/docs/latest/api/module.html#loadurl-context-nextload yet
+
+
+2025-02-13
+[18:15:13.0396] <Rob Palmer>
+If you can make it to Seattle, please join TC39 for a free evening of talks at Docusign on Thursday 20th Feb.
+
+ https://lu.ma/s97y24jd
+
+[03:27:35.0592] <snek>
+what does import source for .node mean? they're compiled binaries 
+
+[05:02:02.0611] <Chengzhong Wu>
+in a world that a `.node` file can be loaded like a `.wasm` file, I think it could have a similar `WebAssembly.Module` representation as `Addon.Module`
+
+[05:03:49.0813] <Chengzhong Wu>
+now that `.node` file loader does not expose linking phase to JS module loader, I didn't find it useful in practice to expose `.node` source representation
+
+
+2025-02-15
+[04:13:20.0056] <Aapo Alasuutari>
+I wonder if there would be appetite for making Array holes and Array indexed property descriptors (possibly also Array overindexing going into the prototype chain) into either Annex B material, or into normative legacy?
+
+ie. Change the spec to first and foremost define Array indexing in the same kind of terms as TypedArray indexing works, while leaving the current definition there as an optional implementation. The change could likely never enter browsers, but on the server-side this sort of change might be possible over the years.
+
+[09:20:44.0612] <ljharb>
+if it’s not possible in the web why would it be possible outside the web? Lots of code runs in both.
+
+[11:52:41.0523] <Aapo Alasuutari>
+Because while a browser can hardly ship a breaking change, runtimes fairly "regularly" do (over a time frame of multiple years, though). Of course, usually those breaking changes only affect their own runtime-related APIs or embedding APIs but there isn't really anything to say that those couldn't also affect some deeper JS APIs.
+
+
+2025-02-16
+[19:57:16.0638] <bakkot>
+We would generally like to remove annex b, not expand it.
+
+[00:32:35.0829] <Aapo Alasuutari>
+I was thinking of this in a similar way to https://github.com/tc39/proposal-rm-builtin-subclassing but admittedly, that proposal aims to only happen in a web-compatible way.
+
+
+2025-02-17
+[08:09:55.0053] <ljharb>
+> <@aapo.alasuutari:matrix.org> Because while a browser can hardly ship a breaking change, runtimes fairly "regularly" do (over a time frame of multiple years, though). Of course, usually those breaking changes only affect their own runtime-related APIs or embedding APIs but there isn't really anything to say that those couldn't also affect some deeper JS APIs.
+
+right, but devs want to run their code in both places, and run web code outside the web. node and friends are moving *closer* to the web, not farther from it, with things like WinterTC
+
+[12:06:55.0825] <Aapo Alasuutari>
+> <@ljharb:matrix.org> right, but devs want to run their code in both places, and run web code outside the web. node and friends are moving *closer* to the web, not farther from it, with things like WinterTC
+
+Fair point yeah. I guess my viewpoint is more of a "language evolution" viewpoint: I don't see the benefit of the features but I do see downsides, and I would personally see them removed as both a career TS/JS developer and a JS engine hobbyist developer.
+
+[12:13:15.0805] <ljharb>
+that’s not the way JS or the web evolves, generally - nothings ever removed, change is additive.
+
+[12:35:46.0763] <bakkot>
+The benefit of the features is existing code continues to work
+
+[13:23:16.0847] <Aapo Alasuutari>
+Yeah, hence the thought of making these parts optional legacy or Annex B. But I do see that this idea does garner interest in the slightest, and so that is that :)
+
+[13:55:06.0251] <Aapo Alasuutari>
+*doesn't 
+
+
+2025-02-18
+[10:39:10.0170] <akaster>
+Does anyone know if the WebAssembly/wabt repo maintainers have any plans to add arm64 Linux releases? I opened an issue about a month ago but it hasn't gotten a response https://github.com/WebAssembly/wabt/issues/2533
+
+[10:53:00.0420] <bakkot>
+akaster: TC39 isn't really involved in wasm. you might try their discord or something? https://webassembly.org/community/resources/
+
+[10:53:28.0378] <akaster>
+ah, I had previously been in a matrix channel for them, but it seemed quite dead. thanks for the link!
+
+
+2025-02-19
+[11:07:58.0560] <canadahonk>
+mild idea/proposal, matrix channel for note taking meta things? <del>i feel bad interrupting #tc39-delegates:matrix.org</del>
+
+[11:08:26.0644] <nicolo-ribaudo>
+No it's good that you interrupt
+
+[11:08:41.0628] <nicolo-ribaudo>
+People should not forget about notes
+
+[11:16:28.0188] <Erik Marks>
+Is there a list of proposal Matrix channels anywhere? I can't find a list on GitHub and they don't show up when I search in Element
+
+[11:17:15.0585] <snek>
+the tc39 space on matrix lists them all
+
+[11:17:17.0775] <snek>
+if you click on the logo
+
+[11:17:21.0420] <ryzokuken>
+#tc39-space:matrix.org 
+
+[11:17:24.0022] <snek>
+* if you click on the logo under the "home" button
+
+[11:17:31.0706] <snek>
+oh apparently you can also link to it, wonderful
+
+[11:19:04.0557] <Erik Marks>
+That's what I was missing, tyvm
+
+
+2025-02-21
+[19:01:30.0786] <canadahonk>
+forgot to ask during plenary, as math.clamp is stage 1, should I move it to the transfer org?
+
+[19:01:44.0783] <bakkot>
+Yes
+
+[19:01:46.0338] <ljharb>
+Yes - not should, must :-)
+
+[19:02:12.0153] <canadahonk>
+ty all
+
+[19:05:44.0702] <canadahonk>
+https://github.com/tc39-transfer/proposal-math-clamp 🎉
+
+
+2025-02-27
+[01:44:54.0338] <Josh Goldberg 💖>
+Question: I'd like to request -and implement if OKd- dark mode for https://tc39.es/proposal-type-annotations. Where is the right place to do that?
+I don't know where to ask for this, sorry if this is the wrong place to ask.
+
+[02:33:39.0210] <nicolo-ribaudo>
+All proposals are generated using https://github.com/tc39/ecmarkup (mostly maintained by bakkot), so you'd probably have to add dark mode there
+
+[02:33:51.0677] <nicolo-ribaudo>
+Maybe open an issue and start prototyping something 
+
+[05:48:11.0261] <Michael Ficarra>
+there is an active PR for this https://github.com/tc39/ecmarkup/pull/632
+
+[06:08:10.0510] <nicolo-ribaudo>
+Regarding that patch -- does Ecma have designers? That logo could quite easily have a version compatible with dark mode that just changes the "ma" letters from black to that blueish gray, but I guess doing it by ourselves might have copyright problems
+
+[06:08:25.0621] <nicolo-ribaudo>
+* Regarding that patch -- does Ecma have designers? That logo could quite easily have a version compatible with dark mode that just changes the "ma" letters from black to that blueish gray, but I guess doing it by ourselves might have trademark problems
+
+
+2025-02-28
+[16:48:25.0090] <Michael Ficarra>
+> <@nicolo-ribaudo:matrix.org> Regarding that patch -- does Ecma have designers? That logo could quite easily have a version compatible with dark mode that just changes the "ma" letters from black to that blueish gray, but I guess doing it by ourselves might have trademark problems
+
+@akirose:matrix.org
+
+[16:49:47.0466] <Aki>
+uhh  >.<
+
+[06:37:53.0586] <littledan>
+Maybe just make a PR against the directory with the site in it: https://github.com/tc39/proposal-type-annotations/tree/main/site
+

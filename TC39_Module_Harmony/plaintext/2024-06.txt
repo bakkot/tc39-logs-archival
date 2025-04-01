@@ -1,0 +1,261 @@
+2024-06-05
+[11:32:56.0905] <jakobjingleheimer>
+I can attend tomorrow but only for the first ~30 mins cuz I have to go to the airport
+
+[15:08:09.0473] <ljharb>
+do you want me to cancel yalls meeting next week, since it's plenary week?
+
+[15:10:10.0923] <nicolo-ribaudo>
+Yes please!
+
+
+2024-06-06
+[07:37:00.0994] <nicolo-ribaudo>
+I think I might be up to 30 minutes late today 
+
+[08:06:31.0249] <jakobjingleheimer>
+My internet just died
+
+[08:09:32.0390] <Chengzhong Wu>
+No one showed up in the room yet.
+
+[08:19:24.0042] <guybedford>
+Was late this side myself again unfortunately. If folks have something to bring up, I'm in the meeting now.
+
+
+2024-06-07
+[04:54:15.0206] <littledan>
+What’s the motivation for the AbstractModuleSource methods in the ESM source imports proposal? They feel separate from the stated goals. The rationale that I was able to find was:
+
+> These helper methods are designed to allow for determining the static public exports and public imports of a module, but do not give information about the internal module identifiers or dynamic import.
+
+[08:58:21.0401] <guybedford>
+littledan: they are in effect loader primitives, that we can do "while we are specifying it". Also effectively replaces the need for eg https://www.npmjs.com/package/es-module-lexer which clearly is needed.
+
+[08:59:32.0348] <guybedford>
+They are somewhat of an orthogonal feature though, that could be worth more explicitly calling out as a use case though certainly. Point taken - I can add some more motivation here around the es-module-lexer use case it solves.
+
+[09:08:40.0168] <littledan>
+but they're defined for all AbstractModuleSources, e.g., also for WebAssembly?
+
+[09:09:22.0026] <littledan>
+I'm also wondering how much you've worked out about the identity of source modules as they're postMessage'd around. Does it go by resolved specifier, or are they cloned the way that module expressions are?
+
+[09:10:16.0174] <guybedford>
+Yes, because these are properties of all cyclic module records
+
+[09:10:39.0698] <guybedford>
+and if Wasm supports top-level await in future or import meta, it might even support those
+
+[09:11:20.0424] <guybedford>
+For the transfer, this is exactly what we are hoping to treat as a Stage 2.7 concern, since it involves interactions with other spec texts
+
+[09:11:48.0153] <guybedford>
+it may likely involve a spec refactoring to more clearly define the module key, which I cover in more detail in the presentation
+
+[09:12:45.0553] <littledan>
+> <@guybedford:matrix.org> They are somewhat of an orthogonal feature though, that could be worth more explicitly calling out as a use case though certainly. Point taken - I can add some more motivation here around the es-module-lexer use case it solves.
+
+It might be worth calling out whether you're open to splitting this part out, given the very separate nature of the motivation and the lack of hard dependencies in either direction.
+
+[09:13:45.0990] <guybedford>
+yeah I can call that out
+
+[10:14:30.0820] <guybedford>
+I've posted https://github.com/tc39/proposal-esm-phase-imports/pull/16 to separate this in the proposal readme.
+
+
+2024-06-10
+[03:51:45.0147] <Aapo Alasuutari>
+I ran into an interesting corner case where spec/implementations differ from what I at least initially would've expected:
+
+I have a case where due to loosely typed names, a single module can match multiple names. (eg. Asking for a module with caret version 1.0.0 and 1.0.1 in a part of the URL can resolve to the same concrete module). I had the bright idea of avoiding duplication of modules by responding with HTML redirects from the server (to be exact, a ServiceWorker intercepts the request and performs the final redirect arbitration). This works fine in getting the right module, but it does not deduplicate them.
+
+I presume this is right and proper from the spec standpoint but on the other hand, is it what is really wanted? Is module redirection a reasonable thing to consider?
+
+[03:59:11.0308] <Aapo Alasuutari>
+* I ran into an interesting corner case where spec/implementations differ from what I at least initially would've expected:
+
+I have a case where due to loosely versioned names, a single module can match multiple names. (eg. Asking for a module with caret version 1.0.0 and 1.0.1 in a part of the URL can resolve to the same concrete module). I had the bright idea of avoiding duplication of modules by responding with HTML redirects from the server (to be exact, a ServiceWorker intercepts the request and performs the final redirect arbitration). This works fine in getting the right module, but it does not deduplicate them.
+
+I presume this is right and proper from the spec standpoint but on the other hand, is it what is really wanted? Is module redirection a reasonable thing to consider?
+
+[04:10:28.0380] <Aapo Alasuutari>
+As code this would be:
+```js
+const modA = await import("mod--^1.0.0"); // server responds with redirect to "mod--1.0.0"
+const modB = await import("mod--1.0.0");
+const modC = await import("mod"); // import-map redirects to "mod--1.0.0"
+
+modB === modC; // true
+modA === modB; // false
+```
+
+[05:22:39.0130] <nicolo-ribaudo>
+Aapo Alasuutari You can read about it at https://github.com/whatwg/html/issues/3624
+
+[05:40:11.0955] <Aapo Alasuutari>
+> <@nicolo-ribaudo:matrix.org> Aapo Alasuutari You can read about it at https://github.com/whatwg/html/issues/3624
+
+Thank you. Makes sense, though it's always unfortunate to see your bright idea get dashed on the rocks of reality :D
+
+[05:42:10.0470] <Aapo Alasuutari>
+I guess the best option is for the server to return `export *; import foo; export default foo;` as a kind of minimal redirect-like Module.
+
+
+2024-06-11
+[05:14:55.0410] <Luca Casonato>
+Yes, but be careful that `import foo; export default foo` only works if the module actually has a default export
+
+[05:15:13.0183] <Luca Casonato>
+so the redirect module has to be dependant on the input module
+
+[05:15:22.0570] <Luca Casonato>
+ * so the redirect module has to be dependant on the module you are redirecting
+
+[05:23:59.0189] <nicolo-ribaudo>
+Also, you need to use `export { default } from "X"` otherwise you break the live binding 
+
+[05:39:11.0924] <Aapo Alasuutari>
+Ah, trying to re-export a nonexistent default export is presumably a runtime error? Luckily in my case I do know default exports exist but yeah... That's a slight problem.
+
+[05:52:44.0790] <nicolo-ribaudo>
+I remember some sort of `export ** from "x"` proposal to also export the default if present 
+
+[05:52:51.0856] <nicolo-ribaudo>
+It might be worth re-bringing it up 
+
+[06:22:04.0985] <Aapo Alasuutari>
+Or `export "x"`?
+
+[15:58:07.0745] <kriskowal>
+Opinion sought: Should source.imports() include all of source.reexports()?
+
+[15:59:25.0952] <kriskowal>
+My tentative opinion is that imports should include reexports, on the grounds that one would consult imports() for every dependency and reexports() would be consulted for purposes of linking. There doesn’t appear to be a downside to the redundancy.
+
+[16:00:00.0971] <kriskowal>
+ * My tentative opinion is that imports should include reexports, on the grounds that one would consult imports() for every dependency and reexports() would be consulted for purposes of expanding upon exports() to build namespaces when linking. There doesn’t appear to be a downside to the redundancy.
+
+[16:04:12.0032] <ljharb>
+seems strange, "reexports" to me implies you need all three to make a complete picture
+
+[16:04:38.0366] <ljharb>
+iow "exports" and "reexports" should either be distinct sets, or, we'd just have "exports" but it'd tell you which export names were re-exported from where
+
+[16:18:45.0392] <kriskowal>
+exports and reexports are non-overlapping. exports is names and reexports is import specifiers
+
+[16:19:23.0575] <kriskowal>
+imports and reexports overlap since they’re both lists of module import specifiers
+
+[16:20:02.0733] <kriskowal>
+the distinction is moot for wasm.module since they don’t have reexports to deal with
+
+[16:20:24.0272] <kriskowal>
+so there’s likely to be code that relies on imports() producing a complete list of dependencies
+
+[16:22:12.0754] <kriskowal>
+but i can see a case for new ModuleSource(`export * from 'x'`).imports() => [] and .reexports() => ['x'] from a DRY perspective (which is not mine)
+
+
+2024-06-13
+[05:04:35.0884] <Aapo Alasuutari>
+> <@nicolo-ribaudo:matrix.org> It might be worth re-bringing it up 
+
+Would you or Luca Casonato be open to helping me get this off the ground? I find that we have a use case for this.
+
+[05:28:08.0279] <Luca Casonato>
+Yeah we could
+
+
+2024-06-14
+[02:58:43.0571] <guybedford>
+https://github.com/guybedford/proposal-export-star-default was my attempt previously, but without the `**` semantics, which may well get more attention. Aapo Alasuutari if you would like to work on a new proposal I'm sure one of us could try champion it for you.
+
+[03:47:59.0721] <Aapo Alasuutari>
+> <@guybedford:matrix.org> https://github.com/guybedford/proposal-export-star-default was my attempt previously, but without the `**` semantics, which may well get more attention. Aapo Alasuutari if you would like to work on a new proposal I'm sure one of us could try champion it for you.
+
+Hmm, an issue mentions:
+> But, the committee was very clear that having an ambiguous statement that doesn't tell the reader whether or not there is a default or not, it a no-go. In other words, you will have to specify whether or not you want the default to be defined.
+
+[03:48:41.0800] <Aapo Alasuutari>
+So the single-line export without explicitly mentioned default wouldn't be acceptable according to this?
+
+[05:29:06.0991] <nicolo-ribaudo>
+We should go find the relevant notes in the tc39/notes repo and read the discussion 
+
+[09:09:03.0796] <nicolo-ribaudo>
+guybedford I was talking with Luca and we have different understanding of how module identity is preserved across cloning. Do you expect this to be true or false?
+```js
+import source x from "./x.js";
+await import(x) === await import(structureClone(x));
+```
+
+[09:09:46.0751] <Jack Works>
+it depends on the host (web api)?
+
+[09:10:18.0700] <Jack Works>
+I don't have a clear intuitive about what it should be
+
+[09:30:42.0457] <Mathieu Hofman>
+> <@nicolo-ribaudo:matrix.org> guybedford I was talking with Luca and we have different understanding of how module identity is preserved across cloning. Do you expect this to be true or false?
+> ```js
+> import source x from "./x.js";
+> await import(x) === await import(structureClone(x));
+> ```
+
+Any identity preservation through postMessage will likely require implementations to adopt a distributed GC (or make these objects uncollectible)
+
+[09:32:17.0699] <Mathieu Hofman>
+Well technically there is another way in this case which is to resolve the identity of these objects to their content, but that would require changing object equality semantics, which we've already heard browsers balk at for Records and Tuples
+
+
+2024-06-15
+[05:10:11.0932] <littledan>
+Well, for this simpler case, I think they can be identified by their url; it’s the module expression case (if their identity is not by source position but rather per evaluation) where things get tricky
+
+
+2024-06-16
+[21:41:10.0539] <guybedford>
+> <@nicolo-ribaudo:matrix.org> guybedford I was talking with Luca and we have different understanding of how module identity is preserved across cloning. Do you expect this to be true or false?
+> ```js
+> import source x from "./x.js";
+> await import(x) === await import(structureClone(x));
+> ```
+
+My current best understanding of how this might work would be that the objects would have different equality, but because the underlying keys are identical, the instances will be identical. That is, `await import.source(x) === x` but `await import.source(structuredClone(x)) !== x`. In terms of GC, the module registry is not currently clearable. If we want to permit that for hosts, that's maybe a separate discussion, involving a `loader.delete(key)`?
+
+[22:23:41.0973] <guybedford>
+maybe it's `import.unref(source)` or similar...?
+
+[22:23:57.0474] <guybedford>
+ * maybe it's `import.unref(specifier)` or similar...?
+
+[01:31:07.0580] <Rob Palmer>
+Well done to everyone who contributed to this article
+
+https://thenewstack.io/how-javascript-is-finally-improving-the-module-experience/
+
+[01:31:40.0462] <nicolo-ribaudo>
+(I didn't even remember that she interviewed me for it 😅)
+
+
+2024-06-20
+[11:37:07.0552] <guybedford>
+with the recent success of the import-map-extensions repo in being used to specify import map "integrity", I've gone ahead and added a section for import map workers in https://github.com/guybedford/import-maps-extensions/pull/21 to aim to work towards an HTML PR
+
+[11:37:18.0566] <guybedford>
+review / feedback on the above would be very welcome
+
+[14:42:01.0890] <nicolo-ribaudo>
+Amazing, I'll take a look in the next few days :)
+
+
+2024-06-24
+[09:51:54.0402] <guybedford>
+I've added the Stage 2 follow-up as discussed in plenary for the esm source phase in https://github.com/tc39/proposal-esm-phase-imports/pull/18
+
+[09:51:59.0564] <guybedford>
+review on that would be great
+

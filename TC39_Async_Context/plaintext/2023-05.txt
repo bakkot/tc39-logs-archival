@@ -1,0 +1,445 @@
+2023-05-02
+[08:11:51.0733] <Justin Ridgewell>
+Reminder, we’re delaying one hour
+
+[08:12:29.0760] <Justin Ridgewell>
+I don’t have edit access to the calendar. ljharb ?
+
+[08:17:24.0270] <ljharb>
+I’ll fix it shortly
+
+[08:18:13.0981] <ljharb>
+k, moved an hour later
+
+[08:18:40.0806] <Justin Ridgewell>
+Can you give me and Chengzhong Wu edit access?
+
+[08:18:55.0080] <ljharb>
+unfortunately not, i think only Mozilla employees can edit perms
+
+[09:03:09.0907] <Yoav Weiss>
+So would that be 7-8pm CET? (rather than 6-7pm)
+
+[09:03:25.0748] <Yoav Weiss>
+If so, I can only make the first 30 minutes
+
+[09:04:33.0809] <Chris de Almeida (OoO until 05-14)>
+> <@yoavweiss:matrix.org> So would that be 7-8pm CET? (rather than 6-7pm)
+
+yes, 7-8 CEST
+
+[09:39:28.0844] <littledan>
+I will be 5-10 minutes late, please don’t wait for me to start
+
+[09:47:34.0417] <Justin Ridgewell>
+On the agenda this week is:
+- Task Termination: https://docs.google.com/document/d/1yQy8RNeGXLr99bNpy-7tA1Ch7wN0piekp_-JwxC8FtA/edit#
+- Generator feedback: https://matrixlogs.bakkot.com/TC39_Delegates/2023-03-23#L173
+
+[10:00:39.0281] <littledan>
+Also we can go through the rest of the bugs if we have time
+
+[10:00:45.0557] <littledan>
+There are a lot of issues open
+
+[10:01:14.0794] <Justin Ridgewell>
+Meeting starting now
+
+[13:55:54.0177] <Justin Ridgewell>
+Transcript added to today's notes
+
+[14:37:57.0800] <littledan>
+Thanks for a good meeting everyone. I think we made good progress.
+
+
+2023-05-03
+[08:37:18.0291] <Andreu Botella>
+How come the readme doesn't show any actual example of using `AsyncContext` with async/await?
+
+[10:03:56.0024] <Justin Ridgewell>
+It does: https://github.com/tc39/proposal-async-context#transitive-task-attribution
+
+[10:04:14.0501] <Justin Ridgewell>
+There are a bunch of examples, using `setTimeout`, `p.then()`, and `await`
+
+
+2023-05-04
+[23:29:50.0726] <littledan>
+I agree that it would be nice to make some basic usages more prominent in the readme 
+
+[23:45:08.0310] <littledan>
+Basically if the readme could be more like the first half of the previous presentation pasted together with the presentation from next meeting 
+
+[02:40:00.0970] <Yoav Weiss>
+RE https://github.com/tc39/proposal-async-context/issues/52, I'm now thinking if GC times may not be good enough for my immediate use case
+
+[02:40:19.0199] <Yoav Weiss>
+and potentially something we can more tightly define once it's actually required
+
+[07:21:14.0619] <littledan>
+Garbage collection is not an option here IMO
+
+[07:45:22.0810] <Yoav Weiss>
+I agree it's not an option for timestamps
+
+[07:45:31.0100] <Yoav Weiss>
+as GC can be arbitrarily late
+
+[07:46:00.0282] <Yoav Weiss>
+but it can be an option (I think) for TaskAttribution's container management
+
+[14:09:36.0060] <Justin Ridgewell>
+I think we have to deal with GC in a few cases:
+1. `AsyncContext.wrap()`
+2. `new Promise(() => {})` (permanently pending promise)
+
+[14:10:16.0154] <Justin Ridgewell>
+There's an optimistic fast path for promises that resolve (we can decrement the pending counter as soon as that happens), but promises aren't guaranteed to resolve ever.
+
+[14:10:52.0707] <Justin Ridgewell>
+So we're stuck waiting for GC the promise
+
+[14:17:05.0715] <Mathieu Hofman>
+Which will be fun given how leaky promises are in most engines these days
+
+[15:00:05.0032] <littledan>
+Yeah I think we want to count outstanding tasks/micro tasks
+
+[15:47:29.0267] <Mathieu Hofman>
+We agree that's an optimization, right?
+
+[15:53:12.0199] <littledan>
+I don’t think gc vs exact timing is an optimization; I think it is sort of different semantics 
+
+[15:53:54.0674] <littledan>
+There are certain use cases that really only work with exact timing (not just perf metrics but also Angular’s zone.js usage)
+
+[15:54:41.0036] <littledan>
+We just shouldn’t build these features in a way which takes advantage of finalizers
+
+[16:51:02.0393] <Mathieu Hofman>
+For a userland API how do you reconcile that with the fact that task termination is intrinsically tied in some cases to the collection of user held and observable objects?
+
+
+2023-05-05
+[21:09:31.0111] <littledan>
+For a permanently pending promise: wouldn’t terminate 
+For AsyncContext.wrap which isn’t called: it’s not wrap which increments the counter, but rather a separate operation which is called when something is logically “queued” (this must be the case since the wrapped thing can’t decrement the counter since it can be called multiple times)
+
+[21:13:55.0769] <Mathieu Hofman>
+So only wrapped functions in some host queue holds the task alive? That sounds like special treatment for host queues.
+
+[21:15:36.0573] <Mathieu Hofman>
+And a wrapped thing can definitely increment a counter. Once it's executed the counter is decremented. during it execution it can create more wrappers, each incrementing the counter until they're called
+
+[21:17:45.0195] <Mathieu Hofman>
+But if the wrapped function is never called and collected instead, you also need to decrement. That's where GC comes in
+
+[21:17:59.0810] <littledan>
+> <@mhofman:matrix.org> So only wrapped functions in some host queue holds the task alive? That sounds like special treatment for host queues.
+
+Probably the explicit JS API would need to contain calls for this, exactly for this reason. It is just a different operation from wrap.
+
+[21:18:25.0526] <littledan>
+Wrap produces multiply callable things
+
+[21:18:52.0289] <littledan>
+Anyway if wrap produced single-shot things, then it also wouldn’t be a reason to depend on GC
+
+[21:19:31.0931] <littledan>
+If something gets leaked, then it just doesn’t have its completion callback called (maybe)
+
+[21:19:53.0929] <littledan>
+Or maybe it is called but this is definitely a bug somewhere if people are depending on it
+
+[21:21:45.0086] <littledan>
+Anyway this differs a lot from async hooks today where gc is the expected thing to call the destroy hook for async await, not backup/cleanup if you have a leak
+
+[21:22:19.0795] <Mathieu Hofman>
+Ok so you want to put the burden of task continuation on the user land for user land queues? It would be surprising to me that the context value could outlive the task  unless userland takes explicit action, since that's counter to the transparent nature of this API for code unaware of it.
+
+[21:22:57.0048] <Mathieu Hofman>
+Since you can capture a context without using the AsyncContext API simply by code structure.
+
+[21:24:00.0231] <littledan>
+Sorry, what do you mean by that?
+
+[21:24:40.0719] <Mathieu Hofman>
+You can use plain promises to effectively snapshot the current context
+
+[21:25:35.0628] <Mathieu Hofman>
+That IMO should prevent the task termination even if the promise stays pending (nothing in host queues)
+
+[21:26:00.0074] <Mathieu Hofman>
+But the task should terminate once the promise gets collected
+
+[21:27:22.0779] <littledan>
+Oh yeah I agree. Creating the promise should internally call this increment operation
+
+[21:27:45.0675] <littledan>
+But this is different from wrap—increment makes sense since promises are single-shot
+
+[21:28:20.0496] <littledan>
+I think any mismatch here has to do with multiple senses of “queued”
+
+[21:29:18.0795] <littledan>
+Oh wait, sorry, I think we are talking about the .then operation, rather than creating the promise
+
+[21:29:44.0067] <littledan>
+That is the case where the AsyncContext is captured anyway 
+
+[21:30:56.0223] <Mathieu Hofman>
+I remember writing a wrap multishot implementation using only promises.
+
+[21:31:17.0022] <Mathieu Hofman>
+Yes using then
+
+[21:31:39.0716] <littledan>
+Wasn’t that based on multiple then calls?
+
+[21:32:12.0623] <littledan>
+Anyway I need to step back and think about this more; I don’t have a very clear picture right now actually 
+
+[21:32:35.0068] <littledan>
+Maybe I am mistaken 
+
+[21:34:37.0121] <littledan>
+Oh right—you can restore the context multiple times with .then, but you only get one shot at “being outstanding”—the decrement operation only happens the first time. Maybe wrap could apply the same logic and so there actually isn’t a separate increment/decrement operation.
+
+[21:36:10.0270] <Mathieu Hofman>
+https://github.com/endojs/endo/blob/506a9685b62e5694a6a47a0efa05742e0c91fa71/packages/eventual-send/test/async-contexts/async-attack-tools.js
+
+[21:36:54.0442] <Mathieu Hofman>
+Yeah it relies on recreating a promise and calling then every time
+
+[10:22:13.0041] <Justin Ridgewell>
+In case you're not monitoring PR reviews, I suggested we use an `AsyncContext` namespace (so, `AsyncContext.Local` and `AsyncContext.Snapshot`) in https://github.com/tc39/proposal-async-context/pull/55#pullrequestreview-1415123019
+
+[10:22:18.0445] <Justin Ridgewell>
+Anyone care to weigh in?
+
+
+2023-05-10
+[01:33:09.0789] <Andreu Botella>
+I'm looking at the task termination doc, and from the listed use cases it seems like task terminations wouldn't be exposed as user-visible metrics or events, it would just be browser-internal, right?
+
+[01:35:46.0333] <Andreu Botella>
+and an implementation of task attribution with unbounded queues (assuming infinite memory and processing power) would be equivalent to one with task termination
+
+[01:36:18.0270] <Andreu Botella>
+If so, I'm not sure why there needs to be a spec for it, just a note on the task attribution spec would suffice, right?
+
+[01:36:40.0186] <Andreu Botella>
+ * If so, I'm not sure why there needs to be a spec for it, just a note on the task attribution spec describing implementation considerations would suffice, right?
+
+[03:10:30.0406] <littledan>
+For the use cases Yoav presented (eg perf metrics), a lot of people need to be coordinated around the definition of when this termination event happens, both within Chrome, among other browsers who would hopefully eventually do something similar, as well as web developers. Coordinating expectations to guide implementations and usages is exactly what a standard is for.
+
+[03:12:10.0158] <littledan>
+Also sometimes it’s useful for specs to present a more or less realistic way to implement things, to enable people to implement it more straightforwardly.
+
+[03:15:19.0366] <Andreu Botella>
+Web developers need coordination in terms of when the perf metrics happen, not in terms of when a task attribution context gets evicted
+
+[03:22:29.0842] <Andreu Botella>
+ * Web developers need coordination in terms of when the perf metrics happen, not in terms of when a task attribution scope gets evicted
+
+[03:37:38.0165] <littledan>
+Isn’t the second part of the first?
+
+[03:52:11.0654] <Andreu Botella>
+AFAIU the actual eviction isn't exposed to developers
+
+[05:41:51.0317] <littledan>
+sure, it just potentially affects the timing of the callback. Lots of mechanisms in the HTML spec aren't exposed to developers directly.
+
+[05:42:25.0152] <littledan>
+Even just coordinating among all the Chrome engineers and other browser developers requires some very detailed documentation which everyone can agree on, at least
+
+[05:47:06.0308] <Andreu Botella>
+If there is a callback it can affect the timing of, then it should be specified indeed
+
+[05:47:50.0233] <Andreu Botella>
+But the tasks descending from mouseovers use case doesn't require that
+
+[05:48:06.0758] <Andreu Botella>
+The soft navigation durations use case might, but I'm not sure
+
+[05:48:24.0722] <Andreu Botella>
+ * The soft navigation durations use case might, but I'm not sure, and the issue doesn't talk about using task termination directly
+
+[05:50:03.0641] <littledan>
+Many performance events are exposed to JS, e.g., https://w3c.github.io/largest-contentful-paint/ . But even if this one weren't, and only available in dev tools, I don't think that affects whether it can be useful to coordinate deeply on what is being measured.
+
+[05:51:45.0796] <Andreu Botella>
+The tasks descending from mouseovers use case, again AFAIU, is only a concern with memory pressure in the browser, it's not a performance event
+
+[05:52:01.0571] <littledan>
+I'm really confused; I'm not sure what you're getting at
+
+[05:57:27.0996] <Andreu Botella>
+It seems like at least two out of the three use cases described in the task termination design doc are only useful to avoid having to lose task attribution tasks when the number of tasks that would otherwise have to be tracked grows
+
+[05:58:01.0112] <Andreu Botella>
+If we imagine a spherical-frictionless-cow implementation with no memory limits, for those two use cases, task termination would not be needed
+
+[05:58:20.0836] <Andreu Botella>
+And it's typical to assume spherical frictionless cow implementations in specs
+
+[06:05:42.0782] <Andreu Botella>
+I wouldn't be opposed to specifying task termination, and I see the point in enabling coordination, but not only browser engineers read the specs
+
+
+2023-05-16
+[08:02:14.0220] <Justin Ridgewell>
+This week is TC39, so no meeting
+
+
+2023-05-17
+[09:35:02.0547] <littledan>
+putting the user code lexically nested inside of the framework code doesn't really demonstrate the example very clearly
+
+[09:36:51.0358] <Willian Martins>
+Justin Ridgewell: Does this proposal solves the pattern of piling up data in request object in node and pass it around the application?
+
+[09:37:19.0080] <Justin Ridgewell>
+I think you mean where you put framework data on the `req` object so that it can be passed around?
+
+[09:37:28.0587] <Willian Martins>
+Yep
+
+[09:37:49.0214] <Justin Ridgewell>
+
+Then yes, you could store that in an `AsyncContext` instead
+
+[09:38:00.0205] <Justin Ridgewell>
+You won't _need_ to pass the `req` object around anymore to get the context data
+
+[09:38:28.0850] <Willian Martins>
+Thanks. I wanna pitch this proposal internally, and I'm looking for internal use cases.
+
+[09:39:21.0478] <shu>
+it'll be faster to just pass it around though...
+
+[09:46:19.0989] <Justin Ridgewell>
+In pure access-to-the-value terms, yes, it'd be faster to have a parameter or prop on a param
+
+[09:47:12.0597] <Justin Ridgewell>
+But I think that discounts the use of 3p code that is not aware of, eg, the `req` value and won't pass that around
+
+[09:47:41.0394] <Justin Ridgewell>
+So we have an over reliance on closures to capture the `req` and that closure gets passed to 3p code instead
+
+[09:48:08.0790] <Justin Ridgewell>
+I wonder if the closures are actually going to be slower and just the map access that `AsyncContext` gives you
+
+[09:48:34.0441] <Justin Ridgewell>
+Because closures wouldn't be required, I can start using static module level functions and pass data via context
+
+[09:49:08.0647] <Justin Ridgewell>
+ * I wonder if the closures are actually going to be slower then just the map access that `AsyncContext` gives you
+
+[09:49:18.0952] <Justin Ridgewell>
+ * I wonder if the closures are actually going to be slower than just the map access that `AsyncContext` gives you
+
+[09:50:37.0826] <shu>
+not understanding the closure point -- if it's in fact threaded through by user code, there're no closures involved, just passing something through?
+
+[09:50:48.0403] <shu>
+but if closures are in fact involved then i agree
+
+[09:50:58.0244] <littledan>
+The "making hooks work at all with async functions" case seemed pretty important
+
+[09:54:43.0600] <Justin Ridgewell>
+> <@shuyuguo:matrix.org> not understanding the closure point -- if it's in fact threaded through by user code, there're no closures involved, just passing something through?
+
+I don't have an explicit example I can share at the moment, but I see soooo many closures when digging into the codebase
+
+[09:55:50.0951] <Justin Ridgewell>
+> <@littledan:matrix.org> The "making hooks work at all with async functions" case seemed pretty important
+
+To be clear, there are other issues preventing this on the client side (the current RFC is only for server side), but the lack of async context is one of the blockers
+
+[09:58:21.0406] <ljharb>
+i see tons of closures as well - in react, the two approaches are either “prop drilling” or something on the side, like context or a flux store, and the problem with the former is that intermediate components often do not know or remember all the things they need to pass down.
+
+[10:01:37.0531] <littledan>
+I guess the question isn't "are there closures" but "can the user code close over stuff from the framework to make it so it doesn't need to pass things around all the time" and that answer is often no
+
+[10:03:42.0847] <littledan>
+to Mark's point: the update in the AsyncSnapshot API would be simple: You'd pass a positive integer into the AsyncSnapshot constructor to indicate how many times it can be restored. If you write Infinity, the task termination callback is never called. Mostly you'd pass 1; maybe that'd be the default constructor.
+
+[10:04:12.0695] <littledan>
+maybe an "increment" or "clone" method would be added in conjunction with this
+
+[10:06:40.0924] <bakkot>
+can't you just store something mutable in the context and then mutate it manually?
+
+[10:06:48.0579] <bakkot>
+why do you need the base API to be expanded?
+
+[10:13:11.0895] <littledan>
+Oh right that too maybe
+
+[10:14:03.0381] <littledan>
+No the issue is that you want this to work out of the box with promises
+
+[10:15:29.0687] <littledan>
+Calling .then should increment the count, and when the reaction runs, it should be decremented
+
+
+2023-05-26
+[08:50:14.0697] <Chris de Almeida>
+why is the meeting cancelled next week?
+
+[08:51:12.0426] <ljharb>
+it's not; i just moved it an hour later by request
+
+[08:51:28.0380] <ljharb>
+i'd misunderstood and thought only one of the meetings was bumped an hour; apparently the decision was to bump them all by an hour
+
+[08:59:47.0886] <Chris de Almeida>
+ok.. I got a cancellation notice and processed, but I still have an entry for 12 CT
+
+[09:02:07.0581] <Justin Ridgewell>
+That's correct, it went from 11am to 12pm
+
+[09:02:12.0028] <Justin Ridgewell>
+ * That's correct, it went from 11am to 12pm CT
+
+[10:11:53.0881] <ljharb>
+that's weird you got a cancellation notice; i selected "don't email"
+
+[10:14:35.0892] <Andreu Botella>
+I also got one
+
+
+2023-05-30
+[09:15:04.0972] <Mathieu Hofman>
+I have a conflict today and won't be able to attend
+
+[10:02:05.0985] <Justin Ridgewell>
+Starting now
+
+[12:21:36.0175] <Justin Ridgewell>
+I think the Async Context Design Doc needs a more implementation focused section?
+
+[12:21:54.0490] <Justin Ridgewell>
+Like, we describe some of the high level concepts, but we never actually show how this would be done
+
+[12:22:29.0476] <Justin Ridgewell>
+The C++ usage sections are good, but we never explain how to implement the `ValueScope` or `ReferenceScope`
+
+[12:22:37.0034] <Justin Ridgewell>
+Or how the JS APIs would relate to it
+
+[12:48:09.0242] <littledan>
+well, I think the C++ API stuff is somewhat straightforward and doesn't really need to be so much more concrete, but I do think the data structures used within the implementation should be fleshed out
+
+[13:01:04.0841] <littledan>
+(I'm just looking at jrunsup.xsd, which I take it is part of all of this?)
+
+[13:17:47.0195] <littledan>
+Oops wrong tab
+

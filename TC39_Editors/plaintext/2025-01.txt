@@ -1,0 +1,468 @@
+2025-01-03
+[14:14:07.0911] <Michael Ficarra>
+I have a work on-site next week, so I don't think I'll be able to attend editor call
+
+
+2025-01-08
+[14:33:03.0152] <ljharb>
+shu, kevin, are yall attending today? it's just me and jmdyck rn
+
+[14:33:23.0110] <bakkot>
+yeah just a minute
+
+
+2025-01-14
+[19:19:16.0812] <ljharb>
+is it weird to anyone else that https://tc39.es/ecma262/#sec-property-descriptor-specification-type says that an empty Record is a Property Descriptor?
+
+[19:33:45.0104] <bakkot>
+it is, though
+
+[19:33:55.0823] <bakkot>
+that's so `Object.defineProperty(foo, 'bar', {})` works
+
+[23:32:26.0900] <ljharb>
+i mean i get that an empty object has to work in a number of places. but since `{ enumerable: true }` isn't a property descriptor record either (that'd be `{ [[Enumerable]]: true }`) i'm not sure why an empty record needs to be one
+
+[09:24:55.0943] <bakkot>
+if you look at how `Object.defineProperty` works it basically mechanically converts the object into a spec record by copying over each of the relevant fields https://tc39.es/ecma262/multipage/ecmascript-data-types-and-values.html#sec-topropertydescriptor
+
+[09:26:08.0934] <bakkot>
+and then passing it to definePropertyOrThrow which switches on presence of various fields
+
+[09:32:47.0429] <bakkot>
+it could work some other way but the reason an empty record is a property descriptor record is to allow it to be written this way
+
+[09:34:23.0359] <bakkot>
+I think if we were writing it today we'd probably avoid having optional fields in the record, which we usually avoid, but it would require a bit more machinery
+
+[09:45:36.0783] <ljharb>
+I definitely understand why it's written this way
+
+[09:46:00.0803] <ljharb>
+i'm wondering if it would be cleaner to special-case "no fields" rather than having the bottom type of all records be Property Descriptor
+
+[10:01:21.0893] <bakkot>
+ah
+
+[10:01:44.0264] <bakkot>
+I prefer not to; I don't think of records as really sharing types
+
+[10:02:10.0775] <bakkot>
+it's not like you come across a random record with no context in the spec; they're always being passed around between specific algorithms which make it clear what kind of thing they're working with
+
+[10:25:00.0257] <Michael Ficarra>
+lmao is this guy trying to save disk space on GitHub's servers? https://github.com/tc39/ecma262/pull/3478#issuecomment-2589138113
+
+[10:25:02.0465] <Michael Ficarra>
+who does this?
+
+[10:29:06.0425] <jmdyck>
+Maybe he's saving space locally then pushing to github?
+
+[10:45:25.0342] <jmdyck>
+ljharb: Given `Let _e_ be Record {}. If _e_ is a Property Descriptor, then ...`, are you thinking that the condition would succeed?
+
+[10:47:35.0394] <ljharb>
+> <@michaelficarra:matrix.org> who does this?
+
+I’ve encountered many; some are the rare folks who use the PRs and issues tab, and are also stuck on the idea of “clean”, meaning they want to remove things from the list, and that requires closing PRs. In this case, i think he looks at his own profile and says “ick, too many forks” and tries to “clean” them up. But this is like the third time this guy;s done this with the same 262 PR, so i dunno what he’s thinking
+
+[10:47:49.0956] <ljharb>
+> <@jmdyck:matrix.org> ljharb: Given `Let _e_ be Record {}. If _e_ is a Property Descriptor, then ...`, are you thinking that the condition would succeed?
+
+it does, right now, to my reading.
+
+[10:49:58.0792] <jmdyck>
+So you think "is a Foo Record" could be true of any record, regardless of how created, as long as it only has fields that a Foo Record can have?
+
+[10:51:20.0786] <ljharb>
+yes, we have structural not nominal typing on records
+
+[10:53:07.0502] <jmdyck>
+What suggests this to you?
+
+[10:56:59.0636] <bakkot>
+well, we do for property descriptors specifically per the introductory paragraph of https://tc39.es/ecma262/multipage/ecmascript-data-types-and-values.html#sec-property-descriptor-specification-type
+
+[10:57:42.0071] <bakkot>
+I think/hope that everywhere else in the spec the difference would be never be observable; we're not really switching on the types of internal records much (ever?)
+
+[10:58:42.0160] <shu>
+there're a few places around Reference Records, and class fields
+
+[10:59:02.0581] <shu>
+but yes i also hope the difference is never observable
+
+[11:00:02.0254] <shu>
+more specifically i hope, for named records, we never create record literals without the name (but with all the fields) and use it like the named records
+
+[11:02:28.0308] <bakkot>
+ooh, found one but it's silly https://tc39.es/ecma262/multipage/fundamental-objects.html#sec-symbol.for
+
+[11:02:55.0535] <jmdyck>
+bakkot: you're saying that that intro paragraph says that property descriptors have structural not nominal typing?
+
+[11:03:30.0674] <shu>
+oh boo but at least it's right above the table
+
+[11:03:32.0636] <bakkot>
+jmdyck that's my reading of it yes:
+
+> Property Descriptor values may be further classified as data Property Descriptors and accessor Property Descriptors based upon the existence or use of certain fields
+
+[11:04:58.0617] <bakkot>
+I also really dislike the reference to the ambient "GlobalSymbolRegistry List" in `Symbol.for`
+
+[11:05:02.0067] <bakkot>
+I'm sure Michael Ficarra dislikes it more
+
+[11:05:03.0771] <jmdyck>
+oh, the *second* paragraph, hm.
+
+[11:05:27.0726] <bakkot>
+oh sorry yes
+
+[11:06:26.0456] <shu>
+but it really is so global
+
+[11:06:32.0076] <shu>
+it transcends all realms
+
+[11:06:38.0801] <bakkot>
+yes but we should `<dfn>` it or something at the very least
+
+[11:07:17.0669] <shu>
+yeah, and... i guess we should also build in locking?
+
+[11:07:41.0466] <bakkot>
+oh yeah fun
+
+[11:07:44.0188] <bakkot>
+we can just handwave that
+
+[11:07:57.0421] <bakkot>
+actually, would it be observable? they're not cloneable
+
+[11:08:06.0299] <bakkot>
+* actually, would it be observable? they're not structured-cloneable
+
+[11:09:20.0093] <jmdyck>
+(GlobalSymbolRegistry is called out in MF's 2724: https://github.com/tc39/ecma262/issues/2724#issuecomment-1093579455)
+
+[11:09:30.0546] <bakkot>
+ah, good good
+
+[11:10:09.0564] <shu>
+i didn't realize they weren't actually
+
+[11:10:48.0053] <bakkot>
+symbols aren't cloneable at all
+
+[11:10:54.0664] <bakkot>
+it's a bit silly
+
+[11:10:59.0413] <bakkot>
+registered symbols probably should be
+
+[11:11:25.0928] <bakkot>
+https://html.spec.whatwg.org/multipage/structured-data.html#structuredserializeinternal step 5
+
+[11:12:53.0936] <shu>
+that is eminently silly yes
+
+[11:19:32.0370] <jmdyck>
+I think you can read the second para of 6.2.6 as classifying values that you've already established are Property Descriptors. So it doesn't address whether an empty schema-less Record qualifies as a Property Descriptor.
+
+[11:22:16.0333] <bakkot>
+right, yeah; by "we have structural typing for property descriptors" I meant only "within the property descriptor type we have structural typing", not that we have it for discriminating property descriptors from other kinds of things
+
+[11:32:53.0891] <jmdyck>
+okay, so to the question of `Given Let _e_ be Record {}. If _e_ is a Property Descriptor, then ...`, does the condition succeed, your answer is (roughly): the spec doesn't say, and I hope there's never a case where we'd need an answer ?
+
+[11:33:34.0512] <jmdyck>
+(such a case would be an editorial error?)
+
+[11:34:59.0522] <bakkot>
+correct
+
+[11:35:24.0983] <bakkot>
+though the one case in `Symbol.for` needs fixing for that to be strictly true
+
+[11:35:54.0985] <jmdyck>
+i don't understand the Symbol.for example.
+
+[11:36:01.0158] <jmdyck>
+what exactly?
+
+[11:36:27.0686] <bakkot>
+we create a record with specific fields, and do not call out that it is a GlobalSymbolRegistry Record, and then put it in a list of GlobalSymbolRegistry Records
+
+[11:36:55.0745] <shu>
+jmdyck, specifically step 5
+
+[11:36:56.0104] <bakkot>
+this implies that an anonymous Record having the fields of a GlobalSymbolRegistry Record is sufficient to _be_ a GlobalSymbolRegistry Record, i.e., it implies we are using structural typing for records
+
+[11:44:56.0162] <jmdyck>
+gotcha.
+
+[11:45:20.0541] <jmdyck>
+In my static analysis, that's the only error of that kind.
+
+[11:47:13.0191] <jmdyck>
+It goes back to ES6.
+
+[11:51:03.0970] <jmdyck>
+Re GlobalSymbolRegsitry transcending all realms, see https://github.com/tc39/ecma262/issues/824
+
+[11:54:05.0081] <shu>
+wait, _does_ each agent have its own registry?
+
+[11:54:27.0244] <shu>
+i thought it was truly global to the agent cluster, but i may be misremembering since i also thought this was observable (but turns out it isn't due to structured cloning not working)
+
+[11:54:54.0404] <bakkot>
+all we know is "The GlobalSymbolRegistry is an append-only List that is globally available. It is shared by all realms."
+
+[11:54:59.0252] <jmdyck>
+* Re GlobalSymbolRegistry transcending all realms, see https://github.com/tc39/ecma262/issues/824
+
+[11:55:30.0291] <bakkot>
+I would parse "globally available" as meaning "across agent" but it's not observable so /shrug
+
+[12:12:51.0896] <jmdyck>
+AWB thought that GlobalSymbolRegistry was per-Agent: https://github.com/tc39/ecma262/issues/882#issuecomment-293334655, which was quoted in issue 1357.
+
+[13:11:17.0764] <ljharb>
+even without that section, if i make a record and give it all the slots of an X record, how is it not thus an X record?
+
+[13:12:29.0581] <Michael Ficarra>
+@ljharb:matrix.org we just try not to do that
+
+[13:12:55.0574] <Michael Ficarra>
+if something needs a record of a particular kind, I construct it with that in mind
+
+[13:22:37.0050] <jmdyck>
+ljharb: you have a mental model in which it is, I have a mental model in which it is not. The spec appears to be non-committal / allow both.
+
+[13:22:56.0039] <ljharb>
+i totally get we'd try not to do that
+
+[13:23:14.0251] <ljharb>
+but if the spec allows for structural, then it can't possibly be nominal
+
+[13:24:34.0509] <ljharb>
+* but if the spec allows for structural, then it can't possibly be nominal, mental models notwithstanding
+
+[13:24:47.0525] <ljharb>
+(i'm fine with making one or the other explicit, to be clear)
+
+[13:25:05.0123] <jmdyck>
+how do you figure "can't possibly be"?
+
+[13:25:54.0570] <ljharb>
+because if it's allowed to not be nominal, then it's not nominal?
+
+[13:26:25.0584] <ljharb>
+iow there's nothing in the spec preventing me passing a normal empty record where a Property Descriptor is allowed, ∴ it's allowed
+
+[13:26:44.0259] <jmdyck>
+the editors might prevent that.
+
+[13:27:57.0982] <jmdyck>
+deeming it an editorial error.
+
+[13:31:18.0052] <bakkot>
+anything pattern the spec doesn't do or give meaning to is something with no meaning
+
+[13:32:27.0957] <bakkot>
+it's a document
+
+[13:32:49.0317] <bakkot>
+you can write whatever words you want but you can't rely on readers knowing what those words mean unless they're unambiguous or spelled out
+
+[13:33:17.0657] <bakkot>
+you can't just say "I knew it was structural when I was writing it so it's fine" and assume the reader will also know that
+
+[13:34:35.0313] <jmdyck>
+Whether the spec lets you pass a schemaless empty Record where a Property Descriptor is allowed is basically the same question as whether the condition succeeds in `Let _e_ be Record {}. If _e_ is a Property Descriptor, then ...`. And bakkot says the spec does not answer that question, and shouldn't need to.
+
+[13:34:37.0447] <bakkot>
+fortunately as long as we never introduce a place where it would matter we'll never have to clarify which it is
+
+[13:40:32.0773] <jmdyck>
+If you could write arbitrary pseudo-code and some procedure had to give you the result, *then* the question would need to have an answer. But that's not the situation.
+
+[13:48:09.0511] <jmdyck>
+My static-analysis code would complain if it saw such a thing. Don't know about esmeta.
+
+[14:03:38.0556] <ljharb>
+downstream specs could, though, so i still think it's worth clarifying
+
+[15:00:04.0170] <bakkot>
+downstream specs can do lots of things we'd rather they not do but we shouldn't make it easier for them
+
+[15:28:38.0125] <ljharb>
+i agree, i'm not asking for that :-)
+
+[15:29:06.0676] <ljharb>
+i'm asking to make it harder for them by making records nominal, and/or making an empty record not be a property descriptor
+
+[15:50:37.0190] <bakkot>
+explicitly making records nominal would let downstream specs rely on records being nominal, which we don't want them to do
+
+[15:54:50.0453] <jmdyck>
+hm. what would it look like to "rely on records being nominal"? What could someone write that you wouldn't like?
+
+[15:59:40.0519] <ljharb>
+ok, then explicitly make them structural, and still make an empty record not be anything
+
+
+2025-01-15
+[16:18:51.0637] <bakkot>
+explicitly make them structural would let downstream specs rely on records being structural, which we don't want them to do
+
+[16:20:09.0793] <bakkot>
+they could have an algorithm which takes either a Foo Record or a Bar Record, possibly where those have the same fields, and then say "If _arg_ is a Foo Record, then..."
+
+[17:25:19.0405] <jmdyck>
+tx
+
+[18:03:05.0861] <ljharb>
+they currently can rely on them being either, and we can't prevent one without enshrining the other
+
+[18:03:46.0412] <bakkot>
+we can't prevent anything
+
+[18:03:51.0955] <bakkot>
+they're just documents
+
+[18:03:56.0152] <bakkot>
+you can put whatever words you want in them
+
+[18:04:31.0518] <ljharb>
+you just said "would let", which is the same as "would prevent"
+
+[18:04:36.0304] <ljharb>
+if we can let, we can prevent :-)
+
+[18:04:54.0365] <bakkot>
+by "would let" I mean to say "would imply it's ok"
+
+[18:05:10.0672] <bakkot>
+nothing currently implies it is either OK or forbidden because it simply does not come up at all
+
+[18:05:18.0022] <bakkot>
+I don't want to start implying it is OK to do either
+
+[18:05:49.0306] <bakkot>
+and I don't want to write a rule in our spec which says "downstream specs should not do either of these" because that's a silly thing to put in our spec
+
+[18:06:04.0189] <bakkot>
+though it could reasonably be written down in the editorial conventions document Michael Ficarra keeps threatening to write
+
+[18:34:34.0072] <jmdyck>
+a document distinct from https://github.com/tc39/ecma262/wiki/Editorial-Conventions ?
+
+[19:34:45.0691] <bakkot>
+nope that one I just forgot he'd made it already
+
+[05:40:31.0059] <Michael Ficarra>
+the document can use some cleanup and further explanation, but it's actually fairly complete IMO
+
+[07:46:44.0305] <shu>
+gotta get it out of the wiki
+
+[07:46:49.0989] <shu>
+i also forgot the wiki even exists
+
+[08:51:29.0195] <ljharb>
+that's what assertions already are (that's not the only thing they are, ofc)
+
+[08:52:09.0844] <bakkot>
+they sometimes provide that function but if that was the only function they provided we would not have them
+
+[08:52:34.0645] <bakkot>
+we don't add assertions just to constrain other specs
+
+[09:59:56.0244] <ljharb>
+we add host hooks for that purpose
+
+[10:00:23.0790] <ljharb>
+i'm really surprised you don't think there's intrinsic value in setting boundaries for implementors of the spec
+
+[10:03:37.0592] <bakkot>
+I don't know how you got that from what I said
+
+[10:04:43.0030] <bakkot>
+we set boundaries for implementors of the spec all the time. that's basically all the spec is. but asserts are not how we do that. when we want to constrain the normative behavior available to a downstream specification we write down, normatively, what the constraints are. see, for example, the constraints in HostEnqueuePromiseJob: https://tc39.es/ecma262/multipage/executable-code-and-execution-contexts.html#sec-hostenqueuepromisejob
+
+[10:05:50.0843] <bakkot>
+but "don't treat records as having either structural or nominal type" is not a boundary for implementors. it's an editorial convention we would prefer other spec authors who are re-using our specification machinery to follow. it has no implications for the world.
+
+[10:08:24.0409] <bakkot>
+we have no control over how people write other specifications. we can provide guidance. we can set things up in our spec so that it is easier or harder to re-use our spec machinery in particular ways. we can place restrictions on what _normative_ behaviors are allowed in order to qualify as a valid implementation of our spec. but we can't tell people what words they're allowed to write down.
+
+[10:11:38.0957] <bakkot>
+(incidentally, the spec is very explicit that asserts are just for clarification, like any other comment. https://tc39.es/ecma262/multipage/notational-conventions.html#assert )
+
+[10:12:53.0033] <ljharb>
+gotcha, that makes sense
+
+[10:13:31.0675] <ljharb>
+to reiterate i don't really care if records are structural or nominal or neither/both. the thing that seems bizarre to me is that an empty record is technically a property descriptor
+
+[10:15:56.0968] <bakkot>
+my advice is to just not think about it
+
+[10:19:13.0013] <Michael Ficarra>
+FWIW I also don't like that and would probably prefer a refactoring of how we represent property descriptors
+
+[10:19:24.0424] <Michael Ficarra>
+but it's good enough that I'm not motivated to do it
+
+[10:41:06.0653] <ljharb>
+alright
+
+[11:34:16.0577] <jmdyck>
+Which seems more bizarre, that an empty record is a property descriptor, or that records are nominal? You can make the former go away if you imagine the latter. 
+
+[11:53:25.0843] <bakkot>
+my advice to michael is also to just not think about it
+
+[11:56:33.0505] <shu>
+i love not thinking about things
+
+[15:35:46.0877] <jmdyck>
+Dang, I completely forgot about the call.
+
+[15:36:52.0962] <jmdyck>
+(Hm, I should have got a reminder...)
+
+
+2025-01-16
+[16:29:42.0583] <Michael Ficarra>
+that's okay, just about everything discussed in the call should have come across as github notifications
+
+
+2025-01-23
+[22:05:07.0309] <bakkot>
+ljharb: for https://github.com/tc39/ecma262/pull/3379 can you add in the suggested change when landing?
+
+[22:11:30.0573] <ljharb>
+thanks for the ping, done
+
+
+2025-01-27
+[10:22:22.0784] <bakkot>
+shu: https://github.com/tc39/ecma262/pull/3411 is a quick one when you have a minute
+
+[10:22:30.0559] <bakkot>
+pure local refactoring, shouldn't require any context
+
+
+2025-01-29
+[14:31:48.0715] <bakkot>
+running a couple minutes late, sorry
+

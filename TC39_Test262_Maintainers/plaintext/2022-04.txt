@@ -1,0 +1,358 @@
+2022-04-05
+[15:30:00.0926] <sarahghp>
+Hi friends! I will be out again this Thursday (doin' art) and so I will miss the call again. I took a look at the notes, and I agree the RFC process makes sense. 
+
+I need to look at our derivative RFC of course to see if there a few things I'd change, but generally seems like a good plan. I trust Philip to represent for everything else, and I look back to being on a call with you all soon. 
+
+
+2022-04-07
+[11:10:07.0675] <Rick Waldron>
+lol, whoops. I didn't mean to reply to a post
+
+[11:10:09.0740] <Rick Waldron>
+I'm in a meeting that's running over. I will join ours asap
+
+[11:10:21.0125] <Rick Waldron>
+@room ^^
+
+[11:10:40.0604] <ljharb>
+so far it's just three of us
+
+[11:15:16.0473] <ljharb>
+https://github.com/tc39/ecma262/pulls?q=is%3Aopen+is%3Apr+label%3A%22needs+tests%22+label%3A%22has+consensus%22
+
+[11:15:44.0685] <ljharb>
+ * https://github.com/tc39/ecma262/pulls?q=is%3Aopen+is%3Apr+label%3A%22needs+tests%22+label%3A%22has+consensus%22
+
+[11:23:27.0884] <ljharb>
+https://github.com/tc39/ecma262/issues/2170
+
+[11:26:02.0510] <ptomato>
+http://ptomato.name/talks/tc39-2022-03/#21
+
+[16:36:43.0400] <ptomato>
+something I forgot to put on the agenda this morning, re https://github.com/tc39/Admin-and-Business/issues/216, is it significant which ECMA member is Mike's official sponsor or do we just need to arbitrarily pick Salesforce or Igalia?
+
+
+2022-04-08
+[10:28:37.0379] <Richard Gibson>
+sorry for missing yesterday, I got pulled into a conflicting meeting
+
+[14:25:34.0025] <ljharb>
+> <@pchimento:igalia.com> something I forgot to put on the agenda this morning, re https://github.com/tc39/Admin-and-Business/issues/216, is it significant which ECMA member is Mike's official sponsor or do we just need to arbitrarily pick Salesforce or Igalia?
+
+i don't think it's significant; i think ecma just needs to write something into field on their form
+
+
+2022-04-12
+[08:49:02.0660] <ptomato>
+any reason not to remove the graaljs job from CI? it seems to be consistently broken
+
+
+2022-04-14
+[09:52:51.0777] <Rick Waldron>
+I saw that it's passing now
+
+[09:53:17.0733] <Rick Waldron>
+@room just a heads up that I cannot attend today's meeting and I'm out on PTO tomorrow
+
+[09:53:33.0017] <Rick Waldron>
+Please have meeting without me and I will catch up via notes
+
+
+2022-04-21
+[12:02:16.0801] <sarahghp>
+Followup from the meeting. Since we have mostly meaty topics left and I am going to be away next week, should we make next week an async / work on issues meeting and reconvene Thursday May 5?
+
+➕ yes
+😭 no I will miss everyone
+
+[12:06:51.0588] <sarahghp>
+ * Followup from the meeting. Since we have mostly meaty topics left and I am going to be away next week, should we make next week an async / work on issues meeting and reconvene Thursday May 5?
+
+➕ yes
+
+😭 no I will miss everyone
+
+⚙️ half-hour task check-in
+
+[12:06:58.0928] <sarahghp>
+ * Followup from the meeting. Since we have mostly meaty topics left and I am going to be away next week, should we make next week an async / work on issues meeting and reconvene Thursday May 5?
+
+➕ yes
+
+😭 no I will miss everyone
+
+⚙️ half-hour task check-in
+
+
+
+2022-04-25
+[21:53:25.0557] <ljharb>
+any chance we could add a test feature for "IsConstructor checks"? basically all of them use `parseInt` as a canonical non-constructor function, but when testing all my polyfills, a) i shim parseInt, and b) non-constructor-ness can't be shimmed, so i'd like to skip all such tests.
+
+i'd be happy to make the PR if that's the kind of feature flag that's acceptable :-)
+
+[08:57:58.0306] <ptomato>
+that is a problem that I've heard other polyfills having as well
+
+[09:02:34.0277] <Richard Gibson>
+What do you mean by "basically all of them use parseInt as a canonical non-constructor function"? I see only minimal overlap:
+
+```sh
+$ git grep -l isConstructor '*.js' | xargs grep -l parseInt
+test/built-ins/Number/parseInt/not-a-constructor.js
+test/built-ins/parseInt/not-a-constructor.js
+```
+
+I'm also not sure what you mean by "can't be shimmed", because neither arrow functions nor those returned by `Function.prototype.call.bind(fn)` are \[\[Construct\]\]able (although in both cases access to the receiver is lost, so maybe that's the problem?).
+
+Regardless, it does seem reasonable to have a feature flag for the checks, but doesn't it already exist as `Reflect.construct`?
+
+```sh
+$ git grep -l isConstructor test/ | \
+  xargs sed -n '/^features:/,/^---/ { s/[*][/]$//; p }' | \
+  python3 -c "$(printf 'import sys,yaml\nfor doc in yaml.safe_load_all(sys.stdin):\n if doc:\n  print("\x1F".join(doc["features"]))\n')" | \
+  awk 'BEGIN { FS="\x1F" } { for(i=1; i<=NF; i++) m[$i]++; } END { for(flag in m) print m[flag], flag; print NR, "TOTAL" }' | \
+  sort -n | \
+  tail
+13 SharedArrayBuffer
+14 Reflect
+16 Symbol
+21 DataView
+24 ArrayBuffer
+51 TypedArray
+175 Temporal
+383 arrow-function
+623 Reflect.construct
+623 TOTAL
+```
+
+[09:03:35.0458] <Richard Gibson>
+ * What do you mean by "basically all of them use parseInt as a canonical non-constructor function"? I see only minimal overlap:
+
+```sh
+$ git grep -l isConstructor '*.js' | xargs grep -l parseInt
+test/built-ins/Number/parseInt/not-a-constructor.js
+test/built-ins/parseInt/not-a-constructor.js
+```
+
+I'm also not sure what you mean by "can't be shimmed", because neither arrow functions nor those returned by `Function.prototype.call.bind(fn)` are \[\[Construct\]\]able (although in both cases access to the receiver is lost, so maybe that's the problem?).
+
+Regardless, it does seem reasonable to have a feature flag for the checks, but doesn't it already exist as `Reflect.construct`?
+
+```sh
+$ git grep -l isConstructor test/ | \
+  xargs sed -n '/^features:/,/^---/ { s/[*][/]$//; p }' | \
+  python3 -c "$(printf 'import sys,yaml\nfor doc in yaml.safe_load_all(sys.stdin):\n  if doc:\n    print("\x1F".join(doc["features"]))\n')" | \
+  awk 'BEGIN { FS="\x1F" } { for(i=1; i<=NF; i++) m[$i]++; } END { for(flag in m) print m[flag], flag; print NR, "TOTAL" }' | \
+  sort -n | \
+  tail
+13 SharedArrayBuffer
+14 Reflect
+16 Symbol
+21 DataView
+24 ArrayBuffer
+51 TypedArray
+175 Temporal
+383 arrow-function
+623 Reflect.construct
+623 TOTAL
+```
+
+[09:03:58.0443] <Richard Gibson>
+ * What do you mean by "basically all of them use parseInt as a canonical non-constructor function"? I see only minimal overlap:
+
+```sh
+$ git grep -l isConstructor '*.js' | xargs grep -l parseInt
+test/built-ins/Number/parseInt/not-a-constructor.js
+test/built-ins/parseInt/not-a-constructor.js
+```
+
+I'm also not sure what you mean by "can't be shimmed", because neither arrow functions nor those returned by `Function.prototype.call.bind(fn)` are \[\[Construct\]\]able (although in both cases access to the receiver is lost, so maybe that's the problem?).
+
+Regardless, it does seem reasonable to have a feature flag for the checks, but doesn't it already exist as `Reflect.construct`?
+
+```sh
+$ git grep -l isConstructor test/ | \
+  xargs sed -n '/^features:/,/^---/ { s/[*][/]$//; p }' | \
+  python3 -c "$(printf 'import sys,yaml\nfor doc in yaml.safe_load_all(sys.stdin):\n if doc:\n  print("\x1F".join(doc["features"]))\n')" | \
+  awk 'BEGIN { FS="\x1F" } { for(i=1; i<=NF; i++) m[$i]++; } END { for(flag in m) print m[flag], flag; print NR, "TOTAL" }' | \
+  sort -n | \
+  tail
+13 SharedArrayBuffer
+14 Reflect
+16 Symbol
+21 DataView
+24 ArrayBuffer
+51 TypedArray
+175 Temporal
+383 arrow-function
+623 Reflect.construct
+623 TOTAL
+```
+
+[09:04:00.0265] <ljharb>
+bound functions are constructible, and arrows can’t be made in polyfills that support older engines
+
+[09:04:22.0625] <ljharb>
+indeed “all” may have been an exaggeration, but there’s a bunch in other filenames - species things, eg
+
+[09:04:54.0923] <ljharb>
+I’d be happy to use Reflect.construct as the feature flag for those missing it, but that seems specific to that reflect method, versus a generic “non-constructibles” thing
+
+[09:07:15.0847] <Richard Gibson>
+bound functions in general can be constructible, but those returned by `Function.prototype.call.bind(…)` are not because `Function.prototype.call` is not
+
+[09:10:32.0092] <Richard Gibson>
+but at any rate, it is true that the `Reflect.construct` feature is used for more than just isConstructor checks
+
+[09:13:08.0135] <ljharb>
+ooh, good point. perhaps test262 could use call instead of parseint as its non-constructible? nothing ever tries to shim call
+
+[09:13:19.0986] <ljharb>
+that would immediately make a bunch of currently failing tests start passing for me
+
+[09:15:58.0421] <Richard Gibson>
+what do you mean by "as its non-constructible"—where do you want a switch from `parseInt` to `call`?
+
+[09:31:31.0156] <Richard Gibson>
+looking at the 164 test files that include `Reflect.construct` but not `isConstructor` (`git grep -lF 'Reflect.construct' test/ | grep -vF "$(git grep -l isConstructor test/)"`), I retract my implication that the `Reflect.construct` flag covers this
+
+[09:32:04.0268] <Richard Gibson>
+ * looking at the 164 test files that include `Reflect.construct` but not `isConstructor` (`git grep -lF 'Reflect.construct' test/ | grep -vF "$(git grep -l isConstructor test/)"`), I retract my implication that the `Reflect.construct` flag covers this
+
+[09:43:48.0929] <Richard Gibson>
+but I think I would expect a maximally faithful polyfill to shim like `parseInt = bind(call, myParseInt)` rather than `parseInt = myParseInt` in order to ensure absence of [[Construct]]
+
+[09:54:46.0030] <ptomato>
+I think Jordan's point is that you can't do that if your polyfill targets certain obsolete environments
+
+[10:06:28.0152] <ljharb>
+^ that
+
+[10:06:41.0709] <ljharb>
+namely, every browser pre-arrow-functions. all my stuff still targets IE 6
+
+[10:07:28.0705] <ljharb>
+> <@gibson042:matrix.org> but I think I would expect a maximally faithful polyfill to shim like `parseInt = bind(call, myParseInt)` rather than `parseInt = myParseInt` in order to ensure absence of [[Construct]]
+
+a shim has to provide a *new* function, so it can't just bind the original. also, ES3 doesn't have `.bind`.
+
+[10:56:52.0807] <Richard Gibson>
+ES3 doesn't have `Reflect` either, so the test262 code at https://github.com/tc39/test262/blob/main/harness/isConstructor.js won't recognize _anything_ as constructible in such an environment. So to elaborate a bit, I think I would expect a maximally faithful ES3-compatible polyfill to shim like
+
+```js
+/*globalThis.*/parseInt = asNonConstructible(myParseInt);
+…
+function myParseInt(string, radix) { … }
+…
+function asNonConstructible(fn) {
+  if (nativeBind) {
+    // bind(nativeCall, fn) uses a derivatives of Function.prototype.bind with uncurried receiver
+    // to provide a robust version of Function.prototype.call.bind(fn)
+    // (i.e., returning a bound function that lacks [[Construct]] and calls fn with undefined receiver).
+    return bind(nativeCall, fn);
+  }
+
+  // In the absence of Function.prototype.bind, fall back to returning the provided function.
+  return fn;
+}
+```
+
+[10:57:15.0502] <Richard Gibson>
+ * ES3 doesn't have `Reflect` either, so the test262 code at https://github.com/tc39/test262/blob/main/harness/isConstructor.js won't recognize _anything_ as constructible in such an environment. So to elaborate a bit, I think I would expect a maximally faithful ES3-compatible polyfill to shim like
+
+```js
+/*globalThis.*/parseInt = asNonConstructible(myParseInt);
+…
+function myParseInt(string, radix) { … }
+…
+function asNonConstructible(fn) {
+  if (nativeBind) {
+    // bind(nativeCall, fn) uses derivatives of Function.prototype.{bind,call} with uncurried receiver
+    // to provide a robust version of Function.prototype.call.bind(fn)
+    // (i.e., returning a bound function that lacks [[Construct]] and calls fn with undefined receiver).
+    return bind(nativeCall, fn);
+  }
+
+  // In the absence of Function.prototype.bind, fall back to returning the provided function.
+  return fn;
+}
+```
+
+[10:57:52.0864] <Richard Gibson>
+ * ES3 doesn't have `Reflect` either, so the test262 code at https://github.com/tc39/test262/blob/main/harness/isConstructor.js won't recognize _anything_ as constructible in such an environment. So to elaborate a bit, I think I would expect a maximally faithful ES3-compatible polyfill to shim like
+
+```js
+/*globalThis.*/parseInt = asNonConstructible(myParseInt);
+…
+function myParseInt(string, radix) { … }
+…
+function asNonConstructible(fn) {
+  if (nativeBind) {
+    // bind(nativeCall, fn) uses a derivatives of Function.prototype.bind with uncurried receiver
+    // to provide a robust version of Function.prototype.call.bind(fn)
+    // (i.e., returning a bound function that lacks [[Construct]] and calls fn with undefined receiver).
+    return bind(nativeCall, fn);
+  }
+
+  // In the absence of Function.prototype.bind, fall back to returning the provided function.
+  return fn;
+}
+```
+
+[12:14:40.0288] <ljharb>
+interesting
+
+[12:15:10.0933] <ljharb>
+but in the meantime i'd still want to skip those tests, and there's a bunch of `create-species-non-ctor.js` files that aren't easily skippable
+
+[12:30:10.0881] <ptomato>
+another option in the meantime could be to maintain an "expected failures" file that you use when reporting your test results
+
+[12:30:21.0871] <ptomato>
+it'd be annoying to update it manually, but maybe there's some way to generate it
+
+
+2022-04-26
+[19:08:37.0116] <ljharb>
+i kind of already have that because test262-harness forces me to make a preprocessor to do anything useful
+
+[19:09:38.0512] <ljharb>
+but what do yall prefer: a) nothing, jordan is just sad, b) replace all the `parseInt`s with `Function.prototype.call`s, c) tag all the tests relying on non-constructibility with a new made-up feature flag?
+
+[20:15:17.0200] <ptomato>
+to me a feature flag doesn't sound out of place; it may not be an engine capability that's being selected for, but a polyfill capability
+
+[20:32:39.0044] <sarahghp>
+while a is terribly tempting, I do think a feature flag is more expressive and therefore preferable to implicit changes, like b, where understanding the choice is predicated on deeper knowledge
+
+[22:40:47.0070] <ljharb>
+sounds good, i'll make a feature flag PR
+
+[15:38:40.0910] <Richard Gibson>
+I also prefer c, but still have a question about b: what `parseInt`s would be replaced with `Function.prototype.call`?
+
+[15:38:53.0273] <Richard Gibson>
+> <@ljharb:matrix.org> but what do yall prefer: a) nothing, jordan is just sad, b) replace all the `parseInt`s with `Function.prototype.call`s, c) tag all the tests relying on non-constructibility with a new made-up feature flag?
+
+ * I also prefer c, but still have a question about b: what `parseInt`s would be replaced with `Function.prototype.call`?
+
+[15:42:36.0202] <ljharb>
+the `non-ctor` tests mainly
+
+[15:48:56.0232] <ljharb>
+went with this: https://github.com/tc39/test262/pull/3504
+
+
+2022-04-29
+[18:07:21.0330] <ptomato>
+the Rust RFC process suggests "pre-discussing" RFCs on their forums, maybe it's an idea to have a "test262" area of https://es.discourse.group/ ?
+
+[18:25:57.0100] <ljharb>
+Is there enough interest in test262 to warrant that? Totally fine to create it tho
+
+[18:36:25.0606] <ptomato>
+probably not immediately, but if we get uptake of the RFC process and more community involvement, we might find it's useful
+

@@ -1,0 +1,526 @@
+2023-10-02
+[15:16:19.0340] <TabAtkins>
+Sorry, I don't want to test this if someone already has the knowledge off-hand: if you array-destructure an actual array, does it invoke the iterator protocol or just yoink from the numbered properties directly. and does this apply to array-likes as well?
+
+[15:25:49.0473] <Richard Gibson>
+> <@tabatkins:matrix.org> Sorry, I don't want to test this if someone already has the knowledge off-hand: if you array-destructure an actual array, does it invoke the iterator protocol or just yoink from the numbered properties directly. and does this apply to array-likes as well?
+
+yes to both; array-destructuring is defined to depend upon the iterator protocol (which for most built-ins, particularly including `Array.prototype`, is mutable by ECMAScript code)
+DestructuringAssignmentEvaluation
+
+[15:26:01.0728] <Richard Gibson>
+> <@tabatkins:matrix.org> Sorry, I don't want to test this if someone already has the knowledge off-hand: if you array-destructure an actual array, does it invoke the iterator protocol or just yoink from the numbered properties directly. and does this apply to array-likes as well?
+
+ * yes to both; array-destructuring is defined to depend upon the iterator protocol (which for most built-ins, particularly including `Array.prototype`, is mutable by ECMAScript code)
+[DestructuringAssignmentEvaluation](https://tc39.es/ecma262/multipage/ecmascript-language-expressions.html#sec-runtime-semantics-destructuringassignmentevaluation)
+
+[15:27:05.0443] <TabAtkins>
+k, cool
+
+[15:27:30.0553] <TabAtkins>
+that means i don't need to worry about making this more efficient in another proposal ^_^
+
+[16:00:47.0833] <bakkot>
+for this reason you will sometimes see people doing `let {0: x, 1: y} = array`, because it skips the iterator protocol
+
+[16:13:53.0558] <Richard Gibson>
+aw crud, it looks like every implementation diverges from the spec for `const [] = …`
+```
+$ eshost -sx '
+  "use strict"; 
+  const arr = ["a", "b", "c"];
+  Object.defineProperty(Array.prototype, Symbol.iterator, {
+    get() {
+      print("get Symbol.iterator", this);
+      return function*() { 
+        print("@@iterator", this, ...arguments);
+        for (let i = 0; i < this.length; i++) { 
+          const v = this[i];
+          print("yield", v); 
+          yield v; 
+        } return; 
+      }; 
+    }, 
+  }); 
+  print("\n# read all"); const [...all] = arr; 
+  print("\n# read one"); const [first] = arr; 
+  print("\n# read none"); const [] = arr; 
+  print("\n" + JSON.stringify({ first, all }));
+'
+#### ChakraCore, engine262, GraalJS, Hermes, JavaScriptCore, Moddable XS, QuickJS, SpiderMonkey, V8
+# read all
+get Symbol.iterator a,b,c
+@@iterator a,b,c
+yield a
+yield b
+yield c
+
+# read one
+get Symbol.iterator a,b,c
+@@iterator a,b,c
+yield a
+
+# read none
+get Symbol.iterator a,b,c
+
+{"first":"a","all":["a","b","c"]}
+```
+
+(_all three should invoke `@@iterator` and get `next` in [GetIteratorFromMethod](https://tc39.es/ecma262/multipage/abstract-operations.html#sec-getiteratorfrommethod) via [GetIterator](https://tc39.es/ecma262/multipage/abstract-operations.html#sec-getiterator)_)
+
+[16:34:11.0847] <bakkot>
+I suspect that's due to implementing the spec as it was prior to https://github.com/tc39/ecma262/pull/1021, and then only doing the update necessary to make https://github.com/tc39/test262/pull/1248 pass
+
+[16:40:47.0959] <bakkot>
+wait, no
+
+[16:40:53.0463] <bakkot>
+Richard Gibson your test is just wrong
+
+[16:40:56.0733] <bakkot>
+generators don't do anything when invoked
+
+[16:41:15.0727] <bakkot>
+(except evaluate parameter defaults IIRC)
+
+[16:41:18.0019] <bakkot>
+they only do something when you first call `next`
+
+[16:41:56.0160] <bakkot>
+```
+"use strict";
+const arr = ["a", "b", "c"];
+Object.defineProperty(Array.prototype, Symbol.iterator, {
+  get() {
+    print("get Symbol.iterator", this);
+    let thiz = this;
+    return function() {
+      print("@@iterator", this, ...arguments);
+      let i = 0;
+      return {
+        get next() {
+          print("get next");
+          return () => {
+            return i >= thiz.length ? { done: true } : { done: false, value: thiz[i++] };
+          };
+        },
+      };
+    };
+  },
+});
+print("\n# read all"); const [...all] = arr;
+print("\n# read one"); const [first] = arr;
+print("\n# read none"); const [] = arr;
+print("\n" + JSON.stringify({ first, all }));
+```
+gives
+```
+# read none
+get Symbol.iterator a,b,c
+@@iterator a,b,c
+get next
+```
+in all engines, just as it should
+
+[16:44:46.0653] <Richard Gibson>
+phew
+
+[16:52:49.0360] <Richard Gibson>
+well, not _all_ engines: https://github.com/Moddable-OpenSource/moddable/issues/1223
+
+[16:58:00.0610] <bakkot>
+ah yeah I don't have xs installed I guess
+
+
+2023-10-03
+[14:50:50.0455] <James M Snell>
+Hello all. I've got a proposal that I'd like to surface for consideration. I put this together after speaking a bit with Matteo Collina and @ljharb... The fundamental idea is to introduce a mechanism for zero-copy concatenation of `ArrayBuffer` in a way that allows the result to still be an `ArrayBuffer` that can be wrapped with a `TypedArray`. The explainer is here: https://github.com/jasnell/proposal-zero-copy-arraybuffer-list/blob/main/README.md
+
+For a quick example:
+
+const ab1 = new ArrayBuffer(10);
+const ab2 = new ArrayBuffer(20);
+const combined = ArrayBuffer.of(ab1, ab2);
+
+Here, `combined` is effectively a list of the component `ArrayBuffer` instances that is itself an `ArrayBuffer`.
+
+The idea here is adapted from the very popular npm module `bl` which implements a similar idea around Node.js `Buffer` interface but in a way that still has a number of warts.
+
+There is a more detailed example in the explainer. @littledan and ljharb have already graciously provided some extremely helpful feedback.
+
+[14:51:29.0799] <James M Snell>
+ * Hello all. I've got a proposal that I'd like to surface for consideration. I put this together after speaking a bit with Matteo Collina and @ljharb... The fundamental idea is to introduce a mechanism for zero-copy concatenation of `ArrayBuffer` in a way that allows the result to still be an `ArrayBuffer` that can be wrapped with a `TypedArray`. The explainer is here: https://github.com/jasnell/proposal-zero-copy-arraybuffer-list/blob/main/README.md
+
+For a quick example:
+
+const ab1 = new ArrayBuffer(10);
+const ab2 = new ArrayBuffer(20);
+const combined = ArrayBuffer.of(ab1, ab2);
+const u8 = new Uint8Array(combined);
+
+Here, `combined` is effectively a list of the component `ArrayBuffer` instances that is itself an `ArrayBuffer`.
+
+The idea here is adapted from the very popular npm module `bl` which implements a similar idea around Node.js `Buffer` interface but in a way that still has a number of warts.
+
+There is a more detailed example in the explainer. @littledan and ljharb have already graciously provided some extremely helpful feedback.
+
+[14:54:50.0704] <bakkot>
+cc shu ^ as the arraybuffer guy
+
+[14:57:15.0874] <bakkot>
+I know very little about engine internals, but from my own limited perspective, I can say that this seems useful but the cost of making ArrayBuffer fundamentals more complex is usually quite high, so it may not be worth it. It would mean a branch in every access of every TA, or a fair bit of optimization work to avoid that branch.
+
+[15:00:26.0204] <James M Snell>
+Indeed, I do not imagine and won't pretend that the implementation would be trivial. Just the fact, for instance, that v8's internal implementation of `v8::ArrayBuffer` is backed by a single `v8::BackingStore` that is expected to be a single contiguous block of memory presents a challenge. However, I think there's enough potential benefit here that it should warrant at least some consideration and if the ultimate answer is it's not worth it, then so be it :-)
+
+[15:00:48.0427] <bakkot>
+Also, nit, I am not totally clear on what the utility of `subarray` is supposed to be
+
+[15:01:10.0713] <bakkot>
+you can't work with ArrayBuffers directly anyway; you have to use a TA. and TAs are already potentially partial views of an underlying buffer
+
+[15:07:02.0517] <James M Snell>
+Suppose I have two `Uint8Arrays` and I want to concat those with zero-copy, taking the byteOffset and byteLength properly into account. subarray would allow for... `new Uint8Array(ArrayBuffer.of(u8a.buffer.subarray(u8a.byteOffset, u8a.byteLength), u8b.buffer.subarray(u8b.byteOffset, u8a.byteLength)))`
+
+[15:07:49.0186] <James M Snell>
+Using the existing `ArrayBuffer.prototype.slice(...)` here instead would copy
+
+[15:08:08.0156] <bakkot>
+Ah, makes sense
+
+[15:09:24.0176] <bakkot>
+Does mean the underlying implementation would need to get even more complicated, but I guess the additional delta isn't that large
+
+
+2023-10-04
+[01:38:40.0145] <rkirsling>
+wait a sec
+
+[01:39:16.0566] <rkirsling>
+there actually is a surprising thing from that issue just now but it's not the part that the reporter was focused on
+
+[01:39:27.0892] <rkirsling>
+```
+function foo() {
+return
+{ x: 1 };
+}
+```
+is ASI, but
+
+[01:39:45.0277] <rkirsling>
+```
+function foo() {
+return
+{ x: 1, y: 2 };
+}
+```
+is a SyntaxError
+
+[01:40:22.0826] <rkirsling>
+oh oops right, that's true regardless of the `return`.
+
+[01:40:55.0128] <rkirsling>
+just an "object literal as expression statement" thing
+
+[01:48:03.0242] <Ashley Claymore>
+keyboards needed one more form of brackets so we could distinguish between blocks and objects 
+
+[01:49:51.0405] <rkirsling>
+need first-class 「」 😎
+
+[01:51:36.0123] <Andreu Botella>
+```
+function foo() {
+return
+⏞
+x: 1
+⏟ 
+}
+```
+
+
+2023-10-05
+[17:43:40.0009] <Mathieu Hofman>
+> <@jasnell:matrix.org> Hello all. I've got a proposal that I'd like to surface for consideration. I put this together after speaking a bit with Matteo Collina and @ljharb... The fundamental idea is to introduce a mechanism for zero-copy concatenation of `ArrayBuffer` in a way that allows the result to still be an `ArrayBuffer` that can be wrapped with a `TypedArray`. The explainer is here: https://github.com/jasnell/proposal-zero-copy-arraybuffer-list/blob/main/README.md
+> 
+> For a quick example:
+> 
+> const ab1 = new ArrayBuffer(10);
+> const ab2 = new ArrayBuffer(20);
+> const combined = ArrayBuffer.of(ab1, ab2);
+> const u8 = new Uint8Array(combined);
+> 
+> Here, `combined` is effectively a list of the component `ArrayBuffer` instances that is itself an `ArrayBuffer`.
+> 
+> The idea here is adapted from the very popular npm module `bl` which implements a similar idea around Node.js `Buffer` interface but in a way that still has a number of warts.
+> 
+> There is a more detailed example in the explainer. @littledan and ljharb have already graciously provided some extremely helpful feedback.
+
+Oh I've been wanting this for years. I think I wrote an issue somewhere!
+
+[17:50:46.0701] <Mathieu Hofman>
+I also still really want CoW ArrayBuffer slices. I still do not understand how it would introduce much more complexity than the existing detached checks already required.
+
+[18:03:04.0312] <Mathieu Hofman>
+Basically I want to be able to do 
+```js
+const chunks = [];
+chunks.push(chunk1.slice(10));
+chunks.push(chunk2);
+chunks.push(chunk3.slice(0, 5));
+return ArrayBuffer.of(...chunks);
+```
+Obviously each chunk is received in separate events / iterator yields
+
+[18:04:02.0004] <Mathieu Hofman>
+That said I do expect the new combined buffer to itself be a CoW
+
+[18:04:14.0841] <Mathieu Hofman>
+And not a passthrough to the underlying buffer
+
+[18:06:07.0397] <James M Snell>
+The proposal currently does not include CoW but I can't see a reason why it couldn't be. Will give that some thought
+
+[18:09:04.0054] <Mathieu Hofman>
+Btw, in that case it really become a `concat` and the fact that the buffer is in fact a list of smaller buffers is just an unobservable implementation detail
+
+[18:10:31.0138] <James M Snell>
+as long as we're able to preserve the zero-copy concat and zero-copy subarray, then I'm fine with that
+
+[18:10:46.0769] <Mathieu Hofman>
+Basically I'm really concerned about having multiple ArrayBuffer instances backed by the same underlying data. That's more in the realm of SharedArrayBuffer semantics
+
+[18:12:54.0619] <James M Snell>
+True, but to be fair host implementations already give us that ability
+
+[18:13:12.0805] <James M Snell>
+(obviously that doesn't mean we should make it easier :-) ...)
+
+[18:16:45.0651] <Mathieu Hofman>
+I don't believe any host APIs currently expose that ability, right? I know that JS APIs don't
+
+[18:18:20.0942] <Mathieu Hofman>
+Anyway, my motivation for CoW is that I believe it would increase the performance of a ton of existing applications without requiring any code changes
+
+[18:18:39.0329] <Mathieu Hofman>
+ * Anyway, my motivation for CoW is that I believe it would increase the performance of a ton of existing applications without requiring any code changes on their end
+
+[18:19:02.0950] <Mathieu Hofman>
+I think Luca Casonato shares that belief
+
+[18:19:44.0721] <James M Snell>
+With v8, it's fairly trivial to extract a `std::shared_ptr<v8::BackingStore>` and have it shared by multiple `v8::ArrayBuffer` instances
+
+[18:19:56.0503] <James M Snell>
+Not ideal, but trivial :-)
+
+[18:25:25.0067] <Luca Casonato>
+> <@mhofman:matrix.org> I think Luca Casonato shares that belief
+
+Yes, a general purpose CoW optimization for AB.slice would enable many host APIs to become significantly faster
+
+[18:27:14.0938] <Luca Casonato>
+I don’t think we necessarily need a new API here (I view concat as a related, but separate API - it can make sense with or without the CoW optimization)
+
+[18:27:52.0129] <Luca Casonato>
+The nice thing about CoW is that it’s completely unobservable
+
+[18:28:23.0829] <James M Snell>
+Yeah, I'd view the proposal for `ArrayBuffer.of(...)` and CoW as orthogonal. Both nice to have but distinct
+
+[18:29:33.0041] <James M Snell>
+If we could get CoW slice, however, there would be no need at all for the `ArrayBuffer.prototype.subarray(...)` that I suggest in the proposal
+
+[18:31:21.0945] <James M Snell>
+Also if we had CoW, an argument could be absolutely made also that `ArrayBuffer.of(...)` should automatically slice(0, len) to ensure that the new `ArrayBuffer` is composed entirely of CoW slices
+
+[18:41:09.0750] <Luca Casonato>
+I share Mathieu Hofman’s view that we probably should not support having two AB objects backed by the same (or a sub array of the same) backing store 
+
+[18:42:09.0639] <ljharb>
+if it’s unobservable it doesn’t need to be in the spec tho, and arguably couldn’t be
+
+[18:42:15.0729] <ljharb>
+impls can just do it
+
+[19:02:10.0117] <Luca Casonato>
+I she
+
+[19:02:16.0939] <Luca Casonato>
+* I agree
+
+[20:15:16.0607] <Mathieu Hofman>
+Yes that's the difficulty I've been having with this. CoW is technically an unobservable optimizing engines could make today.  But we'll only get it if there is sufficient feedback from the community it's needed. Proposals like this IMO show the need.
+
+[20:17:39.0888] <Mathieu Hofman>
+In that world , a concat feature is orthogonal. But it mostly makes sense if implemented as a list of CoW buffers because otherwise it's equivalent to creating a new contiguous buffer and copying into it.
+
+[20:18:09.0296] <Mathieu Hofman>
+* In that world , a concat feature is orthogonal. But it mostly makes sense if implemented as a list of CoW buffers because otherwise it's equivalent to the program creating a new contiguous buffer and copying into it.
+
+[02:49:11.0682] <ljharb>
+sooo it sounds like this proposal might have a beneficial side effect of nudging engines towards Just Doing CoW, and nothing further need be done?
+
+[04:18:36.0008] <rkirsling>
+need a shu deck titled Have a CoW Man
+
+[05:54:53.0624] <James M Snell>
+Well, having the CoW bit would be great but I don't want to lose track of the zero-copy concat use case, which is what motivated the proposal
+
+[06:46:08.0010] <Mathieu Hofman>
+I understand the performance motivation, but is there any reason zero copy should be something observable directly by the program?
+
+[06:49:15.0560] <ljharb>
+it'd be observable if you mutated one and wanted to see the result in the other, which seems like kind of the main purpose of wanting zero-copy?
+
+[06:50:13.0556] <ljharb>
+ * it'd be observable if you mutated one and wanted to see the result in the other, which seems like kind of the main purpose of wanting zero-copy? (other than perf)
+
+[06:50:33.0102] <James M Snell>
+Well, the vast majority of my zero-copy use cases are for read. Specifically, around things like optimizing Stream API implementations due to the fact that WHATWG streams have no concept of writev the way Node.js streams do
+
+[06:52:14.0482] <James M Snell>
+For instance, I just had a case where a streams impl was resulting in many small writes that needed to be aggregated into larger buffers before being passed down a transform pipeline... unfortunately it's currently not possible to do without copying or modifying the various stream impls down the pipeline which is... difficult
+
+[06:54:05.0091] <James M Snell>
+in the implementation here I would likely be calling `transfer()` anyway so I don't really care so much about mutations being visible as allowing zero-copy concat for reading
+
+[06:59:28.0622] <Mathieu Hofman>
+Yeah that's basically my question, is there any use cases requiring observing the mutation through an aggregation or subarray. I can't think of any, and if those are in fact needed, I'd prefer we add that set of features to SAB which has the shared backing store semantics.
+
+[07:03:26.0012] <Mathieu Hofman>
+> <@jasnell:matrix.org> For instance, I just had a case where a streams impl was resulting in many small writes that needed to be aggregated into larger buffers before being passed down a transform pipeline... unfortunately it's currently not possible to do without copying or modifying the various stream impls down the pipeline which is... difficult
+
+Btw, it was the exact same experience of stitching together smaller chunks that led me to wanting CoW and an internally optimized concat.
+
+
+2023-10-09
+[02:33:10.0632] <nicolo-ribaudo>
+RegExp syntax spec question: https://tc39.es/ecma262/#prod-annexB-Assertion
+
+Why does the current grammar for Annex B `Assertion` need to explicitly check the `UnicodeMode` flag?
+```
+Assertion[UnicodeMode, UnicodeSetsMode, NamedCaptureGroups] ::
+  `^`
+  `$`
+  `\b`
+  `\B`
+  [+UnicodeMode] `(?=` Disjunction[+UnicodeMode, ?UnicodeSetsMode, ?NamedCaptureGroups] `)`
+  [+UnicodeMode] `(?!` Disjunction[+UnicodeMode, ?UnicodeSetsMode, ?NamedCaptureGroups] `)`
+  [~UnicodeMode] QuantifiableAssertion[?NamedCaptureGroups]
+  `(?<=` Disjunction[?UnicodeMode, ?UnicodeSetsMode, ?NamedCaptureGroups] `)`
+  `(?<!` Disjunction[?UnicodeMode, ?UnicodeSetsMode, ?NamedCaptureGroups] `)`
+
+QuantifiableAssertion[NamedCaptureGroups] ::
+  `(?=` Disjunction[~UnicodeMode, ~UnicodeSetsMode, ?NamedCaptureGroups] `)`
+  `(?!` Disjunction[~UnicodeMode, ~UnicodeSetsMode, ?NamedCaptureGroups] `)`
+```
+
+Could it be simplified to this?
+```
+Assertion[UnicodeMode, UnicodeSetsMode, NamedCaptureGroups] ::
+  `^`
+  `$`
+  `\b`
+  `\B`
+  `(?=` Disjunction[?UnicodeMode, ?UnicodeSetsMode, ?NamedCaptureGroups] `)`
+  `(?!` Disjunction[?UnicodeMode, ?UnicodeSetsMode, ?NamedCaptureGroups] `)`
+  `(?<=` Disjunction[?UnicodeMode, ?UnicodeSetsMode, ?NamedCaptureGroups] `)`
+  `(?<!` Disjunction[?UnicodeMode, ?UnicodeSetsMode, ?NamedCaptureGroups] `)`
+```
+
+[04:36:35.0991] <jmdyck>
+Are you suggesting eliminating the nonterminal `QuantifiableAssertion` (which would require changing the `Term` production too), or just eliminating its use from the `Assertion` production?
+
+[04:49:01.0640] <jmdyck>
+The difference between your two snippets happens under `[~UnicodeMode, +UnicodeSetsMode]`, but since I don't think that can happen, I think the substitution would be valid.
+
+
+2023-10-10
+[23:59:21.0785] <annevk>
+FYI: we're considering using "flatten" as a term-of-art for replace a node with its children in the Sanitizer API (and potentially more widely in the DOM at some future point).
+
+[00:44:36.0315] <rkirsling>
+I guess it makes sense if you think of it from the perspective of _that_ node's parent?
+
+[00:45:30.0691] <Domenic>
+Hmm I would prefer replaceWithChildren, to mirror the existing replaceWith and replaceChildren
+
+[00:48:01.0258] <rkirsling>
+right. I guess what I'm saying is that I'd expect flatten to turn grandchildren into children
+
+[00:52:33.0701] <annevk>
+Domenic: that's a bit too long for a Sanitizer API configuration option, needs to be `somethingElements`
+
+[00:53:28.0852] <annevk>
+With the sanitizer the perspective is that of the parent I think, hmm
+
+[01:36:35.0177] <rkirsling>
+I want to suggest `disintegrate` but I think it's a bit too playful :p
+
+[02:27:15.0565] <Domenic>
+> <@annevk:matrix.org> Domenic: that's a bit too long for a Sanitizer API configuration option, needs to be `somethingElements`
+
+I think you could omit the elements? Attributes don't have children, so, it's implied.
+
+[02:48:48.0726] <annevk>
+Domenic: I'm not sure what you mean
+
+[02:50:00.0036] <annevk>
+Domenic: currently the top-level entries of the configuration dictionary are `elements`, `removeElements`, `attributes` (for global attributes), `removeAttributes` (for global attributes), and `flattenElements`
+
+[04:21:56.0129] <jmdyck>
+> <@annevk:matrix.org> FYI: we're considering using "flatten" as a term-of-art for replace a node with its children in the Sanitizer API (and potentially more widely in the DOM at some future point).
+
+Personally, I call that `dissolving` the node. But `replaceWithChildren` would be clearer if it fits.
+
+[05:56:52.0492] <Domenic>
+annevk: I mean you could use replaceWithChildren as a name instead of replaceWithChildrenElements. It's unambiguous because replaceWithChildrenAttributes makes no sense.
+
+[06:04:05.0937] <annevk>
+I see, I like the symmetry of the existing names better, but worth seeing what others think I suppose
+
+
+2023-10-13
+[18:41:37.0043] <Ben Lesh>
+> <@domenicdenicola:matrix.org> Hmm I would prefer replaceWithChildren, to mirror the existing replaceWith and replaceChildren
+
++1 for `replaceWithChildren`... `flatten` is a loaded term in the ecosystem that usually comes with some sort of possibility of depth. There's also "unwrap" or "expand"... but `replaceWithChildren` is more explicit.
+
+Then again there's always "supplant", which is from Ultron in Avengers: Age Of Ultron when he said "People create children to supplant them". 
+
+[00:24:32.0558] <annevk>
+I initially read that as "comes with some sort of possibility of death"
+
+[00:28:33.0062] <annevk>
+For context, the terms started out as dropElements and blockElements. I kept forgetting (and still don't remember) which has the remove semantics and which has the flatten / replace with children semantics.
+
+[15:20:24.0720] <TabAtkins>
+I'm also pretty strong on "flatten already has a meaning that's not consistent with what you're defining"; I'm fine with "replaceWithChildren" (but don't feel strongly about any name)
+
+[15:22:20.0591] <TabAtkins>
+JS's `flatten` is the existing claimant to that name, and if you're leaning on that semantic then it would indeed imply what rkirsling said - replacing an element's *children* with their contents, so you lose one level of nesting *within the element*. If you're flattening an element into *its* parent, you need a different name.
+
+[15:35:37.0919] <ljharb>
+so are we basically trying to come up with a name for what happens when you stick a document fragment into an element?
+
+
+2023-10-14
+[17:37:40.0089] <tewuzij>
+Yes I guess?
+
+[21:10:39.0309] <ljharb>
+MDN says
+> append or insert the fragment into the DOM … Doing this moves the fragment's nodes into the DOM, leaving behind an empty DocumentFragment.
+
+What happens to the original element after you call the "placeholder" method on it? like if you keep a reference to it
+
+[09:55:51.0633] <annevk>
+I filed https://github.com/WICG/sanitizer-api/issues/200 so people can bikeshed there
+
+
+2023-10-17
+[17:37:06.0805] <Michael Ficarra>
+sounds analogous to "spread" in JS to me
+

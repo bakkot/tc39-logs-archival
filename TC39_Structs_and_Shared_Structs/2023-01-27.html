@@ -1,0 +1,265 @@
+<!DOCTYPE html><html><head>
+  <title>TC39 Structs and Shared Structs on 2023-01-27</title>
+  <link rel="stylesheet" href="../style.css">
+  <script>window.room = "TC39 Structs and Shared Structs";</script><script src="../render-roomlist.js"></script>
+  <script src="../logs.js"></script>
+</head>
+<body><div class="wrapper">
+<div class="sidebar">
+<div class="title">TC39 Structs and Shared Structs<br>2023-01-27<br><a href="plaintext/">plaintext logs</a></div>
+<div class="nav">
+<a href="2023-01-26" class="nav-link"><span>prev</span></a>
+<a href="2023-01-29" class="nav-link"><span style="float:right">next</span></a>
+</div>
+    <div class="all-rooms"><noscript>JavaScript is required to load the channel index, but you can go to <a href="../..">the static index</a> directly.</noscript></div>
+<div class="footer"><a href="https://github.com/bakkot/matrix-archive-bot">source on github</a></div>
+</div>
+<div class="rhs">
+<div class="rhs-header">
+<span id="error" style="color: red; display:none">error</span>
+
+<input type="text" id="query" size="25" placeholder="Search TC39 Structs and Shared Structs">
+<a id="search-submit" class="button icon-link" title="Search">
+  <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M505 442.7L405.3 343c-4.5-4.5-10.6-7-17-7H372c27.6-35.3 44-79.7 44-128C416 93.1 322.9 0 208 0S0 93.1 0 208s93.1 208 208 208c48.3 0 92.7-16.4 128-44v16.3c0 6.4 2.5 12.5 7 17l99.7 99.7c9.4 9.4 24.6 9.4 33.9 0l28.3-28.3c9.4-9.4 9.4-24.6.1-34zM208 336c-70.7 0-128-57.2-128-128 0-70.7 57.2-128 128-128 70.7 0 128 57.2 128 128 0 70.7-57.2 128-128 128z"></path></svg>
+</a>
+</div>
+
+<div class="log"><table id="log-table"><tbody id="log-tbody">
+
+  <tr class="msg" id="L0"><td class="ts-cell"><a class="ts" href="#L0" alt="Thu Jan 26 2023 17:17:40 GMT-0800 (Pacific Standard Time)">01:17</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell"><p>So a shared struct instance has a stable identity across <code>postMessage</code>, right? To expand on my earlier idea, I think we don't need any stable identity for module blocks or even symbols, we can just use shared structs themselves to dynamically attach behavior to a shared struct kind, given some built-in wiring. Here is a gist where I explore that approach: <a href="https://gist.github.com/mhofman/aa23fcc88e1ccd031a3c34f88577eaf7">https://gist.github.com/mhofman/aa23fcc88e1ccd031a3c34f88577eaf7</a></p>
+<p>It does not require any new syntax, or extra magic in postMessage (like module blocks, or symbol identities being preserved). It only requires an automatically generated static property on shared struct classes that represent the kind, and some built-in behavior, plus the dynamic prototype lookup we discussed of course. I'm actually wondering if this could be prototyped (pun intented) in the current experiment.</p>
+</td></tr>
+  <tr class="msg" id="L1"><td class="ts-cell"><a class="ts" href="#L1" alt="Fri Jan 27 2023 02:39:13 GMT-0800 (Pacific Standard Time)">10:39</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-4" title="@aclaymore:matrix.org">Ashley Claymore</span>&gt;</div></td><td class="msg-cell">Right, that would be similar to having 'known' static functions that operate on the type and each agent individually imports the module to use those functions, except with the power to per-realm/per-agent register those functions as the prototype to use for that 'type' to get the capability of method dispatch. (also method chaining, but <code>|&gt;</code> operator would also give that).<br>'type' here being the identity created by the <code>shared struct class</code> syntax (the fan-out case).<br>For the fan-in case, where a farm of workers start up on their own, each creating their own separate <code>shared struct class</code> (from the same module URL), as they are sent to a sink, the sink would need to register that one 'prototype' with the multiple 'type's that are received from each worker.</td></tr>
+  <tr class="msg" id="L2"><td class="ts-cell"><a class="ts" href="#L2" alt="Fri Jan 27 2023 03:54:30 GMT-0800 (Pacific Standard Time)">11:54</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell">Right the fan in case would work too, there jsut would be different constructors and kinds, that each would have to be set to use the same prototype maker, or prototype implementation if the prototype doesn't care about exposing the realm local constructor.
+
+You're right at the end of the day this boils down to the capability of setting the dynamic prototype to use for instances.</td></tr>
+  <tr class="msg" id="L3"><td class="ts-cell"><a class="ts" href="#L3" alt="Fri Jan 27 2023 04:21:01 GMT-0800 (Pacific Standard Time)">12:21</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-4" title="@aclaymore:matrix.org">Ashley Claymore</span>&gt;</div></td><td class="msg-cell">and to also capture a bit of what was discussed on the call last night:</td></tr>
+  <tr class="msg" id="L4"><td class="ts-cell"><a class="ts" href="#L4" alt="Fri Jan 27 2023 04:21:05 GMT-0800 (Pacific Standard Time)">12:21</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-4" title="@aclaymore:matrix.org">Ashley Claymore</span>&gt;</div></td><td class="msg-cell"><ul>
+<li>the goal is to have: the instance of a shared struct to exist in shared memory, and the reference to this is passed around directly. There is not a per-agent wrapper adding a layer of indirection for prop access.</li>
+</ul>
+</td></tr>
+  <tr class="msg" id="L5"><td class="ts-cell"><a class="ts" href="#L5" alt="Fri Jan 27 2023 04:24:17 GMT-0800 (Pacific Standard Time)">12:24</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-4" title="@aclaymore:matrix.org">Ashley Claymore</span>&gt;</div></td><td class="msg-cell"><ul>
+<li>if there is a dynamic lookup when [[prototype]] is accessed, if returned functions come from the calling realm then this means that a shared-struct passed between realms (node-VM, or same-origin-iframe, etc) then that means the value returned by <code>getPrototypeOf</code> can observably change, which violates the current description of the sealed integrity level.</li>
+</ul>
+</td></tr>
+  <tr class="msg" id="L6"><td class="ts-cell"><a class="ts" href="#L6" alt="Fri Jan 27 2023 04:26:13 GMT-0800 (Pacific Standard Time)">12:26</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-4" title="@aclaymore:matrix.org">Ashley Claymore</span>&gt;</div></td><td class="msg-cell"><ul>
+<li>cont: if the lookup is 'cached' per-agent, maybe on first read, then this implies there is additional memory usage for a per-agent-per-instance cache</li>
+</ul>
+</td></tr>
+  <tr class="msg" id="L7"><td class="ts-cell"><a class="ts" href="#L7" alt="Fri Jan 27 2023 04:26:34 GMT-0800 (Pacific Standard Time)">12:26</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell"><mx-reply><blockquote> <ul>
+<li>the goal is to have: the instance of a shared struct to exist in shared memory, and the reference to this is passed around directly. There is not a per-agent wrapper adding a layer of indirection for prop access.</li>
+</ul>
+</blockquote></mx-reply>I have actually been wondering about that, and whether that's an observable thing from the 262 spec point of view. The only program observable aspect of this is the preservation of identity through cross agent interactions, which is host defined anyway.</td></tr>
+  <tr class="msg" id="L8"><td class="ts-cell"><a class="ts" href="#L8" alt="Fri Jan 27 2023 04:27:40 GMT-0800 (Pacific Standard Time)">12:27</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-4" title="@aclaymore:matrix.org">Ashley Claymore</span>&gt;</div></td><td class="msg-cell">yes unlikely to be observable, but if that is an implementation goal then it limits which semantics are performant/simple/memory-efficient etc</td></tr>
+  <tr class="msg" id="L9"><td class="ts-cell"><a class="ts" href="#L9" alt="Fri Jan 27 2023 04:28:21 GMT-0800 (Pacific Standard Time)">12:28</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell"><mx-reply><blockquote> <ul>
+<li>cont: if the lookup is 'cached' per-agent, maybe on first read, then this implies there is additional memory usage for a per-agent-per-instance cache</li>
+</ul>
+</blockquote></mx-reply>Not really. If the prototype is set once and maybe throws when accessed before, then it's arguably sealed for that agent. As I mentioned, the fact there is a single reference shared between agents is an implementation detail IMO</td></tr>
+  <tr class="msg" id="L10"><td class="ts-cell"><a class="ts" href="#L10" alt="Fri Jan 27 2023 04:28:58 GMT-0800 (Pacific Standard Time)">12:28</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell">Quoted the wrong message</td></tr>
+  <tr class="msg" id="L11"><td class="ts-cell"><a class="ts" href="#L11" alt="Fri Jan 27 2023 04:29:36 GMT-0800 (Pacific Standard Time)">12:29</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell">As for per instance memory, i believe it'd only be per kind / type memory, not per instance </td></tr>
+  <tr class="msg" id="L12"><td class="ts-cell"><a class="ts" href="#L12" alt="Fri Jan 27 2023 07:46:04 GMT-0800 (Pacific Standard Time)">15:46</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell"><mx-reply><blockquote> <p>So a shared struct instance has a stable identity across <code>postMessage</code>, right? To expand on my earlier idea, I think we don't need any stable identity for module blocks or even symbols, we can just use shared structs themselves to dynamically attach behavior to a shared struct kind, given some built-in wiring. Here is a gist where I explore that approach: <a href="https://gist.github.com/mhofman/aa23fcc88e1ccd031a3c34f88577eaf7">https://gist.github.com/mhofman/aa23fcc88e1ccd031a3c34f88577eaf7</a></p>
+<p>It does not require any new syntax, or extra magic in postMessage (like module blocks, or symbol identities being preserved). It only requires an automatically generated static property on shared struct classes that represent the kind, and some built-in behavior, plus the dynamic prototype lookup we discussed of course. I'm actually wondering if this could be prototyped (pun intented) in the current experiment.</p>
+</blockquote></mx-reply>Is there a reason the identity needs to be a static property, or surfaced to the user at all, as opposed to an internal slot?</td></tr>
+  <tr class="msg" id="L13"><td class="ts-cell"><a class="ts" href="#L13" alt="Fri Jan 27 2023 07:58:00 GMT-0800 (Pacific Standard Time)">15:58</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-4" title="@aclaymore:matrix.org">Ashley Claymore</span>&gt;</div></td><td class="msg-cell">allows more userland solutions/experimentation maybe?</td></tr>
+  <tr class="msg" id="L14"><td class="ts-cell"><a class="ts" href="#L14" alt="Fri Jan 27 2023 07:59:00 GMT-0800 (Pacific Standard Time)">15:59</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-4" title="@aclaymore:matrix.org">Ashley Claymore</span>&gt;</div></td><td class="msg-cell"><p>though I guess that itself can be done in userland</p>
+<pre><code>const id = new shared struct class ID{}
+
+shared struct class SSC {
+  __type__ = id
+}
+</code></pre>
+</td></tr>
+  <tr class="msg" id="L15"><td class="ts-cell"><a class="ts" href="#L15" alt="Fri Jan 27 2023 07:59:06 GMT-0800 (Pacific Standard Time)">15:59</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell">I'm not certain that's necessary, at least not for an MVP. </td></tr>
+  <tr class="msg" id="L16"><td class="ts-cell"><a class="ts" href="#L16" alt="Fri Jan 27 2023 07:59:41 GMT-0800 (Pacific Standard Time)">15:59</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell">I did this so the program could attach the dynamic prototype without magic</td></tr>
+  <tr class="msg" id="L17"><td class="ts-cell"><a class="ts" href="#L17" alt="Fri Jan 27 2023 08:00:08 GMT-0800 (Pacific Standard Time)">16:00</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell">We can always try to find more ergonomic ways, but this is flexible for experimenting </td></tr>
+  <tr class="msg" id="L18"><td class="ts-cell"><a class="ts" href="#L18" alt="Fri Jan 27 2023 08:00:41 GMT-0800 (Pacific Standard Time)">16:00</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell">It just seems a bit like an overcomplication, IMO.</td></tr>
+  <tr class="msg" id="L19"><td class="ts-cell"><a class="ts" href="#L19" alt="Fri Jan 27 2023 08:01:30 GMT-0800 (Pacific Standard Time)">16:01</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell">If you have an alternative I'm all ears</td></tr>
+  <tr class="msg" id="L20"><td class="ts-cell"><a class="ts" href="#L20" alt="Fri Jan 27 2023 08:02:31 GMT-0800 (Pacific Standard Time)">16:02</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell">All the solutions I've heard so far rely on more syntax that doesn't exist today </td></tr>
+  <tr class="msg" id="L21"><td class="ts-cell"><a class="ts" href="#L21" alt="Fri Jan 27 2023 08:43:52 GMT-0800 (Pacific Standard Time)">16:43</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell"><mx-reply><blockquote> <p>though I guess that itself can be done in userland</p>
+<pre><code>const id = new shared struct class ID{}
+
+shared struct class SSC {
+  __type__ = id
+}
+</code></pre>
+</blockquote></mx-reply>Btw, the set shared/dynamic prototype is the critical part, which cannot be done in userland. And since this is leveraging shared stuct itself to describe the type for its identity preserving feature, the whole thing needs to be bootstrapped in the engine too</td></tr>
+  <tr class="msg" id="L22"><td class="ts-cell"><a class="ts" href="#L22" alt="Fri Jan 27 2023 08:47:54 GMT-0800 (Pacific Standard Time)">16:47</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-4" title="@aclaymore:matrix.org">Ashley Claymore</span>&gt;</div></td><td class="msg-cell">yep. I was imagining a userland experimental library where the prototype is registered with the library, and then the shared-struct is passed to a <code>wrap</code> function that returns a proxy wrapper for it which adds the proto look up (but loses the ability to be structured clone)</td></tr>
+  <tr class="msg" id="L23"><td class="ts-cell"><a class="ts" href="#L23" alt="Fri Jan 27 2023 08:48:23 GMT-0800 (Pacific Standard Time)">16:48</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell">Oh yeah you can totally do this in userland with Proxies</td></tr>
+  <tr class="msg" id="L24"><td class="ts-cell"><a class="ts" href="#L24" alt="Fri Jan 27 2023 08:48:42 GMT-0800 (Pacific Standard Time)">16:48</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell">at the expense of per realm proxy instances </td></tr>
+  <tr class="msg" id="L25"><td class="ts-cell"><a class="ts" href="#L25" alt="Fri Jan 27 2023 08:49:34 GMT-0800 (Pacific Standard Time)">16:49</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-4" title="@aclaymore:matrix.org">Ashley Claymore</span>&gt;</div></td><td class="msg-cell">and code wouldn't be able to magically pass that proxied wrapper to another agent, they would know it needs to be unwrapped again</td></tr>
+  <tr class="msg" id="L26"><td class="ts-cell"><a class="ts" href="#L26" alt="Fri Jan 27 2023 08:49:59 GMT-0800 (Pacific Standard Time)">16:49</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell">minus the postMessage identity preserving logic, but that can be emulated by wrapping postMessage, which gets hairy quickly, and makes it impossible to do cross agent gc of course</td></tr>
+  <tr class="msg" id="L27"><td class="ts-cell"><a class="ts" href="#L27" alt="Fri Jan 27 2023 08:50:11 GMT-0800 (Pacific Standard Time)">16:50</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-4" title="@aclaymore:matrix.org">Ashley Claymore</span>&gt;</div></td><td class="msg-cell">or structuredClone would need a new handler similar to <code>toJSON</code> where it can extract out the struct automatically</td></tr>
+  <tr class="msg" id="L28"><td class="ts-cell"><a class="ts" href="#L28" alt="Fri Jan 27 2023 08:50:17 GMT-0800 (Pacific Standard Time)">16:50</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell">aka no cycle collection. if no cycle, you can use weakrefs</td></tr>
+  <tr class="msg" id="L29"><td class="ts-cell"><a class="ts" href="#L29" alt="Fri Jan 27 2023 08:50:48 GMT-0800 (Pacific Standard Time)">16:50</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell">nah that really needs to be in the engine (at least until I get to propose my API to support distributed GC)</td></tr>
+  <tr class="msg" id="L30"><td class="ts-cell"><a class="ts" href="#L30" alt="Fri Jan 27 2023 08:51:35 GMT-0800 (Pacific Standard Time)">16:51</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell">I have been toying with identity preservation through postMessage for a few years now, that's what got me interested in TC39 in the first place</td></tr>
+  <tr class="msg" id="L31"><td class="ts-cell"><a class="ts" href="#L31" alt="Fri Jan 27 2023 08:52:09 GMT-0800 (Pacific Standard Time)">16:52</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell">(yes I know different standard groups, but the gc API needs to be in the language)</td></tr>
+  <tr class="msg" id="L32"><td class="ts-cell"><a class="ts" href="#L32" alt="Fri Jan 27 2023 08:52:46 GMT-0800 (Pacific Standard Time)">16:52</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell">wrapping postMessage is no fun, it's very inception</td></tr>
+  <tr class="msg" id="L33"><td class="ts-cell"><a class="ts" href="#L33" alt="Fri Jan 27 2023 08:53:13 GMT-0800 (Pacific Standard Time)">16:53</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-4" title="@aclaymore:matrix.org">Ashley Claymore</span>&gt;</div></td><td class="msg-cell">right now I kinda like the idea that shared structs that want a prototype are top-level-const exported <code>export shared struct class Foo {}</code> , and the module they are declared is what is 'attached' to the 'type' as an internal slot. for other agents to load. It could have an overlap with the import-defer-eval proposal, where the module is sync loaded on the first prototype access to be lazy and reduce the cost when the methods are not accessed by other agents</td></tr>
+  <tr class="msg" id="L34"><td class="ts-cell"><a class="ts" href="#L34" alt="Fri Jan 27 2023 08:55:38 GMT-0800 (Pacific Standard Time)">16:55</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell">yeah maybe that's what the ergonomic solution ends up looking like, but module blocks and/or import defer do not exist today if <span class="nick-8">shu</span> want to experiment with something right away. My proposal is about enabling this with what we have today, and the dynamic prototype lookup we'll need anyway</td></tr>
+  <tr class="msg" id="L35"><td class="ts-cell"><a class="ts" href="#L35" alt="Fri Jan 27 2023 08:55:53 GMT-0800 (Pacific Standard Time)">16:55</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell">no need to mess with module logic</td></tr>
+  <tr class="msg" id="L36"><td class="ts-cell"><a class="ts" href="#L36" alt="Fri Jan 27 2023 08:56:15 GMT-0800 (Pacific Standard Time)">16:56</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-4" title="@aclaymore:matrix.org">Ashley Claymore</span>&gt;</div></td><td class="msg-cell">(I don't think) this would need module blocks, the part that is attached to the internal slot can be, as <span class="nick-10">littledan</span> said, a URL string</td></tr>
+  <tr class="msg" id="L37"><td class="ts-cell"><a class="ts" href="#L37" alt="Fri Jan 27 2023 08:58:37 GMT-0800 (Pacific Standard Time)">16:58</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell">I'm personally not a fan of tying module specifier strings into the solution</td></tr>
+  <tr class="msg" id="L38"><td class="ts-cell"><a class="ts" href="#L38" alt="Fri Jan 27 2023 09:21:25 GMT-0800 (Pacific Standard Time)">17:21</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-15" title="@rbuckton:matrix.org">rbuckton</span>&gt;</div></td><td class="msg-cell"><p>Is there any reason the origin trial API couldn't be extended to provide a registration mechanism for the shared struct type with a user-provided unique ID (just a string, but could contain a URI, UUID, etc.) and the thread-local prototype to use?</p>
+<pre><code class="language-js">// + fairly flexible
+// - requires setup on receiver end, correlation of struct type identity.
+// - requires encapsulation for constructor logic
+
+// data.js
+// data only structs don't require registration and have no shared type identity.
+export const DataOnly = new SharedStructType(["foo"]);
+
+// vector2d.js
+// data+behavior structs require registration to define type identity
+const { type: _Vector2D, register } = SharedStructType.prepare(["x", "y"]);
+
+// custom construction behavior
+export function Vector2D(x = 0, y = 0) {
+    const _this = Reflect.construct(_Vector2D, [], new.target);
+    _this.x = x;
+    _this.y = y;
+    return _this;
+}
+
+// prototype methods
+Vector2D.prototype.distanceTo = function (v) {
+    const dx = this.x - v.x;
+    const dy = this.y - v.y;
+    return Math.sqrt(dx * dx + dy * dy);
+};
+
+// Register the type identity, constructor, and prototype to use for this struct type in this thread.
+// NOTE: register(id, constructor [, prototype])
+register("e3a9bd1f-0f64-4848-b255-3c629d0c44a3", Vector2D, Vector2D.prototype);
+
+export { Vector2D };
+
+// main.js
+import { DataOnly } from "./data.js";
+import { Vector2D } from "./vector2d.js";
+const data = new DataOnly();
+data.foo = "data only, no behavior";
+
+const v1 = new Vector2D(1, 2);
+const v2 = new Vector2D(3, 4);
+const worker1 = new Worker("worker1.js");
+worker1.postMessage([data, v1, v2]);
+
+const worker2 = new Worker("worker2.js");
+worker2.postMessage([data, v1, v2]);
+
+// worker1.js
+// worker1 does not import Vector2D, so can only access its data.
+parentPort.on("message", ([data, v1, v2]) =&gt; {
+    data.foo; // "data only, no behavior"
+    v1.x; // 1
+    v2.y; // 4
+    // NOTE: prototype not registered. This could mean an invalid prototype chain (thus every non-data
+    // member acces would throw), or a default prototype chain (where prototype methods throw by nature
+    // of them just being `undefined`).0
+    v1.distanceTo(v2); // error
+    v1.toString(); // error?
+});
+
+// worker2.js
+// worker2 imports Vector2D, which causes registration as a side-effect.
+import "./vector2d.js";
+parentPort.on("message", ([data, v1, v2]) =&gt; {
+    data.foo; // "data only, no behavior"
+    v1.x; // 1
+    v2.y; // 4
+    v1.distanceTo(v2); // ok
+    v1.toString(); // ok
+});
+</code></pre>
+<p>The user-supplied type identity would allow the user to define the same struct in different bundles, and the registry wouldn't be global, but would rather be thread-local, so there'd be no global mutable registry to worry about. It also doesn't really matter if the prototypes differ slightly between realms/threads, since they all access the same underlying data.</p>
+<p>We could eventually extend this to syntax, possibly even using decorators:</p>
+<pre><code class="language-js">// data.js
+export shared struct DataOnly {
+    foo;
+
+    // NOTE: constructors don't necessarily require registration
+    constructor(foo) {
+        this.foo = foo;
+    }
+}
+
+// vector2d.js
+// a syntactic declaration doesn't necessarily need to set a type identity, since
+// we could infer one for it based on path to the containing file and its offset within
+// the file. However, we could still allow the user to explicitly specify type identity
+// for use with bundlers, or other cases where the inferred type identity might not
+// be sufficient.
+
+@struct.id("e3a9bd1f-0f64-4848-b255-3c629d0c44a3")
+// or: @struct.id("https://babylonjs.com/5.0/Vector2D")
+export shared struct Vector2D {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+    }
+    distanceTo(v) {
+        const dx = this.x - v.x;
+        const dy = this.y - v.y;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+}
+</code></pre>
+</td></tr>
+  <tr class="msg" id="L39"><td class="ts-cell"><a class="ts" href="#L39" alt="Fri Jan 27 2023 10:02:40 GMT-0800 (Pacific Standard Time)">18:02</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell">I fail to see how a user supplied value provided after shared struct creation would work. Unless you'd somehow remap types you may have already seen. IMO you'd at least need to pass your unique ID as part of the <code>SharedStructType.prepare</code> call. But in general I don't like strings for unique IDs, and since we already have object that carry identity across agents, I thought it'd make sense to reuse them.</td></tr>
+  <tr class="msg" id="L40"><td class="ts-cell"><a class="ts" href="#L40" alt="Fri Jan 27 2023 10:03:07 GMT-0800 (Pacific Standard Time)">18:03</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell">Btw, the prototype attaching I suggested can be made to have a shape more similar to your suggestion above</td></tr>
+  <tr class="msg" id="L41"><td class="ts-cell"><a class="ts" href="#L41" alt="Fri Jan 27 2023 10:49:12 GMT-0800 (Pacific Standard Time)">18:49</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@mhofman:matrix.org">Mathieu Hofman</span>&gt;</div></td><td class="msg-cell"><pre><code class="language-js">// vector2d.js
+// Each shared struct type, whether data only or "prepared" has its own unique type
+export const vector2Dtype = SharedStructType.prepare(["x", "y"]);
+
+const _Vector2D = SharedStructType.getConstructor(vector2Dtype);
+
+// custom construction behavior
+export function Vector2D(x = 0, y = 0) {
+  const _this = Reflect.construct(_Vector2D, [], new.target);
+  _this.x = x;
+  _this.y = y;
+  return _this;
+}
+
+// prototype methods
+Vector2D.prototype.distanceTo = function (v) {
+  const dx = this.x - v.x;
+  const dy = this.y - v.y;
+  return Math.sqrt(dx * dx + dy * dy);
+};
+
+SharedStructType.registerPrototype(vector2Dtype, Vector2D.prototype);
+
+// main.js
+import { Vector2D, vector2DType } from "./vector2d.js";
+const v1 = new Vector2D(1, 2);
+const worker = new Worker("worker.js");
+worker.postMessage([vector2DType, v1]);
+
+// worker.js
+// worker imports Vector2D, which causes registration as a side-effect.
+import { Vector2D, vector2DType } from "./vector2d.js";
+
+const v2 = new Vector2D(3, 4);
+
+parentPort.on("message", ([mainVector2DType, v1]) =&gt; {
+  SharedStructType.registerPrototype(mainVector2DType, Vector2D.prototype);
+  assert(mainVector2DType !== vector2DType);
+  assert(
+    SharedStructType.getConstructor(mainVector2DType) !==
+      SharedStructType.getConstructor(vector2Dtype)
+  );
+  assert(v1 instanceof Vector2D); // by virtue of sharing a prototype
+  v1.x; // 1
+  v1.distanceTo(v2); // ok
+  v1.toString(); // ok
+});
+
+</code></pre>
+<p>SharedStructType.getConstructor() is needed to allow the program to avoid duplicating type definitions in each agent/realm. I think the burden of such deduplication should be on the program, not on the engine.</p>
+<p>If the engine had to deduplicate itself, you'd either need a user provided type identifier at "prepare" time, and a global lock around such type definitions, or you'd need to somehow be able to collapse separate definitions into a single one. In either case you'd have to figure out what to do if the shape definition does not match, and in the case of definition collapse, how do you communicate the error to the program?</p>
+<p>By having the type definition generate the unique type identifier, you avoid all those complications in the engine, at the cost of putting more type hydration burden on the program.</p>
+</td></tr>
+
+</tbody></table></div></div></div>
+</body></html>

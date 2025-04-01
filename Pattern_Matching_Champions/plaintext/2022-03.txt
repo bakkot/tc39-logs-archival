@@ -1,0 +1,491 @@
+2022-03-11
+[00:33:18.0710] <Jack Works>
+I presented pattern matching to JSCIG and get some feedbacks
+
+[00:40:29.0351] <Jack Works>
+Some feedbacks are about the confusions/bugs in the slides, I have commented on the slide.
+
+[00:40:42.0474] <Jack Works>
+The rest are about the proposal design, and I think we can do better
+
+[01:01:08.0179] <Jack Works>
+https://github.com/tc39/proposal-pattern-matching/issues/248
+
+[01:03:33.0695] <Jack Works>
+other feedbacks are not too formal so I will post it here
+
+[01:04:47.0333] <Jack Works>
+
+Feedback:
+
+```js
+when ([ 'go', dir and ('n' or 'e' or 's' or 'w')]):
+```
+
+> if I need to write `dir and ('n' or 'e' or 's' or 'w')`, there is no way to extract them out. I have to copy and paste.
+
+[01:10:59.0742] <Jack Works>
+Feedback 2: 
+
+Syntax has too much noise in it.
+
+Question: Why a `()` after `when` is required? It's enough to separate LHS and RHS with the `:` we have. (I don't remember why we made that decision so ...)
+
+[01:12:53.0922] <Jack Works>
+Feedback 3:
+
+`Symbol.match` and `Symbol.matcher` creates confusion
+
+[01:15:55.0109] <Jack Works>
+And the final problem, the current Custom Matcher is too verbose on syntax.
+
+I wish it could be the rbuckton 's unapply form and also bring it to the destructing:
+
+```js
+match (val) {
+    when (Some(val)): val,
+    when (None()): undefined
+}
+```
+
+And if we have this form, the alternative syntax I proposed in issue #248 will become
+
+
+```js
+match (val) {
+    when (NaN): NaN
+    default(Magic): console.log("default case with", Magic)
+}
+```
+
+[01:16:44.0260] <Jack Works>
+🙏 really want this one, it's much simpler to use
+
+[09:10:41.0752] <ljharb>
+Jack Works: we talked about the identifier pattern in a previous meeting that i'm pretty sure you were present for; my last comment on that issue sums it up
+
+[09:11:02.0182] <ljharb>
+iow:
+```
+when ([foo])
+```
+needs to work, therefore
+```
+when (foo)
+```
+must also work
+
+[09:11:34.0533] <ljharb>
+> <@jackworks:matrix.org> Feedback 2: 
+> 
+> Syntax has too much noise in it.
+> 
+> Question: Why a `()` after `when` is required? It's enough to separate LHS and RHS with the `:` we have. (I don't remember why we made that decision so ...)
+
+it's not enough imo; the parens are a necessary boundary. container characters aren't noise, they're explicit easy-to-tune-out boundary markers.
+
+[09:18:17.0358] <Jack Works>
+> <@ljharb:matrix.org> iow:
+> ```
+> when ([foo])
+> ```
+> needs to work, therefore
+> ```
+> when (foo)
+> ```
+> must also work
+
+But it's already not working in most places.
+
+And when we discussed this, I didn't recall that we have considered the future special identifier pattern like undefined and infinity.
+
+Take that into our consideration, I think the solo identifier pattern should be a syntax error. There are better ways to do it. `default(binding)`. This way is also more clear on visuals. Easier to read. 
+
+[09:18:31.0240] <ljharb>
+what do you mean not working in most places?
+
+[09:18:39.0319] <ljharb>
+anywhere inside a pattern, a bare identifier is an irrefutable match
+
+[09:18:55.0203] <ljharb>
+(undefined and infinity and NaN aren't future patterns, they're part of this proposal)
+
+[09:19:11.0109] <ljharb>
+`default(binding)` simply *can not work* for nested matches, like inside an array or object
+
+[09:19:32.0967] <ljharb>
+and, because of `if`, you need to be able to do `when (foo) if (condition)`, which the `default()` wouldn't support, because "default with if" would be bizarre
+
+[09:19:56.0724] <ljharb>
+we certainly could make `when (foo)` by itself a syntax error - we already will, if it's not the last clause - but i'm not sure what value that would add
+
+[09:20:00.0744] <Jack Works>
+> <@ljharb:matrix.org> what do you mean not working in most places?
+
+Solo identifier pattern as a syntax error if it does not occur at last. So in most places it's not working. 
+
+[09:20:12.0308] <ljharb>
+ah, i see what you mean
+
+[09:20:30.0701] <ljharb>
+sure, that's a reasonable argument for making it a syntax error always at the top level. i do not think that `default(binding)` is a good idea or makes sense
+
+[09:20:55.0337] <ljharb>
+but i also don't think `when (foo)` is harmful or bad, as long as it's the last clause
+
+[09:21:01.0452] <Jack Works>
+> <@ljharb:matrix.org> anywhere inside a pattern, a bare identifier is an irrefutable match
+
+Yes other identifier pattern is useful. I only mean the topmost sole identifier pattern. 
+
+[09:21:49.0329] <ljharb>
+banning `when (foo)` even as the last item creates an inconsistency tho
+
+[09:22:06.0691] <ljharb>
+it seems more like something that should be linted against, if someone doesn't like the style, rather than banned at the language level
+
+[09:22:18.0246] <Jack Works>
+> <@ljharb:matrix.org> sure, that's a reasonable argument for making it a syntax error always at the top level. i do not think that `default(binding)` is a good idea or makes sense
+
+It's like `catch(error)`, or if you don't like it, we may also have `default with binding`
+
+[09:22:43.0728] <ljharb>
+why would you need the binding tho?
+
+[09:22:56.0740] <Jack Works>
+🤔 oh wait... Yes that reminds me, the issue I mentioned also affects nested pattern
+
+[09:22:58.0396] <ljharb>
+i don't personally have any use case for `when (foo)`, it just naturally falls out of consistency with being able to do it nested
+
+[09:23:06.0606] <ljharb>
+and i see zero harm in allowing it
+
+[09:23:09.0166] <Jack Works>
+Since we need irfutable pattern
+
+[09:23:38.0171] <Jack Works>
+Ban the topmost cannot solve the problem 
+
+[09:24:30.0125] <ljharb>
+if the problem is "irrefutable patterns", yes, that's unavoidable
+
+[09:25:47.0233] <Jack Works>
+I understand now. So... are we sure we didn't miss anything? What if we really need to add something special? That's really not possible... 
+
+[09:25:56.0958] <ljharb>
+why would there ever be any new special things?
+
+[09:26:05.0699] <ljharb>
+that `undefined` is an identifier is a historical mistake
+
+[09:26:20.0562] <ljharb>
+and `-0` and `+0` are special patterns because of -0, which also won't be repeated
+
+[09:26:38.0070] <Jack Works>
+Hmm I don't know, maybe, when we have Decimals, we have a decimal version of DecimalNaN
+
+[09:26:50.0291] <ljharb>
+(`NaN` and `Infinity` are also special patterns because they're identifiers instead of keywords)
+
+[09:27:05.0661] <ljharb>
+if we had Decimals, and they added a NaN (which i doubt), they'd not be able to add it as an identifier, for all these reasons
+
+[09:27:09.0353] <Jack Works>
+Yeah, what if we have more NaN in the language... 
+
+[09:27:26.0730] <ljharb>
+lol if this proposal helps ensure no added NaNs to the language, i think we'd get stage 4 tomorrow
+
+[09:27:42.0880] <Jack Works>
+😆
+
+[09:27:49.0937] <Jack Works>
+But what about Infinity? 
+
+[09:28:06.0610] <Jack Works>
+Maybe some new number kind will have its own Infinity 
+
+[09:34:00.0929] <Jack Works>
+Well, that might be reasonable that "we won't add new special identifier patterns in the future" 
+
+[09:36:18.0586] <ljharb>
+exactly, i think we can say that
+
+[09:36:34.0705] <ljharb>
+since, we shouldn't anyways
+
+[09:40:35.0311] <Jack Works>
+Ok that's cool
+
+[09:43:09.0709] <Jack Works>
+> <@jackworks:matrix.org> And the final problem, the current Custom Matcher is too verbose on syntax.
+> 
+> I wish it could be the rbuckton 's unapply form and also bring it to the destructing:
+> 
+> ```js
+> match (val) {
+>     when (Some(val)): val,
+>     when (None()): undefined
+> }
+> ```
+> 
+> And if we have this form, the alternative syntax I proposed in issue #248 will become
+> 
+> 
+> ```js
+> match (val) {
+>     when (NaN): NaN
+>     default(Magic): console.log("default case with", Magic)
+> }
+> ```
+
+And what about this? I really hope we can have this form and we can also bring it to the destructor syntax.
+
+It's works nicer than the current syntax and have the same feature
+
+[10:11:10.0936] <ljharb>
+"works nicer" is pretty subjective; i am not a fan of that form
+
+[10:11:43.0704] <ljharb>
+but also, changing destructuring is far out of scope of this proposal; if we want something in both, it needs to be added to both at the same time
+
+[15:47:08.0015] <rbuckton>
+I plan to present extractors at an upcoming meeting, but unfortunately have a conflict at the end of this month and won't be able to attend. 
+
+
+2022-03-12
+[16:38:16.0423] <jschoi>
+> <@rbuckton:matrix.org> I plan to present extractors at an upcoming meeting, but unfortunately have a conflict at the end of this month and won't be able to attend. 
+
+Won’t be able to attend the plenary or another meeting?
+
+[17:02:22.0893] <rbuckton>
+I won't be able to attend plenary this month.
+
+[19:16:30.0334] <Jack Works>
+> <@ljharb:matrix.org> but also, changing destructuring is far out of scope of this proposal; if we want something in both, it needs to be added to both at the same time
+
+if rbuckton pushes his proposal, is it possible to switch to that form?
+
+[20:14:08.0323] <ljharb>
+if it advances to stage 2, then sure. but i don’t see that happening before pattern matching does.
+
+[20:15:29.0741] <Jack Works>
+😋
+
+[02:06:20.0588] <jschoi>
+Pattern matching is seeking Stage 2 at next plenary, but is it a problem that do expressions are still at Stage 1? 
+
+[02:09:46.0831] <Jack Works>
+Yeah, the current pattern matching proposal doesn't depend on the semantics of due expression
+
+
+2022-03-13
+[19:29:01.0205] <ljharb>
+i mean, its usefulness certainly does
+
+[19:29:40.0464] <ljharb>
+but indeed, the current state of it has no statement-list RHS unless do expressions exist
+
+
+2022-03-14
+[12:57:00.0575] <TabAtkins>
+Right. match-exprs without do-exprs are still *useful* but definitely not in their final form, but that's fine.
+
+
+2022-03-15
+[17:11:10.0863] <jschoi>
+This isn’t even its final form…
+
+[13:19:19.0533] <TabAtkins>
+[latin choir music begins playing]
+
+
+2022-03-24
+[10:14:47.0247] <TabAtkins>
+Hm, in our pre-meeting Waldemar is objecting to Stage 2 advancement since we don't even actually have initial spec text, just a vague mostly-empty sketch.
+
+[10:17:18.0175] <TabAtkins>
+And yeah, that's def part of Stage 2 https://tc39.es/process-document/
+
+[10:17:33.0526] <TabAtkins>
+so, uh, i guess we withdraw the proposal until next meeting, great
+
+[10:17:56.0711] <Jack Works>
+😂
+
+[10:18:04.0150] <Jack Works>
+Let's start to write spec! 
+
+[10:18:37.0167] <Jack Works>
+I have interest in working on this
+
+[10:21:22.0632] <TabAtkins>
+Def, but we're past the deadline for advancement.
+
+[10:25:19.0979] <jschoi>
+Are you still planning to give an update?
+
+[10:26:13.0787] <TabAtkins>
+dunno how worthwhile it would be?
+
+[10:28:51.0979] <TabAtkins>
+okay, waldemar wants to discuss it at the meeting, so yeah we'll still talk about it
+
+[11:32:32.0458] <ljharb>
+Stage 2 requires initial spec text, which we have
+
+[11:32:39.0209] <ljharb>
+it doesn’t have to be complete or correct.
+
+[11:33:03.0160] <ljharb>
+i would be happy to debate that process issue if that’s the only stage 2 blocker this meeting.
+
+[11:45:47.0461] <ljharb>
+* it doesn’t have to be complete or correct - that’s only a stage 3 requirement.
+
+[12:26:19.0420] <TabAtkins>
+we don't have "initial spec text". we have a bare-bones and incomplete, and likely out of date, grammar, with basically nothing else
+
+[12:27:00.0355] <TabAtkins>
+i agree that the spec text as it currently exists isn't remotely capable of being considered reviewable
+
+[14:28:30.0520] <mpcsh>
+I would very much like to work on the spec
+
+[14:28:35.0236] <mpcsh>
+time for a champions call?
+
+[14:56:01.0747] <TabAtkins>
+heads up: waldemar is gonna object to us having special treatment of the "literal identifiers" (infinity, undefined, NaN, maybe null?)
+
+[14:56:38.0199] <TabAtkins>
+I don't believe we should change anything - I think our current grammar is the best - but just saying.
+
+[14:57:21.0145] <TabAtkins>
+(The only alternative that could work is eliminating literal matchers entirely, and relying solely on interpolation patterns to match against literals - always having to write `when({foo: ${1}})`, for example.)
+
+
+2022-03-25
+[17:04:02.0236] <mpcsh>
+> <@tabatkins:matrix.org> Hm, in our pre-meeting Waldemar is objecting to Stage 2 advancement since we don't even actually have initial spec text, just a vague mostly-empty sketch.
+
+also by `our pre-meeting` I assume you're talking about a google thing?
+
+[17:06:26.0113] <TabAtkins>
+Yeah
+
+[17:07:01.0518] <TabAtkins>
+We always meet up before the committee meetings to suss out objections and whatnot beforehand so we don't waste committee time
+
+[17:07:24.0412] <mpcsh>
+smart 🙂
+
+[17:16:16.0483] <ljharb>
+why is he not ok with the special literals?
+
+[17:16:36.0927] <ljharb>
+> <@tabatkins:matrix.org> we don't have "initial spec text". we have a bare-bones and incomplete, and likely out of date, grammar, with basically nothing else
+
+that is exactly what initial spec text is
+
+[17:18:20.0853] <ljharb>
+just because Waldemar is a grammar expert and catches real problems doesn’t mean that it’s a stage 2 requirement.
+
+[17:19:55.0909] <TabAtkins>
+No, initial spec text means there's spec text, it just will officially have hand waves, issues, or done details not yet filled in. It's still enough to look at and get a reasonable sense of what's going on. We don't have that.
+
+[17:20:09.0324] <TabAtkins>
+* No, initial spec text means there's spec text, it just will possibly have hand waves, issues, or done details not yet filled in. It's still enough to look at and get a reasonable sense of what's going on. We don't have that.
+
+[17:20:19.0566] <TabAtkins>
+* No, initial spec text means there's spec text, it just will possibly have hand waves, issues, or some details not yet filled in. It's still enough to look at and get a reasonable sense of what's going on. We don't have that.
+
+[17:21:17.0228] <TabAtkins>
+I've written a lot of specs in my career, I know what "initial" means in this context. Waldemar can be too picky sometimes but in this instance he's right
+
+[17:21:59.0688] <TabAtkins>
+What we have currently is an explainer in the readme. Reasonable to translate to spec text, but we haven't done that 
+
+[21:07:17.0292] <ljharb>
+i don't agree.
+
+[21:08:18.0648] <ljharb>
+either way, we can still ask. there's no need to be afraid of a "no", especially if the only reason is procedural.
+
+[21:11:12.0063] <Jack Works>
+> <@tabatkins:matrix.org> heads up: waldemar is gonna object to us having special treatment of the "literal identifiers" (infinity, undefined, NaN, maybe null?)
+
+What's the better alternative he wants? 
+
+[21:34:05.0358] <TabAtkins>
+Unsure yet, he just wants no unique rules
+
+[21:34:30.0922] <TabAtkins>
+His exact objection was to identifiers sometimes being bindings and sometimes being values
+
+[21:51:09.0381] <rbuckton>
+At least `null` isn't an identifier
+
+[01:07:15.0895] <Jack Works>
+https://github.com/tc39/proposal-pattern-matching/pull/251
+
+[01:07:16.0740] <Jack Works>
+👀
+
+
+2022-03-28
+[11:02:25.0701] <yulia>
+TabAtkins: you did a great job, i am sorry you had to deal with some of that
+
+[11:02:43.0229] <TabAtkins>
+oh np y'all, this was fine
+
+[11:02:43.0592] <yulia>
+i am seriously thinking about how we can organize this so that it is easier to comprehend
+
+[11:02:57.0187] <TabAtkins>
+but yeah, organization of largish proposals is hard
+
+[11:04:17.0655] <ljharb>
+yeah
+
+[11:04:28.0199] <ljharb>
+and obv we need more accurate spec text
+
+[11:07:59.0372] <yulia>
+would you folks be ok with being the guinea pig for modular proposals?
+
+[11:08:49.0788] <ljharb>
+i don't know what we'd be agreeing to
+
+[11:11:03.0089] <yulia>
+structuring information delivery in a certain way
+
+[11:12:36.0433] <yulia>
+I need to think about it more carefully
+
+[11:12:58.0361] <Jack Works>
+a translation & forward for unfinished concern from hax (due to timeout):
+> The key of this proposal is the syntax. Because it does not add a new possibility to do anything we can't before. Therefore the whole pattern matching proposal should provide a good DX for the developer. Now the proposal doesn't have a complete document about, (1) why we trade-off to choose the current syntax instead of other possible syntaxes; (2) how to fit a variety of use cases; (3) how to balance difference use cases.
+
+[11:13:18.0937] <ljharb>
+happy to consider being the guinea pig once the info about the delivery is delivered :-p
+
+[11:13:32.0155] <Jack Works>
+ * a translation & forward for unfinished concern from hax (due to timeout):
+> The key of this proposal is the syntax. Because it does not add a new possibility to do anything we can't before. Therefore the whole pattern matching proposal should provide a good DX for the developer. Now the proposal doesn't have a complete document about, (1) why we trade-off to choose the current syntax instead of other possible syntaxes; (2) how to fit a variety of use cases; (3) how to balance difference use cases.
+
+[11:13:53.0423] <yulia>
+yeah, i don't want to suggest anything yet, because i don't want to sign you up for more work than you are already doing. I may do the structuring and see how it might play out
+
+[11:14:02.0773] <yulia>
+in terms of maintanence and whatnot, i have a decent enough overview
+
+[11:14:14.0504] <yulia>
+i would really like to solve this "big proposals" problem, this isn't the first time
+
+[11:18:41.0090] <TabAtkins>
+Yeah, i'm tentatively okay with guinea-pigging
+

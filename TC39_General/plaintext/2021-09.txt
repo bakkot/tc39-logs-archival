@@ -1,0 +1,2323 @@
+2021-09-01
+[03:39:35.0977] <jschoi>
+Does anyone have any background on why `Math` got so many functions like `abs` that might have gotten put in `Number`? Having trouble finding in the meeting notes; I think this might predate them. 
+
+[04:33:15.0594] <jmdyck>
+The Math object goes back to ES1
+
+[05:16:57.0309] <jschoi>
+> <@jmdyck:matrix.org> The Math object goes back to ES1
+
+Right, and as far as I can tell, post-ES1 mathematical functions were subsequently added to Math rather than Number simply to be consistent with that status quo. Is that correct?
+
+For example, in the notes, I see some old talk of making clz32 an instance method on Number.prototype, and later it got switched to a “static” method, presumably to avoid boxing primitive numbers. But I can’t really find any explicit reasoning why Math was chosen as its home instead of Number.
+
+[05:20:02.0133] <Ashley Claymore>
+Looks like Number.{isInteger,isSafeInterger} and Math.{sign,trunc,log10,hypot} were added in ES6
+
+[05:20:22.0420] <Ashley Claymore>
+* Looks like Number.{isInteger,isSafeInteger} and Math.{sign,trunc,log10,hypot} were added in ES6
+
+[05:21:07.0387] <Ashley Claymore>
+Those homes seem logical, at least to me.
+
+[05:54:11.0731] <jschoi>
+> <@aclaymore:matrix.org> Those homes seem logical, at least to me.
+
+Yeah. An issue I’m going to raise during my BigInt Math presentation is that of `max` (and `min` and `hypot`). The issue is that if we simply extend `Math.max` to accept BigInts, then `Math.max(…arrOfBigInts)` would unexpectedly return `+Infinity` whenever `arrOfBigInts` happens to be empty—this would basically be an unexpected implicit type conversion from an array of BigInts to a Number value. 
+
+The choices I see are to either add a separate `Math.bigMax` function (and `bigMin` and `bigHypot`)…or add a `BigInt.max` method (in which case…why don’t we have `Number.max`—and then what about the other `Math` functions, do they get copied to `Number` and `BigInt` too?). So that’s why I’m wondering about the original “philosophy” behind `Number` versus `Math`.
+
+[05:55:10.0974] <jschoi>
+All the other `Math` methods can be extended for BigInts with no conversion problems. It’s just those three variadic functions…
+
+[06:12:44.0277] <jschoi>
+* > <@aclaymore:matrix.org> Those homes seem logical, at least to me.
+
+Yeah. An issue I’m going to raise during my BigInt Math presentation is that of `max` (and `min` and `hypot`). The issue is that if we simply extend `Math.max` to accept BigInts, then `Math.max(…arrOfBigInts)` would unexpectedly return `+Infinity` whenever `arrOfBigInts` happens to be empty—this would basically be an unexpected implicit type conversion from an array of BigInts to a Number value. 
+
+The choices I see are to either add a separate `Math.bigMax` function (and `bigMin` and `bigHypot`)…or add a `BigInt.max` method (in which case…why don’t we have `Number.max`—and then what about the other `Math` functions, do they get copied to `Number` and `BigInt` too?).
+
+[06:12:53.0061] <jschoi>
+* So that’s why I’m wondering about the original “philosophy” behind `Number` versus `Math`. All the other `Math` methods can be extended for BigInts with no conversion problems. It’s just those three variadic functions…
+
+[06:14:42.0623] <jmdyck>
+Note that max and min weren't variadic originally, so even if they'd anticipated other numeric types, there wouldn't have been that reason to put them in Number. 
+
+[06:17:56.0630] <jschoi>
+Yeah—I suppose I’m wondering if anyone knows the reasoning behind the original decision to separate `Math` and `Number` functions in the first place. The original philosophy. Perhaps that would help inform this decision. 
+
+[06:18:32.0196] <jschoi>
+* Yeah—I suppose I’m wondering if anyone knows the reasoning behind the original decision to separate `Math` and `Number` functions in the first place. The original philosophy behind ES1 `Math.abs` rather than `Number.abs`. Perhaps that would help inform this decision. 
+
+[06:42:56.0466] <Domenic>
+Totally uninformed guess: Brendan was used to C's `#include <math.h>` as the way to get access to functions like max()/abs()/etc. So he carried that over to JS as using the Math namespace object to get access to functions like max()/abs()/etc.
+
+[08:05:05.0975] <danielrosenwasser>
+> <@domenicdenicola:matrix.org> Totally uninformed guess: Brendan was used to C's `#include <math.h>` as the way to get access to functions like max()/abs()/etc. So he carried that over to JS as using the Math namespace object to get access to functions like max()/abs()/etc.
+
+
+alternative guess: it's on the Math class because they were trying to script java
+
+https://docs.oracle.com/javase/8/docs/api/java/lang/Math.html
+
+[08:06:36.0431] <danielrosenwasser>
+> <@danielrosenwasser:matrix.org> alternative guess: it's on the Math class because they were trying to script java
+> 
+> https://docs.oracle.com/javase/8/docs/api/java/lang/Math.html
+
+https://twitter.com/BrendanEich/status/1263386663679438850
+
+[08:13:01.0356] <Domenic>
+That makes more sense
+
+[08:50:42.0506] <jschoi>
+
+
+https://twitter.com/benawad/status/1263183829235269634?s=20
+
+I wonder if a precision argument for `Math.round` might be worth pursuing………
+
+[08:50:46.0612] <jschoi>
+> <@danielrosenwasser:matrix.org> https://twitter.com/BrendanEich/status/1263386663679438850
+
+ * > 
+https://twitter.com/benawad/status/1263183829235269634?s=20
+
+I wonder if pursuing a precision argument for `Math.round` might be worth pursuing………
+
+
+[08:50:58.0817] <devsnek>
+i like proto methods
+
+[08:51:04.0199] <jschoi>
+ * 
+
+https://twitter.com/benawad/status/1263183829235269634?s=20
+
+I wonder if a precision argument for `Math.round` might be worth pursuing………
+
+[08:51:39.0613] <devsnek>
+they also make stuff like "empty arguments" not an issue anymore
+
+[08:52:35.0143] <bakkot>
+how does a proto method make sense for max?
+
+[08:52:47.0524] <devsnek>
+`a.max(...others)`
+
+[08:52:54.0169] <devsnek>
+if others is empty you return a instead of Infinity
+
+[08:52:54.0949] <bakkot>
+... no
+
+[08:53:09.0100] <devsnek>
+?
+
+[08:54:16.0457] <bakkot>
+uhh I guess I will just say that I find that extremely aesthetically distasteful
+
+[08:54:38.0021] <ryzokuken>
+static methods are nice though
+
+[08:54:46.0548] <ryzokuken>
+`Number.max(...args)`
+
+[08:54:50.0675] <devsnek>
+static methods make you have to care about which item you're dealing with
+
+[08:55:03.0591] <devsnek>
+ * static methods make you have to care about which type you're dealing with
+
+[08:55:07.0978] <devsnek>
+like how we do Type(x)::foo in the spec
+
+[08:55:40.0094] <devsnek>
+i guess you could do `a.constructor.max(a, b)`
+
+[08:56:04.0491] <ryzokuken>
+oh right
+
+[08:56:24.0110] <ryzokuken>
+but I do still like the idea of polymorphic functions that work on mixed lists
+
+[08:56:32.0201] <ryzokuken>
+so namespaced makes sense for those
+
+[08:56:54.0664] <devsnek>
+i mean they could still be polymorphic in cases where that makes sense
+
+[08:57:37.0148] <ryzokuken>
+proto functions, sure, but for static methods it might not be great to make them polymorphic?
+
+[15:12:20.0413] <devsnek>
+so class fields use define instead of set right
+
+[15:12:27.0513] <devsnek>
+so there's no way for the superclass to see that happen
+
+[15:12:59.0150] <bakkot>
+in general superclasses do not see things subclasses do, correct
+
+[15:13:05.0697] <bakkot>
+same goes for methods defined by the subclass
+
+[15:13:12.0276] <devsnek>
+there's a cool python library i want to mimic
+
+[15:13:15.0698] <devsnek>
+where you can do like
+
+[15:13:33.0855] <devsnek>
+```py
+class Foo(lib.Model):
+  field = lib.Int()
+  field = lib.String()
+```
+
+[15:13:44.0289] <devsnek>
+and that builds a validator on foo that you can use on incoming requests
+
+[15:13:52.0846] <devsnek>
+and you can also add methods and stuff to the instance cuz its a normal class
+
+[15:14:09.0411] <devsnek>
+but it requires the superclass knowing the fields to build the validator
+
+[15:14:26.0339] <devsnek>
+i think in python that's done using metaclasses
+
+[15:14:57.0586] <bakkot>
+that seems like a use case for decorators, at a glance
+
+[15:15:08.0055] <devsnek>
+hmmm interesting
+
+[15:15:31.0984] <devsnek>
+where would the data from the decorators be stored
+
+[15:17:11.0715] <bakkot>
+wait, maybe I'm not understanding
+
+[15:17:18.0631] <bakkot>
+how do you use `Foo` after setting it up like that?
+
+[15:17:22.0699] <bakkot>
+or do you have a link to the library?
+
+[15:17:38.0871] <devsnek>
+not a public library unfortunately
+
+[15:17:45.0557] <devsnek>
+but you can do `Foo(some raw data)`
+
+[15:18:09.0788] <devsnek>
+and it will attempt to pull the fields from the raw data and either coerce them into something matching what you specified (Int/String/etc) or throw
+
+[15:18:41.0784] <devsnek>
+ * ```py
+class Foo(lib.Model):
+  field1 = lib.Int()
+  field2 = lib.String()
+```
+
+[15:19:29.0879] <devsnek>
+its nothing too magical, i'm just trying to imagine how i'd duplicate the sort of declarative schema info pattern in js
+
+[15:21:26.0038] <devsnek>
+i guess there could be like `Foo._fields` that the decorators populate, and then lib.Model can check for `this._fields` when its being used?
+
+[15:21:39.0815] <devsnek>
+or Symbol('lib.Fields') would be more proper i guess :P
+
+[15:22:36.0847] <bakkot>
+the current decorator proposal has a concept of metadata, which I think is intended to be used for that sort of thing?
+
+[15:22:46.0173] <bakkot>
+I haven't been following too closely though
+
+[15:25:01.0888] <bakkot>
+I think the thing I'd actually do with a decorator would be more like
+
+```
+@fields({ field1: lib.Int, field2: lib.String })
+class Foo {
+ ...
+}
+```
+where `@fields` would replace the class with a subclass which called `super` and then validated and installed the fields named by the decorator
+
+[15:25:17.0303] <devsnek>
+this seems like it could work https://gc.gy/e5d1ed0d-50fd-4394-8cfd-4f28fe049b5f.png
+
+[15:25:25.0885] <bakkot>
+you can probably do something closer to the Python version where the fields are inline, it's just not how I'd write it
+
+[15:26:12.0106] <devsnek>
+yeah, the thing that annoys me about schema libraries in js i'm familiar with is that they're all out of line
+
+[15:48:10.0192] <devsnek>
+this syntax is rough lol https://gc.gy/3ef68645-496c-41e2-b2db-15eac94f8244.png
+
+[16:08:58.0761] <devsnek>
+can a decorator remove a field
+
+[16:09:56.0319] <devsnek>
+this define behavior is terrible we shouldn't have done it lol
+
+[16:15:24.0113] <bakkot>
+having `[[Set]]` would not make this task any easier, because you can't have a setter for arbitrary properties
+
+[16:15:56.0573] <bakkot>
+you have to use a proxy trap for that, and you can trap `[[DefineOwnProperty]]` just as readily as `[[Set]]` if you're using a proxy
+
+[16:16:45.0819] <bakkot>
+anyway I don't think you can have a decorator which removes a field, no; in fact I think that was basically a design constraint for it to get through committee
+
+[16:18:08.0191] <devsnek>
+that means the base constructor can't set the new field values after they're schema validated
+
+[16:18:18.0414] <devsnek>
+cuz the define overwrites it
+
+[16:19:01.0491] <bakkot>
+... right, base classes run before subclasses, that's how that works
+
+[16:19:10.0975] <bakkot>
+[[Set]] would not help you there because the base class would not know about the fields
+
+[16:19:53.0510] <devsnek>
+well my train of thinking was, using [[set]] would make it reasonable to not perform any operation for `x;` instead of doing `this.x = undefined;`
+
+[16:20:04.0571] <devsnek>
+but it doesn't matter much now
+
+[16:21:06.0436] <bakkot>
+also I think this works: https://gist.github.com/bakkot/71bb439da868db191467762a82e85e61
+
+[16:22:12.0465] <devsnek>
+ah interesting
+
+[16:22:16.0167] <bakkot>
+not sure if it's what you were looking for though
+
+[16:22:31.0716] <devsnek>
+the extra constructor certainly gets around this
+
+[16:22:36.0851] <devsnek>
+thanks for the idea
+
+[16:30:19.0958] <bakkot>
+the only annoying part is that you wouldn't be able to use the fields in C's constructor, if you were trying to do something there
+
+[16:30:27.0641] <bakkot>
+I don't see a way around that without requiring a tiny bit of boilerplate
+
+[16:31:10.0321] <bakkot>
+i.e. something like
+
+```
+@data
+class C {
+  x = data.int;
+  constructor(obj) {
+    data.init(obj);
+    // other stuff
+  }
+}
+```
+
+[16:31:41.0464] <bakkot>
+... actually you don't even need the decorator at that point
+
+[16:31:51.0570] <bakkot>
+you can do that today
+
+[16:34:05.0766] <bakkot>
+https://gist.github.com/bakkot/9b22363769a8d88934d08d2b597dd986
+
+
+2021-09-02
+[23:21:37.0659] <bakkot>
+shu: for resizable array buffers, was there any thought of making TA.p.set(other buffer) grow the target buffer to fit the new data?
+
+[23:24:04.0029] <bakkot>
+I guess the expectation is that users can just manually call `.resize` first, which is not so bad
+
+[07:27:15.0121] <shu>
+bakkot: i can see an argument for either the current behavior or growing behavior if the argument is growable
+
+[07:27:33.0718] <shu>
+but i haven't actually thought too much about it
+
+
+2021-09-03
+[17:15:56.0797] <jschoi>
+In the spec, is there a way to split an abstract List into a first element and another List of the other elements?
+
+[17:16:20.0077] <jschoi>
+“Let «_first_, ..._rest_» be _list_”…
+
+[17:16:30.0159] <bakkot>
+Nope
+
+[17:18:55.0768] <jschoi>
+I’ll just say, “Let _rest_ be the List of all elements of _list_ except its first.”
+
+[17:20:54.0006] <bakkot>
+If you own the list, you could just mutate it
+
+[17:21:14.0483] <jschoi>
+Well, how would I express that in spec language?
+
+[17:21:20.0395] <jschoi>
+It’d still be prose, right?
+
+[17:21:22.0636] <bakkot>
+i. Let r be the first element of remaining.
+ii. Remove the first element from remaining.
+
+[17:21:30.0601] <jschoi>
+Ah…
+
+[17:21:43.0851] <bakkot>
+or
+
+[17:21:44.0770] <bakkot>
+ii. Let kValue be the first element of values and remove that element from values.
+
+[17:21:57.0463] <jschoi>
+Nice. Thank you!
+
+[17:22:45.0194] <bakkot>
+Which thing are you writing that needs this? For bigint math I'd think you could just copy the Number ones
+
+[17:23:17.0818] <jschoi>
+`Math.hypot`. Killing `Math.bigHypot` and merging its behavior into `hypot`.
+
+[17:23:32.0520] <jschoi>
+Dispatching on the type of the first argument.
+
+[17:24:18.0147] <bakkot>
+Math.hypot just iterates over the list; that seems better than splitting it
+
+[17:24:19.0116] <jschoi>
+Coercing the rest of the arguments.
+
+[17:24:41.0325] <jschoi>
+ * Well, it needs to coerce the rest of the arguments based on the first argument’s type, though.
+
+[17:28:37.0662] <jschoi>
+https://github.com/js-choi/proposal-bigint-math/commit/2b865923a97879b3807b27fbf7f3d275f9928e40
+
+[17:29:28.0025] <bakkot>
+Yeah but you don't need to take the tail of the list for that.
+
+I'd do something like
+```
+1. If _args_ is empty, return +0𝔽.
+1. If Type(_args_[0]) is BigInt, let _isBigInt_ be *true*.
+1. Else, let _isBigInt_ be *false*.
+1. For each element _arg_ of _args_, do
+  1. If _isBigInt_ is *true*, then let _n_ be ? ToBigInt(_arg_)
+  1. Else, let _n_ be ? ToNumber(_arg_).
+```
+etc
+
+[17:29:48.0869] <bakkot>
+there's other ways you can write it but none of them obviously require you to construct the list-except-head
+
+[17:29:59.0977] <bakkot>
+just to peek at the head to determine which coercer to use
+
+[17:31:01.0713] <jschoi>
+ * https://github.com/js-choi/proposal-bigint-math/commit/b5ece4e1543c35375f13f02653c0a7119ed0c495
+
+[17:31:26.0691] <jschoi>
+Wouldn’t that cause an unnecessary call to ToBigInt or ToNumber for the first element?
+
+[17:31:41.0571] <bakkot>
+Type() does not perform coercion, no
+
+[17:31:46.0871] <jschoi>
+ * Wouldn’t that cause an unnecessary call to ToBigInt or ToNumber for the first element?
+
+[17:32:17.0939] <bakkot>
+Though, I guess you probably want ToNumeric?
+
+[17:32:20.0322] <jschoi>
+I mean ToBigInt, though. It’s calling ToBigInt on _args_[0] unnecessarily. 
+
+[17:32:35.0224] <bakkot>
+Yeah but that's unobservable
+
+[17:32:35.0747] <jschoi>
+Oh, yeah, right, ugh, I forgot.
+
+[17:32:47.0818] <jschoi>
+> <@bakkot:matrix.org> Yeah but that's unobservable
+
+If we’re fine with that in the spec, I can change it.
+
+[17:32:58.0636] <jschoi>
+> <@bakkot:matrix.org> Yeah but that's unobservable
+
+ * If we’re fine with unobservable redundant calls the spec, I can change it.
+
+[17:33:09.0222] <bakkot>
+If that makes the algorithm easier to read, absolutely.
+
+[17:33:10.0999] <jschoi>
+ * Oh, yeah, right, ugh, I forgot that I need to call ToNumeric on the first.
+
+[17:40:22.0671] <jschoi>
+https://github.com/js-choi/proposal-bigint-math/commit/32152ba671e6b94e9912139db5b3a31e35ad9021
+
+[17:40:28.0053] <jschoi>
+Thanks for the help, bakkot!
+
+[17:42:20.0774] <jschoi>
+…Though would it work with `Math.hypot(Object(4n))`?
+
+[17:42:40.0479] <jschoi>
+Wouldn’t the Type(_args_[0]) return Object?
+
+[17:43:48.0857] <bakkot>
+Right, that's why I suggested ToNumeric
+
+[17:43:53.0424] <jschoi>
+Ah, ah.
+
+[17:45:10.0352] <jschoi>
+So we’re fine with just replacing it with Type(ToNumeric(_args_[0])), because the extra coercion is invisible to the user.
+
+[17:45:25.0969] <bakkot>
+Well, no, that ends up being visible, unfortunately
+
+[17:45:39.0045] <jschoi>
+Ah…
+
+[17:46:06.0151] <bakkot>
+So you do probably want to pop the list after all, I'm afraid
+
+[17:46:24.0058] <bakkot>
+I hadn't thought through the fact that you'd want to ToNumeric before doing the Type
+
+[17:46:54.0665] <jschoi>
+Thanks for the big help anyway, though. 👍️
+
+[17:54:51.0069] <jschoi>
+I wonder if ToPrimitive would work…
+
+[07:36:32.0456] <jschoi>
+Could someone familiar with TypeScript type inference explain the problem being described in https://github.com/js-choi/proposal-hack-pipes/issues/18 ? I’m not sure why the type of `userOption |> map(user => user.name)(^)` cannot be inferred from `userOption` and `map`.
+
+[07:37:46.0974] <jschoi>
+It’s just the same as `map(user => user.name)(userOption)`, after all…
+
+[07:53:44.0708] <devsnek>
+does anyone else keep getting surprised that optional chaining doesn't work with assignment
+
+[07:58:15.0257] <devsnek>
+jschoi: i think they mean this https://www.typescriptlang.org/play?#code/GYVwdgxgLglg9mABAWwIYAcA8AVANIgVQD4AKYALkRIDdLsBKRAXiMPspNToG0BdRloT6IA3gChEkxACcAplBDSkNVABsQsgM49+zVtTUbNAOjToy9ANxiAvmLEQEmqIlTTpqAJ7NE3EQCNKAEYbXmszEk4BVlRjf3pOdy8rIA
+
+[07:58:36.0444] <devsnek>
+i'd say that's just a dumb limitation of TS though, and you can manually annotate it, so i don't think it matters
+
+[08:04:59.0351] <jschoi>
+Huh, I see. So the problem is that TypeScript cannot infer the type of even `map(user => user.name)(userOption)`…but, apparently, somehow it can infer the types in `pipe(userOption, map(user => user.name))`? 🤔 
+
+[08:05:16.0152] <devsnek>
+yeah for some reason it doesn't unify the types in the former case
+
+[08:05:30.0501] <devsnek>
+personally i'd say its probably just better for microsoft to fix that
+
+[08:08:39.0435] <jschoi>
+I wonder if they’ve tried but there’s a fundamental reason why they can’t, hmm. Anyways, thanks for help!
+
+[08:09:02.0046] <jschoi>
+* I wonder if the TypeScript team has tried adding that inference but there’s a fundamental reason why they can’t, hmm. Anyways, thanks for help!
+
+[08:09:46.0883] <devsnek>
+its weird cuz its not really even an inference, it's just unifying `unknown` and `{b: number}` :/
+
+[08:16:53.0495] <jschoi>
+> <@devsnek:matrix.org> jschoi: i think they mean this https://www.typescriptlang.org/play?#code/GYVwdgxgLglg9mABAWwIYAcA8AVANIgVQD4AKYALkRIDdLsBKRAXiMPspNToG0BdRloT6IA3gChEkxACcAplBDSkNVABsQsgM49+zVtTUbNAOjToy9ANxiAvmLEQEmqIlTTpqAJ7NE3EQCNKAEYbXmszEk4BVlRjf3pOdy8rIA
+
+I’ll use your example in my reply on that issue, if that’s okay.
+
+[08:16:59.0014] <devsnek>
+sure
+
+[08:19:56.0013] <jschoi>
+Hm, maybe it’s a fundamental limitation of how TypeScript’s “type inference works left to right”.
+
+[08:21:59.0855] <jschoi>
+Perhaps in `map(user => user.name)(userOption)` it can’t unify the types of `user` and `userOption` because…I don’t know, maybe it’s somehow unidirectional, it expects a type right away in that arrow function, and it eagerly throws an error right there before moving onto `(userOption)`? I wonder how solvable this would be for the TypeScript team, but having to use `pipe` functions seems like a pretty brittle way to work around it.
+
+[08:41:09.0506] <jschoi>
+Hmmm. https://github.com/microsoft/TypeScript/issues/15680
+
+[08:56:07.0757] <jschoi>
+ * Hmmm. https://github.com/microsoft/TypeScript/issues/15680
+https://github.com/microsoft/TypeScript/issues/25826
+https://github.com/microsoft/TypeScript/issues/30134
+
+[10:09:55.0358] <TabAtkins>
+Okay yeah sounds like it's just "we don't actually unify types, just do some inference tricks that fail in a lot of cases", but I'm still confused why `pipe(val, map(user=>user.name))` infers properly.
+
+[10:19:30.0030] <devsnek>
+tsc continues to befuddle me
+
+[10:20:25.0517] <devsnek>
+TabAtkins: it seems to just be the order in which the graph is visited, one of those issues has an example of changing the order of arguments breaking inference 
+
+[10:23:37.0844] <TabAtkins>
+Yeah, seems like there's some special-casing thrown around to address some cases. If this becomes a big issue, I suspect TypeScript can special-case "trailing `(^)` in a pipe body" and make it work like we'd expect, even without full inference.
+
+[10:33:12.0313] <devsnek>
+apparently the swc person is writing a new typescript type checker
+
+[10:33:17.0757] <devsnek>
+maybe it can handle this properly 
+
+[11:56:25.0153] <bakkot>
+we should make `let { #x: a } = foo` work, to mean `let a = foo.#x`: y/n?
+
+[11:57:03.0319] <bakkot>
+I have seeded the emoji reacts so you can more easily just click on the appropriate one to express your opinion
+
+[11:57:54.0506] <TabAtkins>
+Tho `let {#x} = foo;` would still not work, right?
+
+[11:59:30.0607] <bakkot>
+yup
+
+[11:59:38.0647] <bakkot>
+or at least I am not proposing to allow it, and I think it should not work
+
+[12:47:08.0944] <Domenic>
+My personal opinion is that renaming while destructuring is generally distasteful, so I am not voting. (I.e. I think `let x = y.z` is clearer than `let { z: x } = y`.)
+
+[12:53:18.0906] <devsnek>
+i vote for whatever increases the number of productions in the spec
+
+
+2021-09-04
+[10:01:25.0570] <devsnek>
+anyone here familiar with unicode? trying to figure out how to submit corrections/additions to confusables.txt
+
+[10:01:38.0517] <devsnek>
+ * anyone here familiar with unicode consortium stuff? trying to figure out how to submit corrections/additions to confusables.txt
+
+[12:27:21.0894] <jschoi>
+> <@devsnek:matrix.org> anyone here familiar with unicode consortium stuff? trying to figure out how to submit corrections/additions to confusables.txt
+
+https://corp.unicode.org/reporting.html, I believe.
+
+[12:27:33.0446] <jschoi>
+Mark it as “errata”.
+
+
+2021-09-05
+
+2021-09-06
+
+2021-09-07
+
+2021-09-08
+[18:23:16.0523] <babaca>
+
+https://skidson.online/ Best AQW Private server 
+AQW Is a free to play browser mmorpg you can play with your friends join us now!
+
+Join our discord below:
+https://discord.gg/ZAebPzpsbR
+
+
+[18:48:17.0715] <Jack Works>
+https://es.discourse.group/t/cooperative-async-function/975
+
+[18:48:27.0144] <Jack Works>
+Anyone interested in this?
+
+[19:57:20.0254] <ljharb>
+I’m not sure i understand it. JS doesn’t have coroutines; and it doesn’t seem like you’re proposing a task runner be added for then
+
+[19:58:01.0567] <ljharb>
+* I’m not sure i understand it. JS doesn’t have coroutines; and it doesn’t seem like you’re proposing a task runner be added for them
+
+[19:58:50.0094] <ljharb>
+also i don’t think “typescript has trouble typing x” is an argument for any proposal
+
+[20:14:23.0667] <Jack Works>
+> <@ljharb:matrix.org> I’m not sure i understand it. JS doesn’t have coroutines; and it doesn’t seem like you’re proposing a task runner be added for them
+
+host or userland code can do them
+
+[20:14:49.0515] <Jack Works>
+> <@ljharb:matrix.org> also i don’t think “typescript has trouble typing x” is an argument for any proposal
+
+ok i'll remove this line
+
+[20:16:09.0656] <Jack Works>
+> <@ljharb:matrix.org> I’m not sure i understand it. JS doesn’t have coroutines; and it doesn’t seem like you’re proposing a task runner be added for them
+
+generator are the native cooperative way of scheduling multiple tasks, I'm just proposing a syntax sugar of it
+
+[20:17:15.0243] <ljharb>
+it doesn’t feel like the natural way to me
+
+[20:18:00.0807] <ljharb>
+i love the idea of a Task primitive, that produces a promise but isn’t itself one, but i don’t think generators are the ideal or natural fit for that (even async ones, altho that’s at least a much smaller gap)
+
+[20:18:03.0373] <Jack Works>
+it just don't have the good keywords for this task
+
+[20:20:11.0395] <ljharb>
+The language definitely doesn’t solve this problem well. “scheduling” seems odd to me tho since the language doesn’t have any timers in it 
+
+[20:20:34.0473] <Jack Works>
+yeah, I don't intended to add a scheduler.
+
+[20:21:06.0644] <Jack Works>
+WICG scheduler is a perfect companion for this kind of Task
+
+[20:21:16.0778] <ljharb>
+i like that a task could be started, stopped, cancelled, restarted, etc. generators don’t map well to that tho, because generators aren’t reusable and can’t be resumed once they’re interrupted (like return/throw/done, vs yield)
+
+[20:23:38.0667] <Jack Works>
+My idea above support started, pause and cancel and those 3 cases can be supported by generators well. I didn't think restart is very necessary when I was thinking of that abstraction.
+
+[20:27:37.0569] <Jack Works>
+for example, react break their heavy tasks (diff or something like that) into pieces and do only a little things in every 16ms (maybe?)
+
+[20:31:47.0013] <Jack Works>
+```js
+scheduler.postTask(function* () {
+    const result = yield* diffTree(oldJSX, newJSX)
+}())
+```
+If the WICG scheduler supports generator, it can pause the calculation of diffTree anytime to make the web page keep responding
+
+[20:59:23.0943] <ljharb>
+how is that different from a setTimeout or setInterval or rAF?
+
+[20:59:58.0565] <Jack Works>
+you can do as much work as possible if there is enough time
+
+[21:40:09.0536] <bakkot>
+Jack Works: are you familiar with `isInputPending`? I feel like that already gives you the thing you need basically
+
+[21:42:59.0255] <bakkot>
+for the "do as much work as possible if there is enough time" part, at any rate
+
+[08:53:11.0072] <devsnek>
+future style doesn't make much sense to me in js tbh, as much as i like it
+
+[08:53:51.0616] <devsnek>
+in a language like rust, you're combining various raw io surfaces, communicating across threads, etc
+
+[08:54:24.0495] <devsnek>
+but in js, everything you communicate with already exists within the agent and its scheduling 
+
+[16:39:47.0182] <rkirsling>
+wow that repo had so many issues
+
+[16:39:56.0048] <rkirsling>
+my inbox is ablazze
+
+[16:39:58.0210] <rkirsling>
+ * my inbox is ablaze
+
+[16:40:26.0426] <rkirsling>
+ * wow that repo had so many open issues
+
+[16:53:56.0039] <TabAtkins>
+Indeed, sorry about that.
+
+[16:54:08.0405] <TabAtkins>
+All done now.
+
+
+2021-09-09
+[17:00:16.0489] <TabAtkins>
+have the meeting notes been published yet?
+
+[17:33:55.0717] <Justin Ridgewell>
+No, they won't be published for 2 weeks
+
+[17:34:12.0702] <Justin Ridgewell>
+ * No, they won't be published for 2 weeks after the meeting
+
+[17:47:41.0927] <rkirsling>
+> <@tabatkins:matrix.org> Indeed, sorry about that.
+
+nah props to you for being willing to be the target of anger for half of those children
+
+[17:49:18.0989] <rkirsling>
+> <@tabatkins:matrix.org> Indeed, sorry about that.
+
+ * nah props to you for your willingness to be the target of anger for half of those children
+
+[18:00:47.0060] <TabAtkins>
+gotta rip the bandaid off sometime
+
+[18:01:07.0550] <TabAtkins>
+and i've got the "hide as abuse" (and if necessary, report) buttons ready to go when necessary
+
+
+2021-09-10
+[12:09:22.0822] <devsnek>
+is there a name for zipping iterators where the iteration goes until specifically the first iterator is empty
+
+[12:09:33.0833] <devsnek>
+instead of the shortest or longest iterator 
+
+[12:17:03.0428] <TabAtkins>
+I haven't heard of one, but `zip-first` is the obvious name from the standard naming scheme
+
+[16:15:33.0007] <bakkot>
+what do you do if the first one is shorter than the second?
+
+[16:25:46.0929] <TabAtkins>
+stop, like a normal zip does
+
+[16:26:07.0423] <TabAtkins>
+(traditionally, zip stops at the length of the shortest input)
+
+[16:26:43.0392] <bakkot>
+*longer, rather
+
+[16:27:01.0692] <TabAtkins>
+if you meant the opposite case, where the first is longer than the second, then you need a default value for the additional iterators, just like `zip-longest` usually does <https://docs.python.org/3/library/itertools.html#itertools.zip_longest>
+
+[16:27:20.0308] <bakkot>
+fascinating
+
+[16:27:23.0780] <bakkot>
+never seen that function before
+
+[16:27:44.0109] <TabAtkins>
+I get that response most of the time i pull out the itertools manual page
+
+[16:27:51.0413] <bakkot>
+I always written `zip(first, chain(second, repeat(default)))` or equivalents
+
+[16:28:08.0273] <bakkot>
+on reflection, I'm going to keep writing that, since it's composed of primitives people will have seen before instead of being a new thing
+
+[16:28:42.0322] <TabAtkins>
+nothing wrong with that, tho it depends on knowing which one will end first (which you probably do usually know)
+
+[16:28:47.0235] <bakkot>
+sure is a lot of stuff in itertools
+
+[16:29:17.0553] <TabAtkins>
+well, wait, no it doesn't - the second iterator is now infinite, so it'll always consume all of `first` and then stop. never mind.
+
+[16:29:33.0800] <bakkot>
+wait, hang on, does zip_longest not allow you to specify different values for the `first` and `second`?
+
+[16:29:37.0234] <bakkot>
+that seems like it would rarely be useful
+
+[16:29:42.0802] <bakkot>
+I feel like most of my zipping is of unlike types
+
+[16:30:00.0221] <TabAtkins>
+correct, it doesn't. gotta chain if they're unlike types
+
+[16:30:07.0742] <bakkot>
+huh
+
+
+2021-09-11
+[19:18:47.0044] <devsnek>
+bakkot i think u got a good solution to my question
+
+[19:18:55.0925] <devsnek>
+zip shortest + make everything except the first one infinite
+
+[19:44:15.0729] <bakkot>
+`zip-longest` is actually the interesting one; my thing does not give you that unless you know up front which the longest one is
+
+[19:57:04.0574] <bakkot>
+shortest I can come up with in ten minutes is
+
+```
+def zip_longest(*parts, fillvalue=None):
+  sigil = {}
+  return map(
+    lambda p: tuple(map(lambda x: x if x is not sigil else fillvalue, p)),
+    takewhile(
+      lambda p: not (all(map(lambda x: x is sigil, p))),
+      zip(*(chain(x, repeat(sigil)) for x in parts))
+    )
+  )
+```
+which... I guess it's straightforward enough, but I get why python decided that was worth putting in the standard library
+
+[08:00:37.0791] <devsnek>
+itertools docs has examples for how to implement the functions https://docs.python.org/3/library/itertools.html#itertools.zip_longest
+
+[08:45:38.0614] <bakkot>
+yeah but their implementation is an explicit loop, which is gross
+
+[10:23:28.0624] <jschoi>
+Has anyone thought about proposing a logical-xor operator `^^`?
+
+[10:25:38.0497] <jschoi>
+It was asked for and talked about on the TypeScript side, where it was closed with “making new binary operators is TC39's job, not ours”. https://github.com/microsoft/TypeScript/issues/587
+
+[10:25:53.0629] <jschoi>
+ * Has anyone thought about proposing a logical-xor operator `^^` to parallel bitwise xor `^`?
+
+[10:26:56.0457] <bakkot>
+jschoi: what's wrong with `!==`?
+
+[10:27:25.0904] <bakkot>
+obviously it doesn't do the type coercion for you but I would be very reluctant to introduce a new operator which is only necessary when you don't know the types of your variables
+
+[10:27:33.0986] <jschoi>
+Yep, that was brought up too. My answer is: nothing! I’m not seriously considering it, but I am wondering if it was considered.
+
+[10:27:39.0668] <jschoi>
+ * Yep, that was brought up in the TypeScript issue too. My answer is: nothing! I’m not seriously considering it, but I am wondering if it was considered.
+
+[10:27:59.0551] <jschoi>
+ * Yep, that was brought up in the TypeScript issue too. My answer is: nothing! I’m not seriously considering it, but I am wondering if it was considered, especially given that `^` might be used for other purposes in the future.
+
+[10:28:04.0033] <jschoi>
+ * Yep, that was brought up in the TypeScript issue too. My answer is: nothing! I’m not seriously considering it, but I am wondering if it was considered, especially given that the `^` punctuator might be used for other purposes in the future.
+
+[10:28:46.0294] <bakkot>
+I don't recall seeing a discussion; you could check the mailing list archives at esdiscuss.org/, but I'd be surprised if there was any serious proposal put forward
+
+[10:29:40.0020] <jschoi>
+Yeah, I couldn’t find anything on ESDiscuss. But it’s good to know that the temperature for a binary `^^` in TC39 is cold.
+
+[10:30:06.0273] <jschoi>
+ * Yeah, I couldn’t find anything on ESDiscuss. But it’s good to know that the temperature for a binary `^^` in TC39 is cold. The pipe operator might use `^`, after all, which would forever preclude a binary `^^`.
+
+[10:30:29.0172] <jschoi>
+ * Yeah, I couldn’t find anything on ESDiscuss. But it’s good to know that the temperature for a binary `^^` in TC39 is cold. The pipe operator might use `^`, after all, which would forever preclude a binary `^^`. Thank you!
+
+[10:57:04.0355] <devsnek>
+bakkot: it doesn't seem to be like the new tail call wording behaves well with the "caller realm" for eval
+
+[10:57:09.0789] <devsnek>
+ * bakkot: it doesn't seem to me like the new tail call wording behaves well with the "caller realm" for eval
+
+[10:57:54.0920] <devsnek>
+with the old wording the stack was popped, now it is not. which realm should it point to?
+
+[11:01:27.0386] <bakkot>
+devsnek: eval isn't a tail call anyway; I don't understand the question
+
+[11:01:42.0197] <devsnek>
+wdym it isn't a tail call
+
+[11:01:50.0449] <bakkot>
+https://tc39.es/ecma262/#sec-function-calls-runtime-semantics-evaluation
+
+[11:02:04.0293] <bakkot>
+a direct eval doesn't go through the normal call semantics
+
+[11:02:11.0360] <bakkot>
+it has its own branch, which doesn't include the tail call stuff
+
+[11:02:31.0001] <devsnek>
+you can do `return (0, eval)()` though
+
+[11:03:24.0868] <bakkot>
+oh, for indirect eval, sure
+
+[11:04:06.0125] <devsnek>
+so its like 2nd to top or 3rd to top depending on if there's a tail call now
+
+[11:04:22.0255] <bakkot>
+no, it's still the second to top
+
+[11:04:31.0675] <bakkot>
+the realm is no longer the realm of the caller of the function containing the tail call
+
+[11:04:35.0765] <bakkot>
+that was the point of the PR
+
+[11:04:42.0857] <devsnek>
+?
+
+[11:04:59.0957] <bakkot>
+the realm used for `g` in `function f(){ g() }` is the same as the realm for `g` in `function f(){ return g() }`
+
+[11:05:09.0359] <bakkot>
+that was the point of the PR
+
+[11:05:40.0417] <devsnek>
+i'm not following
+
+[11:07:06.0033] <bakkot>
+prior to #2495, when you had a `g` which could observe its callers realm, e.g. if `g` is a revoked proxy for a callable,
+it would observe the realm of the caller of `f` in `function f(){ return g() }`, and now it observes the realm of `f` itself, just as for `function f(){ g() }`
+
+[11:07:22.0678] <devsnek>
+no i mean, if that's the case, isn't the assertion incorrect
+
+[11:07:29.0194] <devsnek>
+since you are continuing to use information from it
+
+[11:08:29.0958] <bakkot>
+eh, depends on what you consider "resources"
+
+[11:08:49.0047] <bakkot>
+we have consensus for allowing cross-realm tail calls to consume resources anyway, we just never merged that change in to the spec (and I don't plan to)
+
+[11:10:28.0756] <devsnek>
+t just weirds me out
+
+[11:10:30.0780] <devsnek>
+ * it just weirds me out
+
+[11:11:45.0135] <devsnek>
+and if we explicitly differentiate between implementation activations of functions and the execution context stack, why do we also have to duplicate the context in asyncfunctionstart
+
+[11:12:04.0768] <devsnek>
+i feel like i'm missing a connection here or there is a mistake
+
+[11:13:06.0846] <bakkot>
+> if we explicitly differentiate between implementation activations of functions
+
+I don't know what this means. the spec does not use the phrase "implementation activations of functions"
+
+[11:13:29.0526] <devsnek>
+> For example, a tail position call should only grow an implementation's activation record stack by the amount that the size of the target function's activation record exceeds the size of the calling function's activation record. If the target function's activation record is smaller, then the total size of the stack should decrease.
+
+[11:14:01.0077] <bakkot>
+that's in a non-normative note, which is talking about implementation strategies
+
+[11:14:29.0969] <bakkot>
+there's no corresponding notion in the normative prose
+
+[11:15:46.0059] <devsnek>
+i think the normative text was written with that model in mind
+
+[11:16:09.0610] <devsnek>
+and it makes it weird
+
+[11:16:53.0079] <bakkot>
+it was written with that model in mind, but it was extremely confused, because it was conflating that with transfers of control
+
+[11:16:58.0502] <bakkot>
+now there is no such conflation; it is much better
+
+[11:19:35.0635] <bakkot>
+re:
+> why do we also have to duplicate the context in asyncfunctionstart
+
+it's so that when the topmost context suspends (that is, the body of the function does `await`), control will return (after a couple of intervening steps) to EvaluateAsyncFunctionBody step 5, which is the correct next step to evaluate
+
+[11:20:32.0406] <bakkot>
+if we didn't push a new context the `await` would suspend the execution context which has EvaluateAsyncFunctionBody itself, which is no good
+
+[11:22:34.0120] <devsnek>
+yeah i know the reasoning there (we had to revert my pr remember?), my point was there seems to be disagreement about what thing is doing the evaluation of code. is the execution context metadata for the evaluation or does it represent the evaluation itself
+
+[11:28:30.0692] <bakkot>
+from the spec's point of view, code is just another kind of data which gets passed around. the execution context stack represents some metadata which is tracked during evaluation - e.g. [[Realm]] - as well as representing nonlocal transfers of control within the spec [but n.b. this is within the _spec's abstract machine_, not within _ecmascript code_]: an execution context can be suspended-and-popped, which transfers control back to the step subsequent to the one which pushed it, and for execution contexts which have steps after the suspend-and-pop, at some future point it can be pushed-and-resumed and control will resume at the step subsequent to the suspend-and-pop.
+
+[11:29:43.0252] <bakkot>
+I'm not sure if this answers "what thing is doing the evaluation of code", though. not sure if by "code" you mean ES code or the spec steps.
+
+[11:35:14.0420] <bakkot>
+("execution contexts which have steps after the suspend-and-pop" is synonymous with "execution contexts which are created for the evaluation of generators/async functions/async generators/TLA modules", i.e., contexts which can use Yield or Await)
+
+[11:35:58.0843] <bakkot>
+sometimes algorithms which do suspend-and-pop use Return to transfer control back to the previous execution context, which is very strange; see https://github.com/tc39/ecma262/issues/2400 for discussion/a possible fix
+
+
+2021-09-12
+[18:56:42.0106] <jschoi>
+Has a `Function.prototype.isConstructor`, `Function.isConstructor`, or `Reflect.isConstructor` method been explored by TC39 before? 
+
+The only references on the web I can find of any discussion is https://esdiscuss.org/topic/add-reflect-isconstructor-and-reflect-iscallable and https://github.com/tc39/agendas/blob/master/2015/01.md. Apparently, Jason Orendorff presented about it, but there’s nothing in https://github.com/tc39/notes/tree/master/meetings/2015-01 about that.
+
+[18:58:12.0784] <jschoi>
+The only reason why I ask about it is because I’m writing a polyfill for `Array.fromAsync` right now and finding it not possible to match the spec.
+
+[18:59:03.0915] <jschoi>
+ * The only reason why I ask about it is because I’m writing a polyfill for `Array.fromAsync` right now and finding it not possible to match the spec. It needs to do what `Array.from` does and start with a `new C` only if `C` is a constructor and otherwise start with `Array(0)`. 
+
+[19:00:37.0525] <jschoi>
+Other polyfills seem to cheat and check only if `C` is a function.
+
+[19:09:41.0077] <jschoi>
+ * Current polyfills for `Array.from` generally seem to cheat and check only if `C` is a function.
+
+[19:58:17.0425] <devsnek>
+jschoi: you can use a proxy to mimic IsConstructor
+
+[19:59:36.0541] <devsnek>
+but i think the reason this doesn't get brought up more is because IsConstructor is not a great check in practice. normal functions and many builtins will be true even though they're not intended to be used as constructors
+
+[20:45:31.0773] <Domenic>
+Yeah, the polyfill can match the spec by using https://esdiscuss.org/topic/add-reflect-isconstructor-and-reflect-iscallable#content-2
+
+[20:46:10.0964] <Domenic>
+And yeah, given that it's only really useful for polyfills, adding it to the language seems subpar.
+
+[07:36:57.0165] <jschoi>
+Hm, I wonder if that proxy in that post even needs a `construct` handler.
+```js
+function isConstructor (obj) {
+  var prox = new Proxy(obj, {});
+  try {
+    new prox;
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+```
+…should work too, right?
+
+[07:44:51.0669] <Richard Gibson>
+no, because a constructor might have runtime constraints such as required arguments
+
+[07:48:19.0429] <jschoi>
+> <@gibson042:matrix.org> no, because a constructor might have runtime constraints such as required arguments
+
+Ah, so `new prox` there might throw not necessarily because it’s not a constructor.
+
+[07:48:23.0138] <jschoi>
+I see.
+
+[07:49:20.0406] <Richard Gibson>
+exactly. That version would false-negative on input like `class { constructor(length){ if(typeof length !== "number") throw new TypeError("length must be a Number"); } }`
+
+[07:49:53.0942] <Ashley Claymore>
+> <@jschoi:matrix.org> Ah, so `new prox` there might throw not necessarily because it’s not a constructor.
+
+the constructor could also have side-effects
+
+
+2021-09-13
+
+2021-09-14
+
+2021-09-15
+[19:38:33.0989] <jschoi>
+Regarding Array.from: In https://tc39.es/ecma262/#sec-array.from, why is usingIterator created? Wouldn’t GetIterator(items, sync) do the job of checking for a sync iterator and throwing TypeError if it can’t? (What is even the purpose of the third parameter of GetIterator?)
+
+[19:40:09.0213] <jschoi>
+Is it to maintain a specific order of attempting to construct C, then calling GetIterator?
+
+[19:40:36.0096] <jschoi>
+ * Regarding Array.from: In https://tc39.es/ecma262/#sec-array.from, why is usingIterator created in step 4? Wouldn’t GetIterator(items, sync) in step 5c do the job of checking for a sync iterator and throwing TypeError if it can’t? (What is even the purpose of the third parameter of GetIterator?)
+
+[19:43:21.0746] <bakkot>
+GetIterator unconditionally attempts to call the `Symbol.iterator` property, even if it's undefined, whereas `Array.from` needs to not enter step 5 at all if the `Symbol.iterator` property is `undefined`
+
+[19:43:59.0396] <bakkot>
+the purpose of the third parameter of GetIterator is in case you have already done the property lookup of `Symbol.iterator`, to avoid doing the property lookup again
+
+[19:44:16.0293] <jschoi>
+Right, and I suppose this is observable by the user, because they can observe whether Construct(_C_) is called before Symbol.iterator.
+
+[19:44:47.0476] <bakkot>
+It's not just about order; it's about only accessing the property once
+
+[19:45:02.0203] <bakkot>
+e.g. if you have a getter for `Symbol.iterator`, `Array.from` should only invoke that getter one time
+
+[19:45:37.0097] <jschoi>
+Ah, okay.
+
+[19:45:39.0958] <jschoi>
+Thanks!
+
+[19:46:16.0415] <bakkot>
+I don't think we actually cared much about the order of the call to `C` vs to `Symbol.iterator`, but we definitely do care that the property is only accessed a single time
+
+[19:46:59.0059] <jschoi>
+I guess I’m confused why step 4 isn’t what step 5c currently is.
+
+[19:47:10.0577] <bakkot>
+uh
+
+[19:47:16.0109] <bakkot>
+I don't know what that means
+
+[19:48:01.0624] <jschoi>
+Another way to put it: why would “Let _iteratorRecord_ be ? GetIterator(items, sync)” result in two accesses of item’s Symbol.iterator property?
+
+[19:48:08.0714] <bakkot>
+oh, you mean, why is step 4 not `GetIterator`? it's because GetIterator unconditionally attempts to call the `Symbol.iterator` property, even if it's `undefined`
+
+[19:48:09.0716] <jschoi>
+ * Another way to put it: why would “Let _iteratorRecord_ be ? GetIterator(_items_, sync)” result in two accesses of item’s Symbol.iterator property?
+
+[19:48:44.0784] <jschoi>
+Mm, yeah, I see now that’s true in GetIterator’s definition. That’s a bit surprising.
+
+[19:48:58.0468] <bakkot>
+that is, there's two things happening here:
+- step 4 can't use `GetIterator` because `GetIterator` will _throw_ if Symbol.iterator is missing
+- step 5c needs to forward `usingIterator` so that it doesn't do another access of Symbol.iterator
+
+[19:49:32.0066] <jschoi>
+ * Mm, yeah, I see now that’s true in GetIterator’s definition. That’s a bit surprising.
+It does check that the result of the Symbol.iterator-value’s function call is an object.
+
+[19:50:03.0041] <jschoi>
+Don’t we want to throw at step 4 anyway if Symbol.iterator is missing?
+
+[19:50:15.0898] <bakkot>
+> That’s a bit surprising.
+
+Eh, so, most of the APIs in JS take only one kind of thing. if they take an iterable, then they're expecting an iterable, and throwing if you pass something non-iterable is the right behavior.
+
+Array.from is relatively unique in that it also accepts an array-like, because it's specifically intended as a coercion method to turn your array-likes into actual arrays (which can then be passed to things which take iterables, because arrays are iterables)
+
+[19:50:16.0161] <jschoi>
+Oh wait.
+
+[19:50:29.0936] <jschoi>
+Of course, right, I had forgotten about that behavior.
+
+[19:50:34.0121] <jschoi>
+Not just iterators.
+
+[19:50:37.0820] <jschoi>
+ * Not just iterables.
+
+[19:50:50.0697] <jschoi>
+It’s been a long day; thanks for your patience!
+
+[19:51:10.0043] <jschoi>
+ * Array.from does not take only iterable inputs.
+
+[19:51:13.0229] <bakkot>
+nw, happy to help
+
+
+2021-09-16
+[07:31:19.0433] <jschoi>
+Are there definite guidelines or criteria for when a proposal issue is “finished”—when we should close the issue?
+Sometimes an issue asks for a concrete actionable change, and, if the change is added to the repository, then the issue is clearly “finished” and should be closed. 
+But oftentimes the issue doesn’t yield an actionable change, and it becomes a long discussion that goes in circles and repeats the same arguments. This can go on for months. If there’s nothing really actionable in the issue, but discussion is still occurring, then when is the issue “finished”? When is it appropriate to close it?
+(Background: https://github.com/tc39/proposal-pipeline-operator/pull/214#discussion_r709774469)
+
+[07:49:38.0171] <jschoi>
+ * Are there definite guidelines or criteria for when a proposal issue is “finished”—when we should close the issue?
+Sometimes an issue asks for a concrete actionable change, and, if the change is added to the repository, then the issue is clearly “finished” and should be closed. 
+But oftentimes the issue doesn’t yield an actionable change, and it becomes a long discussion that goes in circles and repeats the same arguments. This can go on for years. If there’s nothing really actionable in the issue, but discussion is still occurring, then when is the issue “finished”? When is it appropriate to close it?
+(Background: https://github.com/tc39/proposal-pipeline-operator/pull/214#discussion_r709774469)
+
+[07:55:01.0540] <ptomato>
+really depends on the situation. I closed a lot of open discussion-type issues when Temporal reached stage 3 with a message like, "we acknowledge that X has the advantages of Y and Z, but the decision that we decided to move forward with is A because B and C weighed more strongly." but these probably involved orders of magnitude less strong feelings than pipeline
+
+[08:02:21.0738] <ptomato>
+I agree that it should be OK to close things even if discussions are still going on, if they aren't getting anywhere. although sometimes you get a little more goodwill by just letting the discussion burn itself out, then closing the issue
+
+[08:02:37.0764] <ptomato>
+Shane did some good work of that type in this thread: https://github.com/tc39/proposal-temporal/issues/1454
+
+[14:23:11.0704] <rkirsling>
+on a keyboard with combining ^, wouldn't `^)` or `^,` still be typable without an extra keystroke?
+
+[14:23:55.0000] <rkirsling>
+^ leobalter, I suppose
+
+[14:25:11.0469] <leobalter>
+rkirsling:  If I'm writing `^(` I really never type Shift+6 and `(`
+
+[14:25:32.0016] <leobalter>
+but Shift+6, space, and Shift+9 (`(`)
+
+[14:25:47.0943] <rkirsling>
+interesting
+
+[14:25:58.0483] <rkirsling>
+that's a matter of habit though?
+
+[14:26:09.0346] <rkirsling>
+(I'm not arguing for ^ here, I'm just genuinely interested)
+
+[14:26:10.0983] <leobalter>
+same thing for string quote characters, including back quote
+
+[14:26:19.0600] <leobalter>
+mechanical habit, yes
+
+[14:26:39.0261] <leobalter>
+because some of these are also applied in conjunction to other letters
+
+[14:27:11.0103] <leobalter>
+in pt-BR we only mix `^` with aeo, but it might also fall into other letters, no limited to vowels, I guess
+
+[14:27:20.0780] <leobalter>
+it's even for quotes 
+
+[14:28:07.0106] <leobalter>
+like `'` for `áéíóúç`
+
+[14:29:27.0932] <leobalter>
+the keyboard capabilities go beyond what my language grammar allows, so without a space key press, it's a guess game
+
+[14:41:33.0099] <leobalter>
+rkirsling: https://github.com/tc39/proposal-pipeline-operator/issues/91#issuecomment-921274859
+
+[14:44:25.0291] <rkirsling>
+> <@leobalter:matrix.org> like `'` for `áéíóúç`
+
+oh yeah I understand this, the reason for my question is just that it wouldn't combine with other punctuation
+
+[14:45:08.0010] <rkirsling>
+oh wait
+
+[14:45:22.0527] <rkirsling>
+you just demonstrated that you get a different thing from ^
+
+[14:45:27.0215] <rkirsling>
+that's shocking
+
+[14:45:30.0509] <rkirsling>
+what a bummer
+
+[14:46:05.0572] <leobalter>
+for `^)`, `^,` the spacebar keystroke in between is required
+
+[14:47:06.0747] <rkirsling>
+that is super unfortunate behavior
+
+[14:47:20.0434] <rkirsling>
+but I appreciate the knowledge
+
+[14:49:36.0596] <leobalter>
+TIL option+i is equivalent to Shift+6 
+
+[14:58:00.0382] <rkirsling>
+ah. that one works for the US keyboard too
+
+[14:58:42.0361] <rkirsling>
+and does indeed demonstrate the issue you mentioned
+
+[14:58:48.0161] <rkirsling>
+so I guess I was just being naive
+
+[15:06:58.0915] <jschoi>
+> <@leobalter:matrix.org> TIL option+i is equivalent to Shift+6
+
+Well, ⌥I is different in that cannot insert ^ at all, right?
+
+[15:07:15.0142] <jschoi>
+Typing ⌥I then Space leaves ˆ, not ^.
+
+[15:07:37.0104] <jschoi>
+But in keyboard layouts with dead-key modes, typing ⇧6 then Space leaves ^, right?
+
+[15:16:08.0907] <jschoi>
+ * But in keyboard layouts with dead-key modes, typing ⇧6 then Space inserts ^, right?
+
+[15:18:23.0370] <jschoi>
+I think we should generally optimize for ease-of-reading over ease-of-typing. But in this case the trade-offs either way are somewhat small (it depends on how frequent remainder `%` occurs over bitwise xor `^`, and typing Space-then-Backspace every time is not catastrophic but is also annoying).
+
+[15:18:35.0578] <jschoi>
+ * I think we should generally optimize for ease-of-reading over ease-of-typing. But in this case the trade-offs either way are somewhat small (it depends on how frequent remainder `%` occurs over bitwise xor `^`, and typing Space-then-Backspace every time after typing ``` or `^` or whatever is not catastrophic but is also annoying).
+
+[15:18:40.0416] <jschoi>
+ * I think we should generally optimize for ease-of-reading over ease-of-typing. But in this case the trade-offs either way are somewhat small (it depends on how frequent remainder `%` occurs over bitwise xor `^`, and typing Space-then-Backspace every time after typing `` ` `` or `^` or whatever is not catastrophic but is also annoying).
+
+[15:19:59.0290] <ljharb>
+how do international elixir users handle this, since they use `^` for their pattern matching pin operator?
+
+[15:40:28.0906] <leobalter>
+ljharb: I know the guy who created Elixir, who is also a brazilian. lol, I guess Valim picked the ease-of-reading side
+
+[15:41:58.0374] <leobalter>
+in my case is just bias, the convenience of typing is higher than the visual benefits if I compare `%` and `^`. There isn't much else for me to argument on this
+
+
+2021-09-17
+[16:35:35.0807] <jugglinmike>
+Does ECMA262 formally define the spec-internal syntax, "myvariable.[[SomeInternalSlot]]" ?
+
+[16:36:45.0896] <jugglinmike>
+It's a bit tough to search for that pattern, but it doesn't seem to be explained in the Notational Conventions section
+
+[16:40:29.0791] <bakkot>
+jugglinmike: well, there's
+
+> In specification text and algorithms, dot notation may be used to refer to a specific field of a Record value. For example, if R is the record shown in the previous paragraph then R.[[Field2]] is shorthand for “the field of R named [[Field2]]”.
+
+though that only says you can use it for records, not internal slots in general
+
+[16:40:43.0613] <bakkot>
+probably https://tc39.es/ecma262/multipage/ecmascript-data-types-and-values.html#sec-object-internal-methods-and-internal-slots should have a sentence about how internal slots are read
+
+[16:41:00.0852] <jugglinmike>
+Ahah! Thanks
+
+[16:42:38.0293] <jugglinmike>
+bakkot: At the moment, there are at least two cases where a slot that has not been explicitly assigned a value is assumed to provide the value "undefined". Should that behavior be specified for all records? For internal slots only? Or should we set the value "undefined" in InternalObjectCreate? Or none of those things?
+
+[16:43:46.0767] <bakkot>
+> Unless specified otherwise, the initial value of an internal slot is the value undefined.
+
+[16:44:48.0810] <bakkot>
+I'm not sure if that holds for record fields, though. I think we generally initialize record fields before reading them?
+
+[16:45:52.0830] <jugglinmike>
+Hm, I don't know about that. The text you cited covers the cases I've been looking at, though
+
+[16:46:01.0781] <jugglinmike>
+So thanks twice over :)
+
+
+2021-09-18
+[08:18:38.0622] <Jack Works>
+```
+label: {
+    switch (true) { case true: break label }
+    console.log(1)
+}
+```
+
+1 not logged
+
+[08:18:51.0678] <Jack Works>
+that's very inconsistent 
+
+[08:30:55.0379] <Jack Works>
+oh wait never mind
+
+[10:21:08.0081] <devsnek>
+looks like test262 is missing some coverage https://twitter.com/mild_sunrise/status/1439277173932806148
+
+[10:21:30.0096] <devsnek>
+poor v8 https://gc.gy/8259149f-bc48-41c5-9efe-2297b987a302.png
+
+[10:22:36.0558] <bakkot>
+that's... huh
+
+[10:23:29.0561] <devsnek>
+it turned the literal into a string 😄
+
+[10:23:49.0398] <bakkot>
+same deal with hex: `({ 0x7n: 0 }) -> {0x7: 0}`
+
+[10:28:07.0230] <devsnek>
+quick someone wake shu up, sev 0 bug alert
+
+[10:30:48.0930] <bakkot>
+affects FNI too: `Object.values(({ 0o7n: function(){} }))[0].name === '0o7'`
+
+[12:29:27.0392] <rkirsling>
+wacky
+
+[12:29:51.0275] <rkirsling>
+does it just happen for the should-be-bigint cases?
+
+[12:30:13.0558] <bakkot>
+yeah it's specifically a bug in the parser for bigints
+
+[12:30:34.0531] <bakkot>
+that is, a bug in the parser for object literals in the bigint case
+
+[12:30:40.0557] <bakkot>
+specifically https://github.com/v8/v8/blob/894a36f9dd43a39ffdb3980bc7dac51e3399b06a/src/parsing/parser-base.h#L2294
+
+[12:31:22.0632] <rkirsling>
+ahhh whoops haha
+
+[13:09:41.0634] <ljharb>
+hm, in the latest node repl it prints out `[ 'Oo7n' ]`
+
+[13:10:29.0295] <bakkot>
+leading character is a digit-0 not an letter-O
+
+[13:10:34.0768] <bakkot>
+ * leading character is a digit-0 not a letter-O
+
+[13:11:24.0595] <ljharb>
+ah k
+
+[13:11:54.0492] <ljharb>
+`Object.keys({ 0o7n: 1 }` makes `[ '0o7' ]`
+
+[13:12:46.0360] <ljharb>
+ * `Object.keys({ 0o7n: 1 }` makes `[ '0o7' ]`, gotcha
+
+[13:38:35.0566] <justingrant>
+If this bug is fixed and people are relying on the current behavior, does that mean that someone will have to publish a polyfill to get the current behavior back?  If so, that would be so awesome.  
+```
+npm install 0o7-licensed-to-polyfill
+```
+
+
+2021-09-19
+[17:01:49.0146] <jschoi>
+o7…It’s a person saluting. 
+
+[17:01:51.0357] <jschoi>
+Also, I’m trying to figure out where it is specified that `for await`, when given a non-async iterable, performs `await` on each of the iterable’s items. 
+
+
+[17:01:51.0715] <jschoi>
+
+
+In https://tc39.es/ecma262/#sec-runtime-semantics-forin-div-ofbodyevaluation-lhs-stmt-iterator-lhskind-labelset, step 6.b, when _iteratorKind_ is async, then Await is called on _nextResult_ itself. But I don’t see any place where Await is called on _nextValue_…
+
+[17:12:22.0512] <bakkot>
+jschoi: I believe it's in `AsyncFromSyncIteratorPrototype`
+
+[17:12:28.0370] <bakkot>
+i will see if I can find it
+
+[17:13:39.0373] <bakkot>
+https://tc39.es/ecma262/multipage/control-abstraction-objects.html#sec-asyncfromsynciteratorcontinuation
+
+[17:15:20.0769] <bakkot>
+that is, the `AsyncFromSyncIteratorPrototype` wrapper doesn't return `Promise.resolve({ value: innerValue, done: false })` directly, as you might expect; rather, it yields `Promise.resolve(innerValue).then(unwrapped => ({ value: unwrapped, done: false })`
+
+[17:15:27.0149] <bakkot>
+ * that is, the `AsyncFromSyncIteratorPrototype` wrapper doesn't return `Promise.resolve({ value: innerValue, done: false })` directly, as you might expect; rather, it yields `Promise.resolve(innerValue).then(unwrapped => ({ value: unwrapped, done: false }))`
+
+[17:20:25.0596] <bakkot>
+incidentally, the fact that Await is not called on `nextValue` means that it's actually possible to cause the loop variable in a `for await` to hold a Promise if you construct the async iterator manually, though you should not do this: 
+
+```
+let x = { [Symbol.asyncIterator](){ let first = true; return { next(){ if (first) { first = false; return { value: Promise.resolve(0), done: false }; } else return { done: true }; } } } };
+for await (let a of x) console.log(a); // prints a Promise holding 0
+```
+
+[18:32:48.0255] <jschoi>
+bakkot: Aha, thank you very much. This will help me very much.
+
+[19:23:30.0096] <jschoi>
+(Background for those curious: https://github.com/tc39/proposal-array-from-async/issues/9)
+
+
+2021-09-20
+[07:42:46.0715] <shu>
+devsnek: thanks for the report. is there an issue yet? happy to make one if not
+
+[07:43:56.0370] <devsnek>
+i don't think there is
+
+
+2021-09-21
+
+2021-09-22
+[07:03:16.0325] <Ashley Claymore>
+In Chrome:
+
+```
+console.log((new class {
+  #id;
+  
+  test(a,b) {
+    return a << #id in b
+  }
+}).test(0, {}))
+```
+
+Parses without a SyntaxError and results with 'Uncaught TypeError: Cannot convert a Symbol value to a number'  when it does `(a << #id)`
+Could someone confirm if this is expected?
+
+[07:04:23.0774] <nicolo-ribaudo>
+It should be a parse error, we had the same bug in Babel
+
+[07:04:29.0650] <nicolo-ribaudo>
+ * It should be a parser error, we had the same bug in Babel
+
+[07:05:18.0629] <Ashley Claymore>
+Thanks nicolo-ribaudo - yes Babel emits a parser error as you say
+
+[07:06:06.0103] <Ashley Claymore>
+I've just realized that I'm making the same mistake in the TypeScript parser
+
+[07:09:05.0875] <nicolo-ribaudo>
+It looks like JSC has the same bug:
+```
+➜ eshost -e "class C { #x; test() { 0 << #x in {} } }" -t
+┌────────────────┬──────────────────────────────────────────────────────────┐
+│ ChakraCore     │                                                          │
+│                │ SyntaxError: Invalid character                           │
+├────────────────┼──────────────────────────────────────────────────────────┤
+│ Hermes         │                                                          │
+│                │ SyntaxError: invalid expression                          │
+├────────────────┼──────────────────────────────────────────────────────────┤
+│ JavaScriptCore │ class C { #x; test() { 0 << #x in {} } }                 │
+├────────────────┼──────────────────────────────────────────────────────────┤
+│ Moddable XS    │                                                          │
+│                │ SyntaxError: missing expression                          │
+├────────────────┼──────────────────────────────────────────────────────────┤
+│ SpiderMonkey   │                                                          │
+│                │ SyntaxError: private names aren't valid in this context: │
+├────────────────┼──────────────────────────────────────────────────────────┤
+│ V8             │ class C { #x; test() { 0 << #x in {} } }                 │
+└────────────────┴──────────────────────────────────────────────────────────┘
+
+```
+
+[07:09:27.0126] <nicolo-ribaudo>
+ * It looks like JSC has the same bug:
+```
+➜ eshost -e "class C { #x; test() { 0 << #x in {} } }" -t
+┌────────────────┬──────────────────────────────────────────────────────────┐
+│ ChakraCore     │                                                          │
+│                │ SyntaxError: Invalid character                           │
+├────────────────┼──────────────────────────────────────────────────────────┤
+│ Hermes         │                                                          │
+│                │ SyntaxError: invalid expression                          │
+├────────────────┼──────────────────────────────────────────────────────────┤
+│ JavaScriptCore │ class C { #x; test() { 0 << #x in {} } }                 │
+├────────────────┼──────────────────────────────────────────────────────────┤
+│ Moddable XS    │                                                          │
+│                │ SyntaxError: missing expression                          │
+├────────────────┼──────────────────────────────────────────────────────────┤
+│ SpiderMonkey   │                                                          │
+│                │ SyntaxError: private names aren't valid in this context: │
+├────────────────┼──────────────────────────────────────────────────────────┤
+│ V8             │ class C { #x; test() { 0 << #x in {} } }                 │
+└────────────────┴──────────────────────────────────────────────────────────┘
+```
+
+[07:56:05.0164] <shu>
+ah, and we do as well
+
+[07:56:06.0534] <shu>
+should fix
+
+[07:57:02.0240] <Ashley Claymore>
+want me to raise an issue?
+
+[07:57:24.0675] <shu>
+sure, feel free to file, i haven't done it yet
+
+[08:12:11.0766] <Ashley Claymore>
+https://bugs.chromium.org/p/v8/issues/detail?id=12259
+
+[08:33:55.0959] <shu>
+thank you kindly
+
+[12:08:00.0601] <Justin Ridgewell>
+Wait till you see `#id in #id in obj`
+
+[12:10:40.0964] <shu>
+that's fixed by the same fix
+
+[12:11:23.0946] <shu>
+which hopefully will land tomorrow
+
+[13:03:02.0291] <Ashley Claymore>
+Does anyone have a link to JSC’s issue tracker, wanted to check if this is already there or not 
+
+[13:03:12.0772] <Ashley Claymore>
+* Does anyone have a link to JSC’s issue tracker, I wanted to check if this is already there or not 
+
+[13:19:34.0638] <timothygu>
+> <@aclaymore:matrix.org> Does anyone have a link to JSC’s issue tracker, I wanted to check if this is already there or not
+
+https://bugs.webkit.org/buglist.cgi?bug_status=__open__&component=JavaScriptCore&product=WebKit
+
+[13:19:57.0361] <timothygu>
+> <@aclaymore:matrix.org> Does anyone have a link to JSC’s issue tracker, I wanted to check if this is already there or not
+
+ * [https://bugs.webkit.org/buglist.cgi?bug_status=__open__&component=JavaScriptCore&product=WebKit]
+
+[13:20:09.0200] <timothygu>
+ * `https://bugs.webkit.org/buglist.cgi?bug_status=__open__&component=JavaScriptCore&product=WebKit`
+
+
+2021-09-23
+[18:57:49.0771] <rkirsling>
+hmm if you make a ticket you can CC me since I did that feature
+
+[20:02:00.0289] <rkirsling>
+what was the point of misunderstanding though, I wonder?
+
+[20:04:19.0591] <rkirsling>
+oh literally something about the productions themselves, huh
+
+[20:19:21.0157] <rkirsling>
+that really kinda sucks actually. I thought one was free to view `#x in` like a "decorated" unary op
+
+[22:15:10.0398] <Ashley Claymore>
+It seems that at least 4 people (including me) all made the same/similar mistake 
+
+[22:15:26.0609] <Ashley Claymore>
+Productions be hard 😅
+
+[22:15:49.0704] <rkirsling>
+I'm not even sure how to describe the mistake though
+
+[22:16:06.0579] <rkirsling>
+like this is genuinely tricky to even wrap your head around in terms of precedence
+
+[22:16:18.0275] <rkirsling>
+my solution is gonna be grotesque
+
+[22:20:40.0350] <Ashley Claymore>
+For TypeScript we are going with initially parsing as `(x << #id) in v` and then the next stage spots/emits the error. Though I have zero knowledge of jsc’s code so no idea if that approach applies. Or if SyntaxErrors must come from the first parse pass
+
+[22:29:38.0618] <rkirsling>
+ah right, I think I'd somehow convinced myself that it needed to part of the first pass
+
+[22:30:12.0687] <rkirsling>
+ * ah right, I think I'd somehow convinced myself that it needed to be part of the first pass
+
+[22:30:30.0492] <rkirsling>
+brain too tired for this, apparently
+
+[22:47:20.0588] <Ashley Claymore>
+* For TypeScript is going with initially parsing as `(x << #id) in v` and then the next stage spots/emits the error. Though I have zero knowledge of jsc’s code so no idea if that approach applies. Or if SyntaxErrors must come from the first parse pass
+
+[23:00:42.0351] <Ashley Claymore>
+* TypeScript is going with initially parsing as `(x << #id) in v` and then the next stage spots/emits the error. Though I have zero knowledge of jsc’s code so no idea if that approach applies. Or if SyntaxErrors must come from the first parse pass
+
+[23:06:15.0898] <rkirsling>
+er hmm no I take that back
+
+[23:08:37.0944] <rkirsling>
+yeah I really think the way we have it I basically have to check not only that the next token is `in` but also that the current operator on top of the stack (if any) has precedence less than left shift
+
+[23:09:44.0057] <rkirsling>
+("grotesque" may be a bit dramatic; it's just unlike any other case 😅)
+
+[23:10:27.0364] <rkirsling>
+...this would've been a good use for the #tc39-implementers:matrix.org channel, heh
+
+[23:16:58.0801] <rkirsling>
+ * yeah I really think the way we have it I basically have to check not only that the next token is `in` but also that the current operator on top of the stack (if any) has precedence less than left shift (and is also not `in`)
+
+[23:40:37.0166] <rkirsling>
+ * yeah I really think the way we have it I basically have to check not only that the next token is `in` but also that the current operator on top of the stack (if any) has precedence less than `<`
+
+[23:58:07.0532] <Ashley Claymore>
+> <@rkirsling:matrix.org> ...this would've been a good use for the #tc39-implementers:matrix.org channel, heh
+
+I've joined that channel now. Thanks wasn't aware of it :)
+
+[23:58:37.0732] <Ashley Claymore>
+> <@rkirsling:matrix.org> ...this would've been a good use for the #tc39-implementers:matrix.org channel, heh
+
+ * I've joined that channel now. Thanks, wasn't aware of it 🙂
+
+[07:50:09.0702] <jschoi>
+There’s a TC39 Research Call scheduled right now, but Zoom says the host hasn’t started the meeting. Is anyone else in the meeting yet?
+
+[07:50:18.0409] <jschoi>
+* There’s a TC39 Research Call scheduled to start right now, but Zoom says the host hasn’t started the meeting. Is anyone else in the meeting yet?
+
+[07:51:26.0265] <ptomato>
+I was also wondering that
+
+[07:54:34.0742] <Jack Works>
+> <@jschoi:matrix.org> There’s a TC39 Research Call scheduled to start right now, but Zoom says the host hasn’t started the meeting. Is anyone else in the meeting yet?
+
+I guess it's because Yulia is on holiday
+
+[07:54:37.0883] <Jack Works>
+👀
+
+[07:55:48.0050] <jschoi>
+Ah, so no one else can start the meeting, I presume…
+I wonder if Felienne Hermans, the researcher, is aware of this too?
+
+[07:59:10.0200] <Jack Works>
+We can have an 1hr holiday too 😋
+
+[08:00:36.0985] <littledan>
+FYI the agenda for the incubator call in an hour is now posted at https://github.com/tc39/incubator-agendas/blob/master/2021/09-20.md
+
+[08:00:45.0645] <littledan>
+Hope to see you there soon!
+
+
+2021-09-24
+
+2021-09-25
+[10:11:44.0825] <pokute>
+Hello. Is there any proposal similar to a following that came up to my mind:
+**Nullish property omittal**
+``({ a: 'a', b?: list && `mangled${b}` })`` being sugar for
+`` ({ a: 'a', ...b ? { b: `mangled${b}` } : {} })``
+
+[10:11:49.0640] <pokute>
+ * Hello. Is there any proposal similar to a following that came up to my mind:
+**Nullish property omittal**
+`({ a: 'a', b?: list && `mangled${b}` })` being sugar for
+`({ a: 'a', ...b ? { b: `mangled${b}` } : {} })`
+
+[10:12:07.0330] <pokute>
+ * Hello. Is there any proposal similar to a following that came up to my mind:
+**Nullish property omittal**
+`({ a: 'a', b?: b && `mangled${b}` })` being sugar for
+`({ a: 'a', ...b ? { b: `mangled${b}` } : {} })`
+
+[10:14:06.0560] <pokute>
+ * Hello. Is there any proposal similar to a following that came up to my mind:
+**Nullish property omittal**
+`({ id: 'a', name?: name && `mangled${name}` })` being sugar for
+`({ id: 'a', ...name ? { name : `mangled${name }` } : {} })`
+
+[10:18:49.0955] <pokute>
+ * Hello. Is there any proposal similar to a following that came up to my mind:
+**Nullish property omittal**
+`({ id: 'a', subStructure?: secondaryId && { subId: secondaryId } })` being sugar for
+`({ id: 'a', ...secondaryId ? { subStructure: { subId: secondaryId } } : {} })`
+
+[10:20:54.0682] <pokute>
+> <@pokute:matrix.org> Hello. Is there any proposal similar to a following that came up to my mind:
+> **Nullish property omittal**
+> `({ id: 'a', subStructure?: secondaryId && { subId: secondaryId } })` being sugar for
+> `({ id: 'a', ...secondaryId ? { subStructure: { subId: secondaryId } } : {} })`
+
+With `secondaryId` of undefined or null, the resulting object would be `{ id: 'a' }`
+With `secondaryId` of 'foobar` the resulting object would be `{ id: 'a', subStructure: { subId: 'foobar' } }`
+
+[10:21:50.0320] <pokute>
+ * With `secondaryId` of `undefined` or `null`, the resulting object would be `{ id: 'a' }`
+With `secondaryId` of `'foobar'`the resulting object would be`{ id: 'a', subStructure: { subId: 'foobar' } }`
+
+[10:27:54.0358] <pokute>
+ * Nevermind, need to investigate it by myself further.
+
+
+2021-09-26
+[07:07:47.0845] <devsnek>
+https://github.com/cesanta/elk
+
+[07:08:07.0856] <devsnek>
+it interprets over tokens without building an ast, crazy stuff
+
+
+2021-09-27
+[09:08:28.0337] <devsnek>
+would be cool if intl provided stuff like parsing localized numbers
+
+[09:17:35.0016] <ryzokuken>
+devsnek: parsing is explicitly out of scope for Intl
+
+[09:17:40.0790] <ryzokuken>
+see tc39/ecma402#1
+
+[09:18:00.0281] <ryzokuken>
+ * see tc39/ecma402#1
+
+[09:18:16.0982] <devsnek>
+you mean "scope"?
+
+[09:18:21.0190] <devsnek>
+or
+
+[09:18:33.0253] <devsnek>
+oh an issue
+
+[09:18:52.0688] <ryzokuken>
+https://github.com/tc39/ecma402/issues/1 yeah
+
+[09:19:01.0927] <devsnek>
+i'm not asking to parse dates (yet)
+
+[09:19:27.0929] <devsnek>
+idk seems weird to unilaterally draw a line there
+
+[09:19:28.0705] <ryzokuken>
+they do talk about numbers here as well
+
+[09:19:52.0534] <ryzokuken>
+maybe https://blog.sffc.xyz/post/190943794505/why-you-should-not-parse-localized-strings will be helpful?
+
+[09:21:56.0671] <devsnek>
+input type=number is just Number() lol
+
+[09:23:35.0139] <ryzokuken>
+lol maybe not the best example
+
+[09:23:42.0542] <ryzokuken>
+btw, is that mandated by the spec?
+
+[09:25:06.0931] <devsnek>
+it uses this https://html.spec.whatwg.org/multipage/common-microsyntaxes.html#rules-for-parsing-floating-point-number-values
+
+[09:25:28.0654] <devsnek>
+so not literally Number() but
+
+[09:25:37.0836] <devsnek>
+just as not locale friendly as using Number()
+
+[09:28:55.0814] <devsnek>
+so far i've built this evil thing https://gc.gy/a45f7c47-5e4d-432b-8f16-82be9b79c69d.png
+
+[09:33:49.0801] <Jack Works>
+> <@devsnek:matrix.org> so far i've built this evil thing https://gc.gy/a45f7c47-5e4d-432b-8f16-82be9b79c69d.png
+
+Can you try parse this with following?
+zh or ja with 三千六百五十四
+
+
+[09:34:00.0590] <devsnek>
+yeah it won't work
+
+[09:34:03.0568] <devsnek>
+lol
+
+[09:34:23.0588] <Jack Works>
+😂
+
+[09:34:24.0959] <devsnek>
+cuz after this stage it still goes into Number()
+
+[09:34:30.0452] <devsnek>
+so arabic numerals only
+
+
+2021-09-28
+[02:20:57.0934] <ryzokuken>
+devsnek: is there really no popular 3rd party lib for parsing numbers?
+
+[02:22:45.0024] <ryzokuken>
+well, since ICU parses numbers you could probably use ICU4X?
+
+[08:03:12.0871] <devsnek>
+maybe I could
+
+[08:03:28.0586] <devsnek>
+I don't understand the icu4x api at all though
+
+
+2021-09-29
+
+2021-09-30
+[12:54:28.0774] <jschoi>
+Could someone familiar with the spec explain https://github.com/tc39/proposal-array-from-async/pull/11#discussion_r719681385 ?
+
+How is it that %Array.prototype.values% returns an iterator record? It just returns CreateArrayIterator(O, value).
+
+[12:54:37.0133] <jschoi>
+ * Could someone familiar with the spec explain https://github.com/tc39/proposal-array-from-async/pull/11#discussion_r719681385 ?
+
+How is it that %Array.prototype.values% returns an iterator record? It just returns CreateArrayIterator(_O_, value).
+
+[12:55:34.0930] <jschoi>
+(Basically, I’m trying to plug the result of CreateArrayIterator into CreateAsyncFromSyncIterator, but it’s a type mismatch. Surely there’s a way to do this without manually creating a record, right?
+
+[12:55:36.0993] <jschoi>
+ * (Basically, I’m trying to plug the result of CreateArrayIterator into CreateAsyncFromSyncIterator, but it’s a type mismatch. Surely there’s a way to do this without manually creating a record, right?)
+
+[12:56:13.0798] <jschoi>
+ * Could someone familiar with the spec explain https://github.com/tc39/proposal-array-from-async/pull/11#discussion_r719681385 ?
+
+How is it that %Array.prototype.values% returns an iterator record? It just returns CreateArrayIterator(_O_, value) (https://tc39.es/ecma262/#sec-array.prototype.values).
+
+[12:56:32.0286] <jschoi>
+ * (Basically, I’m trying to plug the result of CreateArrayIterator into CreateAsyncFromSyncIterator, but the former returns an iterator and the latter requires an iterator record. Surely there’s a way to do this without manually creating a record, right?)
+
+[12:59:17.0821] <bakkot>
+> How is it that %Array.prototype.values% returns an iterator record?
+
+It doesn't; it returns an actual iterator (i.e. an object with a `.next` method). Maybe you have this question backwards?
+
+(Iterator Records, like all records, are never exposed to user code.)
+
+[13:02:27.0343] <bakkot>
+> Surely there’s a way to do this without manually creating a record, right?
+
+Not that I'm aware of. The normal flow is to call `GetIterator`, which does the work for you. But manually making the record should just be a one-liner, so I don't think it's worth abstracting it out.
+
+[13:03:32.0105] <bakkot>
+(just `Let _iteratorRecord_ be the Record { [[Iterator]]: _iterator_, [[NextMethod]]: %ArrayIteratorPrototype.next%, [[Done]]: false }.`, I think)
+
+[13:13:35.0812] <jschoi>
+> <@bakkot:matrix.org> (just `Let _iteratorRecord_ be the Record { [[Iterator]]: _iterator_, [[NextMethod]]: %ArrayIteratorPrototype.next%, [[Done]]: false }.`, I think)
+
+Got it, thanks.
+
+[13:14:29.0510] <jschoi>
+> <@bakkot:matrix.org> > How is it that %Array.prototype.values% returns an iterator record?
+> 
+> It doesn't; it returns an actual iterator (i.e. an object with a `.next` method). Maybe you have this question backwards?
+> 
+> (Iterator Records, like all records, are never exposed to user code.)
+
+I was confused because that’s what zloirock had said it does.
+
+[13:14:49.0440] <jschoi>
+ * I was confused because that’s what zloirock had said it does. It’s good to know that it actually doesn’t; I am no longer confused.
+
+[13:15:34.0600] <jschoi>
+Oh, wait, he was suggesting using `%Array.prototype.values%` as the method argument to GetIterator. That *should* work…
+
+[13:15:43.0253] <jschoi>
+ * Oh, wait, I had misunderstood him. He was suggesting using `%Array.prototype.values%` as the method argument to GetIterator. That _should_ work…
+
+[14:48:45.0669] <TabAtkins>
+jschoi: In your bind-this, you have some text about the operator "creating bound functions" like .bind() does, but as far as I can tell it doesn't do this. Every example you have is using it immediately as part of a call expression; always `randomObj->fakeMethod(x)` (equivalent to `fakeMethod.call(randomObj, x)`), never `randomObj->fakeMethod` (equivalent to `fakeMethod.bind(randomObj)`). Are your examples too limited, or did the scope change at some point to be a call operator rather than a bind operator?
+
+[14:57:37.0501] <jschoi>
+> <@tabatkins:matrix.org> jschoi: In your bind-this, you have some text about the operator "creating bound functions" like .bind() does, but as far as I can tell it doesn't do this. Every example you have is using it immediately as part of a call expression; always `randomObj->fakeMethod(x)` (equivalent to `fakeMethod.call(randomObj, x)`), never `randomObj->fakeMethod` (equivalent to `fakeMethod.bind(randomObj)`). Are your examples too limited, or did the scope change at some point to be a call operator rather than a bind operator?
+
+The examples are too limited. `o->fn` is `fn.bind(o)`, 
+and `o->fn(a)` is `fn.call(o, a)`, because `fn.call(o, a)` is indistinguishable from `fn.bind(o)(a)`.
+
+[14:58:30.0352] <jschoi>
+`fakeMethod.call(randomObj, x)` is indistinguishable from `fakeMethod.bind(randomObj)(x)`. 
+
+[15:06:37.0969] <TabAtkins>
+Do you have thoughts about dropping that case in favor of letting PFA + `->`-as-a-call-operator handle it? `o->fn` would instead be `o->fn~(...)`, which also produces bound functions that record the receiver; the `->` here sets the receiver in time for PFA to record it.
+
+[15:07:14.0433] <TabAtkins>
+Then there's no intermediate object creation when using just `->`
+
+[15:13:43.0727] <jschoi>
+> <@tabatkins:matrix.org> Then there's no intermediate object creation when using just `->`
+
+My current understanding is that no object creation has to occur with `x->o(a)`. It can always be optimizable to a direct call without constructing a bound function. There’s no way for the developer to distinguish between `Function.bind(o)(a)` and `Function.call(o, a)`, so the engine is free to optimize `x->o(a)` to use `call` rather than `bind`.
+
+[15:17:15.0290] <jschoi>
+> <@tabatkins:matrix.org> Do you have thoughts about dropping that case in favor of letting PFA + `->`-as-a-call-operator handle it? `o->fn` would instead be `o->fn~(...)`, which also produces bound functions that record the receiver; the `->` here sets the receiver in time for PFA to record it.
+
+ljharb, rbuckton (OOF til Oct-1), and I have talked a little about how PFA syntax would interact with this use case. PFA syntax in of itself cannot address the call-this use case. But it’s true that it could capture `this` if `o->fn~(…)` was given a special case…but that seems more complicated than just making `o->fn` bind and `o->fn()` call.
+
+[15:19:12.0847] <jschoi>
+> <@tabatkins:matrix.org> Do you have thoughts about dropping that case in favor of letting PFA + `->`-as-a-call-operator handle it? `o->fn` would instead be `o->fn~(...)`, which also produces bound functions that record the receiver; the `->` here sets the receiver in time for PFA to record it.
+
+ * ljharb, rbuckton (OOF til Oct-1), and I have talked a little about how PFA syntax would interact with this use case. PFA syntax in of itself cannot address the call-this use case. But it’s true that it could capture `this` if `o->fn~(…)` was given a special case…but that seems more complicated than just making `o->fn` bind and `o->fn()` call. (And `o->fn(a)` need not construct a bound function, because `fn.bind(o)(a)` is user-indistinguishable from `fn.call(o, a)`. This hopefully would be an Easy Optimization, though of course if it isn’t then I would have to reevaluate my approach.
+
+[15:19:27.0426] <jschoi>
+ * ljharb, rbuckton (OOF til Oct-1), and I have talked a little about how PFA syntax would interact with this use case. PFA syntax in of itself cannot address the call-this use case. But it’s true that it could capture `this` if `o->fn~(…)` was given a special case…but that seems more complicated than just making `o->fn` bind and `o->fn()` call. (And `o->fn(a)` need not construct a bound function, because `fn.bind(o)(a)` is user-indistinguishable from `fn.call(o, a)`. This hopefully would be an Easy Engine Optimization™, though of course if it isn’t then I would have to reevaluate my approach.
+
+[15:20:38.0648] <jschoi>
+ * ljharb, rbuckton (OOF til Oct-1), and I have talked a little about how PFA syntax would interact with this use case. PFA syntax in of itself cannot address the call-this use case. But it’s true that it could capture `this` if `o->fn~(…)` was given a special case…but that seems more complicated than just making `o->fn` bind and `o->fn()` call. (And `o->fn(a)` need not construct a bound function, because `fn.bind(o)(a)` is user-indistinguishable from `fn.call(o, a)`. This hopefully would be an Easy Engine Optimization™. If this optimization turns out not to be Easy, then I would have to reevaluate my approach.)
+
+[15:22:01.0537] <jschoi>
+ * ljharb, rbuckton (OOF til Oct-1), and I have talked a little about how PFA syntax would interact with this use case. PFA syntax in of itself cannot address the call-this use case. But it’s true that it could capture `this` if `o->fn~(…)` was given a special case…but that seems more complicated than just making `o->fn` bind and `o->fn(a)` call. (And `o->fn(a)` need not construct a bound function. It could simply call `fn` on `o` directly—because `fn.bind(o)(a)` is user-indistinguishable from `fn.call(o, a)`. This hopefully would be an Easy Engine Optimization™. If this optimization turns out not to be Easy, then I would have to reevaluate my approach.)
+
+[15:22:12.0243] <jschoi>
+ * ljharb, rbuckton (OOF til Oct-1), and I have talked a little about how PFA syntax would interact with this use case. PFA syntax in of itself cannot address the call-this use case. But it’s true that it could capture `this` if `o->fn~(…)` was given a special case…but that seems more complicated than just making `o->fn` bind and `o->fn(a)` call. (And `o->fn(a)` need not construct an intermediate bound function. It could simply call `fn` on `o` directly—because `fn.bind(o)(a)` is user-indistinguishable from `fn.call(o, a)`. This hopefully would be an Easy Engine Optimization™. If this optimization turns out not to be Easy, then I would have to reevaluate my approach.)
+
+[15:22:32.0559] <jschoi>
+ * ljharb, rbuckton (OOF til Oct-1), and I have talked a little about how PFA syntax would interact with this use case. PFA syntax in of itself cannot address the call-this use case. But it’s true that it could capture `this` if `o->fn~(…)` was given a special case…but that seems more complicated than just making `o->fn` bind and `o->fn(a)` call. (And `o->fn(a)` need not construct an intermediate bound function. It could simply call `fn` on `o` directly—because `fn.bind(o)(a)` is user-indistinguishable from `fn.call(o, a)`. This hopefully would be an Easy Engine Optimization™. If this optimization turns out not to be Easy, then I would have to reevaluate my approach, but I would also be quite surprised.)
+
+[15:23:30.0729] <ljharb>
+i am very unoptimistic about the timeline of PFA advancing and would not want to subjugate any other proposal to it at this time.
+
+[15:26:22.0695] <jschoi>
+FYI, ljharb: bakkot gave some negative signals towards this-bind `->`, especially if its primary use case is global protection (https://github.com/js-choi/proposal-bind-this/issues/8). 
+
+We might run into some headwinds from the rest of the Committee, too, but we’ll see…I’ll do my best to make its case, though.
+
+[15:28:26.0869] <bakkot>
+jschoi: if you present the case as it is in the readme, I do not expect you'll be able to get even stage 1
+
+[15:31:18.0735] <ljharb>
+i think stage 1 is basically a certainty - it's something we've discussed many times and will do so again - but obviously we wouldn't want to present in a way that would make stage 2 harder to get
+
+[15:31:20.0984] <jschoi>
+Understood. I’m guessing that you’d block Stage 1?
+
+We might need more time than to October to build its case, then…though I need to reinvestigate what the differences between this proposal and HE Shi-Jun’s Extensions or the prior bind-operator proposal are, since this proposal is meant to replace both of them.
+
+[15:31:33.0931] <bakkot>
+specifically: stage 1 is laying out a problem statement. If the problem statement is "people who want to be defensive against mutation of the global methods find that the standard `uncurryThis` helper is too slow", I think the committee as a whole - certainly me personally - would not be receptive to that being a problem worth spending more time on
+
+[15:31:33.0979] <jschoi>
+ * Understood. I’m guessing that you’d block Stage 1?
+
+We might need more time than to October to build its case, then…though I need to reinvestigate what the differences between this proposal and HE Shi-Jun’s Extensions or the prior bind-operator proposal are, since this proposal is meant to replace both of them.
+
+[15:31:42.0714] <ljharb>
+fair
+
+[15:31:45.0598] <bakkot>
+if there is a different problem statement, it's more likely you'd get stage 1
+
+[15:32:17.0948] <jschoi>
+Would “binding and calling with `this` is very common and is worth lubricating with syntax” be more compelling to you?
+
+[15:32:31.0790] <bakkot>
+much more compelling, yes
+
+[15:32:43.0449] <bakkot>
+I might not agree it's worth new syntax, but that's more of a stage 2 concern
+
+[15:33:14.0792] <bakkot>
+(that is, a concern for getting stage 2, rather than getting stage 1)
+
+[15:33:27.0038] <jschoi>
+Right, okay. So I need to focus less on the security aspect. Thanks for the feedback.
+Figuring out what was compelling enough for the prior bind operator and for Extensions to reach Stage 1…although it’s true that neither of them have reached Stage 2…
+
+[15:34:26.0410] <bakkot>
+(i.e. I agree with the problem statement of "it could be easier to bind `.this`" but am skeptical of the cost/benefit of adding new syntax to solve that problem - syntax is _expensive_)
+
+[15:34:52.0139] <bakkot>
+ * (i.e. I agree with the problem statement of "it could be easier to bind `this`" but am skeptical of the cost/benefit of adding new syntax to solve that problem - syntax is _expensive_)
+
+[15:35:05.0996] <shu>
+i am pretty unconvinced this needs syntax
+
+[15:38:04.0233] <Justin Ridgewell>
+I think anything that aids tree shake ability for bundles is a huge improvement
+
+[15:38:08.0172] <jschoi>
+ * Right, okay. So I need to focus less on the security aspect or at least subsume it under “bind/call is very common”. Thanks for the feedback.
+Figuring out what was compelling enough for the prior bind operator and for Extensions to reach Stage 1…although it’s true that neither of them have reached Stage 2…
+
+[15:39:02.0102] <Justin Ridgewell>
+This and pipelines is how we get nice APIs without resorting to really ugly nested calls
+
+[15:39:15.0843] <shu>
+i'm missing some steps there. how would syntax for bind help tree shaking?
+
+[15:40:21.0220] <jschoi>
+It seems that call-this syntax would encourage library developers to create separate “methods” that use `this` and which are individually importable. For example, RxJS was doing that in v5, although they switched away when it became clear that `::` was stuck.
+
+[15:40:26.0288] <TabAtkins>
+Syntax for *call* helps there
+
+[15:40:27.0708] <jschoi>
+ * It seems that it would encourage library developers to create separate “methods” that use `this` and which are individually importable. RxJS was going to do this in v5.
+
+[15:40:36.0558] <jschoi>
+ * It seems that it would encourage library developers to create separate “methods” that use `this` and which are individually importable. RxJS was going to do this in v5, although they switched away when it became clear that `::` was stuck.
+
+[15:40:44.0705] <jschoi>
+ * It seems that it would encourage library developers to create separate “methods” that use `this` and which are individually importable. For example, RxJS was doing that in v5, although they switched away when it became clear that `::` was stuck.
+
+[15:40:58.0248] <jschoi>
+ * It seems that bind/call-this syntax would encourage library developers to create separate “methods” that use `this` and which are individually importable. For example, RxJS was doing that in v5, although they switched away when it became clear that `::` was stuck.
+
+[15:41:04.0410] <jschoi>
+ * It seems that call-this syntax would encourage library developers to create separate “methods” that use `this` and which are individually importable. For example, RxJS was doing that in v5, although they switched away when it became clear that `::` was stuck.
+
+[15:41:09.0841] <shu>
+i still don't understand, how does syntax for call help there?
+
+[15:41:13.0335] <Justin Ridgewell>
+`bind` doesn't matter for tree-shake, it's just the `call` syntax
+
+[15:41:58.0614] <jschoi>
+Example: https://github.com/ReactiveX/rxjs/tree/5.x#es6-via-npm
+
+[15:42:03.0006] <TabAtkins>
+shu: If you want to write good APIs that look like `foo.bar()` but with free functions that you can import/tree-shake, you want a call operator so you can do `foo->bar()` or whatever
+
+[15:42:07.0472] <jschoi>
+```js
+import { Observable } from 'rxjs/Observable';
+import { of } from 'rxjs/observable/of';
+import { map } from 'rxjs/operator/map';
+
+Observable::of(1,2,3)::map(x => x + '!!!'); // etc
+```
+
+[15:42:08.0264] <ljharb>
+personally i only really need `.call` syntax, but both bind and call come together so naturally just by including or omitting the invocation parens
+
+[15:42:27.0437] <TabAtkins>
+(or write them to use their first arg rather than `this` and use pipe: `foo |> bar(^)`)
+
+[15:42:32.0322] <TabAtkins>
+ * (or write them to use their first arg rather than `this` and use pipe: `foo |> bar(^)`)
+
+[15:42:47.0181] <Justin Ridgewell>
+Tab explains it really well.
+
+[15:43:03.0770] <shu>
+and `bar.call(foo)` defeats tree shaking because `call` is configurable/writable?
+
+[15:43:05.0590] <Justin Ridgewell>
+But it's anything to avoid the kitchen-sink style object APIs, where they're almost impossible to tree-shake
+
+[15:43:25.0426] <jschoi>
+Nah, it’s just much less ergonomic. Which is why RxJS moved away from it when `::` failed.
+
+[15:43:26.0268] <TabAtkins>
+No, it defeats "fluent API"
+
+[15:43:38.0051] <Justin Ridgewell>
+No, that would work, but you'll never see users actually wanting to write that.
+
+[15:43:38.0686] <shu>
+i... see
+
+[15:43:39.0892] <TabAtkins>
+`baz.call(bar.call(foo))`
+
+[15:43:40.0335] <jschoi>
+> <@shuyuguo:matrix.org> and `bar.call(foo)` defeats tree shaking because `call` is configurable/writable?
+
+ * Nah, it’s just much less ergonomic. Which is why RxJS moved away from it when `::` failed.
+
+[15:43:47.0461] <TabAtkins>
+that's ugly as sin ^^_
+
+[15:43:56.0259] <shu>
+i have no qualms, but okay
+
+[15:44:06.0673] <TabAtkins>
+versus `foo.bar().baz()`?
+
+[15:44:36.0139] <shu>
+it is uglier than that, yes
+
+[15:45:08.0225] <TabAtkins>
+Well, we know from wide experience at this point that it's *sufficiently* ugly that literally nobody does it, and instead they invent `.pipe()` and start using HOF
+
+[15:45:11.0070] <shu>
+it is not ugly enough for me to prioritize over applying DCE if that were an impactful optimization for a library
+
+[15:45:35.0311] <Justin Ridgewell>
+Think of a beginner's perspective, they'll never write `baz.call(bar.call(foo))` and it'll be hard for them to understand what's really happening.
+
+[15:45:46.0393] <Justin Ridgewell>
+`foo.bar().baz()` is extremely intuitive
+
+[15:45:57.0429] <Justin Ridgewell>
+My hope is `foo->bar()->baz()` will be, too.
+
+[15:46:00.0477] <TabAtkins>
+(I still find .call() hard to understand in anything beyond trivial cases, and I'm far from a beginner.)
+
+[15:46:28.0744] <Justin Ridgewell>
+ * Think of a beginner's perspective, they'll never write `baz.call(bar.call(foo))` and it'll be hard for them to understand what's really happening.
+
+[15:47:32.0164] <Justin Ridgewell>
+I see `->` and `|>` as the next way libraries are written, with the explicit goal of tree-shaking out every unused piece of code
+
+[15:48:40.0805] <Justin Ridgewell>
+If we start exporting a bunch of top-level functions (with either a `this` context or a first-param), our libraries can encompass every use case with 0 bloat
+
+[15:48:52.0294] <shu>
+why even use `this`
+
+[15:49:08.0836] <shu>
+why not just do it the old OO-in-C way, and just take the receiver as the actual first argument
+
+[15:49:54.0391] <Justin Ridgewell>
+Because people are used to `foo.bar().baz()`
+
+[15:50:11.0284] <Justin Ridgewell>
+That's the ideal
+
+[15:50:25.0085] <Justin Ridgewell>
+The closer we can make the final syntax to the ideal syntax, the better adoption we'll see
+
+[15:50:35.0350] <shu>
+i have a hard time with this because that is an aesthetic i do not share
+
+[15:50:45.0056] <TabAtkins>
+(I don't think it's that bad, and suspect `foo |> bar(^) |> baz(^)` will be a significant objection.)
+
+[15:56:04.0215] <Justin Ridgewell>
+See also firebase's redesign: https://www.youtube.com/watch?v=r5eJQ3nPc6A
+
+[15:56:27.0895] <Justin Ridgewell>
+They're using first-param, which I think is fine
+
+[15:56:58.0759] <Justin Ridgewell>
+But I adoption will be better if we had `->`
+
+[15:57:25.0327] <shu>
+yes, the firebase redesign convinced me of pipe operators' utility beyond catering to those who want more FP in JS, which i categorically don't want
+
+[15:57:30.0095] <Justin Ridgewell>
+ * But I think adoption will be better if we had `->`
+
+[16:06:20.0523] <rkirsling>
+> <@shuyuguo:matrix.org> yes, the firebase redesign convinced me of pipe operators' utility beyond catering to those who want more FP in JS, which i categorically don't want
+
+you _know_ I gotta ask whether that pun was intended
+
+[16:10:19.0617] <rkirsling>
+on topic though, the thought of `->` really makes me feel like "oh no we're turning into Perl"
+
+[16:10:48.0507] <rkirsling>
+...except it's worse, because `foo->` isn't accessing something related to `foo` 😓
+
+[16:12:00.0838] <jschoi>
+If I remember my Perl correctly, `foo->bar()` is a method call, right? That’s actually pretty similar…
+
+[16:13:42.0348] <TabAtkins>
+(that's also a PHP method call ^_^)
+
+[16:13:45.0141] <rkirsling>
+er well, hmm, yeah
+
+[16:14:07.0683] <rkirsling>
+I guess my last sentence isn't quite right
+
+[16:14:35.0020] <rkirsling>
+but it does feel like promoting something unusual in a way that makes very basic things confusing
+
+[16:16:56.0190] <jschoi>
+I can understand that. `this`, bind, and call are all pretty confusing in JavaScript. 
+But they’re all still very common, too, so it may be worth lubricating them…Jordan’s global-protection use cases were what spurred me to actually make this proposal, and it’s impossible without the proposal (due to `Function` mutation)…but I’m sure it’s only a tiny subset of what people use bind and call for in general.
+
+[16:17:22.0311] <jschoi>
+ * I can understand that. `this`, bind, and call are all pretty confusing in JavaScript.
+But they’re all still very common, too; they’re core parts of JavaScript. So it still may be worth lubricating them. Jordan’s global-protection use cases were what spurred me to actually make this proposal, and it’s impossible without the proposal (due to `Function` mutation)…but I’m sure it’s only a tiny subset of what people use bind and call for in general.
+
+[16:18:33.0363] <jschoi>
+I suppose since arrow functions’ premiere, bind and call became much less prevalent…
+
+[16:18:36.0961] <rkirsling>
+right but these things are longwinded because they're not the things beginners do
+
+[16:19:19.0246] <rkirsling>
+I would be GENUINELY scared at making every beginner worry about "was it `.` that I'm supposed to write? but there's also `->`..."
+
+[16:19:51.0298] <rkirsling>
+...which was my first reaction to needing to edit a Perl script
+
+[16:24:48.0182] <jschoi>
+rkirsling: That’s understandable. Would you have similar concerns about the old `::` bind operator and the Extensions proposal, too?
+
+[16:25:05.0769] <rkirsling>
+I don't believe so
+
+[16:25:17.0833] <rkirsling>
+I feel like `->` is a very charged symbol
+
+[16:25:43.0062] <rkirsling>
+in other words, I'm not opposed to _a_ solution here
+
+[16:27:01.0974] <jschoi>
+I had waffled between `&.`, `!.`, and `::`. Jordan gave me feedback that it shouldn’t contain `.` because of confusion with `.`. `::` I’m not a huge fan of because it implies namespacing to me, and `o::fn()` doesn’t seem a lot like namespacing to me (it didn’t belong to `o`; it’s being bound to `o`). But, well, this is all bikesheddable, and I’m open to any suggestions that would reduce concerns.
+
+[16:27:38.0037] <jschoi>
+ * I had waffled between `&.`, `!.`, and `::`. Jordan gave me feedback that it shouldn’t contain `.` because of confusion with `.`. I’m not a huge fan of `::` because it implies namespacing to me, and `o::fn()` doesn’t seem a lot like namespacing to me (it didn’t belong to `o`; it’s being dynamically bound to `o`). But, well, the operator token is bikesheddable, and I’m open to any suggestions that would reduce concerns.
+
+[16:28:35.0861] <jschoi>
+I’ll reformulate the explainer to focus on “call and bind are very, very common (and that includes but isn’t limited to code that wants to use globals robustly)”, and then hopefully that’ll be enough for at least Stage 1.
+
+[16:29:04.0226] <jschoi>
+ * I’ll probably change the token, and I’ll reformulate the explainer to focus on “call and bind are very, very common (and that includes but isn’t limited to code that wants to use globals robustly)”, and then hopefully that’ll be enough for at least Stage 1.
+
+[16:49:25.0054] <bakkot>
+I am annoyed that tree-shaking is such a powerful argument here. it's not like it's actually that difficult to tree-shake out unused methods, especially with typescript, it's just that no one is doing it.
+
+[16:49:53.0406] <bakkot>
+if I had more time I would just fixup webpack or rollup to do it properly and then we could just use the existing language
+
+[16:50:21.0989] <bakkot>
+it seems dumb to change the language just because the tooling is bad.
+
+[16:53:55.0026] <Justin Ridgewell>
+> <@bakkot:matrix.org> if I had more time I would just fixup webpack or rollup to do it properly and then we could just use the existing language
+
+Requiring a full type system to do this makes it incredibly difficult.
+
+[16:58:47.0617] <bakkot>
+Justin Ridgewell: lucky someone else already wrote one then!
+
+[16:59:44.0970] <bakkot>
+but also, you can actually get quite far without a type system
+

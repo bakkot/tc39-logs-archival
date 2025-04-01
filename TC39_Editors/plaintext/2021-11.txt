@@ -1,0 +1,292 @@
+2021-11-01
+[22:47:15.0757] <ljharb>
+definitely there's lots of spam PRs github hid
+
+[22:47:25.0274] <ljharb>
+where did you get these notifications? i haven't seen any
+
+[22:47:44.0686] <ljharb>
+1986 got closed because anne had deleted his fork, so the PR couldn't ever be updated
+
+[22:48:25.0796] <ljharb>
+oh maybe i didn't get the notifications because i did the action.
+
+[22:49:02.0043] <ljharb>
+so re PR 1508 - that actually has a ref that points to a3bae8cc2ad9da4db1379cf2af683eb115a65f88 (which is also PR 1378)
+
+[22:49:09.0596] <ljharb>
+ * so re PR 1508 - that actually has a ref that points to a3bae8cc2ad9da4db1379cf2af683eb115a65f88 (which is also PR 1378)
+
+[22:50:09.0997] <ljharb>
+all of the spam PRs' refs are still there forever. one of them, 1642, followed the master branch - meaning, even tho the PR is utterly inaccessible, the PR was from master *to another branch*, so every time master changes, the PR ref moves. but now it's closed, so that ref won't keep changing. so that's nice
+
+
+2021-11-02
+[23:28:42.0737] <bakkot>
+finished my formatter, finally: https://github.com/tc39/ecma262/pull/2564
+
+
+2021-11-03
+[22:32:54.0414] <ljharb>
+"is finite" seems to be used in the spec for both Number values and also mathematical values. Is that desired?
+
+[23:08:01.0958] <bakkot>
+seems fine
+
+[23:08:28.0631] <bakkot>
+we give the definition for `finite` for Number values, even
+
+[14:29:48.0178] <bakkot>
+gonna be a couple minutes late for editor call, sorry
+
+
+2021-11-04
+[19:25:03.0398] <bakkot>
+shu: https://github.com/tc39/ecma262/pull/2566
+
+[07:21:53.0122] <shu>
+will look today
+
+[12:41:50.0583] <bakkot>
+shu: re: https://github.com/tc39/ecma262/pull/2548, it looks like very nearly every `!`-prefixed call gets the user-code effect suppressed (possibly actually all of them?). maybe worth building that heuristic into ecmarkup?
+
+[13:57:03.0652] <shu>
+bakkot: almost all, yes. worth thinking about building it in. it puts the burden of vigilance on us (the PR reviewers) to remember to check if a `!` shouldn't be suppressed. otherwise it puts the burden on authors
+
+[13:57:14.0233] <shu>
+putting it on us is probably the right choice
+
+[14:40:46.0069] <shu>
+bakkot: Michael Ficarra oh, for the "*default*" stuff, the point is that "*default*" is used only as a [[LocalName]] and not as an [[ExportName]] in ExportEntry Records, and therefore is not user visible?
+
+[14:46:54.0179] <shu>
+so if a module exports a value named `"*default*"`, that could be imported, since the magical [[ExportName]] name is `"default"`, which has always been user exposed?
+
+[14:59:13.0612] <bakkot>
+yeah exactly
+
+[15:01:50.0746] <bakkot>
+(It also gets into the [[BindingName]] of ResolvedBinding Records, but that's basically the same as the [[LocalName]] of ExportEntry Records)
+
+[15:03:30.0496] <shu>
+right
+
+[15:03:49.0878] <shu>
+whereas `"*"` and `"*namespace*"` leak into [[BindingName]], which is the problem
+
+[15:04:13.0456] <bakkot>
+into [[ImportName]], rather
+
+[15:06:06.0263] <shu>
+ah right, that's the usual case
+
+[15:06:13.0167] <shu>
+the [[BindingName]] problem is for accessing via a namespace object
+
+[15:08:39.0010] <bakkot>
+ah, yes, right
+
+[15:10:12.0697] <bakkot>
+actually I thinking further I'm not 100% sure `"*namespace*"` is actually a problem, hm
+
+[15:11:25.0971] <bakkot>
+`"*"` definitely is though
+
+[15:11:48.0836] <shu>
+why isn't "*namespace*" a problem?
+
+[15:12:43.0383] <bakkot>
+because the lookup that's happening in step 10 of 10.4.6.8 (module NS [[Get]]) is of the post-resolution name
+
+[15:12:52.0123] <bakkot>
+which is strictly internal, same as `"*default*"`
+
+[15:13:55.0842] <bakkot>
+[[BindingName]] tells you where to find the binding of interest _within_ the module; it's not the externally-facing name
+
+[15:14:29.0620] <bakkot>
+exactly the same same as [[LocalName]] of ExportEntry Records
+
+[15:14:56.0673] <shu>
+oh, and `export *` has no [[LocalName]]
+
+[15:15:12.0753] <shu>
+so if i did an `import "*namespace*"` it would not resolve to the actual NS object, since that has special handling
+
+[15:16:02.0503] <shu>
+okay, but also _because_ of the special handling everywhere for NS objects, it's certainly also correct and clearer if we just globally replaced it with `~namespace~`
+
+[15:16:08.0401] <bakkot>
+`export * from 'mod'` has no [[LocalName]], right (none of the `export from` forms do)
+
+[15:16:18.0884] <bakkot>
+(there is no `export *;`)
+
+[15:16:26.0094] <shu>
+yes, i meant with the `from` tail
+
+[15:16:28.0365] <bakkot>
+yeah, right
+
+[15:30:56.0103] <bakkot>
+> if i did an import `"*namespace*"` it would not resolve to the actual NS object
+
+right, though not because of specially handling `"*namespace*"`; rather, it's because that gets resolved with `ResolveExport("*namespace*")`, which looks for an ExportEntry Record whose [[ExportName]] is `"*namespace*"`, which is not a thing we ever create (except of course with bradley's PR you could make one explicitly)
+
+[15:31:24.0801] <shu>
+ah, yes, right
+
+[15:32:04.0124] <shu>
+anyways lgtm. further classification of the various meanings of `"*"` is a nice added bonus
+
+[15:32:17.0384] <bakkot>
+if you did `export { f as "*namespace*" }`, then that would resolve to a ResolvedBinding Record whose [[BindingName]] is `f`, so again no problems there
+
+
+2021-11-05
+[10:18:34.0191] <bakkot>
+ljharb: just marked https://github.com/tc39/ecma262/pull/2566 as ready; it should go in as the current set of commits imo
+
+[10:19:24.0501] <bakkot>
+I kinda want to bikeshed the names further but we should just land it and maybe bikeshed some future day
+
+[12:59:11.0114] <shu>
+which names you aren't 100% on?
+
+[13:01:51.0552] <bakkot>
+`all-but-default`, mainly
+
+[13:02:42.0681] <bakkot>
+`export * from 'mod'` is going to _export_ all but the default name, but the way it's implemented is, it asks the upstream module for _all_ of its names, and then filters out `"default"`, so having the [[ImportName]] be `all-but-default` is arguably misleading
+
+[13:03:25.0992] <shu>
+ah, i see
+
+[13:05:16.0896] <shu>
+sounds like implementation detail, which makes me feel like `all-but-default` is accurate enough (certainly more accurate than `*`). the plumbing of imports and exports is arcana to most people, even those who read the spec regularly
+
+[13:05:18.0169] <shu>
+ * sounds like implementation detail, which makes me feel like `all-but-default` is accurate enough (certainly more accurate than `*`). the plumbing of imports and exports is to arcanamost people, even those who read the spec regularly
+
+[13:05:21.0143] <shu>
+ * sounds like implementation detail, which makes me feel like `all-but-default` is accurate enough (certainly more accurate than `*`). the plumbing of imports and exports is arcana to most people, even those who read the spec regularly
+
+[13:07:29.0944] <bakkot>
+ljharb: jmdyck just pointed out a type issue; I'm going to force-push up a fix in a sec
+
+[13:16:06.0223] <ljharb>
+"all-named"?
+
+[13:17:42.0019] <bakkot>
+The problem isn't that "all but default" is awkward, it's that it's inaccurate as a description of what's being imported
+
+[13:35:11.0711] <ljharb>
+which commit do you want the fixup merged into?
+
+[14:00:43.0502] <bakkot>
+the namespace one
+
+[15:56:01.0465] <ljharb>
+bakkot: there's a merge conflict when i reorder the fixup commit to be right after the namespace commit, and it's not super clear to me what the right resolution is
+
+[16:14:00.0851] <bakkot>
+k, will fix
+
+[16:16:25.0219] <bakkot>
+ljharb: updated
+
+[16:18:11.0551] <bakkot>
+ugh, no, I squash two
+
+[16:18:12.0736] <bakkot>
+one sec
+
+[16:19:56.0847] <bakkot>
+k, actually good now
+
+[16:52:17.0562] <ljharb>
+thanks
+
+
+2021-11-09
+[16:42:18.0031] <bakkot>
+shu: did you want to review https://github.com/tc39/ecma262/pull/2154 ? I rebased and partially rewrote it and Michael reviewed
+
+[16:42:32.0518] <bakkot>
+ * shu: did you want to review https://github.com/tc39/ecma262/pull/2154 ? I rebased and partially rewrote it and Michael reviewed
+
+[17:11:10.0052] <shu>
+yes i do
+
+[17:11:16.0056] <shu>
+and i'll get to it before wed
+
+
+2021-11-10
+[14:31:12.0626] <shu>
+will be a few mins late
+
+
+2021-11-19
+[14:50:25.0895] <shu>
+can call user code is getting there, maybe another one or two sessions to track down false negatives
+
+[14:51:32.0675] <shu>
+bakkot: whenever you merge my PR and do the next ecmarkup release, do you mind updating ecma262's package lock as well?
+
+[14:51:54.0965] <shu>
+i don't know how to install older versions of npm and also don't want to rewrite the file for no good reason
+
+[15:15:57.0080] <bakkot>
+will do
+
+[15:26:53.0601] <shu>
+thank you
+
+[15:35:06.0501] <bakkot>
+shu: https://github.com/tc39/ecma262/pull/2583
+
+[15:55:00.0247] <shu>
+excellent
+
+
+2021-11-20
+[18:13:32.0922] <ljharb>
+@shu `npx npm@6 install` for future reference
+
+
+2021-11-24
+[14:57:26.0956] <shu>
+https://meet.google.com/qgj-cbjw-qmo
+
+
+2021-11-29
+[13:02:33.0470] <Michael Ficarra>
+I think the thing we should propose is allowing loose matching, as recommended by Unicode
+
+[13:03:07.0806] <Michael Ficarra>
+if we do that, we can definitely drop (some of) the tables
+
+[13:18:29.0411] <shu>
+as a continued non-user of regexps, sgtm
+
+[13:32:26.0006] <bakkot>
+ugh, no
+
+[13:32:29.0411] <bakkot>
+we should not do that
+
+[13:32:43.0376] <bakkot>
+generally speaking it is bad to have multiple ways to spell the same thing
+
+[13:36:51.0174] <Michael Ficarra>
+so... stick with the status quo and everything requires consensus?
+
+[15:18:09.0692] <Michael Ficarra>
+update: on the agenda for next meeting: https://github.com/tc39/agendas/pull/1084
+
+
+2021-11-30
+[15:41:43.0645] <ljharb>
+seems like maybe https://github.com/tc39/ecma262/tree/HEAD/workingdocs should be deleted; thoughts?
+

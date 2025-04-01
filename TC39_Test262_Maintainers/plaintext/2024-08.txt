@@ -1,0 +1,272 @@
+2024-08-01
+[07:12:36.0786] <Ms2ger>
+How do I check whether someone has signed the Test262 CLA? (Do we check?)
+
+[14:45:51.0523] <cjtenny>
+Break into their house and sift through their filing cabinets
+
+[14:46:00.0583] <cjtenny>
+then, ask them?
+
+[14:46:03.0518] <cjtenny>
+(idk)
+
+[15:43:33.0602] <Michael Ficarra>
+any test262 maintainers have a preference on testing strategy for https://github.com/tc39/ecma262/pull/3345?
+
+[15:44:26.0284] <Michael Ficarra>
+if not, I think I'm just going to embed a huge set of input-output pairs in a test and assert each of them
+
+[15:45:21.0509] <Michael Ficarra>
+probably a couple thousand random non-negative finite floats
+
+
+2024-08-02
+[20:23:22.0148] <ptomato>
+if you can pick a few cases that you would know to be different if the sqrt was computed using, say, the approximation that'd most likely be used if it wasn't exact, that'd be best. otherwise, what you suggested seems fine
+
+[20:23:53.0687] <ptomato>
+also, ask Anba, who probably knows exactly how you'd do this most effectively
+
+
+2024-08-06
+[09:15:23.0457] <Richard Gibson>
+> <@michaelficarra:matrix.org> any test262 maintainers have a preference on testing strategy for https://github.com/tc39/ecma262/pull/3345?
+
+the Handbook of Floating-Point Arithmetic references [Unifying Tests for Square Root](https://archive.org/details/manualzz-id-863632) by Michael Parks and [Berkeley TestFloat](http://www.jhauser.us/arithmetic/TestFloat.html) and [UCBTEST](https://www.netlib.org/fp/#:~:text=ucbtest.tgz) for concrete (C) implementations
+
+[10:51:42.0732] <Michael Ficarra>
+the algorithm for generating interesting cases is a bit hard to follow, but ucbtest does have some fixed input cases I could try to steal as additional test262 tests
+
+
+2024-08-14
+[09:05:02.0062] <ptomato>
+> <@jasew:matrix.org> I’ve chatted with him, he said he’s not involved anymore and it’s up to the committee/test262 editors to decide what they want to do about it.
+> He’s happy to give keys if someone wants to upstream the fork or archive if that’s what test262 project decides.
+
+JaseW: ljharb: re. test262-harness and eshost, did Brian ever get around to transferring them to TC39?
+
+[09:05:59.0458] <JaseW>
+It doesn't look like it, I can ping him
+
+[09:09:34.0195] <Michael Ficarra>
+I think people might be using this eshost fork in Brian's absence: https://github.com/CanadaHonk/eshost
+
+[09:09:38.0400] <Michael Ficarra>
+@linusgroh:matrix.org may know more
+
+[09:10:36.0090] <JaseW>
+There definitely are people using that version, which is why it would be nice to unify this a bit, as there's some fragmentation at the moment
+
+[09:11:16.0962] <linusg>
+I don't know of anything other than test262.fyi using our various forks fwiw
+
+[09:14:29.0547] <linusg>
+"various" being:
+* https://github.com/CanadaHonk/eshost
+* https://github.com/CanadaHonk/test262-stream
+* https://github.com/CanadaHonk/test262-harness
+* https://github.com/CanadaHonk/esvu
+* https://github.com/CanadaHonk/jsvu
+
+[09:14:57.0833] <linusg>
+some of these are completely dead upstream, others just a bit too unresponsive for quick iteration
+
+[09:17:06.0755] <Michael Ficarra>
+yeah I've had PRs open to some of them for years lol
+
+[09:17:52.0397] <linusg>
+Definitely fine to have changes cherry-picked back into upstream if someone is volunteering to do that 😉 (cc canadahonk for all of the above)
+
+[09:19:10.0979] <canadahonk>
+happy to transfer forks *somewhere* if it would help fwiw
+
+[09:20:30.0132] <JaseW>
+So the first question is, are we happy to have these under the TC39 namespace?
+
+- https://github.com/CanadaHonk/eshost
+- https://github.com/CanadaHonk/test262-stream
+- https://github.com/CanadaHonk/test262-harness
+- https://github.com/CanadaHonk/esvu
+- https://github.com/CanadaHonk/jsvu
+
+If so, can we cherry pick or just plain move them there and still have people helping maintain them? (esvu/jsvu can be merged I guess?)
+
+[09:20:53.0097] <JaseW>
+ * So the first question is, are we happy to have these under the TC39 namespace?
+
+- https://github.com/CanadaHonk/eshost
+- https://github.com/CanadaHonk/test262-stream
+- https://github.com/CanadaHonk/test262-harness
+- https://github.com/CanadaHonk/esvu
+- https://github.com/CanadaHonk/jsvu
+
+If so, can we cherry pick or just plain move them (from CH or Brian's repo) there and still have people helping maintain them? (esvu/jsvu can be merged I guess?)
+
+[09:27:25.0470] <Chris de Almeida>
+ideally we would take control of the upstream repos, right?
+
+[09:42:24.0527] <JaseW>
+For the majority of repos, yes, I assume we can take Brian's repos and replay CanadaHonk's changes on to them?
+I don't know if I should ask https://github.com/bocoup/test262-stream about bringing this into TC39 namespace (as they don't maintain it anymore)? Im sure they would be fine with that.
+
+esvu is devsnek, maybe he would be happy moving that to TC39, and jsvu isn't needed (as esvu is just a fork of that but more up to date)
+
+[09:45:54.0323] <JaseW>
+Then there's the question of npm, I assume we would move some of these tools into here?:
+https://www.npmjs.com/org/tc39
+
+[09:56:25.0607] <ptomato>
+we talked about taking over eshost and test262-stream in the maintainers meeting today and in principle we're happy to do that but don't want to commit until we have a discussion with more of the maintainers present
+
+[10:00:20.0284] <JaseW>
+Which maintainers are you referring to? test262 maintainers? Or the ones of these tools? 
+
+[11:11:03.0404] <canadahonk>
+> <@jasew:matrix.org> So the first question is, are we happy to have these under the TC39 namespace?
+> 
+> - https://github.com/CanadaHonk/eshost
+> - https://github.com/CanadaHonk/test262-stream
+> - https://github.com/CanadaHonk/test262-harness
+> - https://github.com/CanadaHonk/esvu
+> - https://github.com/CanadaHonk/jsvu
+> 
+> If so, can we cherry pick or just plain move them (from CH or Brian's repo) there and still have people helping maintain them? (esvu/jsvu can be merged I guess?)
+
+fwiw I trust my forks of the directly test262 related repos but stuff like jsvu and esvu is still maintained upstream iirc, those forks are mostly for test262.fyi only changes
+
+[11:24:11.0258] <ptomato>
+> <@jasew:matrix.org> Which maintainers are you referring to? test262 maintainers? Or the ones of these tools?
+
+test262 maintainers
+
+[12:49:57.0707] <linusg>
+> <@canadahonk:matrix.org> fwiw I trust my forks of the directly test262 related repos but stuff like jsvu and esvu is still maintained upstream iirc, those forks are mostly for test262.fyi only changes
+
+jsvu is barely maintained, which is why esvu exists now :)
+I talked this through with Jason earlier, we agreed that it would be nice to get:
+* anything we currently need jsvu for into esvu so we don't have to deal with both
+* the new engines we added to the esvu fork into upstream (currently devsnek)
+
+[12:51:25.0474] <linusg>
+> <@pchimento:igalia.com> we talked about taking over eshost and test262-stream in the maintainers meeting today and in principle we're happy to do that but don't want to commit until we have a discussion with more of the maintainers present
+
+if maintenance burden of those two things I'm happy to sign up for that (assuming it's not tied to being a test262 maintainer)
+
+[12:51:37.0701] <linusg>
+> <@pchimento:igalia.com> we talked about taking over eshost and test262-stream in the maintainers meeting today and in principle we're happy to do that but don't want to commit until we have a discussion with more of the maintainers present
+
+ * if maintenance burden of those two things is a concern I'm happy to sign up for that (assuming it's not tied to being a test262 maintainer)
+
+
+2024-08-15
+[00:32:56.0973] <JaseW>
+ptomato Brian has transferred eshost and test262-harness into tc39 transfer
+
+[00:33:10.0852] <JaseW>
+CC ljharb
+
+[10:26:18.0327] <ljharb>
+awesome! npm ownership is the remaining piece
+
+[11:01:31.0895] <bakkot>
+https://www.npmjs.com/org/tc39 would be a good home for at least tes262-harness
+
+[11:01:40.0410] <bakkot>
+ * https://www.npmjs.com/org/tc39 would be a good home for at least test262-harness
+
+
+2024-08-17
+[07:09:24.0668] <canadahonk>
+does Brian want to maintain again? I'm happy to be maintainer of both and upstream my forks
+
+
+2024-08-19
+[04:19:18.0905] <JaseW>
+canadahonk: no he does not, he's not involved anymore
+
+[04:21:02.0081] <canadahonk>
+I'm happy to manage (issues/PRs/etc) and maintain if agreed/wanted
+
+
+2024-08-23
+[03:41:18.0902] <Ms2ger>
+So who can review eshost/test262-harness changes now?
+
+[03:41:40.0970] <Ms2ger>
+(I'm happy to help as well)
+
+[06:06:43.0328] <canadahonk>
+I'm happy to
+
+[06:16:56.0946] <Ms2ger>
+I guess - who is willing and who is currently able
+
+[08:24:30.0380] <ptomato>
+I'm not currently able, yes willing if needed
+
+[09:23:01.0407] <ryzokuken>
+I added the maintainers team to the harness repo with write access
+
+[09:23:43.0229] <ryzokuken>
+I removed Rick and Mike because they had explicit write access but they're already on the team so nothing should be affected
+
+[09:23:57.0066] <ryzokuken>
+lmk if there's any unexpected issues
+
+[09:37:35.0974] <Richard Gibson>
+> <@ms2ger:igalia.com> So who can review eshost/test262-harness changes now?
+
+willing and able
+
+[09:53:37.0008] <ljharb>
+i'm willing, not sure if i'll be able
+
+[13:04:46.0855] <canadahonk>
+any opinions on me upstreaming my forks?
+
+[13:21:42.0287] <Richard Gibson>
+I haven't looked at the differences, but they seem unlikely to be objectionable. I'm in favor of such a kick start
+
+[13:24:25.0106] <shu>
+who's using the harness?
+
+[13:33:46.0692] <ptomato>
+I use it constantly as a dev tool for test262
+
+[13:37:30.0108] <canadahonk>
+I use it for test262.fyi
+
+
+2024-08-24
+[17:35:46.0345] <ljharb>
+i occasionally test all my polyfills together with it
+
+
+2024-08-26
+[01:40:10.0163] <Ms2ger>
+Any objection to closing all the old dependabot PRs on test262-harness?
+
+[09:04:42.0613] <ljharb>
+you can do that, but alternatively you can update the deps and dependabot should auto-close them
+
+
+2024-08-28
+[09:28:18.0014] <shu>
+i have a GH UI question. what requirement is not met in this PR at the bottom? https://github.com/tc39/test262/pull/4145
+
+[09:28:41.0932] <shu>
+is it the "branch out-of-date with base branch"?
+
+[09:54:57.0911] <Michael Ficarra>
+looks all green to me
+
+[10:05:18.0876] <shu>
+ah my coworker already merged it
+
+[10:05:30.0853] <shu>
+it didn't auto-merge and we were trying to figure out which condition wasn't satisfied
+
+[10:11:27.0005] <ljharb>
+but yes, branch out of date might do it
+

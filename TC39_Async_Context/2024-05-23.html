@@ -1,0 +1,103 @@
+<!DOCTYPE html><html><head>
+  <title>TC39 Async Context on 2024-05-23</title>
+  <link rel="stylesheet" href="../style.css">
+  <script>window.room = "TC39 Async Context";</script><script src="../render-roomlist.js"></script>
+  <script src="../logs.js"></script>
+</head>
+<body><div class="wrapper">
+<div class="sidebar">
+<div class="title">TC39 Async Context<br>2024-05-23<br><a href="plaintext/">plaintext logs</a></div>
+<div class="nav">
+<a href="2024-05-22" class="nav-link"><span>prev</span></a>
+<a href="2024-05-24" class="nav-link"><span style="float:right">next</span></a>
+</div>
+    <div class="all-rooms"><noscript>JavaScript is required to load the channel index, but you can go to <a href="../..">the static index</a> directly.</noscript></div>
+<div class="footer"><a href="https://github.com/bakkot/matrix-archive-bot">source on github</a></div>
+</div>
+<div class="rhs">
+<div class="rhs-header">
+<span id="error" style="color: red; display:none">error</span>
+
+<input type="text" id="query" size="25" placeholder="Search TC39 Async Context">
+<a id="search-submit" class="button icon-link" title="Search">
+  <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M505 442.7L405.3 343c-4.5-4.5-10.6-7-17-7H372c27.6-35.3 44-79.7 44-128C416 93.1 322.9 0 208 0S0 93.1 0 208s93.1 208 208 208c48.3 0 92.7-16.4 128-44v16.3c0 6.4 2.5 12.5 7 17l99.7 99.7c9.4 9.4 24.6 9.4 33.9 0l28.3-28.3c9.4-9.4 9.4-24.6.1-34zM208 336c-70.7 0-128-57.2-128-128 0-70.7 57.2-128 128-128 70.7 0 128 57.2 128 128 0 70.7-57.2 128-128 128z"></path></svg>
+</a>
+</div>
+
+<div class="log"><table id="log-table"><tbody id="log-tbody">
+
+  <tr class="msg" id="L0"><td class="ts-cell"><a class="ts" href="#L0" alt="Wed May 22 2024 20:10:02 GMT-0700 (Pacific Daylight Time)">03:10</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@stephenhicks:matrix.org">Steve Hicks</span>&gt;</div></td><td class="msg-cell"><mx-reply><blockquote> I think we can extend this as well. Imagine the parent is doing a fetch and creates an abort signal, then passes that same signal to the children to perform their fetches. They each setup their own fetch state otherwise, maybe logging. It’d be surprising that the parent aborting their fetch causes the child’s fetch to inherit the parent’s fetch state.</blockquote></mx-reply>I'm not quite sure what you're saying.  If you pass the same signal to the children, then aborting them is exactly what I'd expect.  It should be a conscious choice which signal to pass, and reusing a signal indicates to me precisely that you want them all to abort together.</td></tr>
+  <tr class="msg" id="L1"><td class="ts-cell"><a class="ts" href="#L1" alt="Wed May 22 2024 20:13:41 GMT-0700 (Pacific Daylight Time)">03:13</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">I expect the children to abort, not for the cleanup code in the children to assume the signaling event’s context.</td></tr>
+  <tr class="msg" id="L2"><td class="ts-cell"><a class="ts" href="#L2" alt="Wed May 22 2024 20:15:46 GMT-0700 (Pacific Daylight Time)">03:15</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@stephenhicks:matrix.org">Steve Hicks</span>&gt;</div></td><td class="msg-cell">Gotcha, I think I misunderstood "sets up their own fetch state".  You were saying that they might add some of their own async vars as well, and that it should be encapsulated to the child rather than flowing through from the parent.  I agree.</td></tr>
+  <tr class="msg" id="L3"><td class="ts-cell"><a class="ts" href="#L3" alt="Wed May 22 2024 20:16:30 GMT-0700 (Pacific Daylight Time)">03:16</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell">Yes, rereading it now I didn’t word it well.</td></tr>
+  <tr class="msg" id="L4"><td class="ts-cell"><a class="ts" href="#L4" alt="Wed May 22 2024 21:29:15 GMT-0700 (Pacific Daylight Time)">04:29</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@stephenhicks:matrix.org">Steve Hicks</span>&gt;</div></td><td class="msg-cell"><p>Another example where encapsulated (defualt flow-around) approach makes sense is to behave like React's <code>&lt;Context.Provider&gt;</code>.  That API is designed to avoid "prop drilling", where an outer JSX component needs to pass data to an inner JSX component, but due to JSX's design, this ends up requiring every component in between to accept and pass along that same data.  The generally accepted solution is to put a <code>&lt;Context&gt;</code> element around the outside, and then it can be accessed directly by any descendent without adding arguments everywhere in between.  If, for some reason, there were an additional provider for the same context variable, it would override the previous one, but only for the current scope - so it's clean.  It would be very susprising if changes to this context in a child scope ended up affecting other sibling subcomponents.</p>
+<p>In general, this use case of "implicit parameter propagation without needing to virally change the signatures  in between" is relevant both in JSX but also in ordinary JS, and it basically always wants the bind-around approach.</p>
+</td></tr>
+  <tr class="msg" id="L5"><td class="ts-cell"><a class="ts" href="#L5" alt="Thu May 23 2024 02:27:34 GMT-0700 (Pacific Daylight Time)">09:27</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-7" title="@jiali.passion:matrix.org">Jia Li</span>&gt;</div></td><td class="msg-cell">Hello, I am Jia Li, the maintainer of the Zone.js, thank you for having me here.</td></tr>
+  <tr class="msg" id="L6"><td class="ts-cell"><a class="ts" href="#L6" alt="Thu May 23 2024 05:49:09 GMT-0700 (Pacific Daylight Time)">12:49</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-10" title="@littledan:matrix.org">littledan</span>&gt;</div></td><td class="msg-cell"><mx-reply><blockquote> Hello, I am Jia Li, the maintainer of the Zone.js, thank you for having me here.</blockquote></mx-reply>Thank you so much for joining! We were wondering, could you tell us about how Zone.js arrived at its current policy of which fallbacks to zone-wrap and how? I have heard that this changed over time to fix bugs. We are trying to work out the analogous policy for AsyncContext.</td></tr>
+  <tr class="msg" id="L7"><td class="ts-cell"><a class="ts" href="#L7" alt="Thu May 23 2024 05:53:30 GMT-0700 (Pacific Daylight Time)">12:53</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-10" title="@littledan:matrix.org">littledan</span>&gt;</div></td><td class="msg-cell">One particular example we have been thinking about is, what zone should an event run in, when it is triggered by JS? I guess Zone.js runs it in the zone where the event was registered, but we are thinking about running it in the zone which triggered the event.</td></tr>
+  <tr class="msg" id="L8"><td class="ts-cell"><a class="ts" href="#L8" alt="Thu May 23 2024 06:46:43 GMT-0700 (Pacific Daylight Time)">13:46</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-7" title="@jiali.passion:matrix.org">Jia Li</span>&gt;</div></td><td class="msg-cell"><p><span class="nick-10">littledan</span>:<br>Yeah, I remembered this issue have been discussed in the earlier stage of zone.js development, the policy of Zone.js is the callback should run in the same context(zone) when the task is scheduled.</p>
+<ol>
+<li>for macrotask, such as <code>setTimeout(callback)</code>, the <code>setTimeout</code> call schedule the async operation, so the callback should be in the same context(zone) with the setTimeout call</li>
+</ol>
+<pre><code>zone1.run(() =&gt; {
+  setTimeout(() =&gt; {
+    console.log(Zone.current.name); // should be zone1
+  }, 0);
+});
+</code></pre>
+<ol start="2">
+<li>about eventTask such as <code>button.addEventListener('click', handler);</code>, we considered the schedule process is the <code>addEventListener</code> call instead of the dispatchEvent call.</li>
+</ol>
+<pre><code>zone1.run(() =&gt; {
+  button.addEventListener('click', () =&gt; {
+     console.log(Zone.current.name) // should be zone1;
+  });
+
+  zone2.run(() =&gt; {
+    button.dispatchEvent(clickEvent);
+  });
+});
+</code></pre>
+<ol start="3">
+<li>for microtask such as Promise, the schedule process is when <code>promise.then</code> is called.</li>
+</ol>
+<pre><code>let p = null;
+zone1.run(() =&gt; {
+  p = new Promise(...);
+});
+zone2.run(() =&gt; {
+  p.then(() =&gt; {
+    console.log(Zone.current); // will be zone2
+  })
+});
+</code></pre>
+</td></tr>
+  <tr class="msg" id="L9"><td class="ts-cell"><a class="ts" href="#L9" alt="Thu May 23 2024 06:47:33 GMT-0700 (Pacific Daylight Time)">13:47</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-10" title="@littledan:matrix.org">littledan</span>&gt;</div></td><td class="msg-cell"><span class="nick-7">Jia Li</span>: What kind of feedback have you gotten over time about this policy? Do people ever complain that it gives them the wrong results?</td></tr>
+  <tr class="msg" id="L10"><td class="ts-cell"><a class="ts" href="#L10" alt="Thu May 23 2024 06:56:24 GMT-0700 (Pacific Daylight Time)">13:56</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-7" title="@jiali.passion:matrix.org">Jia Li</span>&gt;</div></td><td class="msg-cell"><p>About eventTask, some people asks the question why the zone is not the zone when the event triggered which is confuse in some cases, but in Angular, event task basically always run in the same zone, so there are no big difference about using the register zone or the trigger zone(they are the same in the 99% of the use cases).</p>
+<p>And I think the event trigger such as <code>dispatchEvent</code> is a synchronized operation, so depends on should we consider eventTask as an async operation, if it is , I think using the register zone is reasonable, if not, zone.js should leave the eventTask alone and not wrap it at all.</p>
+</td></tr>
+  <tr class="msg" id="L11"><td class="ts-cell"><a class="ts" href="#L11" alt="Thu May 23 2024 07:29:12 GMT-0700 (Pacific Daylight Time)">14:29</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-10" title="@stephenbelanger:matrix.org">Stephen Belanger</span>&gt;</div></td><td class="msg-cell"><p>The exit is the end of the scope function. It applies scopes in <em>exactly the same way</em>. It just does it implicitly at the runtime level. And yes, there most certainly <em>is</em> a way to know when execution ends: any time the runtime would become <em>idle</em> and/or transition to microtask processing it knows it has reached the end of the current selection of synchronous code. At that point you end that context.</p>
+<p><em>However</em>, you don't <em>actually</em> need to know when an end occurs if all execution descends from a root at the beginning of execution as then the <em>start</em> of any execution would be propagating and therefore swapping out the context value <em>anyway</em>, so clearing it at the <em>end</em> actually becomes unnecessary as it would be immediately followed by a change <em>anyway</em>. There's actually been mathematical proofs of this for the .NET implementation.</p>
+</td></tr>
+  <tr class="msg" id="L12"><td class="ts-cell"><a class="ts" href="#L12" alt="Thu May 23 2024 07:38:59 GMT-0700 (Pacific Daylight Time)">14:38</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-10" title="@littledan:matrix.org">littledan</span>&gt;</div></td><td class="msg-cell"><mx-reply><blockquote> <p>About eventTask, some people asks the question why the zone is not the zone when the event triggered which is confuse in some cases, but in Angular, event task basically always run in the same zone, so there are no big difference about using the register zone or the trigger zone(they are the same in the 99% of the use cases).</p>
+<p>And I think the event trigger such as <code>dispatchEvent</code> is a synchronized operation, so depends on should we consider eventTask as an async operation, if it is , I think using the register zone is reasonable, if not, zone.js should leave the eventTask alone and not wrap it at all.</p>
+</blockquote></mx-reply>Not wrapping at all seems kinda incomplete as well; sometimes no JS was on the stack when the event was triggered. I was imagining that the registration-time zone should be used for some of those cases (e.g., onload)</td></tr>
+  <tr class="msg" id="L13"><td class="ts-cell"><a class="ts" href="#L13" alt="Thu May 23 2024 07:39:49 GMT-0700 (Pacific Daylight Time)">14:39</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-10" title="@littledan:matrix.org">littledan</span>&gt;</div></td><td class="msg-cell">Even for clicking, sometimes you dispatchEvent, but usually you actually just click, in which case you don't have anything to go on besides the registration zone</td></tr>
+  <tr class="msg" id="L14"><td class="ts-cell"><a class="ts" href="#L14" alt="Thu May 23 2024 07:40:12 GMT-0700 (Pacific Daylight Time)">14:40</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-10" title="@littledan:matrix.org">littledan</span>&gt;</div></td><td class="msg-cell">so maybe the "triggering zone" should be used <em>when it exists</em>, otherwise you fall back to the registration-time zone</td></tr>
+  <tr class="msg" id="L15"><td class="ts-cell"><a class="ts" href="#L15" alt="Thu May 23 2024 12:22:28 GMT-0700 (Pacific Daylight Time)">19:22</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell"><mx-reply><blockquote><p>The exit is the end of the scope function. It applies scopes in <em>exactly the same way</em>. It just does it implicitly at the runtime level. And yes, there most certainly <em>is</em> a way to know when execution ends: any time the runtime would become <em>idle</em> and/or transition to microtask processing it knows it has reached the end of the current selection of synchronous code. At that point you end that context.</p>
+<p><em>However</em>, you don't <em>actually</em> need to know when an end occurs if all execution descends from a root at the beginning of execution as then the <em>start</em> of any execution would be propagating and therefore swapping out the context value <em>anyway</em>, so clearing it at the <em>end</em> actually becomes unnecessary as it would be immediately followed by a change <em>anyway</em>. There's actually been mathematical proofs of this for the .NET implementation.</p>
+</blockquote></mx-reply><blockquote data-md=">">The exit is the end of the scope function<br></blockquote><br>Which means there’s a leak until the end of the function. <a href="https://gist.github.com/jridgewell/4aa2d6458f41d4574d6aeb580dc80d5d">https://gist.github.com/jridgewell/4aa2d6458f41d4574d6aeb580dc80d5d</a></td></tr>
+  <tr class="msg" id="L16"><td class="ts-cell"><a class="ts" href="#L16" alt="Thu May 23 2024 12:24:29 GMT-0700 (Pacific Daylight Time)">19:24</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell"><blockquote data-md=">">And yes, there most certainly is a way to know when execution ends: any time the runtime would become idle and/or transition to microtask processing it knows it has reached the end of the current selection of synchronous code. <br></blockquote><br>How do you propose expsoing this API to libraries?</td></tr>
+  <tr class="msg" id="L17"><td class="ts-cell"><a class="ts" href="#L17" alt="Thu May 23 2024 13:01:31 GMT-0700 (Pacific Daylight Time)">20:01</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell"><blockquote data-md=">">However, you don't actually need to know when an end occurs if all execution descends from a root at the beginning of execution as then the start of any execution would be propagating and therefore swapping out the context value anyway<br></blockquote><br>This doesn’t fully remove the need for the above end of task detection, becuase the last object placed there can’t be freed until the event loops replaces the context. It also means that Jobs would place an empty context when they return, which is OK I guess.</td></tr>
+  <tr class="msg" id="L18"><td class="ts-cell"><a class="ts" href="#L18" alt="Thu May 23 2024 16:24:34 GMT-0700 (Pacific Daylight Time)">23:24</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-7" title="@jiali.passion:matrix.org">Jia Li</span>&gt;</div></td><td class="msg-cell"><mx-reply><blockquote> so maybe the "triggering zone" should be used <em>when it exists</em>, otherwise you fall back to the registration-time zone</blockquote></mx-reply><p>So there are two cases.</p>
+<ol>
+<li>User registered the click event handler in zone1, and user click the button with mouse, the click behavior happens in a noop zone (the default zone), and the handler should run in the registered zone.</li>
+<li>User registered the click event handler in zone1, and user trigger the zone programmatically with something like dispatchEvent in zone2, so in this case, it is confusing that which zone should the handler run into, from the zone.js unified policy perspective, it should be zone1, otherwise in the 1st usecase, the handler should run in the noop zone,  but some user may want to see zone2 in some scenario.</li>
+</ol>
+<p>I still belive the current policy (run callback in the register zone) make more senses, and maybe in some cases let use can also access both the register zone and the trigger zone will be better.</p>
+</td></tr>
+  <tr class="msg" id="L19"><td class="ts-cell"><a class="ts" href="#L19" alt="Thu May 23 2024 16:41:28 GMT-0700 (Pacific Daylight Time)">23:41</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-1" title="@jridgewell:matrix.org">Justin Ridgewell</span>&gt;</div></td><td class="msg-cell"><blockquote data-md=">">zone.js unified policy perspective<br></blockquote><br>Is this documented somewhere?</td></tr>
+
+</tbody></table></div></div></div>
+</body></html>

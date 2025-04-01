@@ -1,0 +1,122 @@
+2023-07-03
+[16:30:49.0017] <littledan>
+So, do we want to give a status update at the next TC39 meeting?
+
+[16:31:46.0240] <littledan>
+(This should be fine to add after the deadline)
+
+[16:32:23.0437] <littledan>
+BTW amazing article explaining the value of AsyncContext and WinterCG. Thanks Justin and James for speaking with Mary. https://thenewstack.io/beyond-browsers-the-longterm-future-of-javascript-standards/
+
+
+2023-07-04
+[06:12:11.0552] <Yoav Weiss>
+littledan: apologies for the delay, missed your message. Didn't talk to neither Anne nor Ms2ger about this just yet..
+
+[09:06:20.0993] <Chengzhong Wu>
+> <@littledan:matrix.org> So, do we want to give a status update at the next TC39 meeting?
+
+I'll be traveling next week so I won't be able to make it too.
+
+
+2023-07-06
+[09:41:32.0115] <ljharb>
+ok to delete next week's meeting, due to plenary?
+
+[11:16:55.0293] <Justin Ridgewell>
+Yes
+
+
+2023-07-18
+[09:00:55.0462] <Andreu Botella>
+Hey, I wrote some initial test262 tests: https://github.com/tc39/test262/pull/3874
+
+[09:02:03.0723] <Andreu Botella>
+Also, the spec text should be updated to make generators propagate the init snapshot. I will try to do that myself, but I'm not that familiar with execution contexts and all of that
+
+
+2023-07-20
+[04:34:57.0484] <Andreu Botella>
+It looks like there are a few spec-created iterators that use the generators machinery internally
+
+[04:36:12.0024] <Andreu Botella>
+currently I think this would only allow observing the AsyncContext generators state if you use `Object.defineProperty` to make one of the indexes of an array (or maybe also a regex) have a getter
+
+[04:36:18.0280] <Andreu Botella>
+```js
+const asyncVar = new AsyncContext.Variable();
+
+const array = [23, 34, 45];
+Object.defineProperty(array, 1, {
+  get() {
+    return asyncVar.get();
+  }
+});
+
+const iter = asyncVar.run("foo", () => array.values());
+
+asyncVar.run("bar", () => {
+    console.log([...iter]);  // [23, "foo", 45]
+});
+```
+
+[04:36:29.0832] <Andreu Botella>
+but this would be more readily observable with iterators helpers
+
+[04:36:32.0952] <Andreu Botella>
+ * but this would be more readily observable with iterator helpers
+
+[04:40:10.0506] <Andreu Botella>
+```js
+const asyncVar = new AsyncContext.Variable();
+
+const array = [23, 34, 45];
+const iter1 = array.values();
+const iter2 = asyncVar.run("foo", () => {
+    return iter1.map(v => [asyncVar.get(), v]);
+});
+asyncVar.run("bar", () => {
+    console.log([...iter2]);  // [["foo", 23], ["foo", 34], ["foo", 45]]
+});
+```
+
+[04:41:16.0252] <Andreu Botella>
+is this expected?
+
+
+2023-07-25
+[10:02:43.0396] <Mathieu Hofman>
+I'm in the hallway
+
+[10:25:27.0931] <littledan>
+https://github.com/whatwg/html/pull/9408
+
+
+2023-07-31
+[10:08:21.0599] <Andreu Botella>
+Hey, I have a PR for generator support: https://github.com/tc39/proposal-async-context/pull/61
+
+[10:08:51.0079] <Andreu Botella>
+it'd be good to get a thorough review from someone who understands execution contexts and generators more than me, to make sure I haven't missed anything
+
+[10:09:19.0403] <Andreu Botella>
+but I think this is enough to have the behavior of restoring the context at initialization
+
+[10:10:33.0365] <Andreu Botella>
+or rather, to restore the initialization context the first time the generator is resumed, and then on every yield store the current context to restore that next time
+
+[10:10:57.0850] <Andreu Botella>
+although that isn't really needed now that I think about it, since you can't have nested yields
+
+[10:11:36.0890] <Andreu Botella>
+ * although that isn't really needed now that I think about it, since you can't have nested yields, or modify the snapshot within a function stack frame
+
+[10:12:03.0548] <Andreu Botella>
+I guess I can get rid of the snapshotting on yield then
+
+[10:18:48.0715] <Andreu Botella>
+ * although that isn't really needed now that I think about it, since you can't yield the outer generator inside a callback run within it, or modify the snapshot within a function stack frame
+
+[10:18:59.0074] <Andreu Botella>
+ * although that isn't really needed now that I think about it, since you can't yield the generator inside a callback run within it, or modify the snapshot within a function stack frame
+
