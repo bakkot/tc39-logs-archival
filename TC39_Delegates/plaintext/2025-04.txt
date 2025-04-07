@@ -146,3 +146,93 @@ Ok thank you :)
 [07:23:39.0447] <Chris de Almeida>
 gentle reminder that even though PRs are not required, they are greatly appreciated because people who have notifications on will know there is something new on the agenda
 
+
+2025-04-07
+[19:51:00.0595] <jschoi>
+[Math.sqrt](https://tc39.es/ecma262/multipage/numbers-and-dates.html#sec-math.sqrt) says, “Return 𝔽(the square root of ℝ(n)),” but [Math.cbrt](https://tc39.es/ecma262/multipage/numbers-and-dates.html#sec-math.cbrt) says, “Return an implementation-approximated Number value representing the cube root of ℝ(n).” Does anyone know why their language is different?
+
+[19:53:35.0440] <bakkot>
+jschoi: https://github.com/tc39/ecma262/pull/3345
+
+[19:53:58.0625] <bakkot>
+basically we know that everyone is using a correct sqrt because wasm requires it but we don't know this about cube root and it's a pain to find out
+
+[19:56:22.0949] <jschoi>
+Ah…so it’s because there’s no cbrt instruction.
+
+[19:57:23.0068] <jschoi>
+* Ah…so it’s because there’s no cbrt instruction in WASM. A shame.
+
+[20:01:55.0607] <jschoi>
+* Ah…so it’s because there’s no cbrt instruction in WASM. That seems like an unfortunate omission.
+
+[20:01:58.0037] <jschoi>
+I presume that BigInt.sqrt should also use the “implementation-approximated” language, since it’s not trying to match a f32/364 WASM instruction.
+
+[20:02:17.0691] <jschoi>
+* I presume that BigInt.sqrt should also use the “implementation-approximated” language, since it’s not trying to match a f32/364 WASM instruction but rather something like [Waldemar’s novel implementation](https://github.com/waldemarhorwat/integer-roots).
+
+[20:04:00.0309] <jschoi>
+* I presume that BigInt.sqrt should also use the “implementation-approximated” language, since it’s not trying to match a f32/364 WASM instruction but rather something like [Waldemar’s novel implementation](https://github.com/waldemarhorwat/integer-roots) over an unbounded ℕ domain.
+
+[20:31:37.0198] <bakkot>
+no, if it's straightforward for everyone to have the right answer, then we should require the right answer
+
+[20:31:46.0130] <bakkot>
+and waldemar's is exact
+
+[20:32:08.0099] <bakkot>
+we only do implementation-approximated if getting the exact right answer is difficult or expensive
+
+[20:38:34.0408] <jschoi>
+Oh, so then *both* BigInt.sqrt and BigInt.cbrt should say, “Return ℤ(the square/cube root of ℝ(n))”.
+
+[20:39:10.0319] <jschoi>
+* Oh, so then _both_ BigInt.sqrt and BigInt.cbrt should say something like, “Return ℤ(the square/cube root of ℝ(n)), truncated toward 0”.
+
+[20:39:12.0272] <jschoi>
+* Oh, so then _both_ BigInt.sqrt and BigInt.cbrt should say something like, “Return ℤ(the square/cube root of ℝ(n)), truncated toward 0.”
+
+[20:45:13.0979] <bakkot>
+yes although the ℤ operator takes an integer as input so it would have to be more like “Return ℤ(the square/cube root of ℝ(n) truncated toward 0)”
+
+[20:45:19.0534] <bakkot>
+though probably clearer as two steps
+
+[20:48:11.0593] <jschoi>
+Editorially, would
+“Let _root_ be the integer part of the square/cube root of ℝ(n)” or
+“Let _root_ be the square/cube root of ℝ(n), truncated toward 0”
+be preferable?
+
+[20:48:22.0243] <jschoi>
+* Editorially, would
+“Let _root_ be the integer part of the square/cube root of ℝ(_n_)” or
+“Let _root_ be the square/cube root of ℝ(_n_), truncated toward 0”
+be preferable?
+
+[20:49:47.0006] <jschoi>
+* Editorially, do you have an opinion about whether
+“Let _root_ be the integer part of the square/cube root of ℝ(_n_); return ℤ(_root_)”,
+“Let _root_ be the square/cube root of ℝ(_n_), truncated toward 0; return ℤ(_root_)”,
+“Let _root_ be the square/cube root of ℝ(_n_); return ℤ(the integer part of _root_)”, or
+“Let _root_ be the square/cube root of ℝ(_n_); return ℤ(_root_ truncated toward 0)”
+be preferable?
+
+[20:50:40.0154] <jschoi>
+* Editorially, do you have an opinion about which would be preferable?
+1. Let _root_ be the integer part of the square/cube root of ℝ(_n_). Return ℤ(_root_).
+2. Let _root_ be the square/cube root of ℝ(_n_), truncated toward 0. Return ℤ(_root_).
+3. Let _root_ be the square/cube root of ℝ(_n_). Return ℤ(the integer part of _root_).
+4. Let _root_ be the square/cube root of ℝ(_n_). Return ℤ(_root_ truncated toward 0).
+
+[20:58:04.0786] <jschoi>
+* Editorially, do you have an opinion about which would be preferable?
+
+1. Let _root_ be the integer part of the square/cube root of ℝ(_n_). Return ℤ(_root_).
+2. Let _root_ be the square/cube root of ℝ(_n_), truncated toward 0. Return ℤ(_root_).
+3. Let _root_ be the square/cube root of ℝ(_n_). Return ℤ(the integer part of _root_).
+4. Let _root_ be the square/cube root of ℝ(_n_). Return ℤ(_root_ truncated toward 0).
+
+Hm, I see MakeFullYear does already use “the integer part of”. There is nowhere in the spec that uses “toward 0/+∞/-∞”.
+
