@@ -68,3 +68,138 @@ On FF, a sort without a comparator seems to sort NaNs according to "absolute val
 
 The spec seems fairly clear to me on this whole issue; canonicalisation happens on every sort call, but the lived reality is different. Should this be accepted, or is this something to file a bug to implementors about (if not already existent)? Or should this be a case where the spec is loosened to allow for implementation defined behaviour?
 
+[04:13:28.0937] <Michael Ficarra>
+Aapo Alasuutari: Seems like you should file issues against the implementations. Have you checked the JSC behaviour?
+
+[04:14:03.0830] <Aapo Alasuutari>
+Nope, I don't happen to have JSC at my fingertips quite the same as I have FF and Chrome.
+
+[04:20:25.0694] <Aapo Alasuutari>
+Okay, non-buggy test code:
+```js
+b = BigUint64Array.of(9221120237041091055n, 9221120237041090774n);
+console.log(b[0], b[1]);
+a = new Float64Array(b.buffer);
+a.sort();
+console.log(b[0], b[1]);
+a.sort(() => Math.random() ? -1 : 1);
+console.log(b[0], b[1]);
+```
+
+[04:25:25.0050] <Aapo Alasuutari>
+(I was wrong about FF ordering by "absolute value", that doesn't seem to happen. I must've accidentally sorted the BigUint64Array in one of my tests. Otherwise it all goes as I wrote.)
+
+[04:26:01.0808] <nicolo-ribaudo>
+in JSC it logs
+```
+9221120237041091055n 9221120237041090774n
+9221120237041090560n 9221120237041090560n
+9221120237041090560n 9221120237041090560n
+```
+
+[04:27:37.0141] <nicolo-ribaudo>
+Which from your message above seems to be the spec-compliant behavior
+
+[04:28:08.0213] <Aapo Alasuutari>
+Yup, that's seems compliant. Ladybird also complies, according to a response I got in their Discord.
+
+[04:28:19.0086] <Aapo Alasuutari>
+* Yup, that's seems compliant. Ladybird also complies, based on a response I got in their Discord.
+
+[04:40:32.0066] <Aapo Alasuutari>
+https://issues.chromium.org/issues/408932085
+
+[04:48:38.0378] <Aapo Alasuutari>
+https://bugzilla.mozilla.org/show_bug.cgi?id=1958820
+
+[08:06:33.0842] <shu>
+where's the step that canonicalizes NaNs in sort?
+
+[08:08:23.0856] <shu>
+is it your reading that [[Get]] returns the ES NaN, then [[Set]] of that NaN should always produce the same bit pattern in typed arrays?
+
+[08:12:24.0671] <shu>
+anyway i think we should fix the spec to reflect reality, and clear up ambiguities in the reading
+
+[08:13:00.0480] <shu>
+i don't see a realistic path to get interoperable NaN canonicalization across engines, nor the benefits of doing so
+
+[10:29:03.0409] <ljharb>
+we had a whole day of discussion in 2015 about NaN canonicalization. my recollection was that the only time NaNs are canonicalized is when you see one *in JS* - not when a spec-internal operation gets or copies one
+
+[10:30:03.0675] <littledan>
+yeah not requiring canonicalization was a pretty explicit decision; I don't understand why we think this doesn't apply to sort
+
+[10:45:31.0261] <annevk>
+Not sure if this is what Aapo meant, but when I looked at https://tc39.es/ecma262/#sec-rawbytestonumeric earlier I could interpret that as normalizing NaN values. It checks if value is NaN and then it doesn't return value, but it returns (a canonical?) NaN.
+
+[10:50:36.0540] <littledan>
+The current text does imply certain guarantees that aren't actually met in all browsers: "An implementation must always choose the same encoding for each implementation distinguishable NaN value." I would prefer that we adopt Waldemar's proposed alternative semantics, that every time you write a float into a TypedArray, it may have arbitrary undefined NaN bits (which is the previous sentence: "If value is NaN, rawBytes may be set to any implementation chosen IEEE 754-2019 binary64 format NaN encoding. ") https://tc39.es/ecma262/#sec-numerictorawbytes
+
+[10:51:34.0872] <littledan>
+the committee was just a little over-optimistic that such regularity would fall out in engines like V8, but it doesn't
+
+[10:51:58.0840] <littledan>
+anyway I imagine sort hits this spec path, so it doesn't guarantee canonicalization
+
+[10:53:45.0506] <littledan>
+* When you write the JS NaN to a TypedArray, its byte pattern may be arbitrary: which is the previous sentence: "If value is NaN, rawBytes may be set to any implementation chosen IEEE 754-2019 binary64 format NaN encoding. " https://tc39.es/ecma262/#sec-numerictorawbytes
+
+Actually, the text gives some guarantees that aren't actually met in all browsers: "An implementation must always choose the same encoding for each implementation distinguishable NaN value." I would prefer that we adopt Waldemar's proposed alternative, that we just delete that second sentence.
+
+[10:54:04.0265] <littledan>
+* When you write the JS NaN to a TypedArray, its byte pattern may be arbitrary: "If value is NaN, rawBytes may be set to any implementation chosen IEEE 754-2019 binary64 format NaN encoding. " https://tc39.es/ecma262/#sec-numerictorawbytes
+
+Actually, the text gives some guarantees that aren't actually met in all browsers: "An implementation must always choose the same encoding for each implementation distinguishable NaN value." I would prefer that we adopt Waldemar's proposed alternative, that we just delete that second sentence.
+
+[13:24:22.0214] <Aapo Alasuutari>
+Yeah, I was thinking of [[Get]] and a misread of "The Number Type":
+> NaN values of the IEEE Standard are represented in ECMAScript as a single special NaN value.
+I had interpreted this to mean that all NaNs must be canonicalised to a single one. Though, the NumericToRawBytes also linked above does indeed say that writing NaN should always choose the same NaN, so I did end up getting it right despite getting it wrong :D
+
+[13:24:29.0171] <Aapo Alasuutari>
+* Yeah, I was thinking of \[\[Get\]\] and a misread of "The Number Type":
+
+> NaN values of the IEEE Standard are represented in ECMAScript as a single special NaN value.
+
+I had interpreted this to mean that all NaNs must be canonicalised to a single one. Though, the NumericToRawBytes also linked above does indeed say that writing NaN should always choose the same NaN, so I did end up getting it right despite getting it wrong :D
+
+[13:25:27.0527] <Aapo Alasuutari>
+* Yeah, I was thinking of \[\[Get\]\] / RawBytesToNumeric and a misread of "The Number Type":
+
+> NaN values of the IEEE Standard are represented in ECMAScript as a single special NaN value.
+
+I had interpreted this to mean that all NaNs must be canonicalised to a single one. Though, the NumericToRawBytes also linked above does indeed say that writing NaN should always choose the same NaN, so I did end up getting it right despite getting it wrong :D
+
+[13:30:19.0829] <Aapo Alasuutari>
+Since spec-wise, sort always performs a fully copy of the buffer data into a list of Values and back after sorting, it'll indeed always pass each entry in the TA through NumericToRawBytes.
+
+[13:30:42.0493] <Aapo Alasuutari>
+* Since spec-wise, sort always performs a fully copy of the buffer data into a list of Values and back after sorting, it'll indeed always pass each entry in the TA through RawBytesToNumeric and NumericToRawBytes.
+
+[16:08:03.0267] <akaster>
+what's the best way to get this change (PR 2193) on someone's radar? queue it up for an upcoming TC39 meeting? something less formal?
+
+[16:35:37.0267] <bakkot>
+that PR is not currently correct and also needs tests
+
+[16:35:46.0448] <bakkot>
+so you will need to find a champion willing to do that work
+
+[16:35:50.0520] <bakkot>
+thus far no one has stepped forward
+
+[16:35:59.0250] <bakkot>
+I personally do not currently have time
+
+
+2025-04-08
+[18:17:16.0380] <littledan>
+This would be a great project for a new TC39 delegate to take up, if anyone's looking for something useful to champion
+
+[20:01:25.0814] <rkirsling>
+I think my comment in September was meant as a "do y'all want me to carry this over the finish line" but I can't find any context for it in Matrix history, say
+
+[20:01:42.0086] <rkirsling>
+and also nobody replied in-thread 😅
+
