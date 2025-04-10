@@ -5,3 +5,148 @@ I see that there's a Decimal.Amount item on the agenda. Would it be possible to 
 [09:03:46.0492] <Jesse>
 yes, I'll take a look -- thanks!
 
+
+2025-04-09
+[07:03:13.0310] <Jesse>
+if you're interested, you're welcome to take a look at the current slides for the decimal update next week: https://notes.igalia.com/p/tc39-2025-04-decimal-intl-integration#/
+
+[07:04:21.0629] <Jesse>
+I've tried to incorporate feedback on our recent discussions here and present a version of Decimal.Amount that I think warrants discussion in plenary
+
+[07:08:34.0338] <Jesse>
+eemeli: are you happy with N-ic's response to the question?
+
+[08:43:33.0169] <sffc>
+I think
+1. We should spend more time overall on motivation and less on the API
+2. Discuss how this design addresses committee feedback from February
+3. We should probably change "withSignificantDigits" to "toAmount" to address Eemeli's feedback)
+
+[08:47:21.0619] <Jesse>
+agree -- I can add a bit to the slides
+
+[09:23:02.0933] <Richard Gibson>
+Thanks!
+* I think slide 8 would be better if it demonstrated *in*equality of values with differing precision (e.g., `v.equals(v.withFractionalDigits(2)) // false`).
+* There seems to be a typo on slide 11 (extraneous trailing `)` in the code block).
+* On slide 12, "_`Intl.NumberFormat` should handle `Decimal.Amount` values (the former is a kind of number)_" seems non-grammatical (what is "_the former_" referring to?).
+* Slide 15 misspells "Discussion".
+
+[09:23:22.0470] <Jesse>
+ack, thank you -- I'm on it!
+
+
+2025-04-10
+[22:31:05.0129] <eemeli>
+Niocolo's reply does answer my questions, but it doesn't really make me happy about `Decimal.Amount`. According to the current version of the slides it's described as:
+> Today, we propose a new `Decimal.Amount` primordial for storing a (1) decimal value (2) with a precision (3) but without a unit.
+
+That last part in particular seems rather novel and surprising, and I can't find any mention of such an approach in the repo or meeting notes. I proposed the term "amount" as an alternative for "measure", but now it's being taken up as a part of Decimal and won't include any units?
+
+[22:39:36.0205] <sffc>
+My mental model of `Decimal.Amount` is that it contains both a precision and a unit
+
+[22:41:14.0124] <sffc>
+* My mental model of `Decimal.Amount` is that it contains both a precision and a unit. I just looked at Jesse's updated slides and they are proposing a specific shape I haven't seen before.
+
+[22:46:40.0126] <sffc>
+I don't agree with the framing of the motivation on slide 4. There wasn't consensus that the proposals remain separate; I would describe it as skepticism raised by some delegates that the use cases were similar enough to merge them.
+
+[22:50:33.0422] <sffc>
+We should highlight that we took home the feedback about building a _protocol_, and we investigated it. We found, however, that only the primordial brings immutability, ergonomics, and interoperability to the table. To address the feedback about a top-level `Amount` not seeming well-motivated, we are coming with an updated proposal that scopes the primordial under `Decimal.Amount`, to make clear that this is a type that is designed to live in the Decimal universe.
+
+[23:57:22.0391] <ljharb>
+why would "amount" include a unit?
+
+[23:57:31.0979] <ljharb>
+amount to me is like a magnitude, it's unitless
+
+[00:09:25.0928] <nicolo-ribaudo>
+> <@ljharb:matrix.org> why would "amount" include a unit?
+
+The idea is that:
+- the decimal proposal introduces plain decimals, exactly as it was for the past year
+- for good Intl integration and to be able to fully represent external decimal128 values, the proposal also introduced an object that lets you represent a (decimal,precision) pair. This object doesn't support any operations, it's just some data payload + a comparison function. It has a prototype, to put the function on it, as well as things like .toLocaleString.
+- the measure proposal needs a way to define an (object,precision,unit): given that for the other proposal we are defining (object,precision) already, this proposal can just add the unit there.
+
+Whether it's called Amount, Measure, or something else doesn't really matter for now — if we have .to/.with/.someThing else methods to get to it, we could even not expose the constructor at all (like we don't expose ArrayIterator)
+
+[00:10:06.0906] <nicolo-ribaudo>
+* The idea is that:
+- the decimal proposal introduces plain decimals, exactly as it was for the past year
+- for good Intl integration and to be able to fully represent external decimal128 values, the proposal also introduced an object that lets you represent a (decimal,precision) pair. This object doesn't support any operations, it's just some data payload + a comparison function. It has a prototype, to put the function on it, as well as things like .toLocaleString.
+- the measure proposal needs a way to define an (object,precision,unit): given that for the other proposal we are defining (object,precision) already, this proposal can just add the unit there.
+Whether it's called Amount, Measure, or something else doesn't really matter for now — if we have .to/.with/.someThing else methods to get to it, we could even not expose the constructor at all (like we don't expose ArrayIterator). Although this is more like a nuclear option, because people will give a name to these objects and we are in a position to direct that.
+
+
+[00:10:15.0365] <nicolo-ribaudo>
+* The idea is that:
+the decimal proposal introduces plain decimals, exactly as it was for the past year
+for good Intl integration and to be able to fully represent external decimal128 values, the proposal also introduced an object that lets you represent a (decimal,precision) pair. This object doesn't support any operations, it's just some data payload + a comparison function. It has a prototype, to put the function on it, as well as things like .toLocaleString.
+the measure proposal needs a way to define an (object,precision,unit): given that for the other proposal we are defining (object,precision) already, this proposal can just add the unit there.
+Whether it's called Amount, Measure, or something else doesn't really matter for now — if we have .to/.with/.someThing else methods to get to it, we could even not expose the constructor at all (like we don't expose ArrayIterator). Although this is more like a nuclear option, because people will give a name to these objects and we are in a position to direct that.
+
+
+[00:10:38.0824] <nicolo-ribaudo>
+* The idea is that:
+
+- the decimal proposal introduces plain decimals, exactly as it was for the past year
+
+- for good Intl integration and to be able to fully represent external decimal128 values, the proposal also introduced an object that lets you represent a (decimal,precision) pair. This object doesn't support any operations, it's just some data payload + a comparison function. It has a prototype, to put the function on it, as well as things like .toLocaleString.
+
+- the measure proposal needs a way to define an (object,precision,unit): given that for the other proposal we are defining (object,precision) already, this proposal can just add the unit there.
+
+
+Whether it's called Amount, Measure, or something else doesn't really matter for now — if we have .to/.with/.someThing else methods to get to it, we could even not expose the constructor at all (like we don't expose ArrayIterator). Although this is more like a nuclear option, because people will give a name to these objects and we are in a position to direct that.
+
+[00:10:50.0378] <nicolo-ribaudo>
+Oh well I give up on formatting this as a list
+
+[00:12:34.0955] <sffc>
+I was proposing that `Decimal.Amount` adds both precision and unit. There is no middle intermediate type; it is just a `Decimal.Amount` with a null unit. Some delegates were already skeptical of adding 1 type, so I didn't want to push my luck with 2 types (and then we'd have to name them), plus Luca pointed out that there isn't really any JS duck-typing advantage to distinguishing "null unit" from "type does not support a unit". So it seems simplest to keep them as one type.
+
+[00:13:45.0683] <nicolo-ribaudo>
+Yes I've been convinced that we should have them as a single object. The .unit should be on the Decimal.Amount object, and not on a third new one.
+
+[00:14:10.0429] <nicolo-ribaudo>
+This is unrelated to how the proposals are merged/split though, a proposal can add a property/field on an existing object 
+
+[00:15:24.0760] <sffc>
+/me verifies that the Decimal.Amount OP does indeed state that the unit is in the data model of Decimal.Amount
+
+[00:16:36.0326] <sffc>
+I see
+
+[00:16:59.0649] <nicolo-ribaudo>
+Yes I double-checked yesterday too :)
+
+My mental model of the end state matches exactly what you described there
+
+[00:17:29.0872] <sffc>
+If you think removing the unit field from my formulation of `Decimal.Amount` is more likely to make it palatable in the short term for Stage 2 purposes... okay with me. Not sure about Eemeli.
+
+[00:19:01.0064] <nicolo-ribaudo>
+I think it's not only good for decimal (keeping the proposal focused on its goal), but it also makes life easier for proposal-that-adds-the-unit: there is no new object to justify, it's just adding a field on an existing one
+
+[00:20:32.0529] <nicolo-ribaudo>
+And I think Decimal.Amount should be justified entirely on Intl integration and interop with external systems, without saying "it will be _needed_ to add units", even though we must make it clear from the beginning that the plan is the other proposal will slot into that
+
+[00:23:58.0413] <nicolo-ribaudo>
+A question I have for eemeli is: you expressed disappointment with entangling the two proposals in the past. If plain Decimal was much further ahead in the process than Measure (or if decimal was already stage 4!), would you be ok with this design?
+
+[00:58:00.0772] <eemeli>
+I continue to think that trying to intermingle these proposals is making the whole situation less rather than more clear. Is "this design" the following?
+- A `Decimal` would not carry any precision information.
+- The decimal proposal introduces `Decimal.Amount` as an object that carries precision information, but does not support mathematical operations.
+- The measure proposal adds `unit` to `Decimal.Amount`.
+
+[01:13:16.0263] <nicolo-ribaudo>
+Yes
+
+[01:34:53.0337] <eemeli>
+Ok, then in a hypothetical future where something like `Decimal.Amount` was already stage 3 or 4, then it would indeed be obvious for measure to be adding `unit` to it. But this is not where we are now, and I don't see the value of the question. More significantly, I don't understand why `Decimal.Amount` needs to be included in the decimal proposal, if `Decimal` itself will not carry precision information.
+
+In the current slides, the motivation and use cases for `Decimal` and `Decimal.Amount` appear to be orthogonal, with the former serving data exchange, while the latter is for formatting values with precision. Why are both of these mixed into the decimal proposal?
+
+Would it not be simpler to have one proposal (decimal) providing a solution for data exchange, and another proposal (measure) providing a solution for formatting values with precision?
+
