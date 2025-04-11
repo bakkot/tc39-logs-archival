@@ -229,3 +229,137 @@ It was specifically withdrawn at this plenary; you can read the reasoning here: 
 
 But, as has been already mentioned, the reason was because many engine implementors say that operator overloading is impossible to do without penalizing the performance of every JavaScript program. It will probably never happen in JavaScript.
 
+
+2025-04-10
+[04:59:46.0151] <Jack Works>
+https://github.com/tc39/ecma262/issues/3563
+
+[04:59:58.0332] <Jack Works>
+found this when re-implementing RegExp in engine262
+
+[05:36:49.0876] <Seokho Song>
+I think between below the  following tests in test262 are contradictory. 
+
+1. https://github.com/tc39/test262/blob/main/test/staging/sm/class/superPropDelete.js
+2. https://github.com/tc39/test262/blob/main/test/language/expressions/delete/super-property-uninitialized-this.js
+
+And I guess spec spec-compliant way is 2 because before accessing the property ReferenceError exception will be occur first by envRec.[[ThisBindingStatus]] is uninitialized.
+
+If it is, I'll open PR soon to test262. correct me if I'm wrong :)
+
+[05:42:29.0159] <Seokho Song>
+* I think between below the  following tests in test262 are contradictory.
+
+1. https://github.com/tc39/test262/blob/main/test/staging/sm/class/superPropDelete.js
+2. https://github.com/tc39/test262/blob/main/test/language/expressions/delete/super-property-uninitialized-this.js
+
+And I guess the spec-compliant way is 2, because the ReferenceError exception will be occur by the spec - "envRec.\[\[ThisBindingStatus\]\] is uninitialized"  before accessing the property.
+
+If it is, I'll open PR soon to test262. correct me if I'm wrong :)
+
+[05:47:34.0145] <Jack Works>
+maybe it's related to https://github.com/tc39/ecma262/pull/2267
+
+[13:18:51.0801] <Mikhail Efanov>
+Hey everyone! I had an idea to propose adding a native `deepEqual` to ECMAScript. I’ve written a small draft here: https://github.com/misha98857/proposal-object-deep-equal/blob/main/README.md, but I wanted to ask how relevant this idea might be — and whether similar proposals have been made and rejected before?
+
+The main goal is to move away from third-party libraries and custom solutions in favor of built-in functionality.
+
+[13:29:46.0292] <bakkot>
+the idea is tossed around occasionally. it is a very large problem space; there are many different notions of what it would mean to be "equal". if you want to make the case for it you should give motivating examples for why someone would want to do this (in the browser - things which are mainly useful in tests are not good candidates to add to the language).
+
+[13:30:15.0057] <Michael Ficarra>
+we really need a deep equality section in https://github.com/tc39/faq
+
+[13:30:49.0998] <ptomato>
+hi, welcome! and thanks for taking the time.
+
+about the idea, I've heard people say that there are many possible semantics for deepEqual which are all valid depending on what your use case is. some are mutually exclusive. not sure how widespread this view is in committee. anyway, as a starting point I'd suggest making sure you've catalogued all the different semantics that people might possibly expect from a deepEqual function and come prepared with arguments why a standardized one should choose one semantic over another.
+
+also see the Composites idea which is on the agenda for the upcoming TC39. there is a `Composite.equal` function which would not exactly be deepEqual, but might cover some of the use cases
+
+[13:37:55.0172] <bakkot>
+as to prior art, there's been one actual proposal (https://github.com/tc39/proposal-array-equality) although it didn't go anywhere; you can probably find it in the notes for more.
+
+there's also
+- https://es.discourse.group/t/json-equals-x-y/2019
+- https://es.discourse.group/t/proposal-object-equals-and-hashcode/1753
+
+and others I'm sure
+
+[13:39:50.0445] <Mikhail Efanov>
+Thanks. I hadn't seen this proposal before. It seems similar — two composite objects are almost equal, like in "common" deepEqual logic
+
+[13:41:41.0851] <Michael Ficarra>
+also related is [`structuredClone`](https://developer.mozilla.org/en-US/docs/Web/API/Window/structuredClone) which has made a decision on some of the "deep" questions
+
+[13:45:29.0011] <Chris de Almeida>
+also: https://github.com/tc39/proposal-record-tuple#equality
+
+[14:30:01.0131] <littledan>
+yes but still, this is different from what you typically want in a test framework, to check whether two *mutable* arrays are (currently) equal. Such a function does not have that same stability property. So probably multiple things need to exist.
+
+[15:06:21.0170] <jschoi>
+> <@bakkot:matrix.org> as to prior art, there's been one actual proposal (https://github.com/tc39/proposal-array-equality) although it didn't go anywhere; you can probably find it in the notes for more.
+> 
+> there's also
+> - https://es.discourse.group/t/json-equals-x-y/2019
+> - https://es.discourse.group/t/proposal-object-equals-and-hashcode/1753
+> 
+> and others I'm sure
+
+Hemanth H.M, ljharb, and I talked about reviving proposal-array-equality a few years ago but none of us have had time. 
+
+[15:14:17.0918] <jschoi>
+(Also, there was https://github.com/sebmarkbage/ecmascript-shallow-equal.)
+
+[15:17:17.0470] <jschoi>
+* (Also, there was https://github.com/sebmarkbage/ecmascript-shallow-equal, https://es.discourse.group/t/native-deep-clone-algorithm/, and the dormant https://github.com/tc39/ecma262/issues/2555.)
+
+[15:17:27.0239] <jschoi>
+* (Also, there were https://github.com/sebmarkbage/ecmascript-shallow-equal, https://es.discourse.group/t/native-deep-clone-algorithm/, and the dormant https://github.com/tc39/ecma262/issues/2555.)
+
+[15:24:16.0059] <jschoi>
+Also, I recall someone saying that we probably will never ever be able to add anything to Object.prototype ever again without breaking websites; would that apply to static methods in Object?
+
+[15:24:44.0851] <jschoi>
+* Also, I recall someone in the Committee saying once that we probably will never ever be able to add anything to Object.prototype ever again without breaking websites. Does that apply to static methods in Object?
+
+[15:27:27.0440] <shu>
+it was more about Array.prototype than Object.prototype
+
+[15:27:30.0022] <shu>
+static methods are fine
+
+[15:27:59.0033] <bakkot>
+this is also true of Object.prototype to be clear
+
+[15:28:29.0851] <shu>
+fair, i would also object to adding stuff to Object.prototype
+
+[15:28:46.0080] <shu>
+even if it's web compatible it's guaranteed to be a bugfarm or security thing
+
+[15:46:47.0801] <jschoi>
+My feedback is that your proposal looks like a good start. Were I writing this proposal, I would make sure I do three more things: 
+
+0. Search thoroughly for similar official TC39 proposals, like proposal-array-equality, find the meeting notes when they were presented to the Committee in the [meeting notes repository](https://github.com/tc39/notes/), and determine the biggest barriers to them advancing. Other than the lack of time of the champions. If you want to try to revive any proposal you find, feel free to open an issue and start working on the next steps.
+1. Search for more prior art of deep equality in JavaScript as practical—particularly popular deep-equality NPM packages. (Examples of deep equality in other languages also is good, but JavaScript has big differences from all other languages.)
+2. Compare the behavior of the prior art (maybe in a table). Do they compare objects’ enumerated properties, use symbol-based protocols, or do something else?
+3. Investigate how real-world codebases use the prior art—particularly popular NPM packages depending on the popular deep-equality NPM packages. I would be especially interested to find out whether those popular dependents on deep-equality packages use deep equality only in testing or for production code. 
+
+For example, if you find that virtual-DOM libraries often use certain types of deep equality in hot loops, that could be a compelling-enough argument to add to the JS engines.
+
+This would all be volunteer work, of course, and we know how thankless volunteer work can be. It must have been a lot of hard work for you already. Thank you for taking the time.
+
+
+2025-04-11
+[20:24:26.0455] <ljharb>
+because of null prototypes, imo it would be a bad design to ever add another Object.prototype method, even if web compat wasn't a thing
+
+[21:59:00.0419] <kriskowal>
+There’s a slightly better adjacent universe where Object.prototype itself is null. (They also have amazing sandwiches.)
+
+[22:01:30.0804] <kriskowal>
+If you keep going in that direction, you arrive in another slightly better universe where Object.prototype is void and void === null, then a little farther yet, void == null. This is where the expression _null and void_ comes from. There’s no universe where JavaScript only has one bottom. Sad but true.
+

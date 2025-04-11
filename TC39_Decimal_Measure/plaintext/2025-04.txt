@@ -150,3 +150,134 @@ In the current slides, the motivation and use cases for `Decimal` and `Decimal.A
 
 Would it not be simpler to have one proposal (decimal) providing a solution for data exchange, and another proposal (measure) providing a solution for formatting values with precision?
 
+[06:34:05.0076] <Jesse>
+I think the current `Decimal.Amount` is also relevant for the data exchange story because part of the story may involve a developer's need to preserve all digits of a number coming over the wire, and/or transmitting a decimal value with that precision
+
+[06:36:26.0986] <Jesse>
+with `Decimal` alone, that aspect of the data exchange story is harder to sell because you'd need to store a decimal value from a string coming over the wire, and then calculate the precision of it on the side (e.g. by simple parsing, looking for the "." character, then counting the digits on the left and right). And that extra information would need to stored separately from the decimal value
+
+[06:37:42.0077] <Jesse>
+there is another way to understand the data exchange story, which is preservation of mathematical accuracy (i.e., no rounding). That's where `Decimal` fits the bill
+
+[06:58:33.0787] <Jesse>
+with `Decimal.Amount` we also address complementary needs for formatting decimals
+
+[06:59:32.0508] <Jesse>
+so I understand the point about orthogonal needs but I might say that the current design, with Decimal.Amount, addresses two complementary needs
+
+[07:01:21.0880] <Jesse>
+I think that Decimal.Amount also helps us to not get too entangled with issues of units and the use cases arising from them, such as conversion, formatting, canonicalization (or not?) (e.g. kilometer --> meter)
+
+[07:02:32.0354] <Jesse>
+thus Decimal.Amount helps us to stay in the realm of decimal numbers properly speaking, without getting caught up by unit issues
+
+[07:31:23.0383] <littledan>
+I'm opposed to making Decimal more complicated by adding this other Decimal.Amount class. What if we made Amount part of the Measure proposal. Whether it's two classes or one, either way could work, but this is beyond the core behavior of Decimal. (It'd be fine if we say, Intl.PluralRules doesn't work for Decimal)
+
+[07:31:58.0864] <littledan>
+* I'm opposed to making Decimal more complicated by adding this other Decimal.Amount class. What if we made Amount part of the Measure proposal? Whether Amount is a separate class from Measure or it's just a Measure with a null unit, either way could work, but this is beyond the core behavior of Decimal. (It'd be fine if we say, Intl.PluralRules doesn't work for Decimal)
+
+[07:33:41.0132] <littledan>
+I don't think that "Decimal has no value for Intl" is a reasonable counterargument. TC39 would not let almost any Intl proposal through if every proposal had to be seen as of core importance to every delegate's goals.
+
+[07:40:53.0088] <littledan>
+so I agree 100% with Eemeli
+
+[08:59:10.0955] <nicolo-ribaudo>
+I'll be a few minutes late
+
+[09:03:50.0526] <Jesse>
+Dan and Eemeli and I are here
+
+[09:48:01.0085] <sffc>
+Two reasons I don't agree with this line of reasoning:
+
+1. JS is a great language for i18n _because_ we take an Intl-first approach. In the last 10 years, Decimal is second only to Temporal in being a proposal that impacts i18n. It should also take an Intl-first approach.
+2. Decimal by itself is a fairly weekly-motivated proposal due to reasons I've made clear on GitHub (we can agree to disagree on this). Decimal with Intl makes the proposal well-motivated.
+
+[09:50:54.0192] <littledan>
+yes, I disagree with 2
+
+[09:51:28.0050] <littledan>
+I'm happy that the Measure proposal is being developed. We should have something like this in our standard library.
+
+[09:53:03.0959] <littledan>
+but I really don't see any cases where looking at Intl makes us want to go back and change the underlying proposal. I think it'd be worth it to fully develop Measure and check whether there's anything like this.
+
+[12:10:33.0513] <littledan>
+* What if we made Amount part of the Measure proposal? Whether Amount is a separate class from Measure or it's just a Measure with a null unit, either way could work, but this is beyond the core behavior of Decimal. (It'd be fine if we say, Intl.PluralRules doesn't work for Decimal)
+
+[16:44:58.0243] <sffc>
+Putting aside disagreements regarding process and procedure, the two _outcomes_ I want to _avoid_ are:
+
+1. JS ends up with separate Decimal and Amount/Measure types that together are not maximally symbiotic
+2. JS ends up with Decimal but no intrinsic for its i18n interop
+
+The way we get to (1) is if we pursue Amount/Measure by itself, optimized for existing numeric types in JS, and then Decimal comes along later, but Amount/Measure is not designed with maximal Decimal integration. For example, Decimal.Amount has a more elegant way of handling precision than a polymorphic Amount/Measure would be able to have.
+
+The way we get to (2) is if Decimal gets to Stage 2 without Intl support, and then Amount/Measure gets blocked for whatever reason (lack of consensus around intrinsic vs protocol, etc).
+
+Going back to process/procedure questions, the way to prevent both of these outcomes is to put Decimal.Amount into the Decimal proposal (with precision only, no units for now) and advance it to Stage 2. If Decimal gets approved, so does Decimal.Amount.
+
+[16:52:04.0477] <sffc>
+It's worth reminding everyone that we _almost_ got Stage 2 on full decimal last summer. The hold-out was Jordan who took the position that "if we're adding Decimal, let's do it right and make equality and arithmetic and stuff work the way devs expect it to work". In other words, the other delegates were mostly okay with having a type in the language that has the shape of Decimal.Amount.
+
+Our latest proposal is that we have Decimal as the ergonomic entrypoint, and we keep full decimal, renamed to Decimal.Amount, to cover the use cases that Decimal doesn't cover by itself. This seems like a great compromise.
+
+[16:52:20.0492] <sffc>
+* It's worth reminding everyone that we _almost_ got Stage 2 on Full Decimal128 last summer. The hold-out was Jordan who took the position that "if we're adding Decimal, let's do it right and make equality and arithmetic and stuff work the way devs expect it to work". In other words, the other delegates were mostly okay with having a type in the language that has the shape of Decimal.Amount.
+
+Our latest proposal is that we have Decimal as the ergonomic entrypoint, and we keep full decimal, renamed to Decimal.Amount, to cover the use cases that Decimal doesn't cover by itself. This seems like a great compromise.
+
+[16:52:48.0877] <sffc>
+* It's worth reminding everyone that we _almost_ got Stage 2 on Full Decimal last summer. The hold-out was Jordan who took the position that "if we're adding Decimal, let's do it right and make equality and arithmetic and stuff work the way devs expect it to work". In other words, the other delegates were mostly okay with having a type in the language that has the shape of Decimal.Amount.
+
+Our latest proposal is that we have Decimal as the ergonomic entrypoint, and we keep Full Decimal, renamed to Decimal.Amount, to cover the use cases that Decimal doesn't cover by itself. This seems like a great compromise.
+
+[16:56:50.0436] <sffc>
+What do people think of this comparison: in Temporal, by themselves, MonthDay or YearMonth might not be super strongly motivated. We would have been able to achieve most of the value proposition of Temporal by just having PlainDate. However, the champions decided amongst themselves that these two types were an important part of the whole overall package of an ergonomic datetime API. The plenary trusted our judgement, and now we have the types. In a similar way, Decimal.Amount should be a type that we position as motivated as a piece of the ergonomic numerics type system, and it is just one piece of the proposal that we put in front of plenary.
+
+[16:59:07.0052] <sffc>
+* Putting aside disagreements regarding process and procedure, the two _outcomes_ I want to _avoid_ are:
+
+1. JS ends up with separate Decimal and Amount/Measure types that together are not maximally symbiotic
+2. JS ends up with Decimal but no ergonomic solution for its i18n interop
+
+The way we would get to (1) is if we pursue Amount/Measure by itself, optimized for existing numeric types in JS, and then Decimal comes along later, but Amount/Measure is not designed with maximal Decimal integration. For example, Decimal.Amount has a more elegant way of handling precision than a polymorphic Amount/Measure would be able to have.
+
+The way we would get to (2) is if Decimal gets to Stage 2 without Intl support, and then Amount/Measure gets blocked for whatever reason (lack of consensus around intrinsic vs protocol, etc).
+
+Going back to process/procedure questions, the way to prevent both of these outcomes is to put Decimal.Amount into the Decimal proposal (with precision only, no units for now) and advance it to Stage 2. If Decimal gets approved, so does Decimal.Amount.
+
+
+2025-04-11
+[17:04:20.0500] <sffc>
+* What do people think of this comparison: in Temporal, by themselves, MonthDay or YearMonth might not be super strongly motivated. We would have been able to achieve most of the value proposition of Temporal by just having PlainDate. However, the champions decided amongst themselves that these two types were an important part of the whole overall package of an ergonomic datetime API. The plenary trusted our judgement, and now we have the types. In a similar way, Decimal.Amount should be a type that we position as motivated as a piece of the ergonomic numerics type system, and it is just one piece of the proposal that we put in front of plenary.
+
+I don't think it is right to position this as a question we ask plenary: "should we include Decimal.Amount?" That's just an opportunity for inconclusive debate around what it means to be motivated and what is the bar for being motivated and what the alternatives could be. In Temporal, we didn't ask "should we include Temporal.PlainYearMonth?" We just included it as part of our package. Delegates who were interested left feedback on GitHub. This is what we can and should do with Decimal.Amount.
+
+[17:05:18.0065] <sffc>
+* What do people think of this comparison: in Temporal, by themselves, MonthDay or YearMonth might not be super strongly motivated. We would have been able to achieve most of the value proposition of Temporal by just having PlainDate. However, the champions decided amongst themselves that these two types were an important part of the whole overall package of an ergonomic datetime API. The plenary trusted our judgement, and now we have the types. In a similar way, Decimal.Amount should be a type that we position as motivated as a piece of the ergonomic numerics type system, and it is just one piece of the proposal that we put in front of plenary.
+
+I don't think it is right to position this as a question we ask plenary: "should we include Decimal.Amount?" That's just an opportunity for inconclusive debate around what it means to be motivated and what is the bar for being motivated and what the alternatives could be. In Temporal, I don't recall us asking "should we include Temporal.YearMonth?" We just included it as part of our package. Delegates who were interested left feedback on GitHub. This is what we can and should do with Decimal.Amount.
+
+[01:09:33.0158] <eemeli>
+> Decimal but no ergonomic solution for its i18n interop
+
+sffc What would this look like? As we've agreed that Decimal (the one that does math) won't include precision, my understanding is that without any changes in ECMA-402 attempting to format a Decimal with NumberFormat or select its plural category will call its `.toString()` method, and get the user the result that they might expect from the Decimal's numerical value.
+
+This won't really add any new capabilities for number formatting, but it won't take them away either, so I don't see how the i18n interop of even a minimal Decimal would not have an ergonomic solution.
+
+[01:11:46.0694] <eemeli>
+Also, just to clarify, I am not advocating for a polymorphic Amount, and I'm not aware of anyone else doing so either. I do think that a black-box Amount would be sufficient for i18n purposes, but that's not the same thing.
+
+[01:15:43.0703] <nicolo-ribaudo>
+The "good intl support for decimal" that Shane would be happy with is something along the lines of https://github.com/nicolo-ribaudo/proposal-numeric-with-precision (but just for decimal). It's what evolved in the discussions of merging decimal and measure, but we can figure out what's the _minimal_ chunk that would need to be added to Decimal that:
+- is good enough for intl
+- can be extended by the measure/amount proposal
+
+[01:17:56.0173] <nicolo-ribaudo>
+* The "good intl support for decimal" that Shane would be happy with is something along the lines of https://github.com/nicolo-ribaudo/proposal-numeric-with-precision (but just for decimal, and without the protocol). It's what evolved in the discussions of merging decimal and measure, but we can figure out what's the _minimal_ chunk that would need to be added to Decimal that:
+- is good enough for intl
+- can be extended by the measure/amount proposal
+
