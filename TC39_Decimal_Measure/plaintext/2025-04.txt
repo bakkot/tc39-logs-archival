@@ -281,3 +281,109 @@ The "good intl support for decimal" that Shane would be happy with is something 
 - is good enough for intl
 - can be extended by the measure/amount proposal
 
+[06:05:24.0806] <Jesse>
+can you say more about what a black-box Amount is, versus a minimal Amount?
+
+[06:06:15.0607] <Jesse>
+atm the current Decimal.Amount does almost nothing, except string formatting and equality comparison (which itself is pretty trivial)
+
+[06:06:23.0649] <eemeli>
+It's an Amount that doesn't directly tell you what its contained value is, so it's only available as e.g. a string.
+
+[06:07:36.0113] <Jesse>
+ah, I see. At the moment that's what we've got, though the current design needs to be updated somewhat if we want this to be  a basis for measure, and not just the end of the road for Decimal
+
+[06:22:00.0950] <Jesse>
+another alternative is that Measure/Amount is its own primordial
+
+[06:23:15.0658] <Jesse>
+we've talked about the 2-class vs. 3-class approach before, and argued in favor of the 2-class approach, but I wonder if we want to revisit that
+
+[06:24:33.0850] <Jesse>
+the line of thinking I have in mind is: is Measure really so close to Decimal.Amount that Measure has to be viewed as an extension of Decimal.Amount?
+
+[06:25:42.0537] <Jesse>
+if we look at Decimal.Amount as a solution to a couple of problems arising from the decimal problem space, then maybe it's just an accident that Measure -- if you drop some data -- looks like a Decimal.Amount
+
+[07:39:35.0891] <littledan>
+OK, I guess I'm sold on Decimal.Amount at this point
+
+[07:39:53.0892] <littledan>
+we should probably go back and make sure it has the full IEEE data model though (including negative precision)
+
+[07:40:10.0567] <littledan>
+it vaguely makes sense to model significant digits (?)
+
+[07:40:34.0227] <littledan>
+I guess I see little risk of 1., but cannot disagree with you that 2. is a possibility
+
+[07:41:10.0110] <littledan>
+yes, Temporal is a strong reference point for "let's not worry too much about making too many classes, and make sure we have a clean division of what's logically actually represented, rather than filling in nulls"
+
+[07:41:23.0945] <littledan>
+except the difference is that Decimal.Amount is much lighter-weight
+
+[07:42:13.0389] <littledan>
+(what if we called the class Decimal.WithPrecision?)
+
+[07:54:11.0014] <nicolo-ribaudo>
+What if for now we call it `Decimal.ThatObject`, and just name it further ahead during stage 2 once both the proposal are at stage 2? :)
+
+[07:54:30.0791] <littledan>
+heh Amount is fine for now
+
+[07:54:46.0374] <littledan>
+anyway I've flipped the polarity of how I feel about this proposal
+
+[07:54:57.0136] <littledan>
+not sure what I was thinking...
+
+[07:55:36.0006] <littledan>
+it's nice and minimal
+
+[07:57:58.0822] <nicolo-ribaudo>
+(disclosure :P) I was talking with Dan about this potential minimal version of this: https://nicolo-ribaudo.github.io/proposal-decimal-with-precision/ and https://github.com/nicolo-ribaudo/proposal-decimal-with-precision
+
+It's currently broken because I forgot to round, and it has the .with method naming that Eemeli suggested to change, but it could be a good starting point 
+
+[08:04:56.0650] <eemeli>
+Is this not satisfied by indicating significant digits with a positive integer number?
+
+[08:06:39.0017] <littledan>
+well, yeah, that's what IEEE calls it, but this proposal flips the sign bit, but that's fine
+
+[08:06:59.0351] <littledan>
+I think it's probably more intuitive for positive to mean "more decimal places"
+
+[08:15:02.0536] <eemeli>
+I would prefer `Decimal.ThatObject`, or some other clearly not-final name for the part that is getting packaged into the decimal proposal. The i18n problem/need that it's fulfilling was only accepted by committee as a part of the measure proposal, and the clear intent is for it to be filled out with `unit` and `currency` fields by the measure proposal.
+
+[08:17:52.0144] <littledan>
+sure, SGTM
+
+[08:26:24.0911] <eemeli>
+Jesse: Regarding this phrase in the slides:
+> We propose a new Decimal.Amount primordial for storing a (1) decimal value (2) with a precision (3) but without a unit.
+
+Would it be perhaps more appropriate to phrase it a bit like this?
+> We propose a new Decimal.Amount primordial for storing a decimal value with a precision.
+> If accepted, the measure proposal may add fields to this primoridal to store unit or currency indicators.
+
+[11:27:57.0700] <Jesse>
+Yes, that’s closer to the intention — I’ll change it, thanks!
+
+[11:59:45.0137] <Jesse>
+would we need something like a `.withQuantum` method (name TBD) to expose this kind of capability? It could take a positive or negative integer (negative would be equivalent to `.withFractionalDigitss` with a negated argument)
+
+[12:02:38.0116] <nicolo-ribaudo>
+We should pick just one probably, especially because the word "quantum" is not very well known
+
+[13:10:01.0755] <littledan>
+yes, "precision" is way more clear than "quantum"
+
+[13:30:08.0787] <nicolo-ribaudo>
+For precision, I think both toFixed and Intl use positive numbers to mean "more digits of precision", so it'd be great to follow that. I don't actually know what the current PR does, or what IEEE does.
+
+[13:30:46.0270] <nicolo-ribaudo>
+I think we should stay within what can be encoded by IEEE, but we can expose it differently. Is the quantum the number of fractional digits or of significant digits?
+
