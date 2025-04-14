@@ -149,3 +149,98 @@ IMO it'd be best to work on standing up a service which handles things well with
 [07:29:21.0352] <littledan>
 jumping straight to content-addressed hashes is kind of a lot
 
+
+2025-04-13
+[04:47:04.0211] <James>
+tiny update on where i got to with my sourcemap publishing/externals idea. it seems chrome does have some trouble requesting external sourcemaps
+do any of you know if there's any particular rules browsers follow when loading a sourcemap url?
+
+[04:47:07.0202] <James>
+cross origin stuff etc
+
+[16:13:43.0772] <Chris de Almeida>
+NRO is down for 5m TG4 report tomorrow.  lmk if delta
+
+[16:16:05.0365] <jkup>
+I'll be doing the update! 5m is good though it's a short one
+
+
+2025-04-14
+[21:00:00.0432] <Simon Zünd>
+Chrome attempts to load the source map via the inspected page itself at first. So if the page fails to `fetch` the source map, so will Chrome DevTools
+
+[00:52:38.0664] <James>
+interesting. the error isn't of any use really ("unexpected error" or some such thing). but im guessing its a cross-origin thing then
+
+[00:54:40.0747] <James>
+in this case im also using devtools for node, so there is no 'page'. not sure what the rules are then, i.e. what is the origin etc
+
+[00:58:30.0103] <James>
+i imagine debug IDs will make this a lot easier one day if someone hosts a server to look them up 😅
+
+[01:03:51.0371] <Nic>
+The problems that debug IDs are solving is distinguishing two different source maps that are hosted at the same URL (for example, because you updated your code and rebuild the source map). With the default devtools behavior, if you are already including the version of the file in the URL you are fetching then also having the ID is probably not super helpful.
+
+[01:04:18.0838] <Nic>
+If Chrome devtools have problems fetching those source maps however, you might take a look at the extensions API mentioned in https://github.com/tc39/ecma426/issues/185
+
+[01:04:32.0292] <Nic>
+It's possible you might just do the fetching by yourself through a browser extension 
+
+[01:05:04.0413] <Nic>
+What's asked in the last question there seems to be exactly what you are trying to do
+
+[01:10:31.0664] <James>
+pretty much. we have a tool now which transforms sourcemap urls to CDN hosted ones. if devtools were capable of loading them, all would be solved (and made easier one day by standards ideally)
+
+[01:12:06.0305] <James>
+ill see if i can pester someone who knows more about node devtools than i do. i.e. any limits on requests etc, what origin it is
+
+[01:55:06.0575] <Simon Zünd>
+DevTools basically first attempts to call the `Network.loadNetworkResource` CDP method https://chromedevtools.github.io/devtools-protocol/tot/Network/#method-loadNetworkResource
+
+[01:55:14.0537] <Simon Zünd>
+So it depends whether Node implements that or not
+
+[01:55:43.0477] <Simon Zünd>
+If that fails, we try a different approach by attempting to fetch it ourselves but with some of the target permissions applied
+
+[01:55:49.0222] <Simon Zünd>
+Let me dig up the code
+
+[01:56:37.0101] <Simon Zünd>
+https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/devtools/devtools_ui_bindings.cc;l=1116;drc=e005c381337ad6a2312cafa0202f80b7950afbe1
+
+[01:56:48.0843] <Simon Zünd>
+That is the fallback if going through the inspected page fails
+
+[01:57:03.0656] <Simon Zünd>
+e.g. DevTools can load source maps from `file:///` URLs and it uses the fallback for that
+
+[01:57:27.0952] <Simon Zünd>
+I imagine that because Node.js only recently started implementing the CDP `Network` domain, we always used the fallback for node.js debugging
+
+[02:01:27.0244] <Simon Zünd>
+Note that cross-origin source maps are somewhat common, but the server serving the source maps needs to have CORS configured to allow fetching from cross-origins
+
+[02:04:11.0524] <James>
+so its possible node/devtools just never attempts to load external maps? thanks so much for the info too. was looking for that c file for a while 😅
+
+[02:06:44.0504] <James>
+i basically get the same error as these folks:
+https://github.com/Adobe-CEP/CEP-Resources/issues/448
+
+and yes im currently using jsdelivr which has the right CORS headers, content type, etc. but this error makes it seem more like devtools just isn't even trying to request it in the first place
+
+[02:09:00.0931] <James>
+once i get this working, longer term it does feel like we should have a standard symbol server some day. one of the various orgs would need to own/host it, but it'd get rid of the need for anyone shipping sourcemaps anymore
+
+[02:09:25.0137] <James>
+im kinda hacking around it by hosting them on npm under a special tag, but i can see a future where there's an actual sourcemap server somewhere
+
+[03:40:49.0414] <Simon Zünd>
+If you have a small repro, feel free to file a bug on crbug.com. I can take a look at why DevTools fails to fetch the source map.
+
+[03:43:38.0309] <Simon Zünd>
+Ah, note that remote debugging is different depending on how DevTools is opened. The fallback path only exists if you use a "real" Chrome DevTools opened either via right-click "inspect" or via `chrome://inspect`. Otherwise the fallback path doesn't exist.
+
