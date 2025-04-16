@@ -472,3 +472,265 @@ suggestions welcome
 [02:49:20.0397] <Jesse>
 we've thrown around a few ideas here but haven't really settled on one
 
+[05:38:16.0045] <eemeli>
+What does this mean? What's the use case here?
+
+[05:41:24.0056] <Jesse>
+something like `Decimal.Something.from(x, 3. "fractionalDigits").toString() === x` for all digit strings `x` with up to 3 decimal digits (where 3 is known out-of-band)
+
+[05:43:37.0316] <Jesse>
+* something like `Decimal.Something.from(x, 3. "fractionalDigits").toString() === x` for all digit strings `x` with 3 fractional digits (where 3 is known out-of-band)
+
+[05:44:24.0621] <Jesse>
+this could be used for e.g. currency, where a number of fractional digits is known in advance
+
+[06:07:53.0371] <eemeli>
+If that's important in particular for currency values, then we ought to be quite explicit about it, as this has significant implications for the `.toString()` output once we start to consider including a `currency` field as a part of proposal-measure.
+
+[06:13:34.0528] <eemeli>
+As in, I think it means that either:
+1. `toString()` only encodes the numerical value,
+2. we ought to include a parser for a number+currency or number+unit string format,
+3. we strongly recommend that anyone with a non-formatting reason to represent a number together with a currency or unit not actually do so, or
+4. we reconsider a 3-class solution.
+
+Presuming, of course, that we agree that this sort of round-tripping is important.
+
+[06:15:56.0284] <eemeli>
+Hence my question earlier: Is there an actual demonstrated need for non-formatting use cases for decimal-with-precision that is significant enough that we need to account for it in this API design, or do we only strongly care about the formatting use cases?
+
+[06:16:37.0303] <littledan>
+I'm having trouble following; are we proposing having a parser for Decimal.Amount?
+
+[06:17:04.0177] <littledan>
+let's follow the decision for Decimal. The counterarguments are the same in both cases. If we're going with it, let's stick with it for Decimal.Amount
+
+[06:17:34.0977] <littledan>
+the most visible usage of a name is on the title slide; you might want to change that
+
+[06:17:39.0376] <eemeli>
+I don't think we ought to have one, but if we seriously care about round-tripping, then that's something we need ot consider.
+
+[06:18:01.0612] <littledan>
+my understanding was that the driving motivation was around the formatting use case
+
+[06:18:41.0217] <eemeli>
+That's my understanding as well, but e.g. the slides first mention the non-formatting case.
+
+[06:18:42.0471] <Jesse>
+atm there's no parser for Decimal.Something; using the `.from` static constructor method, the 1st argument is a decimal string, which gets passed to Decimal, which does have a parser
+
+[06:19:03.0670] <littledan>
+where did the demand for round-tripping come from?
+
+[06:19:47.0907] <Jesse>
+it's mentioned in the issue which kicked off this disucssion: https://github.com/tc39/proposal-measure/issues/26
+
+[06:20:16.0940] <Jesse>
+it's not the topmost need, but it is there
+
+[06:21:56.0418] <Jesse>
+we can focus on the value Decimal.Something has for i18n -- that's the clearest benefit
+
+[06:22:45.0646] <littledan>
+hmm, do you have the .equals method?
+
+[06:22:57.0010] <littledan>
+(I don't really know what the use case is for that)
+
+[06:23:28.0282] <eemeli>
+Hang on, how could we even have round-tripping unless we have a parser that parses something like `'1.20'` as something more than just the decimal value `1.2`?
+
+[06:23:31.0665] <Jesse>
+we had it, but dropped it because the use case wasn't exactly clear, and it becomes easily user-definable if we expose the underlying value and precision
+
+[06:23:54.0007] <littledan>
+I don't see anything on that thread about round-tripping parsers
+
+[06:23:56.0297] <littledan>
+let's keep this simple!
+
+[06:24:09.0186] <littledan>
+as minimal as possible
+
+[06:24:23.0499] <littledan>
+just because we can vaguely conceive of a use case for something doesn't mean we should have it
+
+[06:24:34.0047] <eemeli>
+And to therefore explicitly not aim to support round-tripping, or other non-formatting use cases for decimal-with-precision.
+
+[06:24:56.0877] <littledan>
+I guess the `from` method is the parser?
+
+[06:26:23.0487] <Jesse>
+yeah, `.from` is the parser (though I might say that `from` contains the decimal parser)
+
+[06:26:38.0784] <Jesse>
+for `.from`, I have in mind taking 3 arguments, no just 1 (a decimal string)
+
+[06:27:40.0466] <Jesse>
+I could imagine it taking 2 (a decimal string and a "precision mode", indicating either fractional digits or significant digits)
+
+[06:27:45.0863] <Jesse>
+but certainly more than 1
+
+[06:28:34.0834] <eemeli>
+I continue to prefer not having a `.from` factory method, and using `new Amount(value, options)` where the `value` is parsed as the numerical value and the `options` may initially contain `fractionDigits` or `significantDigits`, and be later extended to also support `unit` and `currency`.
+
+[06:30:34.0738] <Jesse>
+we could certainly go either way -- I'm agnostic about that. I think the idea for a static constructor method came from Temporal. But there, we also have `new`, too
+
+[06:31:17.0044] <littledan>
+yeah I guess my preference for making this absolutely as minimal as possible is fairly soft
+
+[06:31:38.0499] <littledan>
+I was just surprised that this was part of it
+
+[06:31:57.0359] <eemeli>
+If `new Decimal(value)` works with numbers, strings, and decimal `value`s, then I would find it quite surprising for the same proposal to advocate a different approach for `Decimal.Something`.
+
+[06:34:31.0401] <Jesse>
+tbh I think we didn't quite have this full discussion for decimal -- values were understood as constructed using `new`, only. There was some discussion of having explicit conversion methods (`toNumber`, `toBigInt`) but IIRC we didn't make a decision about whther to have factory methods. We ended up just stuffing everything into the constructor, taking many possible types of arguments
+
+[06:35:14.0890] <Jesse>
+I might suggest this as a topic for discussion in the next champions call next week
+
+[06:36:43.0993] <Jesse>
+Shane hinted at a broader topic in the last call, namely whether Temporal-style design (especially concerning constructors) is something we want generally, in TC39; but IIRC we didn't apply that thinking to Decimal
+
+[06:37:38.0828] <Jesse>
+MM's question yesterday about membranes and static methods makes me wonder if we should ban the Decimal constructor from taking a Decimal
+
+[06:37:52.0947] <Jesse>
+this is a bit edge case-y but that may come up
+
+[06:41:01.0053] <eemeli>
+If the Decimal constructor can't accept a Decimal value, how should one copy a Decimal instance? Also related: If you construct a Decimal.Something with a Decimal value, is the Decimal.Something value the given instance, or a new instance? This matters in particular because Decimal is a class which may be extended.
+
+[06:41:31.0201] <Jesse>
+one way to copy `x` would be `new Decimal(x.toString()`
+
+[06:43:03.0342] <Jesse>
+for constructing a Decimal.Something from a Decimal `x` I was thinking: `new Decimal.Something(x.toString(), n, "fractionalDigits")` where `n` is something known out-of-bounds, as is `"fractionalDigits"` (the knowledge of how precision to be understood)
+
+[06:43:41.0036] <Jesse>
+you could also do e.g. `new Decimal.Something(x.toFixed(n), n, "fractionalDigits")` or `new Decimal.Something(x.toPrecision(n), n, "significantDigits")`
+
+[06:44:41.0924] <eemeli>
+Huh, and after yesterday: should a Decimal value be a Composite with a custom prototype? If it's not, how else could one use a Decimal as e.g. a Map key?
+
+[06:47:30.0925] <Jesse>
+imo we should try to align Decimal with Composite -- what do we need to add to the prototype?
+
+[06:48:36.0979] <littledan>
+I think it's premature to align Decimal with Composite
+
+[06:48:52.0214] <littledan>
+anyway you wouldn't change anything about the prototype, just make it a frozen object
+
+[06:49:02.0305] <littledan>
+(not frozen prototype but frozen instance)
+
+[06:49:20.0289] <Jesse>
+agree it's early days for the composite discussion
+
+[06:50:58.0390] <littledan>
+if you're saying Decimal should be a Composite, you're saying one thing should block on the other, and I'm not convinced
+
+[06:51:14.0098] <eemeli>
+One relevant part is that I think we can agree that Decimal.Something is not expected to provide a custom equality.
+
+[06:52:08.0872] <Jesse>
+based on the understading of equality Shane sketched in the issue, I think it's not necessary
+
+[06:52:18.0153] <Jesse>
+but if there's something we've overlooked, I'm happy to hear it
+
+[06:52:35.0920] <littledan>
+custom?
+
+[06:52:37.0438] <Jesse>
+I'm happy to drop that and keep decimal.something really minimal
+
+[06:53:09.0348] <Jesse>
+there are probably some Intl needs for equality that Shane had in mind that we could dive in to
+
+[06:53:29.0846] <eemeli>
+As in, a built-in way to specifically say if two somethings are equal.
+
+[06:54:10.0258] <eemeli>
+Is there pre-existing discussion on whether a non-primitive Decimal ought to be usable in a Set or as a Map key?
+
+[06:54:25.0613] <littledan>
+maybe we can just keep this presentatlon slightly ambiguous, and focus on talking about the minimal core, and see if people are up for that? then we can argue about  details
+
+[06:54:52.0281] <littledan>
+sffc: this would be helpful; Waldemar seemed to oppose this particular equality operation strongly
+
+[06:55:44.0726] <littledan>
+I haven't seen discussion about this. The assumption has always been that it'd be a normal object
+
+[06:55:56.0182] <littledan>
+OK, so just the equals method.
+
+[10:05:20.0097] <nicolo-ribaudo>
+Note that equality is trivial to do in userland
+
+[10:05:55.0946] <nicolo-ribaudo>
+`x.decimal.equals(y.decimal) && x.significantDigits === y.significantDigits`
+
+
+2025-04-16
+[21:49:55.0296] <sffc>
+There's a lot here since I last posted my reply. Most of it relates to topics I've already explained in my GitHub issues including #175 and #181. I think my position on most of the comments here is well-known, and back-and-forth on Matrix is not my communication channel of choice.
+
+[21:55:56.0337] <sffc>
+* There's a lot here since I last posted my reply. Most of it relates to topics I've already explained in my GitHub issues including #175 and #181. I think my position on most of the comments here is well-known. In short, I am in support of a clean immutable data type that supports decimal with precision, possibly with future support for units. All methods operate according to that data model, including equals and to/from string.. If there are specific concerns, let's make GitHub issues. Back-and-forth on Matrix is not my communication channel of choice.
+
+[21:56:16.0949] <sffc>
+* There's a lot here since I last posted my reply. Most of it relates to topics I've already explained in my GitHub issues including #175 and #181. I think my position on most of the comments here is well-known. In short, I am in support of a clean immutable data type that supports decimal with precision, possibly with future support for units. All methods operate according to that data model, including equals and to/from string.
+
+If there are specific questions/suggestions/comments/concerns, let's make GitHub issues. Back-and-forth on Matrix is not my communication channel of choice.
+
+[21:56:34.0943] <sffc>
+* There's a lot here since I last posted my reply. Most of it relates to topics I've already explained in my GitHub issues including #175 and #181.
+
+I think my position on most of the comments here is well-known. In short, I am in support of a clean immutable data type that supports decimal with precision, possibly with future support for units. All methods operate according to that data model, including equals and to/from string.
+
+If there are specific questions/suggestions/comments/concerns, let's make GitHub issues. Back-and-forth on Matrix is not my communication channel of choice.
+
+[21:58:13.0246] <sffc>
+* There's a lot here since I last posted my reply. Most of it relates to topics I've already explained in my GitHub issues including #175 and #181.
+
+I think my position on most of the comments here is well-known. In short, I am in support of a clean immutable data type that supports decimal with precision, possibly with future support for units. All methods operate according to that data model, including equals and to/from string.
+
+If there are specific questions/suggestions/comments/concerns, let's make GitHub issues. Back-and-forth on Matrix is not my communication channel of choice. I like Matrix for things like sharing slides and asking quick questions, but I strongly prefer matters of substance to stick to GitHub.
+
+[21:58:49.0530] <sffc>
+* There's a lot here since I last posted my reply. Most of it relates to topics I've already explained in my GitHub issues including #175 and #181.
+
+I think my position on most of the comments here is well-known. In short, I am in support of a clean immutable data type that supports decimal with precision, possibly with future support for units. All methods operate according to that data model, including equals and to/from string.
+
+If there are specific questions/suggestions/comments/concerns, let's make GitHub issues. I like Matrix for things like sharing slides and asking quick questions, but I strongly prefer GitHub for matters of substance.
+
+[22:00:01.0781] <sffc>
+* There's a lot here since I last posted my reply.
+
+I think my position on most of the comments here is well-known. In short, I am in support of a clean immutable data type that supports decimal with precision, possibly with future support for units. All methods operate according to that data model, including equals and to/from string. I've already explained my reasoning in GitHub issues including #175 and #181.
+
+If there are specific questions/suggestions/comments/concerns, let's make GitHub issues. I like Matrix for things like sharing slides and asking quick questions, but I strongly prefer GitHub for matters of substance.
+
+[22:01:06.0384] <sffc>
+* There's a lot here since I last posted my reply.
+
+I think my position on most of the comments here is well-known. In short, I am in support of a clean immutable data type that supports decimal with precision, possibly with future support for units. All methods operate according to that data model, including equals and to/from string. I've already explained my reasoning in GitHub issues including #175 and #181. I don't see anything in the last 100 comments that changes my logic.
+
+If there are specific questions/suggestions/comments/concerns, let's make GitHub issues. I like Matrix for things like sharing slides and asking quick questions, but I strongly prefer GitHub for matters of substance.
+
+[22:01:35.0781] <sffc>
+* There's a lot here since I last posted my reply.
+
+I think my position on most of the comments here is well-known. In short, I am in support of a clean immutable data type that supports decimal with precision, possibly with future support for units. All methods operate according to that data model, including equals and to/from string. I've already explained my reasoning in GitHub issues including #175 and #181. I don't see anything in the last 100 Matrix comments that would change my logic.
+
+If there are specific questions/suggestions/comments/concerns, let's make GitHub issues. I like Matrix for things like sharing slides and asking quick questions, but I strongly prefer GitHub for matters of substance.
+

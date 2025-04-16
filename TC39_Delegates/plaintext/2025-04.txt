@@ -2272,3 +2272,1112 @@ He said he would find it quite annoying if he had to care when a zero is positiv
 
 This of course was a mere convenience sample. Take it for what it’s worth.
 
+[06:54:49.0657] <ryzokuken>
+@room starting in 5 minutes
+
+[07:26:25.0126] <Michael Ficarra>
+hang on, can't we store the pre-transaction state in locals and roll it all back in the catch?
+
+[07:26:42.0978] <Michael Ficarra>
+is the issue that we may partially roll back because of another OOM?
+
+[07:27:06.0160] <Mathieu Hofman>
+Yes in this simple case, but it's not always straightforward to store all state to restore it
+
+[07:28:07.0276] <Mathieu Hofman>
+The point was that it's not always obvious where OOM can happen, and an undue burden to be defensive about them
+
+[07:30:16.0295] <naugtur>
+The combinations of backup values would grow incredibly fast in real programs' complexity 
+
+[07:30:50.0565] <littledan>
+I imagine Chrome filed that WHATWG issue because it *does* implement OOM-fails-fast
+
+[07:31:51.0071] <shu>
+whether an OOM is thrown depends on the API
+
+[07:32:00.0275] <littledan>
+oh right
+
+[07:32:10.0962] <shu>
+like, if you try to make a string that's too big, that probably throws a RangeError even if there's no explicit RangeError check (like in ArrayBuffer allocation)
+
+[07:32:19.0764] <shu>
+but almost all "small" allocation OOMs crash
+
+[07:32:53.0552] <shu>
+some of it has been added previously because people repeatedly ask
+
+[07:33:08.0966] <littledan>
+you mean, cases where it throws rather than crashing?
+
+[07:33:11.0216] <littledan>
+would it be possible/desirable to implement the original OOM-fails-fast guarantee? Do we have evidence of web-incompatibility?
+
+[07:33:31.0695] <shu>
+yeah, where they ask for it to throw so they can catch it
+
+[07:34:22.0611] <shu>
+i think making out-of-stack crash is like incompatible
+
+[07:34:55.0578] <shu>
+i don't think it is desirable to _spec_ original OOM-fail-fast
+
+[07:35:17.0519] <shu>
+* i think making out-of-stack crash is likely incompatible
+
+[07:35:43.0600] <littledan>
+transcriptionist notes are excellent today
+
+[07:35:51.0096] <Michael Ficarra>
+I'm not convinced that the current host hook requirement doesn't permit never returning
+
+[07:35:54.0935] <littledan>
+thanks for clarifying, Shu
+
+[07:36:28.0792] <shu>
+to be clear i think it is useless to have a host hook, and actively harmful to ultimately expose that hook to user code (if i understood what mark's long term plans were earlier in the proposal)
+
+[07:47:17.0585] <Michael Ficarra>
+why is it any more likely to be in ecosystem code than `for(;;);`?
+
+[07:53:33.0892] <shu>
+"inducing a host to panic" sounds like exploiting a bug to me
+
+[07:53:41.0754] <shu>
+there is no sanctioned way to induce a host to panic
+
+[07:55:05.0282] <naugtur>
+One strong difference in the browser between infinite loops and panic is infinite loop freezes the UI and panic would inform the user.
+The host hook gives the hook power to decide (or even ask the user) how to react.
+
+[07:55:22.0292] <bakkot>
+lots of people put panics in languages which have them and ~none of them write defensive infinite loops
+
+[07:55:57.0569] <naugtur>
+(we once wrote a defensive I finite loop at MetaMask. Long story)
+
+[07:56:05.0298] <naugtur>
+* (we once wrote a defensive infinite loop at MetaMask. Long story)
+
+[07:59:19.0483] <shu>
+what we're doing right now does not violate the JS spec, what?
+
+[07:59:53.0974] <kriskowal>
+(In the mid-aughts, Google prefaced every JSON HTTP response with `while(true)` to defend against XSS. For all I know, they still do.)
+
+[08:00:30.0099] <Andreu Botella>
+I think Mark is arguing that stopping a script execution through any other means than the stack emptying because the execution finished is legal per the JS spec
+
+[08:02:17.0536] <Andreu Botella>
+* I think Mark is arguing that stopping a script execution through any other means than the stack emptying because the execution finished is not legal per the JS spec
+
+[08:02:17.0870] <iain>
+Making stack overflow crash is definitely not compatible. At one point SM increased our stack limit, and we saw performance reports on games websites using some weird obfuscator that deliberately overflowed the stack as part of its attempt to make itself hard to debug, because it was taking longer to hit the limit.
+
+[08:02:28.0890] <shu>
+what i was responding to was mark referred to the current OOM behavior in browsers as "violating the spec"
+
+[08:04:35.0907] <Michael Ficarra>
+how does aborting help facilitate transactions?
+
+[08:04:59.0384] <Michael Ficarra>
+or does it not become an abort, it becomes a rollback to some previously tagged point?
+
+[08:05:42.0429] <Mathieu Hofman>
+In our case, our supervisor worker embargoes all effects from the child worker and commits them once the worker completes its operation
+
+[08:06:33.0338] <Mathieu Hofman>
+It currently uses an actual DB transaction to accomplish that, but that's an implementation choice
+
+[08:07:05.0225] <Michael Ficarra>
+ah like Golem
+
+[08:08:00.0640] <Michael Ficarra>
+(https://www.golem.cloud/)
+
+[08:08:02.0309] <Andreu Botella>
+so `self.close()` on dedicated workers doesn't kill the worker, it just prevents new tasks from being enqueued onto the event loop, but you could signal to the parent to kill the worker, and then call it
+
+[08:08:31.0949] <Mathieu Hofman>
+(the abortable unit is obviously the worker agent as we don't use SAB)
+
+[08:10:08.0691] <Mathieu Hofman>
+Right that's great for implementing `panic`. It doesn't help for OOM
+
+[08:10:23.0731] <littledan>
+Can we get someone else helping with notes?
+
+[08:10:42.0750] <Andreu Botella>
+I'll help out
+
+[08:12:57.0533] <bakkot>
+I am pretty sure `{ object literal } as const` is all of these things Ron is saying
+
+[08:13:13.0689] <bakkot>
+TS can infer the closed domain of the keys and values just fine
+
+[08:13:32.0883] <bakkot>
+and will prevent you from adding new keys and all
+
+[08:13:43.0602] <littledan>
+see https://github.com/rbuckton/proposal-enum/issues/23
+
+[08:14:14.0513] <Michael Ficarra>
+@bakkot:matrix.org I'm pretty sure Ron's banking on some of these continuation ideas actually happening though
+
+[08:14:14.0754] <littledan>
+Igalia implemented `: enum` as an upgraded version of this, which also does some type system magic that catches further back up
+
+[08:15:00.0046] <littledan>
+the most basic thing is that `as const` still requires you to do `const Foo = { /* ... */ } as const; type Foo = Foo[keyof Foo]` which is ugly, and then the type isn't branded at that point
+
+[08:15:27.0694] <littledan>
+so I think the TS-only alternative would be more like https://github.com/microsoft/TypeScript/pull/61414
+
+[08:15:28.0257] <bakkot>
+oh, `as enum` is neat, sure
+
+[08:15:34.0223] <shu>
+sidebar comment is that is very, very risky
+
+[08:15:39.0605] <shu>
+see decorators
+
+[08:15:57.0172] <Richard Gibson>
+I think it does, though... consider `typeof (len => { try { return "x".repeat(len); } catch(err) {} })(2**53 - 1)`—the [spec](https://tc39.es/ecma262/multipage/text-processing.html#sec-string.prototype.repeat) requires it to be `"string"` AFAICT, but actual behavior is `"undefined"`
+
+[08:16:01.0615] <bakkot>
+I have never found having to use `keyof Foo` to be that painful personally but simplifying seems good
+
+[08:16:37.0928] <littledan>
+so far, I get that the advantages are 1) self-references 2) frozenness
+
+[08:17:05.0360] <littledan>
+I'd bet that the majority of TS developers who know how to use `enum` do not know how to use `keyof` to achieve the same effect
+
+[08:17:15.0487] <Michael Ficarra>
+oh I know, plus I think pretty much all of them have no shot (maybe auto-initialising with symbols would be fine)
+
+[08:18:10.0219] <bakkot>
+sure because they can use `enum` instead, so it's not widely taught as a pattern, but if they did not have `enum` they'd learn the other pattern
+
+[08:19:03.0453] <littledan>
+maybe, idk, the idiom feels kind of "low level" to me, why should I as a developer have to do this weird TS plumbing for something which is "obvious"
+
+[08:19:22.0102] <littledan>
+but none of this relates to whether we should add a JS feature
+
+[08:20:40.0812] <shu>
+isn't Ron's whole motivation slide about TS DX?
+
+[08:21:22.0290] <littledan>
+yeah, I just mean that bakkot and I were talking about tradeoffs between `: enum` vs the `keyof` idiom, which is entirely *within* TS
+
+[08:21:32.0651] <shu>
+ah gotcha
+
+[08:21:37.0284] <Steve Hicks>
+This might be less surprising if it were called `Composite.is`?
+
+[08:22:25.0111] <littledan>
+To these, I'd add 3) Looking like existing TS enum 4) being a syntax base for further follow-on features
+
+[08:24:23.0176] <bakkot>
+3) is not much of an advantage unless we do auto-incrementing, which we are not going to do
+
+[08:27:02.0219] <littledan>
+3 actually may be a disadvantage, because of the transition (see set -> define fields)
+
+[08:27:19.0624] <littledan>
+why are we not going to do auto-incrementing? (not that I disagree...)
+
+[08:27:45.0932] <bakkot>
+because it is very bad and I and several delegates are dead against it for that reason
+
+[08:28:08.0067] <littledan>
+right just asking what the reason/badness is
+
+[08:29:22.0908] <bakkot>
+ah, see discussion in the vicinity of https://matrixlogs.bakkot.com/TC39_Delegates/2025-02-21#L227
+
+[08:29:32.0230] <littledan>
+if this is a feature where TypeScript continues to have custom *runtime* semantics (due to disagreeing with TC39) it makes me significantly less excited about this feature
+
+[08:29:44.0893] <bakkot>
+biggest thing is that it makes it way, way too easy to have breaking changes
+
+[08:31:12.0425] <shu>
+not sure i follow, how does auto increment increase likelihood of having breaking changes?
+
+[08:31:55.0921] <jschoi>
+As an aside, I have to express gratitude over having a Matrix archive website. It’s been so invaluable over the years for situations just like this.
+
+[08:32:37.0257] <snek>
+if you put a new variant not at the end of the enum, it renumbers all the following ones
+
+[08:32:49.0846] <shu>
+are you expecting that people will be like `if (val == 42)` and hardcode a particular enum's integer value?
+
+[08:34:00.0774] <shu>
+but ... why is that breaking?
+
+[08:34:19.0599] <shu>
+are there users of that enum that refer to the raw integer values?
+
+[08:34:23.0190] <snek>
+no i think its more like if you have a library and two versions of it are talking to each other
+
+[08:34:32.0598] <bakkot>
+yes
+
+
+[08:34:41.0099] <shu>
+oh, you want two libraries with different versions in the same app
+
+[08:34:42.0681] <shu>
+got it
+
+[08:34:56.0689] <snek>
+well i personally imagine more like talking over http or smth
+
+[08:35:00.0275] <snek>
+but in any random scenario 
+
+[08:36:01.0767] <Andreu Botella>
+having someone else helping with the notes would help
+
+[08:36:11.0030] <Michael Ficarra>
+also people storing enum values in JSON or databases
+
+[08:36:12.0304] <shu>
+i'm still having trouble understanding why enum auto-numbering is the footgun. is it something like, the new version of the library is otherwise completely backwards compatible, but they wanted to prepend instead of append an enum value for an orthogonal new feature, and now it's incompatible?
+
+[08:36:31.0852] <shu>
+like we deal with these problems in Chrome as well, they're all append only
+
+[08:36:50.0715] <snek>
+i mean we can talk about all the times v8 has broken abi compat from inserting variants/members into the middle of existing definitions if you want examples of how this is a footgun :P
+
+[08:36:52.0470] <jschoi>
+* Regarding Kevin’s gamedev example and game developers’ domain knowledge of -0:
+
+I checked today with a friend in game dev—some who works on physics engines as their job, mostly within Unreal Engine’s C++/Blueprint APIs, for the past decade. He routinely works with data structures containing floating points in his physics work.
+
+He did not know what negative zero was, and he doubted any of his colleagues knew either; he said it seemed like trivia that would never affect his team and that would never need to care about. (He seems to deal with mathematical discontinuities in other ways, before ever encountering a negative zero. Or maybe Unreal has abstracted it away enough that they’ve never needed to care.)
+
+He said he would find it quite annoying if he had to care when a zero is positive or negative while using it as a key in an Unreal TMap container. But he would never use a float as a key anyway and instead would use a strict integer type for keys instead. We are not so lucky in JavaScript...
+
+This of course was a mere convenience sample. Take it for what it’s worth.
+
+[08:36:54.0518] <shu>
+removing enum values in general is a breaking change so i assume that's out of scope here
+
+[08:37:17.0952] <Michael Ficarra>
+@shuyuguo:matrix.org in a completely closed world, auto-numbering would be fine, but the value of the enum escapes or is stored somewhere, so in practice it's rarely okay to re-number your enum
+
+[08:37:36.0968] <shu>
+yes, we can. i don't really know how well we deal with public API enums, probably too cavalierly
+
+[08:37:53.0674] <littledan>
+I guess the idea is, it's just too tempting, syntax-wise, to add new values into the beginning or middle
+
+[08:38:22.0208] <shu>
+okay thanks
+
+[08:38:45.0871] <snek>
+i feel like i would most enjoy the default being unique symbols for each item, unless you explicitly want the value to be serializable in which case you need to bring in your own numbers/strings (or use a decorator?)
+
+[08:38:55.0389] <hax (HE Shi-Jun)>
+In real life u might find someone made mistake. For example, in some versions of Monaco editor, I found the enum value changed in the new version and cause bugs in my application.
+
+[08:39:09.0108] <snek>
+* i feel like i would most enjoy the default being unique symbols for each item, unless you explicitly want the value to be serializable in which case you need to bring in your own numbers/strings (or use a decorator?). just to get a base level of mindfulness for how your enum is used.
+
+[08:42:29.0742] <Josh Goldberg 💖>
+As a reference, in typescript-eslint's recommended configs there is a rule that bans comparing enum values with non-enum values. That's mostly targeted to stopping developers from relying on specific values of enums.
+https://typescript-eslint.io/rules/no-unsafe-enum-comparison
+The rule's docs mark a delineation between the two common uses of enums that we've found:
+* "Namespaced bag of values": you care about the values (and likely don't auto-number)
+* "Opaque identifiers": you explicitly don't want to know about the values (e.g. for auto-numbering)
+
+[08:42:32.0877] <hax (HE Shi-Jun)>
+I remember there is a proposal by engines try to remove TDZ anyway?
+
+[08:42:43.0246] <bakkot>
+if you maintain the discipline of append-only it's also fine but people don't; they like similar values to be close to each other in the declaration
+
+[08:43:04.0765] <Michael Ficarra>
+🤔 there's nothing protecting a user from giving more than 1 enum case the same associated value? that seems bad...
+
+[08:43:08.0668] <shu>
+yeah i understand that. there are many warnings about APPEND ONLY DO NOT REMOVE ANYTHING etc
+
+[08:43:59.0209] <Michael Ficarra>
+also just alphabetical so they're easier to scan
+
+[08:44:11.0878] <Josh Goldberg 💖>
+I hate to beat the same drum twice in a row, but yes that is also a recommended rule in typescript-eslint 😅
+https://typescript-eslint.io/rules/no-duplicate-enum-values
+Some developers like it for aliasing values. I've personally done this with a `/** @deprecated Use (other name) instead. */` sometimes.
+
+[08:45:24.0365] <bakkot>
+yeah so the goal is to not add a feature which requires that whenever you use it
+
+[08:46:10.0917] <shu>
+sure, i understand the motivation. my take at this time is how much you'd like to favor public API enum use vs internal enum use
+
+[08:46:47.0116] <Andreu Botella>
+can we get some help with the notes?
+
+[08:47:37.0246] <Michael Ficarra>
+do we need to raise a PoO for notes?
+
+[08:49:32.0180] <Michael Ficarra>
+and attributions!
+
+[08:49:42.0711] <Michael Ficarra>
+it's super hard to attribute post-hoc
+
+[08:55:18.0336] <littledan>
+yes, and we make errors there sometimes
+
+[08:58:38.0324] <hax (HE Shi-Jun)>
+set -> define is very different (much worse) case because it use same syntax but very different semantic. I don't think enum have similar issues.
+
+[09:06:26.0786] <Jesse>
+can someone help with the notes? I can't take notes rn -- need to go home, make dinner, and come back to the office in < 60 min
+
+[09:07:09.0935] <ryzokuken>
+Jesse could you stick around for a minute or two?
+
+[09:07:19.0395] <ryzokuken>
+we should be wrapping up here soon
+
+[09:07:34.0068] <bakkot>
+I can take over for the next minute Jesse 
+
+[09:07:36.0851] <bakkot>
+go eat
+
+[09:09:21.0334] <ryzokuken>
+thanks both
+
+[09:46:09.0589] <rbuckton>
+The TypeScript compiler uses this behavior to define ranges for fast tests against `node.kind`, like `FirstKeyword = BreakKeyword, LastKeyword = OfKeyword`, etc., making it very valuable for using enums in performance-critical code.
+
+[09:46:54.0053] <rbuckton>
+It's also useful when defining a mask that might only contain a single bit.
+
+[09:51:12.0673] <ljharb>
+the typescript compiler's moving to go, though - are there any other JS use cases?
+
+[09:52:09.0717] <snek>
+i have done the same thing, in js, not in the typescript compiler
+
+[09:52:30.0499] <rbuckton>
+The TypeScript compiler isn't the only case, just the most prominent. I use this behavior in other projects as well.
+
+[09:53:49.0890] <ljharb>
+sorry, to clarify - are these use cases performance-critical in the same way as tsc?
+
+[09:55:12.0909] <ryzokuken>
+@room back in 5 minutes
+
+[09:55:59.0150] <rbuckton>
+Some are, yes. There are plenty of other cases, though. For example, I've used them when building a deserializer for a wire format.
+
+[09:58:40.0098] <Chris de Almeida>
+looking for two TC39 heroes to help with the notes  🙏
+
+[10:02:31.0682] <Aki>
+Delegates, if you're presenting at a different part of this meeting, maybe consider taking notes now as a way to pay it forward for when you're speaking
+
+[10:06:13.0406] <ljharb>
+(i forgot to provide this context: ruben is a node TSC member and core collaborator)
+
+[10:06:31.0390] <Chris de Almeida>
+@ljh
+
+[10:06:44.0241] <shu>
+bless you
+
+[10:06:49.0246] <Chris de Almeida>
+* @ljharb:matrix.org if you can, please update agenda to include link to slides
+
+[10:08:16.0068] <ljharb>
+it's a PDF, i'll upload it to the agenda
+
+[10:10:36.0094] <jschoi>
+TCQ should be switched to the new agenda item so that people can add to the queue, right?
+
+[10:10:50.0382] <ryzokuken>
+looks updated for me
+
+[10:10:56.0611] <ryzokuken>
+can you try refreshing?>
+
+[10:11:04.0291] <ljharb>
+https://github.com/tc39/agendas/blob/main/2025/2025.04%20-%20Object.propertyCount%20slides.pdf
+
+[10:11:13.0692] <jschoi>
+> <@jschoi:matrix.org> TCQ should be switched to the new agenda item so that people can add to the queue, right?
+
+Resolved, thank you. 
+
+[10:12:22.0211] <jschoi>
+> <@ljharb:matrix.org> (i forgot to provide this context: ruben is a node TSC member and core collaborator)
+
+Would you like me to add this to the notes, where you introduce him?
+
+[10:12:29.0299] <ljharb>
+sure, thanks!
+
+[10:16:12.0858] <snek>
+is this even implementable in a way that makes sense with these options?
+
+[10:16:43.0747] <snek>
+like unless your object impl is always sorting out these 3 different kinds of keys
+
+[10:16:55.0120] <snek>
+it would be expensive to get the counts
+
+[10:17:06.0238] <snek>
+* it would be expensive as expensive to get the counts as doing Object.keys etc
+
+[10:17:11.0484] <snek>
+* it would be as expensive to get the counts as doing Object.keys etc
+
+[10:17:24.0703] <snek>
+* like unless your object impl is storing these 3 different kinds of keys separately
+
+[10:18:00.0855] <bakkot>
+this API is excessively fleshed out for a stage 0 proposal
+
+[10:18:10.0138] <Michael Ficarra>
+it's probably pretty likely that engines will be differentiating these 3 classes of property keys
+
+[10:18:11.0243] <bakkot>
+gotta convey to new delegates to avoid that
+
+[10:18:42.0597] <Chris de Almeida>
+it's going for stage 1 or 2
+
+[10:18:49.0342] <Michael Ficarra>
+yeah most people who have been participating in committee have gotten that message, but we definitely don't message it to outsiders
+
+[10:19:13.0777] <hax (HE Shi-Jun)>
+The alternative  should use `enumerableKeys` and `nonEnumerableKeys`? 🤔
+
+[10:20:19.0324] <bakkot>
+I would also like to convey to new delegates to avoid trying to go for stage 2 when there is any nontrivial design space
+
+[10:20:24.0800] <jschoi>
+This “Example uses” slide is important.
+
+[10:20:26.0269] <bakkot>
+* I would also like to convey to new delegates to avoid trying to go straight for stage 2 when there is any nontrivial design space
+
+[10:20:33.0816] <jschoi>
+Maybe the most important slide.
+
+[10:20:40.0503] <ljharb>
+what is the nontrivial part of the design space you see?
+
+[10:20:54.0739] <jschoi>
+* This “Example uses” slide with real-world appearances is important.
+
+[10:20:57.0481] <ljharb>
+"one method vs multiple methods" seems trivial to me, as does "how are the api options spelled"
+
+[10:21:01.0243] <Chris de Almeida>
+keep in mind Jordan is co-champion on this, so this is not strictly a 'new member' thing
+
+[10:21:03.0696] <bakkot>
+which variants of kinds of key we allow you to query for, what the shape of the API is
+
+[10:21:06.0924] <ljharb>
+* "one method vs multiple methods" seems trivial to me, as does "how are the api options spelled" and "which api options are included"
+
+[10:21:54.0014] <ljharb>
+certainly if you think there's more options than are being presented then it's fine to ensure those are included before stage 2. but the decision which to use likely would be a stage 2 decision imo
+
+[10:22:14.0574] <bakkot>
+no I mean I think we should do ~none of the options in the proposal
+
+[10:22:17.0798] <bakkot>
+and that's a large design space
+
+[10:22:29.0706] <ljharb>
+lol ok well that's def a stage 2 blocking opinion :-)
+
+[10:23:19.0467] <bakkot>
+also we are not going to get through the queue on this
+
+[10:23:21.0788] <bakkot>
+not even close
+
+[10:24:16.0761] <ptomato>
+maybe we should bring Dan Minor's topic forward, so that we can have the rest of the discussion keeping in mind to which degree this pattern is already optimized in practice?
+
+[10:24:22.0593] <Michael Ficarra>
+yeah this presentation is taking all the available time
+
+[10:25:54.0673] <jschoi>
+TCQ queue rearrangement would be great for situations just like this.
+
+[10:26:28.0304] <jschoi>
+Is there a TCQ issue for marking whether your queue item would block the current agenda item or would manifestly affect its conclusion?
+
+[10:26:55.0670] <rbuckton>
+If we go over, I do have a hard stop at 2:30pm ET and still need to be present for the Explicit Resource Management topic.
+
+[10:28:11.0479] <ryzokuken>
+there's so much to be requested from TCQ but it's still unclear what the status of the rewrite is
+
+[10:28:40.0226] <Chris de Almeida>
+hmmm..  might need to move to day 4 if that's a hard constraint
+
+[10:29:23.0348] <rbuckton>
+I'm not presenting, but I am the champion so I think it's fairly important I'm present. I have to leave at 2:30 to pick up my daughter, so I don't have any wiggle room.
+
+[10:30:33.0950] <Justin Ridgewell>
++1 to Shu
+
+[10:31:10.0706] <Justin Ridgewell>
+Especially the examples with .filter(), I don’t expect that kind of optimization even in higher tier JITs.
+
+[10:31:48.0360] <Chris de Almeida>
+we could swap with `non-extensible` topic, but then I think that affects @ljharb:matrix.org's constraint
+
+[10:32:02.0160] <Michael Ficarra>
+what happened to Dan Minor's item?
+
+[10:33:13.0077] <rbuckton>
+If we keep it at 2pm and it goes over, I will be back by about 2:50pm if the topic goes the full 30 minutes.
+
+[10:33:25.0940] <littledan>
+I think the more relevant optimization here is really just about, this will be done in the runtime without allocating an extra array/iterator. Doesn't need actual *compiler* optimizations.
+
+[10:34:16.0520] <shu>
+well, allocation sinking / scalar replacement is a common compiler optimization
+
+[10:37:37.0796] <snek>
+v8 doesn't optimize this does it
+
+[10:38:28.0372] <shu>
+this particular pattern? nope, not afaik
+
+[10:39:03.0982] <snek>
+seems ripe for peep hole reduction
+
+[10:40:24.0082] <shu>
+patches welcome
+
+[10:41:34.0983] <littledan>
+sure but why would you call propertyCount on something allocated locally?
+
+[10:45:17.0638] <shu>
+oh i was thinking of doing scalar replacement on the locally allocated `keys()` array
+
+[10:45:24.0877] <shu>
+* oh i was thinking of doing scalar replacement on the length of locally allocated `keys()` array
+
+[10:47:48.0225] <littledan>
+oic, yeah sounds hard
+
+[10:49:58.0135] <Bradford Smith>
+If you're trying to validate that an Array doesn't have expando properties, couldn't you quite cheaply do `Object.countProperties(arr) - arr.length === 0`?
+
+[10:50:25.0071] <bakkot>
+sparse arrays :(
+
+[10:50:40.0385] <Bradford Smith>
+drat
+
+[10:51:00.0465] <snek>
+just throw if passed a sparse array
+
+[10:51:48.0302] <shu>
+this is also a good lesson about over-developing the solution
+
+[10:55:21.0753] <Michael Ficarra>
+I am super uncomfortable with granting stage 1 and then later finding out what we've agreed to when it's added to the notes by the champion
+
+[10:55:37.0663] <Michael Ficarra>
+I get that we have to move on, but this seems like a failure of our process
+
+[10:55:55.0291] <shu>
+@erights Mark Miller (Agoric) MM: i am okay with the problem statement "improving performance of counting properties on objects"
+
+[10:56:18.0502] <shu>
+i need to think more about the problem statement "how to detect sparse arrays and built-in Arrays with non-indexed properties"
+
+[10:56:21.0881] <shu>
+those are just different problem statements
+
+[10:56:45.0854] <shu>
+i dislike the pattern of delegates raising questions about what the actual problem statement is, and the champion saying "yeah just add it to the list, that's one of our problems too"
+
+[10:57:54.0192] <littledan>
+maybe we need a brief overflow topic to agree on what we got to Stage 1 on
+
+[10:58:01.0570] <shu>
+yeah
+
+[10:58:32.0290] <snek>
+is the scope not statically whatever block contains the switch case?
+
+[10:58:42.0259] <shu>
+ehh, kinda
+
+[10:59:06.0517] <shu>
+but it's a good change that stands alone of implementation opportunities imo
+
+[10:59:15.0886] <snek>
+oh switch does add a scope, til
+
+[10:59:23.0352] <shu>
+lexical declarations with on-scope-exit in bare case bodies is hateful
+
+[11:00:01.0794] <snek>
+oh yeah i'm not arguing in favor of keeping this
+
+[11:00:25.0560] <bakkot>
+I _think_ `Array.isSparse` plus `Object.propertyCount` gives you "detecting [non-sparse] arrays with non-indexed properties" as in bradford's example above (basically `return !Array.isSparse(arr) && Object.countProperties(arr) === arr.length + 1`)
+
+[11:00:45.0208] <bakkot>
+but yeah they're pretty different problem spaces
+
+[11:01:04.0280] <ljharb>
+it's 100% fine with me personally, if part of the stage 1 exploration results are "make a separate `Array.isSparse` proposal"
+
+[11:01:06.0401] <bakkot>
+* I _think_ `Array.isSparse` plus `Object.countProperties` gives you "detecting \[non-sparse\] arrays with non-indexed properties" as in bradford's example above (basically `return !Array.isSparse(arr) && Object.countProperties(arr) === arr.length + 1`)
+
+[11:01:11.0633] <littledan>
+this issue kind of points to how it'd be nice if we moved some more things to "early" time (or a secret third time in the middle?) in the spec's execution model of the world, so we don't gratuitously require this kind of extra logic
+
+[11:02:12.0427] <ljharb>
+* it's 100% fine with me personally, if part of the stage 1 exploration results are "make a separate `Array.isSparse` proposal" (thus removing "index stuff" from this one)
+
+[11:05:13.0515] <Ruben>
+The current options are to differentiate `index`, `nonIndexString`, and `symbol` key types with another option to determine if they should be enumerable or not.
+
+Very frequent is the basic case, and I believe no one spoke up against that case: Object.keys(object).length. so enumerable true and index and nonIndexString keys.
+
+Another frequent use case is checking if symbols collected with Object.getOwnSymbols are enumerable or not. That is enumerate true or false and symbol key type.
+
+One more use case is to validate that an array like Object does not contain any non index string properties. This is a huge performance overhead for these cases. That is either index or nonStringKey type and enumerable true. 
+
+I believe the latter is the main question about wanting to solve this with the API or not.
+
+Another use case is to have a fast path for dense arrays by not having to check if an array is sparse. It would allow to skip additional steps. This would be index type and either enumerability.
+
+There are lots of other use cases depending on what a user wants to do. I can collect additional ones if that is requested.
+
+[11:07:54.0152] <bakkot>
+Of those use cases, I am at this point only convinced that the basic case is worth solving in the language.
+
+[11:09:10.0517] <Ruben>
+Array.isSparse will address the cheaper one of the two index key types use cases I am aware of. The major performance overhead comes when checking for additional non index string properties on array like objects. That is the one Mark also brought up. For most cases, this will make up most CPU time for validating or comparing these arrays.
+
+[11:09:22.0039] <Michael Ficarra>
+yes I'm much more comfortable with agreeing to pursue only the first part as part of this proposal, and another case can be made for another proposal
+
+[11:09:52.0290] <ljharb>
+would folks be receptive to a separate `Array.isSparse` proposal then?
+
+[11:09:56.0678] <ptomato>
+we didn't get around to further queue items but I'd like to point out that if there is one frequent use case where it's worth optimizing propertyCount, consider during stage 1 whether it makes more sense to add an API for that specifically
+
+[11:10:08.0956] <bakkot>
+given adequate motivation
+
+[11:10:12.0269] <Michael Ficarra>
+I would certainly welcome a presentation that seeks Stage 1 for it
+
+[11:10:54.0467] <Ruben>
+I can put such a proposal together. Michael Ficarra: would you like to look into this together with me?
+
+[11:11:13.0384] <Michael Ficarra>
+I would not
+
+[11:11:29.0748] <ljharb>
+i'm happy to work on it as well, but i'm not sure what bakkot would consider "adequate motivation"
+
+[11:12:48.0841] <bakkot>
+you've talked about code needing to check for sparse arrays. I personally have never seen code which needed to check for sparse arrays except maybe some extremely pedantic serialization libraries, so giving examples and explaining why it's important for that code would go a long way.
+
+[11:12:53.0041] <rbuckton>
+`static #t = void ...` looks like it should just have been `static { ... }`
+
+[11:14:14.0716] <shu>
+yeah exactly
+
+[11:14:41.0669] <Michael Ficarra>
+I would be convinced just seeing that a lot of people are doing it, regardless of whether we think it's "good"
+
+[11:15:53.0005] <ljharb>
+i mean every user of node's `console.log` or `util.inspect` would benefit from the perf increase such a proposal offers
+
+[11:15:57.0580] <ljharb>
+so that one seems pretty empirical
+
+[11:16:43.0747] <bakkot>
+I'm especially unconvinced by arguments from performance of node's internals because they always have the option of doing things in C++
+
+[11:16:57.0794] <bakkot>
+or zig, or whatever
+
+[11:17:17.0472] <snek>
+i don't think util.inspect would benefit, it still has to manually identify sparse runs
+
+[11:17:18.0040] <Ruben>
+From what was discussed: I would remove index vs nonIndexString from the implementation. I believe that was the main pain point. Adding Array.isSparse in combination with the keys would allow the main use cases to be addressed
+
+[11:17:18.0132] <Michael Ficarra>
+wouldn't we also only care about cases that count properties but avoid enumerating?
+
+[11:17:42.0973] <Ruben>
+This also simplifies the implementation by not having to worry about what an index key is
+
+[11:18:16.0940] <Aki>
+Which is the German one that shu hasn't been able to reach?
+
+[11:18:44.0551] <ljharb>
+with the fast path, only when it finds a sparse thing, so it'd only punish people doing the Bad Thing
+
+[11:19:02.0147] <snek>
+but it has to iterate over the array anyway
+
+[11:19:05.0800] <snek>
+to print all the things it contains
+
+[11:19:30.0963] <Ruben>
+It does that by not allocating the array 
+
+[11:19:47.0105] <shu>
+Aki: it's not the websites themselves, but whoever designed the websites for the two sites listed under "Axial": https://github.com/syg/proposal-nonextensible-applies-to-private/issues/1
+
+[11:19:47.0294] <Ruben>
+That would otherwise be a huge overhead
+
+[11:20:22.0113] <shu>
+it's clear from the HTML source that those two sites were written by the same 3rd party people, so i figured it's not useful to reach out to the sites themselves
+
+[11:20:37.0004] <shu>
+well, i _could_ ask them who they used directly but i haven't tried
+
+[11:20:48.0394] <shu>
+not sure if they'd respond to english in any case
+
+[11:22:45.0297] <ptomato>
+not sure it's in the spirit of the reviewer requirement to speedrun this process?
+
+[11:25:07.0579] <Michael Ficarra>
+Mark should've written tests, he could've gone for 3
+
+[11:25:24.0836] <littledan>
+probably it's not trivial to update all of test262 for this
+
+[11:25:36.0176] <bakkot>
+I almost wrote tests for `getOrInsert` just so it could advance
+
+[11:25:38.0973] <bakkot>
+it's so small...
+
+[11:25:40.0588] <Michael Ficarra>
+I didn't say it was easy
+
+[11:25:50.0392] <bakkot>
+and claude is surprisingly good at writing test262 tests
+
+[11:25:59.0434] <dminor>
+Yeah, I'm not sure what the urgency is here.
+
+[11:26:27.0435] <bakkot>
+well, there's a little more urgency because this is a breaking change
+
+[11:26:36.0024] <bakkot>
+albeit of something which is multiple years old at this point
+
+[11:26:39.0687] <dminor>
+Jonas from the University of Bergen already wrote tests -- https://github.com/tc39/test262/pull/4454
+
+[11:26:54.0896] <snek>
+i think there's also just a baseline impatience from knowing that you can only advance stuff at meetings. who wants to wait months for what could be immediate?
+
+[11:26:57.0069] <bakkot>
+oh nice!
+
+[11:27:05.0269] <jschoi>
+And with “monotonously (but not asymptomatically)” growing use. 
+
+[11:27:07.0132] <bakkot>
+glad I didn't then
+
+[11:28:58.0839] <Chris de Almeida>
+tbf, he did say 'please'
+
+[11:29:23.0352] <shu>
+monotonic not monotonous
+
+[11:31:08.0621] <jschoi>
+Yes, you are right. I did an eggcorn. 
+
+[11:37:55.0698] <littledan>
+yeah I don't really see this as a source of urgency. But it's more like, if we all agree on it, and it's simple and well-developed, then we can do this multiple advancement thing
+
+[11:40:00.0592] <Michael Ficarra>
+the chairs have been doing a really great job lately ❤️
+
+[11:40:22.0325] <Chris de Almeida>
+> The committee may elide the process based on the scope of a change under consideration, as it sees fit.
+
+[11:41:05.0208] <littledan>
+yep, I agree, that's the clause we're invoking
+
+[11:41:05.0807] <Chris de Almeida>
+the YOLO clause
+
+[11:41:16.0762] <littledan>
+well, no, we're not eliding the process
+
+[11:41:20.0352] <littledan>
+we're following it
+
+[11:41:37.0224] <Chris de Almeida>
+one of the definitions of elide is 'merge'
+
+[11:42:02.0828] <Chris de Almeida>
+so I think we are still eliding?  🤷  semantics I suppose
+
+[11:49:12.0024] <jschoi>
+Is it considered bad form to add multiple queue items at the same time? 
+
+[11:49:30.0754] <Chris de Almeida>
+not at all
+
+[11:49:58.0476] <Chris de Almeida>
+what's bad form is to add two topics in one item
+
+[11:50:34.0570] <jschoi>
+Is it still alright to add multiple queue items if they’re added early, before a presentation ends?
+
+[11:50:42.0762] <Chris de Almeida>
+yes
+
+[12:01:27.0645] <Andreu Botella>
+there is no transcriptionist at this point
+
+[12:22:11.0056] <shu>
+Mathieu Hofman: to your question before time ran out, i see a host hook as a layering point for other _specs_. if the other specs that all embed JS today, HTML being foremost, just end up saying that the host hook does implementation-defined behavior, i think it is misleading editorially to add such a host hook
+
+[12:22:37.0033] <shu>
+a host hook suggests there is a prescribed or proscribed behavior common to >1 implementation
+
+[12:40:55.0027] <Mathieu Hofman>
+I see 2 behavior possible for a host hook:
+- Throw an error / abrupt completion
+- Stop any forward progress
+
+I would very much like some host being able to be clear what their chosen behavior is. While I understand the Web is not interesting in killing the agent cluster, especially if that involves the main renderer thread, I think it makes sense for other hosts. For example maybe a Cloudflare worker would want to terminate the isolate on OOM? Or a node process could opt-in a similar termination (similar to how you can configure termination on unhandled rejection for example)
+
+[13:24:53.0951] <shu>
+a cloudflare worker is not a host in my mental model
+
+[13:25:03.0853] <shu>
+we can make it editorially clearer where implementation-defined behavior may occur
+
+[13:25:11.0444] <shu>
+but the bar to clear a host hook is when there is an embedder spec
+
+[13:25:39.0391] <shu>
+but even implementation-defined is pretty problematic and most likely unimplementable
+
+[13:26:02.0751] <shu>
+on mobile OSes, it's not up to the VM to choose. we may be killed by android's OOM-killer even if the engine tries its darndest to resume
+
+[13:27:21.0490] <shu>
+so to be clear, i'm arguing against the editorial tool of host hook, not against the general thing of getting something in writing about resources
+
+[13:41:51.0909] <kriskowal>
+There’s a gap for a definition of Host in https://github.com/tc39/how-we-work/blob/main/terminology.md which gives us latitude for interpretation, but by your reckoning, is Node.js or Deno a host?
+
+[13:44:06.0908] <shu>
+no
+
+[13:44:25.0882] <shu>
+if there is no spec, i don't consider it a host
+
+[13:45:15.0821] <kriskowal>
+That is the crux of the disagreement then. I’d qualify host and specification separately. Perl is, after all, a language.
+
+[13:45:35.0491] <shu>
+i consider node and deno implementations
+
+[13:45:54.0598] <shu>
+they do not need editorial hooking points in the JS specification if they do not themselves have a specification
+
+[13:50:04.0877] <shu>
+kriskowal: https://tc39.es/ecma262/#host
+
+[13:57:25.0749] <kriskowal>
+So, informally, WinterTG might constitute a singular host, because it is a specification that further clarifies the implementation of certain host hooks. There’s no specified notion of an “implementation hook”, but such things exist outside the realm of specifications.
+
+[13:58:24.0865] <Andreu Botella>
+We'd have to agree on whether there's something to specify in that implementation before providing a spec though
+
+[13:58:42.0703] <Andreu Botella>
+but yeah, we could do that
+
+[13:58:53.0118] <Andreu Botella>
+* We (WinterTC) would have to agree on whether there's something to specify in that implementation before providing a spec though
+
+[13:59:29.0147] <kriskowal>
+This framing does help qualify worthiness of consideration, and from that emerges the hooks available to implementations that exist outside specified hooks, regardless of worthiness of consideration.
+
+[14:00:26.0444] <shu>
+yeah, if WinterTG produces a spec for all JS runtimes to conform to, then that would be a singular host
+
+[14:00:26.0757] <kriskowal>
+That is, puts Node.js on strange footing here, if they for example sought to be able to get a heap snapshot at the exact moment of a reference error.
+
+[14:01:15.0850] <kriskowal>
+All JS runtimes seems like a reach. Is not the purpose of a host to differentiate a subset of implementations for more specific considerations?
+
+[14:02:18.0343] <kriskowal>
+Take TG-53 as a more concrete example. They specify all manner of things that browsers are not obliged to implement, at the embedded system bindings.
+
+[14:13:15.0017] <shu>
+all JS runtimes that seek to conform to whatever WinterTG produces
+
+[15:03:19.0589] <littledan>
+*WinterTC
+
+[15:05:09.0232] <shu>
+ah sorry yeah
+
+[15:06:03.0925] <littledan>
+a lot of the host hooks for WinterTC environments will be provided by the HTML spec, but yeah there might be some which we define differently at the minimum-common-api level
+
+[15:08:15.0374] <littledan>
+and there might be some which are defined per-server-environment, in principle
+
+[15:08:36.0100] <littledan>
+we haven't worked out everything about how modules work yet; that's a case that will somehow be mixed
+
+[15:13:33.0857] <shu>
+kriskowal: to be clear i'm not against calling out editorially that there may be implementation-defined behavior for OOMs
+
+[15:14:43.0968] <shu>
+the bigger issue is i don't think it's feasibly implementable for an implementer of JS or embedder of a JS engine to choose "always try to resume" or "always crash agent cluster"
+
+[15:18:59.0953] <kriskowal>
+On that, we agree.
+
+[15:19:41.0164] <kriskowal>
+I’m encouraging Mark to make this clear: we do not seek to impose either of those semantics on the web. We’re seeking a place to stand for non-web “implementations”.
+
+[15:20:33.0565] <shu>
+i think the non-web implementations have a specification, then a host hook is fair game to be discussed. if it's really just _your_ implementation (XS), then i think it's fine to call out the possibility of this behavior editorially, without a host hook
+
+[15:20:44.0271] <shu>
+* i think if the non-web implementations have a specification, then a host hook is fair game to be discussed. if it's really just _your_ implementation (XS), then i think it's fine to call out the possibility of this behavior editorially, without a host hook
+
+[15:20:53.0622] <kriskowal>
+And also not just for our own transactional wonderland. There are intermediate points in the spectrum from “availability before all else” and “transactions”.
+
+[15:22:28.0993] <shu>
+metapoint here is that i am bemused by mark's worldview to reason at this level of fault tolerance
+
+[15:23:07.0927] <kriskowal>
+A specific case I would advocate for as a user of Node.js in any unattended distributed system is to leave a pretty corpse for the autopsy.
+
+[15:23:23.0059] <shu>
+i suppose i'm used to a world where UB is a convenient catchall for real world issues like this
+
+[15:24:03.0832] <shu>
+but since we strictly speaking do not have UB, the logical conclusion of that interpretation is all real world resource faults must be specified as well. but that seems intractable to me so i think i just never gave it much thought
+
+[15:24:41.0470] <shu>
+like, surely solar flares causing random bit flips in your RAM can be meaningfully guarded against by a language specification?
+
+[15:25:05.0873] <shu>
+* like, surely solar flares causing random bit flips in your RAM cannot be meaningfully guarded against by a language specification?
+
+[15:25:07.0518] <kriskowal>
+I mean, it is pretty spectacular. I’m bemused that I have the privilege of considering resilience against stack overflow, for an attacker that prepares for a stack n frames below the top in order to force specific invariants to be violated.
+
+[15:25:22.0381] <shu>
+but what's your line-drawing exercise, is what i'm asking
+
+[15:26:51.0975] <kriskowal>
+at risk of the appearance of being anything less than an expert in this field (hi), what do the initials UB expand to?
+
+[15:27:16.0598] <shu>
+undefined behavior
+
+[15:27:22.0879] <kriskowal>
+oh, well then.
+
+[15:27:27.0239] <shu>
+actually i have no idea if C++ considers real world resource faults to be UB
+
+[15:27:39.0974] <kriskowal>
+real world resource faults are all sorts of hell
+
+[15:28:26.0164] <kriskowal>
+nevermind OOM, linux sbrk literally never returns an error. it prefers to give you a page you will fault on first touch
+
+[15:28:45.0244] <shu>
+well, concrete question for you: what's the principled reason that distinguishes solar flares causing bit flips and OOMs, or are two events in the same category?
+
+[15:29:11.0386] <shu>
+or not even solar flares, just freak bit flips. that happens
+
+[15:30:19.0217] <kriskowal>
+ah, but *adversarial* solar flares, that’s the real trick
+
+[15:30:58.0981] <kriskowal>
+adversarial solar flares are of course cosmic rays deliberately intended to exploit knowledge about your toolchain in order to force intentional outcomes
+
+[15:31:18.0914] <shu>
+what i'm driving at is, if the pedantic interpretation is that implementations of JS today that can OOM _are_ non-conformant because the spec assumes infinite, non-faulty memory
+
+[15:31:25.0974] <kriskowal>
+i believe the differentiating line is probability, and whether the threat mechanism can be exploited by an adversary
+
+[15:31:46.0089] <shu>
+conformance is not probabalistic
+
+[15:31:59.0675] <shu>
+i'm not against having such a notion, to be clear, i think likelihood of conformance is a much more useful measure
+
+[15:32:03.0459] <shu>
+but that's not what marking was arguing for
+
+[15:32:56.0584] <kriskowal>
+ah, i cannot speak to the broader point about the impossibility of satisfying both of the desirable traits of a system
+
+[15:33:53.0329] <shu>
+we should discuss this over drinks, i might even enjoy myself. but i don't think it's a great use of committee time to get an editorial carveout
+
+[15:33:57.0301] <kriskowal>
+i am certainly more aligned with the position that we cannot have perfect outcomes in the absolute
+
+[16:33:13.0417] <jschoi>
+Would nuclear-weapon EMPs fall under this? Or, really, any artificial EMP…
+
+[16:34:09.0592] <jschoi>
+* Would nuclear-weapon EMPs fall under “adversarial solar flares”? Or, really, any artificial EMP…
+
+[16:39:01.0881] <kriskowal>
+I mean, if your threat model is deterministic termination, you terminate deterministically.
+
+
+2025-04-16
+[01:06:04.0262] <Mathieu Hofman>
+I think the difference is that one (OOMs, panic) is dependent on actions taken by the program, where the other one (solar flares) isn't. For the latter it's the mere existence of the program that maters most, not what it did. The line blurs a little bit for OS OOM killers, but my understanding is that this is fatal to the agent cluster anyway.
+
