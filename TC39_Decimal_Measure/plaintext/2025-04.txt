@@ -734,3 +734,167 @@ I think my position on most of the comments here is well-known. In short, I am i
 
 If there are specific questions/suggestions/comments/concerns, let's make GitHub issues. I like Matrix for things like sharing slides and asking quick questions, but I strongly prefer GitHub for matters of substance.
 
+[10:50:35.0497] <nicolo-ribaudo>
+sffc Isn't it 34 significant digits, and not 31? (I'm just reading from wikipedia)
+
+[10:51:37.0129] <littledan>
+presumably we're taking off a few to deal with those edge cases Waldemar is talking about
+
+[10:52:20.0522] <littledan>
+I'm not sure what Waldemar meant about rounding mode -- does he want that to be a property of the Decimal.Amount?
+
+[10:52:24.0131] <sffc>
+thanks
+
+[11:26:32.0404] <Jesse>
+I think what WH meant with rounding was triggered by one of my examples: "converting" 42.56 to "42" or "43" if you impute 2 significant digits to the number
+
+[11:26:51.0035] <Jesse>
+it would be "42" using round-ties-to-even
+
+[11:27:21.0424] <Jesse>
+in the current API, there's no place for speciifying a rounding mode, if needed
+
+[11:27:35.0821] <Jesse>
+by contract, `Decimal.prototype.toPrecision` does allow for specifying a rounding mode
+
+[11:27:39.0034] <Jesse>
+contrast
+
+[11:28:28.0083] <Jesse>
+we could certainyl support that
+
+[11:31:16.0024] <Jesse>
+yeah it's 34, though the exponent gets a bit tricky when dealing with subnormal numbers (*extremely* close to zero)
+
+[11:31:37.0073] <Jesse>
+but the 34 significaitn digits is true for those numbers, too
+
+[11:33:00.0467] <Jesse>
+we could add that as an optional argument to `togetherWithSignificantDigits`, as is the case today with `Decimal.prototype.toPRecision`
+
+[11:33:44.0587] <Jesse>
+but then, yeah, I guess that would need to be stored in the Decimal.Amount value
+
+[11:34:23.0813] <Jesse>
+and pass that to Intl.NF rounding options
+
+[11:39:28.0578] <eemeli>
+My presumption is that we would want the numerical value `42.56` of  `new Amount('42.56', { significantDigits: 2 })` to be somehow available.
+
+[11:39:42.0507] <Jesse>
+eem-eli thanks for pointing out to MM that he can solve his number formatting needs, today, even with huge/ultra precise numbers by contructing a digit string and passing that to Intl
+
+[11:40:51.0233] <Jesse>
+ah, interesting - we currently have an accessor for the underlying decimal -- which doesn't change when constructing a Decimal.Something -- so that data is recoverable
+
+[11:41:48.0743] <eemeli>
+Because if it's not available, don't we end up with effectively a black-box Amount, and y'all have pushed back against that quite strongly.
+
+[11:45:47.0861] <sffc>
+Decimal.Amount should do the rounding stuff ahead of time. That's kind-of the point. `new Amount('42.56', { significantDigits: 2 })` should take a rounding mode.
+
+[11:46:45.0359] <Jesse>
+my thinking is that we store the original value but *present* only the (possibly rounded) value
+
+[11:47:25.0488] <eemeli>
+Actually, are there use cases for Decimal.Amount that would not be served equally well by a numeric string?
+
+[11:48:26.0988] <sffc>
+#175
+
+[11:49:15.0180] <Jesse>
+https://github.com/tc39/proposal-decimal/issues/175
+
+[11:51:50.0528] <sffc>
+I will try to write up my thoughts on Mark and Waldemar's comments, but tl;dr there seems to be a disconnect between both the facts and the goals of the proposal.
+
+[11:53:39.0345] <Jesse>
+I think we don't need to talk about quanta; I didn't quite understand how that came up, and I when i think about Amount I don't feel the need to reach for the concept of quanta
+
+[11:54:25.0507] <Jesse>
+I mean, maybe as an implementation detail, in some implemenations; but it's not necessary to understand the proposal
+
+[11:54:59.0059] <sffc>
+I mentioned the word in the context of an optimization Decimal.Amount makes possible and didn't mean for the conversation to rathole on that
+
+[11:55:50.0315] <Jesse>
+right I undersood you as referring to a low-level detail; sad that we got sidetracked
+
+[11:56:51.0295] <eemeli>
+So the problem we're working around is that we presume that changing the output of `new Intl.NF().format('1.0')` would not be web-compatible, yes? Do we have any proof of that?
+
+[11:57:37.0782] <sffc>
+I hope one of these days we can align on the axiom that "significant digits", "fraction digits", and "trailing zeros" are equivalent and interchangeable concepts after being applied to a decimal number
+
+[11:58:12.0562] <Jesse>
+I agree we can convert between those
+
+[11:58:25.0711] <eemeli>
+If we presume that the number of training zeros can be negative, yes.
+
+[11:58:35.0197] <eemeli>
+* If we presume that the number of trailing zeros can be negative, yes.
+
+[11:59:24.0575] <Jesse>
+I think that's equivalent to "downgrading" the # of significant digits
+
+[12:33:20.0032] <eemeli>
+* My presumption is that we would want the numerical value `42.56` of  `new Amount('42.56', { significantDigits: 2 })` to be somehow available.
+
+[12:33:31.0939] <eemeli>
+* So the problem we're working around is that we presume that changing the output of `new Intl.NF().format('1.0')` would not be web-compatible, yes? Do we have any proof of that?
+
+[12:35:13.0816] <eemeli>
+sffc: To represent e.g. `new Amount('42.56', { significantDigits: 2 })` using trailing zeros without losing precision on the original value, we'd need to say something like `trailingZeros: -2`.
+
+[12:36:17.0032] <eemeli>
+Same actually goes for fractional digits.
+
+[12:36:38.0013] <sffc>
+In my mental model, that thing should _absolute_ "lose precision". `new Amount('42.56', { significantDigits: 2 })` is identically equivalent to `new Amount('43', { significantDigits: 2 })` and `new Amount('43')`
+
+[12:36:46.0848] <sffc>
+* In my mental model, that thing should _absolutely_ "lose precision". `new Amount('42.56', { significantDigits: 2 })` is identically equivalent to `new Amount('43', { significantDigits: 2 })` and `new Amount('43')`
+
+[12:37:46.0190] <sffc>
+Here's another way of explaining this type. It is the _intermediate_ value during number formatting, something that the language cannot currently represent. It is the value after rounding and precision have been applied, but before the digits are converted to their numbering system specific representation.
+
+[12:38:25.0925] <sffc>
+Maybe framing it that way would also help address Mark's concern about why we have this only on Decimal but not on Number
+
+[12:38:52.0161] <sffc>
+`Number.prototype.toDecimalAmount` could totally be a thing
+
+[12:40:25.0970] <sffc>
+Calling it "decimal with precision" is maybe misleading. It is a "decimal after precision was applied to it"
+
+[12:41:16.0529] <eemeli>
+Except for how intl. NumberFormat treats its trailing zeros, `(42.56).toPrecision(2)` already does something _really_ close to that.
+
+[12:42:06.0935] <eemeli>
+Hence my earlier question: Are we really sure that we can't fix Intl.NumberFormat?
+
+[12:54:31.0142] <sffc>
+When I worked on string arguments to `Intl.NumberFormat.prototype.format` a few years ago, I got pushback about "let's please not set precedent for using strings as an intermediate decimal representation" and I got Stage 3 by promising I wouldn't try to use strings in this way. :)
+
+[12:56:26.0904] <sffc>
+So I'm not opposed to exploring whether we could further improve `Intl.NumberFormat.prototype.format(String)` in a web-compatible way, but that doesn't fix the problem of an actual intermediate type.
+
+[12:56:56.0048] <sffc>
+* So I'm not opposed to exploring whether we could further improve `Intl.NumberFormat.prototype.format(String)` in a web-compatible way, but that doesn't alleviate the need to have an actual intermediate type.
+
+[13:02:36.0654] <eemeli>
+I don't think I understand the use case for a separate intermediate type if formatting or selecting on a numeric string accounts for the precision in that string representation.
+
+[13:19:38.0945] <sffc>
+For one, you can't do `decimal.withSignificantDigits(5).withUnit("meter")`
+
+[13:21:24.0730] <sffc>
+* For one, you wouldn't be able to do `decimal.withSignificantDigits(5).withUnit("meter")` without an upgraded intermediate
+
+
+2025-04-17
+[21:33:56.0407] <eemeli>
+Correct; we would effectively end up with a "three-class" solution where one of the "classes" is a numeric string, i.e. the solution for representing units or currency codes would be wholly separate.
+

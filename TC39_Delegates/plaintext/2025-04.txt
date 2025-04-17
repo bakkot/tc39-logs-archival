@@ -3381,3 +3381,718 @@ I mean, if your threat model is deterministic termination, you terminate determi
 [01:06:04.0262] <Mathieu Hofman>
 I think the difference is that one (OOMs, panic) is dependent on actions taken by the program, where the other one (solar flares) isn't. For the latter it's the mere existence of the program that maters most, not what it did. The line blurs a little bit for OS OOM killers, but my understanding is that this is fatal to the agent cluster anyway.
 
+[06:57:58.0741] <ryzokuken>
+@room starting in >3 mins
+
+[07:00:31.0979] <snek>
+matrix pls mark this channel read 
+
+[07:01:29.0666] <sffc>
+Working on connecting...
+
+[07:10:47.0596] <Richard Gibson>
+**matrix**: `Yes, I have marked this channel red.`
+
+[07:11:13.0617] <ryzokuken>
+sorry this functionality doesn't exist for your client
+
+[07:11:18.0649] <snek>
+i wish "mark as read" actually did something 😔
+
+[07:11:35.0883] <shu>
+jesus i've seen what you've done marking other channels as read and i want it for this channel
+
+[07:14:07.0789] <nicolo-ribaudo>
+I just managed to get the number of unread messages in this channel down from 4 to 1 by opening all the old threads in the right sidebar
+
+[07:15:57.0155] <Chengzhong Wu>
+tip: there is a button "Mark as read" hidden in the channel list "..." menu. It also marks unread subthreads as read
+
+[07:17:21.0291] <ryzokuken>
+the threads interaction is usually what makes the "mark as read" action not work as expected. Another way to fix that is to enable the threads activity center which gives you a popup on the bottom left with all unread threads
+
+[07:17:54.0257] <Jesse>
+still working on getting down to 4 digits
+
+[07:18:22.0876] <snek>
+in particular its not dismissing mentions in this channel (the two i had above for example). threads unrelated.
+
+[07:18:31.0623] <snek>
+* in particular its not dismissing mentions in this channel (the two i had above for example). threads unrelated. only way is to send a message :(
+
+[07:27:02.0962] <Aki>
+Y'all if you have a topic on the agenda this meeting, please consider taking a session or two editing the notes.
+
+[07:40:41.0091] <shu>
+code unit order is well defined too, isn't it?
+
+[07:43:03.0712] <Michael Ficarra>
+@shuyuguo:matrix.org for systems that have encoded the same string in UTF-16, yes
+
+[07:43:41.0087] <shu>
+then i guess that's the same question as my one on the queue
+
+[07:43:52.0172] <shu>
+i don't really get the portability
+
+[07:44:58.0233] <Michael Ficarra>
+portability to systems that use another encoding and don't want to transcode to UTF-16 to figure out sort order?
+
+[07:45:24.0428] <shu>
+but your problem is that we don't have utf16, not the sort order?
+
+[07:45:24.0740] <Andreu Botella>
+most other systems use UTF-8 (or in the case of python, UTF-32)
+
+[07:45:47.0184] <shu>
+like the portability problem i'd have figured is that our strings can be malformed
+
+[07:46:16.0265] <Michael Ficarra>
+no I think that's a whole other issue that was not addressed here
+
+[07:46:36.0376] <shu>
+what is the portability problem around _sort order_
+
+[07:46:40.0331] <Michael Ficarra>
+I think the whole proposal was assuming well-formedness
+
+[07:47:08.0699] <shu>
+a concrete example would be good
+
+[07:47:17.0662] <Andreu Botella>
+most systems use UTF-8, and sort based on that (or in the case of python, it doesn't use UTF-8 but has an equivalent comparison)
+
+[07:47:22.0686] <Andreu Botella>
+most developers don't realize there's a mismatch
+
+[07:47:27.0481] <shu>
+give me an example
+
+[07:47:42.0088] <shu>
+where you sort some strings in JS, and then... 
+
+[07:47:51.0479] <Michael Ficarra>
+oh I think I understand what you mean @shuyuguo:matrix.org: you're asking why they must sort identically on two systems that use different encodings?
+
+[07:48:01.0731] <shu>
+yeah, that's not a _portability_ problem to me
+
+[07:48:07.0957] <shu>
+i understand different systems have different behaviors
+
+[07:48:10.0415] <shu>
+they're different systems!
+
+[07:48:42.0519] <shu>
+oh i see, the "portability" here means "portability of lack of surprise when workign with strings across different systems"?
+
+[07:48:47.0559] <bakkot>
+yes
+
+[07:48:50.0925] <shu>
+not like, code is in non-interoperable
+
+[07:48:54.0105] <Michael Ficarra>
+@shuyuguo:matrix.org imagine a page that is server-side rendered with a sorted list of things, then dynamically updated at runtime (say, to add an item) and completely re-orders instead of just appearing to add the one item
+
+[07:49:45.0520] <bakkot>
+it is good to be able to implement the same algorithm in JS as in other languages without huge pain
+
+[07:50:04.0958] <Michael Ficarra>
+I guess there could be interoperability concerns? If you're like hashing a sorted list, your hash will be different on systems that sort it differently
+
+[07:50:33.0284] <bakkot>
+also for me the motivation is not really performance; you _could_ do this in userland the same way you can always do `(a, b) => a - b` but it's super painful
+
+[07:50:46.0054] <bakkot>
+this is a very natural way of sorting strings so it should be provided by the language
+
+[07:51:26.0565] <littledan>
+yeah I'm really not convinced that this function makes sense to add to JS
+
+[07:53:25.0167] <bakkot>
+littledan: because you don't think it comes up or because you think it's easy to do in userland or?
+
+[07:54:08.0872] <littledan>
+More the first one, and that it'll be used when it shouldn't be. But sorry I joined in the middle, should not have made such a confident comment, sounds like it maybe does come up
+
+[07:55:00.0410] <nicolo-ribaudo>
+When should this _not_ be used? I guess maybe where performance matters, and the engine is encoding the string as UTF-16 and not as UTF-8?
+
+[07:55:23.0592] <bakkot>
+if you're not interoperating with other systems then you should not use this
+
+[07:55:33.0801] <bakkot>
+for performance reasons if nothing else
+
+[07:56:46.0278] <bakkot>
+(do any major engines encode as utf-8? I don't think so? some do one-byte representations for strings with only small codepoints but that's different)
+
+[07:57:30.0044] <msaboff>
+This seems like a reasonable and straightforward proposal.  I think this wold be usable for some devs
+
+[07:57:58.0853] <littledan>
+it should definitely not be used when interacting with humans. The problem is that, when applied to English, it is almost usable.
+
+[07:58:54.0833] <msaboff>
+* This seems like a reasonable and straightforward proposal.  I think this would be usable for some devs
+
+[07:59:08.0951] <msaboff>
+* This seems like a reasonable and straightforward proposal.  I think this would be usable for some devs.
+
+[08:00:22.0150] <bakkot>
+I want the thing Michael Ficarra is describing (a lexicographic comparator builder and a codepoint iterator) but I still want the thing described here even after we get this
+
+[08:00:29.0866] <bakkot>
+* I want the thing Michael Ficarra is describing (a lexicographic comparator builder and a codepoint iterator) but I still want the thing described here even if we get those things
+
+[08:00:45.0996] <Michael Ficarra>
+that's totally fair @bakkot:matrix.org
+
+[08:01:36.0915] <sffc>
+I saw two use cases for sorting:
+
+1. A total ordering for use in a BTree-like data structure
+2. A human-readable ordering
+
+(1) is better served by UTF-16 ordering. (2) is better-served by Intl.Collator.
+
+But I'm reasonably convinced that given how common UTF-8 is on the Web and elsewhere in software, there is value for having a code point ordering function available in the JS standard library, in order to interoperate with those syetems.
+
+[08:02:56.0242] <nicolo-ribaudo>
+ryzokuken / Chris de Almeida If this takes less than one hour, the continuation of my topic from Monday has a 🔒️ but can be moved to the end of this slot
+
+[08:03:12.0431] <ryzokuken>
+thanks for the heads up
+
+[08:03:20.0156] <Michael Ficarra>
+a process discussion taking less than an hour? impossible!
+
+[08:03:21.0127] <nicolo-ribaudo>
+* ryzokuken / Chris de Almeida If this takes less than one hour, the continuation of my topic from Monday has a 🔒️ but can be moved to the end of this slot
+
+(assuming Mathieu Hofman will be online and read my answer on GitHub)
+
+[08:03:35.0513] <sffc>
+Main risk from my POV is that I don't want developers to see this new shiny function and think they should generally be using it for sorting. It is useful for the fairly narrow use case of interoperating with these external systems.
+
+[08:03:38.0044] <nicolo-ribaudo>
+Well Michael said so 😛
+
+[08:04:55.0521] <Mathieu Hofman>
+Actually it isn't but I left the question of lone surrogate for stage 2. Spoiler: use their code unit value to sort them
+
+[08:05:32.0137] <littledan>
+if this is for interop with other systems, we'll get our answer pretty objectively
+
+[08:06:10.0352] <bakkot>
+I am inclined to treat them as replacement character for sorting purposes, and only use code unit value for breaking ties
+
+[08:06:10.0571] <Michael Ficarra>
+yeah, there's an obvious answer
+
+[08:06:31.0984] <bakkot>
+because when you convert to a string in the other system it's going to use the replacement character
+
+[08:06:43.0745] <bakkot>
+so if you want to match sort order that's how you have to sort
+
+[08:06:55.0782] <Michael Ficarra>
+🤔 replacement characters should only really be used when transcoding
+
+[08:08:14.0951] <Mathieu Hofman>
+catching up now, sorry things came up in the real world
+
+[08:10:26.0648] <Mathieu Hofman>
+I think this is not a real issue. We do have Intl.Collator.prototype.compare, and I expect this would be introduced in that context with use cases
+
+[08:11:28.0122] <Andreu Botella>
+the dev outreach, and MDN and so on, should give the three types of comparison and their use cases
+
+[08:23:11.0337] <nicolo-ribaudo>
+I got distracted (apparently I left the gas stove on for hours by accident), and I missed the discussion for the second Dan minor point. I agree that blocks based on process not being respected should have a lower bar
+
+[08:23:17.0000] <nicolo-ribaudo>
+* I got distracted (apparently I left the gas stove on for hours by accident), and I missed the discussion for the second Dan Minor point. I agree that blocks based on process not being respected should have a lower bar
+
+[08:23:25.0338] <nicolo-ribaudo>
+* I got distracted (apparently I left the gas stove on for hours by accident), and I missed the discussion for the second point by Dan Minor. I agree that blocks based on process not being respected should have a lower bar
+
+[08:27:56.0995] <Jesse>
+can someone take over for me in the notes in ~5 min?
+
+[08:29:37.0337] <shu>
+i... think ecma exists to attract due-paying members?
+
+[08:29:43.0735] <shu>
+i don't think they exist to _serve_ us
+
+[08:29:50.0021] <Chris de Almeida>
+how about this ecma rule:
+
+[08:29:56.0199] <Chris de Almeida>
+> The agenda shall be made available to all members three weeks before each meeting
+
+[08:30:08.0347] <shu>
+oh man that'd be awesome
+
+[08:30:13.0459] <ljharb>
+serving us is what attracts due-paying members
+
+[08:30:23.0841] <ljharb>
+* serving us is what attracts due-paying members (TCs in general, but TC39 more than most)
+
+[08:30:35.0880] <littledan>
+we've repeatedly confirmed with the Ecma ExeCom that that can be overridden by TC's. I've proposed changing it and the response is, this isn't necessary.
+
+[08:31:02.0195] <waldemar>
+The vast majority of members are non-due-paying
+
+[08:31:06.0219] <shu>
+ljharb: what i mean is, let's stipulate IEs have exact same status. why would BigCo join instead of send all its employees as IEs?
+
+[08:31:43.0741] <littledan>
+the majority of TC39 participation is dues-paying, though
+
+[08:31:47.0398] <ljharb>
+oh sure. but per "any system can be gamed", if ecma sees that happen, they'll revoke the IE status
+
+[08:32:10.0488] <shu>
+i don't think "looking at this line in the opex chart to see if we should continue paying it" is even gaming it
+
+[08:32:18.0343] <shu>
+it happens as standard procedure every year
+
+[08:32:24.0062] <littledan>
+IEs are included in a way that's entirely contingent on Samina's discretion -- this is what the bylaws have always said. The current practice is to give people a year, and then see if they can be convinced to join Ecma.
+
+[08:32:24.0444] <ljharb>
+the openjs foundation (and its predecessors) route always made previous secretariats nervous for the same possibility, but it never actually happened
+
+[08:33:06.0902] <Andreu Botella>
+will do
+
+[08:33:16.0115] <littledan>
+I think OpenJS has made changes over time towards sending people who represent their projects, rather than just anyone (since we have the IE system for other projects)
+
+[08:34:06.0235] <littledan>
+long-term IEs make sense when you're representing a particular constituency, e.g., a strategic open source project (or in an Ecma Fellows-like situation). Lots of IEs are more transitional/introductory
+
+[08:34:20.0653] <nicolo-ribaudo>
+What if you gain block points by taking notes
+
+[08:34:23.0061] <ljharb>
+that's indeed actual policy now, but i don't think historically it's ever violated that policy ¯\_(ツ)_/¯ 
+
+[08:35:06.0256] <Chris de Almeida>
++1
+
+[08:36:27.0293] <shu>
+damn okay, was about to tell mark to catch me outside...
+
+[08:36:29.0396] <shu>
+guess it's not me
+
+[08:37:04.0475] <ryzokuken>
+you jest but I have suggested this in the past
+
+[08:37:58.0202] <Michael Ficarra>
+can I pay people to take notes and then transfer their block points to me?
+
+[08:38:32.0499] <Chris de Almeida>
+you will need them to block on your behalf... clandestinely
+
+[08:38:48.0696] <nicolo-ribaudo>
+That's only valid for green 
+
+[08:38:52.0070] <nicolo-ribaudo>
+* That's only valid for green credits
+
+[08:39:06.0947] <littledan>
+Ecma needs to be able to explain to prospective members what benefits they will get by joining, so that we can do things like pay Aki for her good support work, and the transcriptionists, and maybe one day sponsor test262. It's a balancing act because we need to make sure that those who can't pay but will make good technical contributions can be involved. (This is a common situation which W3C and Unicode also face and solve similarly.)
+
+[08:40:02.0425] <littledan>
+often symbolic things ("do you really get to vote?") are important for people to make their internal arguments in companies
+
+[08:44:56.0168] <Michael Ficarra>
+Isn't the continued participation of IEs always dependent on the member that invited them? I don't think a company would want to subjugate themselves like that if they're truly interested in participating.
+
+[08:45:16.0964] <shu>
+do we actually check back in?
+
+[08:45:35.0789] <shu>
+with the sponsoring company, that is
+
+[08:45:53.0132] <Michael Ficarra>
+all IEs are temporary, so they need to be re-sponsored at the very least
+
+[08:46:03.0716] <Chris de Almeida>
+yes, and it also becomes an issue if the sponsoring member has left ecma
+
+[08:46:51.0447] <Michael Ficarra>
+yeah that's taking on a lot of risks just to save on dues
+
+[08:53:22.0578] <jschoi>
+> <@michaelficarra:matrix.org> all IEs are temporary, so they need to be re-sponsored at the very least
+
+How often does Invited Expert status need to be renewed? 
+
+[08:53:42.0028] <Chris de Almeida>
+they are reviewed yearly
+
+[08:53:45.0816] <jkup>
+I believe the status is meant to be re-evaluated annulaly 
+
+[08:53:51.0611] <jkup>
+* I believe the status is meant to be re-evaluated annually
+
+[08:56:01.0410] <jschoi>
+Oh boy—then thank you to whoever kept my status even when I didn’t show up for a year or two. 
+
+[08:56:21.0204] <Aki>
+i feel like there's a Supreme Court/Andrew Jackson analogy to be made here
+
+[08:56:27.0934] <ryzokuken>
+we missed you 😄 
+
+[08:57:02.0512] <littledan>
+tbh we're falling behind on those reviews/renominations and just leaving people in until we get around to it
+
+[08:57:34.0566] <ryzokuken>
+oh wait, did we even have someone sponsor you?
+
+[08:57:57.0528] <ryzokuken>
+guess you went from delegate to IE directly and without an explicit sponsor because of the WIP proposals
+
+[08:58:51.0410] <ljharb>
+we also didn't used to review/revisit/recertify them at all, it's a relatively recent (and good) thing to do so
+
+[08:59:09.0848] <Michael Ficarra>
+@erights:matrix.org, @shuyuguo:matrix.org, and chairs: https://syg.github.io/proposal-nonextensible-applies-to-private/ LGTM, that proposal can advance to 2.7
+
+[08:59:44.0325] <jschoi>
+(I promise to try harder to get the University of Utah to join Ecma. I’m still not sure if it should specifically be by the Department of Computer Science...)
+
+[09:00:41.0699] <littledan>
+whatever's easiest for your internal paperwork
+
+[09:01:13.0864] <shu>
+i'm being dense, did someone else understand mark's argument?
+
+[09:02:23.0664] <Bradford Smith>
+In my experience (since 2020), I don't think I've ever seen an invite expert's lone objection be overruled. I feel like we've been de facto treating them as equivalent to other delegates, even if the Ecma rules say otherwise. Does that observation match with others'?
+
+[09:06:28.0363] <msaboff>
+I did not.
+
+[09:06:32.0452] <nicolo-ribaudo>
+I think I've seen it being overruled, but through behind the doors discussions 
+
+[09:07:04.0956] <nicolo-ribaudo>
+Actually at this point I don't even remember who was IE and who was not
+
+[09:08:05.0992] <Chris de Almeida>
+the notion of who is blocking is far less important than the substance of the blocking concern(s)
+
+[09:10:37.0400] <jschoi>
+“Let it be known that ${organization}, embodied by me, blocks this proposal.” — delegate of organization 
+
+[09:12:34.0606] <Chris de Almeida>
+it's not healthy for this committee to say that we don't care about an IE's concerns or that their concerns are any less valid than a delegate's.  or, as some have pointed out, that their reviews are insufficient, or they cannot champion proposals, and so on
+
+[09:12:41.0503] <shu>
+IME that statement is false
+
+[09:12:57.0147] <Chris de Almeida>
+say more
+
+[09:13:10.0369] <hax (HE Shi-Jun)>
+"Because one person could have a non-technical, political reason that they want to block something. It’s happened in the past, we have seen it; and there’s no technical resolution that will allow something to move forward." --- I read the notes and I really want to know the real example and check if I agree that or not...
+
+[09:13:43.0922] <shu>
+i'll dm
+
+[09:14:53.0750] <jkup>
+I'm a bit nervous about the "technical vs. non-technical reason" concept. On one hand it feels like someone could say a technical reason while really wanting to block for "political" reasons. On the other hand I worry a bit about spawning meta discussions around "Was that a technical or political objection?"
+
+[09:15:30.0625] <ryzokuken>
+especially given how commonplace it can be in our industry to dismiss things as "non-technical"
+
+[09:15:52.0403] <ryzokuken>
+"any concern I disagree with is non-technical" *drops mic* /s
+
+[09:17:18.0875] <shu>
+i get the strong sense that the bar against which people are comparing msaboff's proposal is an ideal working mode, not our current working mode
+
+[09:18:45.0760] <shu>
+which is unfair to the proposal
+
+[09:22:50.0765] <Michael Ficarra>
+@waldemarh:matrix.org @mhofman:matrix.org see https://github.com/endojs/proposal-compare-strings-by-codepoint/issues/6 for my more general approach
+
+[09:34:37.0955] <dminor>
+Is objecting to a new feature based upon language complexity or lack of harmony with existing features a technical or non-technical objection? If we can only object based upon narrow technical grounds, I worry that JavaScript will keep growing until it subsumes every feature in every other programming language.
+
+[09:37:16.0678] <littledan>
+whenever we get on the topic of "good faith", we're getting into some kind of trouble territory, where we'll soon be talking about politics/bad faith. I think everyone here is consistently doing what they think is best for JavaScript.
+
+[09:37:33.0652] <littledan>
+the main thing is, when we disagree, then what do we do?
+
+[09:38:27.0981] <littledan>
+Even if we don't raise the bar for blocking from 1 person to 2, we can still have a subsequent discussion in a meeting about whether we want to uphold the block (even if it just takes one person to actually do it).
+
+[09:51:43.0911] <Chris de Almeida>
+> when we disagree, then what do we do?
+
+according to our CoC, we try to understand why.  😊
+
+[09:54:35.0689] <littledan>
+yes, and then? that's the question we were trying to answer
+
+[09:59:30.0001] <ryzokuken>
+@room we're back in under a minute!
+
+[10:04:02.0359] <nicolo-ribaudo>
+I know Eemeli will probably want to speak, I'll try to fill in when he cannot take notes
+
+[10:16:54.0804] <ljharb>
+(the queue topic isn't advanced yet fwiw)
+
+[10:46:38.0485] <jschoi>
+There seem to be are a lot of missing attendees in the notes’ attendee lists.
+
+[10:46:53.0400] <Chris de Almeida>
+people add themselves voluntarily
+
+[10:47:19.0627] <Chris de Almeida>
+the secretary maintains an accurate list
+
+[11:03:15.0207] <shu>
+what's the point of the list in the notes?
+
+[11:03:25.0633] <littledan>
+yeah I would like to remove that
+
+[11:03:45.0566] <littledan>
+we always have a lot of people missing; it's not a good record of anything in particular
+
+[11:03:49.0498] <littledan>
+we already have the sign-in form
+
+[11:03:54.0054] <snek>
+it used to be helpful for notetakers to get the right abbreviation 
+
+[11:04:22.0052] <snek>
+perhaps not needed anymore
+
+[11:04:32.0414] <ljharb>
+that's always been the only purpose i understood for it
+
+[11:06:56.0307] <ryzokuken>
+unfortunately the note-takers at this point is a very small set of regulars but it would be super helpful to keep and maintain if someone new was taking notes for instance
+
+[11:08:02.0580] <bakkot>
+we should point note-takers to delegates.txt
+
+[11:08:08.0768] <bakkot>
+when I take notes that's always what I look at anyway
+
+[11:08:13.0442] <bakkot>
+since it's complete
+
+[11:08:25.0085] <bakkot>
+maybe other note takers do something else though
+
+[11:08:28.0697] <Ashley Claymore>
+IE's wouldn't appear in delgates.txt right.
+
+[11:08:33.0204] <ljharb>
+they would
+
+[11:08:34.0507] <Ashley Claymore>
+but yeah otherwise I just use delgates.txt
+
+[11:08:47.0943] <ryzokuken>
+every person who has a TLA should appear there
+
+[11:08:54.0214] <ryzokuken>
+the name of the file... isn't great
+
+[11:08:59.0446] <ryzokuken>
+maybe it should be renamed
+
+[11:09:04.0950] <ryzokuken>
+participants.txt 
+
+[11:10:08.0597] <bakkot>
+no renaming things!!! 💢
+
+[11:10:23.0700] <Ashley Claymore>
+symlink
+
+[11:12:24.0576] <waldemar>
+Option 4: use AI
+
+[11:13:54.0121] <Ashley Claymore>
+Can't see an AI in delegates.txt
+
+[11:14:16.0840] <shu>
+wait, is comparative testing == testing for injectivity?
+
+[11:14:42.0633] <shu>
+are intl functions all injective?
+
+[11:15:59.0060] <snek>
+no
+
+[11:20:18.0686] <littledan>
+but with MessageFormat, they will be *surjective*
+
+[11:20:32.0127] <littledan>
+(via the template which just passes through its string arg)
+
+[11:27:22.0560] <jschoi>
+> <@usharma:igalia.com> unfortunately the note-takers at this point is a very small set of regulars but it would be super helpful to keep and maintain if someone new was taking notes for instance
+
+When I took notes in Seattle at my first meeting in a long time, I first checked the notes’ attendees table for abbreviations and failed to find the ones I needed. Then I asked for a link to delegates.txt again. 
+
+[11:28:38.0530] <shu>
+LLMs would probably make test262 bots so expensive we'd stop running them lol
+
+[11:28:51.0760] <ptomato>
+shu: here's an example of a mini-implementation in test262 https://github.com/tc39/test262/blob/61fcd7bd565e01f795e55080ed9af70b71adb27e/harness/testIntl.js#L2517
+
+[11:29:59.0196] <dminor>
+ptomato: nice presentation and discussion
+
+[11:30:12.0249] <ptomato>
+thanks!
+
+[11:30:40.0859] <Richard Gibson>
+thanks I hate it
+
+[11:30:53.0280] <shu>
+i still don't really get it
+
+[11:31:03.0575] <shu>
+is it just programmatic goldens?
+
+[11:31:28.0495] <ptomato>
+gotta go now but I can elaborate later
+
+[11:58:48.0592] <littledan>
+shu: Whether to apply defer inwardly can be decided independently of which syntax choice we make
+
+[11:59:13.0410] <shu>
+that sounds right
+
+[11:59:35.0075] <littledan>
+(we've gone back and forth on it)
+
+[12:00:03.0589] <littledan>
+I feel like, it makes things faster and should work fine in practice for the same reason (that you're not depending on side effects), so let's throw it in
+
+[12:08:23.0353] <sffc>
+I mentioned this in TDZ but I think it's important enough to bring over here: the quality of the transcriptions today was quite terrible. Not only was there a very large number of errors (multiple per line), but in some cases whole sentences and key concepts were missing. For example, when Nicolo read off the names of people in the queue who supported Stage 2, that whole section got dropped from the transcription (I tried to re-create it manually). This is not a great note-taker experience. CC littledan 
+
+[12:13:00.0717] <littledan>
+ryzokuken: Can you escalate this to Duane?
+
+[12:13:07.0582] <littledan>
+it's crazy how variable this is
+
+[12:13:37.0535] <littledan>
+because yesterday it was great
+
+[12:20:31.0855] <Ashley Claymore>
+the first hour of the 2nd half was OK, but they switched on the hour and the quality stopped significantly 
+
+[12:20:39.0115] <Ashley Claymore>
+*dropped 
+
+[12:23:23.0808] <littledan>
+thanks, I've escalated this to the transcription company
+
+[12:24:28.0342] <nicolo-ribaudo>
+Q: do people also struggle to understand what I say, or is it just the transcription when I speak?
+
+[12:24:47.0843] <nicolo-ribaudo>
+* Do people also struggle to understand what I say, or is it just the transcription when I speak?
+
+[12:25:08.0145] <nicolo-ribaudo>
+Changing how I speak is difficult, but things like "speak slower" is something I can try to do
+
+[12:26:49.0143] <bakkot>
+nicolo-ribaudo I have always understood you fine personally
+
+[12:35:03.0220] <sffc>
+I didn't notice a significant difference between number of errors when you were speaking versus others
+
+[14:42:57.0083] <jschoi>
+Regarding +0 vs. -0 again, an interesting bug: https://github.com/WebKit/WebKit/commit/2f856d3a253c3ad7d4d0d1ba21e8ec78772c9e26
+
+[14:43:30.0633] <jschoi>
+* Regarding +0 vs. -0 again, an interesting bug whose fix just got pushed to Safari Technical Preview: https://github.com/WebKit/WebKit/commit/2f856d3a253c3ad7d4d0d1ba21e8ec78772c9e26
+
+[15:25:04.0168] <ptomato>
+> <@pchimento:igalia.com> shu: here's an example of a mini-implementation in test262 https://github.com/tc39/test262/blob/61fcd7bd565e01f795e55080ed9af70b71adb27e/harness/testIntl.js#L2517
+
+Following up on this, here's what I call a "mini-implementation": you write a function in your test file, that imitates the spec algorithm of the method under test, line by line. Then you feed the same test data to that function and to the implementation's method under test. If the output is the same, the test passes
+
+[15:27:15.0124] <ptomato>
+It isn't specific to tests for ILD behavior. You could write a test for, e.g. Array.prototype.at in that style
+
+[15:34:44.0641] <Steve Hicks>
+As a point of order - would anyone object to bumping the AsyncContext Disposable topic to first thing tomorrow?  IIUC that should not go against any constraints, but will allow me to make the full discussion.  Thanks!
+
+[16:15:10.0744] <ljharb>
+that's confusing, the tests pass already in my safari 18.1
+
+[16:18:16.0747] <nicolo-ribaudo>
+I recommend trying to reach out to Domenic Farolino (colleague of yours!) and asking him too. It has been historically difficult to coordinate with him to present observables in TC39, so he might have planned around the current time slot
+
+[16:19:44.0607] <nicolo-ribaudo>
+* I recommend trying to reach out to Dominic Farolino (colleague of yours!) and asking him too. It has been historically difficult to coordinate with him to present observables in TC39, so he might have planned around the current time slot
+
+
+2025-04-17
+[17:51:38.0306] <bakkot>
+it presumably only happens under certain optimization tiers or conditions
+
+[17:52:38.0563] <bakkot>
+also the commit which introduced the bug only landed two weeks ago so would not have gone into stable
+
+[20:43:09.0852] <shu>
+what i don't get is, since it's ILD, how do you decide what your mock does?
+
+[23:34:24.0622] <ljharb>
+for tomorrow: we forgot to get reviewers for `export defer`; can someone ask for that first thing in the morning? thanks!
+
+[23:34:30.0726] <ljharb>
+* for day 4: we forgot to get reviewers for `export defer`; can someone ask for that first thing in the morning? thanks!
+
+[23:50:56.0334] <nicolo-ribaudo>
+Oh yes thank you 😅
+
+[03:32:59.0253] <nicolo-ribaudo>
+Does the "Commit suggestion" button for reviews in the ECMA-262 repo also not work for y'all?
+
+[03:33:53.0101] <naugtur>
+they tend to work better in the files view than main discussion view.
+
+[03:35:37.0451] <nicolo-ribaudo>
+I'm getting the "This diff has recently been updated. Refresh and try again" error in both :/
+
+[03:36:09.0519] <naugtur>
+umm.. so did you reload the page?
+
+[03:36:16.0404] <nicolo-ribaudo>
+yeo
+
+[03:36:18.0837] <nicolo-ribaudo>
+* yep
+
+[03:36:29.0647] <nicolo-ribaudo>
+Also, there have not been changes for weeks :P
+
