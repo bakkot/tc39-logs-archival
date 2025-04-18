@@ -384,3 +384,91 @@ hi 👋
 [15:39:15.0112] <jschoi>
 Hello, welcome to the TC39 General Matrix channel. 
 
+
+2025-04-17
+[10:55:14.0626] <Aapo Alasuutari>
+Regarding this, I think I figured out another place where `%TypedArray%.prototype.sort` implicitly relies on canonicalisation: if I'm not badly mistaken, the CompareTypedArrayElements AO is designed to invoke the "usual" total ordering for floats (convert to uint64, compare by value), but with the assumption that all NaNs are the usual canonical positive NaNs. If the sentence about canonicalisation is dropped, then the sorting algorithm is no longer the usual total ordering but instead something more custom with presumably a branch for NaNs needed.
+
+[10:59:25.0856] <littledan>
+there's "one" NaN value at the JS level, but then when you write it to a TypedArray, it gets the chance to choose a new value. so the de-canonicalization is happening after the code you're talking about.
+
+[10:59:59.0503] <littledan>
+the spec is pretty editorially confusing, and we should make that point more clear
+
+[11:00:18.0278] <Aapo Alasuutari>
+```js
+const b = BigInt64Array.of(-2251795519242240n, -4616189618054758400n, 0n, 4607182418800017408n, 9221120237041090774n);
+const a = new Float64Array(b.buffer);
+a[3] = 1;
+console.log(`${b[0]} ${b[1]} ${b[2]} ${b[3]} ${b[4]}`);
+console.log(`${a[0]} ${a[1]} ${a[2]} ${a[3]} ${a[4]}`);
+a.sort();
+console.log(`${b[0]} ${b[1]} ${b[2]} ${b[3]} ${b[4]}`);
+console.log(`${a[0]} ${a[1]} ${a[2]} ${a[3]} ${a[4]}`);
+a.sort(() => Math.random() ? -1 : 1);
+console.log(`${b[0]} ${b[1]} ${b[2]} ${b[3]} ${b[4]}`);
+console.log(`${a[0]} ${a[1]} ${a[2]} ${a[3]} ${a[4]}`);
+```
+
+[11:00:27.0535] <Aapo Alasuutari>
+* ```js
+const b = BigInt64Array.of(-2251795519242240n, -4616189618054758400n, 0n, 4607182418800017408n, 9221120237041090774n);
+const a = new Float64Array(b.buffer);
+console.log(`${b[0]} ${b[1]} ${b[2]} ${b[3]} ${b[4]}`);
+console.log(`${a[0]} ${a[1]} ${a[2]} ${a[3]} ${a[4]}`);
+a.sort();
+console.log(`${b[0]} ${b[1]} ${b[2]} ${b[3]} ${b[4]}`);
+console.log(`${a[0]} ${a[1]} ${a[2]} ${a[3]} ${a[4]}`);
+a.sort(() => Math.random() ? -1 : 1);
+console.log(`${b[0]} ${b[1]} ${b[2]} ${b[3]} ${b[4]}`);
+console.log(`${a[0]} ${a[1]} ${a[2]} ${a[3]} ${a[4]}`);
+```
+
+[11:01:05.0037] <shu>
+https://tc39.es/ecma262/#sec-comparetypedarrayelements has special casing for NaN, doesn't compare by bit pattern
+
+[11:02:15.0720] <shu>
+would more NOTEs help here? i agree the raw bits <> number machinery for TAs can be confusing but i'm not sure how to improve on it atm
+
+[11:02:35.0731] <Aapo Alasuutari>
+If you create a Float64Array containing NaNs without ever assigning NaNs into it, you can get to a path where the `sort()` call would be the first place where the NaNs would actually be "observed", and it seems like the CompareTypedArrayElements is designed for engines to be able to use bit pattern comparison as an optimisation there. But that then falls apart if NaN canonicalisation isn't actually done/allowed by the spec.
+
+[11:03:11.0527] <Aapo Alasuutari>
+Yeah, it only reads like it was written to be compare-by-bit-pattern-but-we-know-all-nans-are-positive.
+
+[11:03:27.0613] <shu>
+"it seems like the CompareTypedArrayElements is designed for engines to be able to use bit pattern comparison as an optimisation there" where do you get that sense from?
+
+[11:05:00.0350] <Aapo Alasuutari>
+From the fact that it is entirely equivalent (from my understanding and somewhat limited testing) to a comparison by bit pattern if one makes the assumption that all NaNs are canonicalised or at least positive.
+
+[11:05:17.0503] <shu>
+that last bit is pretty important though. you can't make that assumption
+
+[11:05:39.0657] <littledan>
+the spec was deliberately written to enable multiple implementation styles. So if you read it and think, "it permits this", you're not wrong, but that's different from requiring it
+
+[11:09:34.0540] <Aapo Alasuutari>
+Mm, roger. I keep falling into the mistake of thinking that NaN canonicalisation exists somewhere in the spec :)
+
+[11:16:46.0925] <Aapo Alasuutari>
+Except of course for the `NumericToRawBytes` bit where implementations are required to always use the same pattern for NaN, and `sort()` using that AO later when it assigns stuff into the buffer... And since the order of these operations isn't observable, I guess an implementation could freely reorder them, first canonicalise to their chosen positive NaN bit pattern and then run a normal total order comparison.
+
+[11:16:56.0302] <Aapo Alasuutari>
+* Except of course for the `NumericToRawBytes` bit where implementations are (currently) required to always use the same pattern for NaN, and `sort()` using that AO later when it assigns stuff into the buffer... And since the order of these operations isn't observable, I guess an implementation could freely reorder them, first canonicalise to their chosen positive NaN bit pattern and then run a normal total order comparison.
+
+[11:17:06.0985] <littledan>
+yeah the thing about "it must keep using the same pattern when serializing multiple times" is spec fiction; we should remove it.
+
+[11:22:53.0745] <shu>
+could one of you file an editorial issue? :)
+
+[11:26:44.0799] <Aapo Alasuutari>
+I at least commented on https://github.com/tc39/ecma262/issues/635 but if you want to, I can also open a new issue or a PR for the change, assuming there's no particular problem with non-delegates doing so.
+
+[11:28:59.0635] <shu>
+i meant specifically about "yeah the thing about "it must keep using the same pattern when serializing multiple times" is spec fiction; we should remove it."
+
+[11:33:12.0809] <Aapo Alasuutari>
+https://github.com/tc39/ecma262/issues/3567
+
