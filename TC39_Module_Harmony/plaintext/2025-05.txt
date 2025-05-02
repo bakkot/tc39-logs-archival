@@ -1,0 +1,70 @@
+2025-05-01
+[05:58:23.0650] <jakobjingleheimer>
+I'll use the time to review your node PR
+
+[08:05:05.0319] <guybedford>
+Thanks that would be great!
+
+[08:20:54.0165] <nicolo-ribaudo>
+https://github.com/tc39/ecma262/issues/3582 I think I found a bug with module evaluation, but I think it's a regression
+
+[08:22:04.0529] <nicolo-ribaudo>
+* https://github.com/tc39/ecma262/issues/3582 I think I found a bug with module evaluation
+
+[09:48:28.0215] <guybedford>
+good catch, it seems like we either need to clarify that it can be unset for errored modules, or to set it to some arbitrary value in this case
+
+[09:55:35.0698] <guybedford>
+another approach might be to move the CycleRoot set into the linking algorithm, but this would imply creating a proper equivalence between DFS for link and DFS for evaluate which doesn't currently exist
+
+[09:56:50.0390] <guybedford>
+The algorithm as written though, never did proper state transitions on error in evaluate (DFS transitions), and that was a property from the start. Sticking with that model would effectively mean just saying [[CycleRoot]] can be unset...
+
+[09:57:09.0378] <guybedford>
+I'm pretty sure this doesn't affects any real execution paths fwiw
+
+[10:23:03.0169] <nicolo-ribaudo>
+I opened https://github.com/tc39/ecma262/pull/3583, which defaults it to the module itself, and I _think_ it's fine to do it in the error case
+
+[11:09:07.0954] <guybedford>
+Yeah I'm pretty sure that works, as an import to any module in an errored cycle should still find that error and throw it before trying further evaluations.
+
+[11:36:43.0617] <shu>
+nicolo-ribaudo guybedford as the only two people in the world who have this machinery in their heads, any ideas for editorially improving understanding?
+
+[11:37:07.0603] <shu>
+i was thinking maybe an interactive example?
+
+[11:37:12.0811] <shu>
+how do people teach graph algorithms?
+
+[11:38:02.0158] <shu>
+i learned graphs from dr greibach, who taught on transparencies...
+
+
+2025-05-02
+[23:35:33.0449] <nicolo-ribaudo>
+The problem is that this is not just a graph, but each node has also a ton of different states, and for evaluation they are _all_ relevant
+
+[23:36:16.0330] <nicolo-ribaudo>
+I do have an interactive example (linked to in that PR), maybe I could join the next editors call and we could consider how to embed smaller versions of it in the spec, together with the existing examples?
+
+[01:52:14.0268] <nicolo-ribaudo>
+shu Maybe another approach would be to make [[Status]] an enum with a payload, like Rust enums, so that the various slots are only available when they are relevant, and they transition more atomically.
+
+e.g. given that [[AsyncEvaluationOrder]] is only relevant while a module is evaluating-async, it would be used as `If _module_.[[Status]] is an AsyncEvaluationState Record, use _module_.[[Status]].[[AsyncEvaluationOrder]]`
+
+[01:52:51.0357] <nicolo-ribaudo>
+Or like, [[EvaluationError]] would be defined on the EvaluatedState Record
+
+[01:56:58.0700] <nicolo-ribaudo>
+Or maybe we could draw some sort of state machine representing the various valid intermediate states that modules go through during the process, and how they transition between them
+
+[02:21:26.0438] <nicolo-ribaudo>
+* shu Maybe another approach would be to make \[\[Status\]\] an enum with a payload, like Rust enums, so that the various slots are only available when they are relevant, and they transition more atomically.
+
+e.g. given that \[\[AsyncEvaluationOrder\]\] is only relevant while a module is evaluating-async, it would be used as `Assert: _module_.[[Status]] is an AsyncEvaluationState Record. Use _module_.[[Status]].[[AsyncEvaluationOrder]]`
+
+[02:53:04.0063] <nicolo-ribaudo>
+I opened a PR with a test262 test for a top-level await case that was not previously covered, if anybody has time please review :) https://github.com/tc39/test262/pull/4465
+
