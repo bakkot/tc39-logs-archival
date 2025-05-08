@@ -219,3 +219,251 @@ I think.
 [03:28:19.0938] <jmdyck>
 * In the spec, `+UnicodeSetsMode` only occurs in conjunction with `+UnicodeMode`. (i.e., roughly, `+USM` implies `+UM`, or `+USM` is a subset of `+UM`), so any RHS guarded by `[+UM]` 'succeeds' for all cases of `+USM`.
 
+[04:08:18.0340] <Jack Works>
+oh, I checked all Pattern, all Pattern[+USM] is also marked as [+UM]
+
+[04:29:13.0221] <jmdyck>
+yup
+
+[10:25:47.0522] <bakkot>
+I want to proposal a method for finding the item in an iterable which has the largest value according to some function, for example "find the person with the largest age" or whatever. This comes up a lot IME, enough to be worth having in the standard library even though it's like a four or five lines to do with a loop or `.reduce`.
+
+There's two natural ways to do this: either take a function from input items to a number, or take a comparator. both work, first is often more convenient, second is strictly more general.
+
+Thoughts? We could in principle support both. (Even in the same function, just by switching on `callback.length === 1`, but... not that option).
+
+[10:25:50.0905] <bakkot>
+* I want to proposal a method for finding the item in an iterable which has the largest value according to some function, for example "find the person with the largest age" or whatever. This comes up a lot IME, enough to be worth having in the standard library even though it's like a four or five lines to do with a loop or `.reduce`.
+
+There's two natural ways to do this: either take a function from input items to a number, or take a comparator. both work, first is often more convenient, second is strictly more general.
+
+Thoughts? We could in principle support both. (Even in the same function, just by switching on `callback.length === 1`, but... not that option.)
+
+[10:28:13.0403] <bakkot>
+I suppose one way to solve the dilemma is to have a function which lifts a `T -> number` mapper to a `(T, T) -> { -1, 0, 1 }` comparator, and expect people to use that, as in `people.maxByComparator(Compare.by(person -> person.age))`.
+
+[10:28:23.0027] <bakkot>
+(java calls the latter operation `Comparator.comparing`)
+
+[10:31:18.0117] <bakkot>
+* I want to make a proposal for a method for finding the item in an iterable which has the largest value according to some function, for example "find the person with the largest age" or whatever. This comes up a lot IME, enough to be worth having in the standard library even though it's like a four or five lines to do with a loop or `.reduce`.
+
+There's two natural ways to do this: either take a function from input items to a number, or take a comparator. both work, first is often more convenient, second is strictly more general.
+
+Thoughts? We could in principle support both. (Even in the same function, just by switching on `callback.length === 1`, but... not that option.)
+
+[10:35:55.0695] <Michael Ficarra>
+Isn't this the same API design question we had with `uniqueBy`? You can either give a mapper or a comparator, and we probably just want both.
+
+[10:36:23.0108] <Michael Ficarra>
+wouldn't this be less efficient?
+
+[10:36:55.0073] <bakkot>
+Pretty similar, yeah, although the "comparator" for uniqueBy is not a comparator in the sense of "a function which can be passed to `.sort`", whereas it is here
+
+[10:37:43.0416] <bakkot>
+same big-O, but requires computing 2x as many calls of the `T -> number` function, yes
+
+[10:39:58.0017] <bakkot>
+I actually am kind of coming around to the idea of switching on the `.length` of the callback
+
+[11:07:59.0209] <Ashley Claymore>
+A comparator for unique has to compare against all previous unique values. O(N^2)
+A comparator for largest only has to compare against the current winner. O(N)
+
+[11:08:47.0338] <Ashley Claymore>
+This does sound useful. I currently reach for `.sort(c).at(-1)` when in a pinch 
+
+[11:10:15.0541] <eemeli>
+Effectively, this would be sugar for something like this, yes?
+```
+people.reduce((acc, p) => p.age > acc.age ? p : acc)
+```
+
+[11:11:45.0081] <eemeli>
+* Effectively, this would be sugar for something like this, yes?
+
+```
+people.reduce((acc, person) => person.age > acc.age ? person : acc)
+```
+
+[11:17:47.0739] <eemeli>
+Isn't that good enough for this use case?
+
+[11:23:00.0146] <bakkot>
+I mean, isn't a for loop good enough for this use case?
+
+[11:23:17.0823] <Ashley Claymore>
+Reduce has the "empty list" exception which is annoying IMO
+
+[11:23:39.0017] <Ashley Claymore>
+for a winner like method I'd rather an empty set returns undefined as the winner 
+
+[11:25:26.0155] <bakkot>
+`reduce` is basically the same kind of hammer as a for loop. Personally I like it when the language provides common, simple operations even when they're already achievable with the language's existing general purpose tools.
+
+[11:25:41.0578] <bakkot>
+ehhhhh no I was definitely planning on proposing this where it's an exception if you call it on an empty list
+
+[11:25:51.0317] <Ashley Claymore>
+https://es.discourse.group/t/array-prototype-winner/1015/
+
+[11:26:10.0531] <bakkot>
+("winner" is a terrible name)
+
+[11:27:05.0384] <Ashley Claymore>
+> <@bakkot:matrix.org> ehhhhh no I was definitely planning on proposing this where it's an exception if you call it on an empty list
+
+Only a weakly help opinion. I'd be curious what other languages do (the ones that can't return a fancy maybe type)
+
+[11:27:25.0224] <Ashley Claymore>
+> <@bakkot:matrix.org> ehhhhh no I was definitely planning on proposing this where it's an exception if you call it on an empty list
+
+ * Only a weakly held opinion. I'd be curious what other languages do (the ones that can't return a fancy maybe type)
+
+[11:28:54.0922] <Ashley Claymore>
+Passing an initial value to reduce to avoid the throw is annoying because you can't easily pass `undefined` as that will get passed as an argument, so now need to handle that extra case on the comparator 
+
+[11:29:06.0643] <eemeli>
+You can avoid this by passing a sentinel value as the second argument, e.g. `{ age: -Infinity }` in the example case.
+
+[11:29:32.0529] <Ashley Claymore>
+Sure, now do that with a complex type with more than one prop :)
+
+[11:31:06.0673] <Ashley Claymore>
+Returning undefined I can always `?? error()` to get back to the exception behavior. Going from exception to undefined is more work 
+
+[11:32:11.0687] <eemeli>
+```
+people.reduce((acc, person) => person.age > acc?.age ?? -Infinity ? person : acc, null)
+```
+
+[11:32:47.0121] <bakkot>
+python's `max` has an optional `default` argument to use in case of empty list, and throws if the list is empty and no default is provided
+
+[11:32:51.0212] <bakkot>
+which seems pretty reasonable
+
+[11:33:27.0120] <bakkot>
+other languages return fancy maybe types
+
+[11:33:39.0244] <bakkot>
+https://docs.oracle.com/javase/8/docs/api/java/util/stream/Stream.html#max-java.util.Comparator-
+
+[11:34:17.0291] <bakkot>
+https://docs.rs/itertools/latest/itertools/fn.max.html
+
+[11:34:30.0248] <Ashley Claymore>
+a default that is only used for empty sounds good, that isn't passed to the comparator 
+
+[11:35:31.0253] <Michael Ficarra>
+god this language could've been so much better if we had a built-in Maybe in the early days
+
+[11:35:55.0174] <eemeli>
+Or allowed any breaking changes ever.
+
+[11:35:56.0104] <Ashley Claymore>
+And monoid protocols
+
+[13:05:43.0103] <JaseW>
+> <@aclaymore:matrix.org> Only a weakly help opinion. I'd be curious what other languages do (the ones that can't return a fancy maybe type)
+
+So Rust has both `max` and `max_by` methods on iterators where the later takes a comparator function and the former only works with values that implement “Order”, so mainly numbers etc 
+
+In Rust’s case they return an Option type then None if the list is empty, so `undefined` in the js equivalent.
+
+https://doc.rust-lang.org/std/iter/trait.Iterator.html#method.max_by
+
+[13:06:23.0545] <JaseW>
+> <@aclaymore:matrix.org> Only a weakly help opinion. I'd be curious what other languages do (the ones that can't return a fancy maybe type)
+
+* So Rust has both `max` and `max_by` methods on iterators where the later takes a comparator function and the former only works with values that implement “Order”, so mainly numbers etc 
+
+In Rust’s case they return an Option type then None if the list is empty, so `undefined` in the js equivalent.
+
+https://doc.rust-lang.org/std/iter/trait.Iterator.html#method.max_by
+
+That being said, option is a fancy return type, so doesn’t help here. But I do like the max and max_by names better.
+
+[13:06:51.0543] <JaseW>
+> <@aclaymore:matrix.org> Only a weakly help opinion. I'd be curious what other languages do (the ones that can't return a fancy maybe type)
+
+* So Rust has both `max` and `max_by` methods on iterators where the later takes a comparator function and the former only works with values that implement “Order”, so mainly numbers etc 
+
+In Rust’s case they return an Option type then None if the list is empty, so `undefined` in the js equivalent.
+
+https://doc.rust-lang.org/std/iter/trait.Iterator.html#method.max_by
+
+That being said, Option is a fancy return type, so doesn’t help here. But I do like the max and max_by names better.
+
+[13:09:40.0892] <Ashley Claymore>
+Maybe empty vs unaryarrays are the true JS option type, as you can't `null.map`.
+I tried that in a codebase once when I was in my wild youth phase 
+
+[13:09:52.0007] <Ashley Claymore>
+* Maybe empty vs unary arrays are the true JS option type, as you can't `null.map`.
+I tried that in a codebase once when I was in my wild youth phase 
+
+[13:23:59.0270] <bakkot>
+`max` and `max_by` are the right names but rust has them exactly backwards :(
+
+[13:24:35.0119] <bakkot>
+`sort` takes a comparator, `sortBy` would take a `T -> number`
+
+[13:24:39.0775] <bakkot>
+ditto max and maxBy
+
+[13:24:55.0682] <bakkot>
+* ditto `max` and `maxBy`
+
+[13:25:10.0054] <bakkot>
+I guess the `T -> number` one is called `max_by_key`
+
+[13:25:39.0362] <bakkot>
+* I guess the `T -> number` one is called `max_by_key` in rust
+
+[13:26:09.0163] <bakkot>
+but yeah I think the natural naming is `max` taking an optional comparator and `maxBy` taking a mandatory `T -> number`
+
+[15:41:38.0096] <TabAtkins>
+This is it, yes. Both variants are needed, and this is the right naming/assignment.
+
+[15:46:36.0516] <Michael Ficarra>
+@bakkot:matrix.org throwing or returning a special value for empty iterators?
+
+[16:02:01.0696] <bakkot>
+Michael Ficarra throwing but with an optional second `default` argument to return in that case, like python does
+
+[16:03:06.0568] <bakkot>
+though I guess that's annoying in the specific case that you want to use the default comparator but provide a default
+
+[16:03:10.0822] <bakkot>
+oh well I guess
+
+[16:03:18.0628] <Michael Ficarra>
+yeah I think that's what I would do as well
+
+[16:03:33.0694] <Michael Ficarra>
+still not 100% convinced it's needed, but if we do have it, that's how I would do it
+
+[16:06:49.0157] <Michael Ficarra>
+I definitely want `unique`/`uniqueBy` more
+
+[16:07:58.0061] <bakkot>
+I forget: given that we have no array prototype methods, how would those work? on iterator.prototype but returning array?
+
+[16:08:41.0037] <bakkot>
+I guess they could return an iterator, ok
+
+[16:09:08.0618] <bakkot>
+just kind of weird to have an iterator that uses O(all previous items) memory
+
+[16:31:24.0875] <Michael Ficarra>
+yeah that was the feedback I got at the last presentation
+
+[16:31:38.0806] <Michael Ficarra>
+it's weird but I don't think it's *surprising* if you consider for even a second what it's doing
+
+[16:32:50.0440] <Michael Ficarra>
+and I don't think that's fatal to the proposal
+
