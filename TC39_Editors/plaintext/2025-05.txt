@@ -156,3 +156,156 @@ especially if you ignore those passed to CreateBuiltInFunction
 [07:23:46.0794] <bakkot>
 I definitely do not want to treat them all as returning completions; I don't see any reason to do that
 
+
+2025-05-14
+[08:09:56.0531] <bakkot>
+https://github.com/tc39/proposal-idl/issues/7
+
+[09:27:07.0572] <Michael Ficarra>
+wow that seems *really* messy
+
+[09:27:20.0455] <Michael Ficarra>
+exceptions on top of exceptions
+
+[09:27:40.0867] <Michael Ficarra>
+when so many things have a special 1-off attribute, is it really helpful?
+
+[09:55:18.0771] <bakkot>
+I'm thinking there might be a middle ground, because most of the 1-off things are things we don't really want to do in the future
+
+[09:55:34.0395] <bakkot>
+so possibly we could just enumerate those ones and then do the rest with IDL
+
+[10:37:34.0319] <shu>
+that doc has 78 pages
+
+[10:37:37.0925] <shu>
+i'm not reading that
+
+[10:40:53.0392] <shu>
+i'd like someone to exec summary that for me
+
+[10:41:23.0528] <bakkot>
+the issue has descriptions of the parts which are most important
+
+[10:51:22.0423] <shu>
+that helps, thanks
+
+[10:51:27.0786] <shu>
+i'm a little skeptical of the "shared infra" parts
+
+[10:51:38.0809] <shu>
+you'd need to write a different bindgen for JS builtins
+
+[15:37:01.0382] <bakkot>
+looks like hte IPR check is broken again
+
+[15:38:22.0686] <bakkot>
+ah, I think because ron used his work email previously and that is no longer associated with his account
+
+[15:38:29.0847] <bakkot>
+we really gotta update the check to only apply to _new_ commits
+
+[16:02:05.0760] <ljharb>
+yes, that's right. i pinged ron to re-add it to his github account.
+
+[16:05:38.0124] <ljharb>
+i added a commit that marks his spec commits as exceptions, so nothing's blocked
+
+[16:06:07.0718] <Michael Ficarra>
+he probably can't re-add it if he doesn't have access to that email account anymore
+
+[16:06:38.0178] <ljharb>
+i think you still can add it, you just can't verify it
+
+[16:06:57.0093] <ljharb>
+(but this is yet another reminder of why work emails should never be used as the primary address for open source work)
+
+[16:07:55.0452] <Michael Ficarra>
+lmao
+
+[16:42:47.0229] <Michael Ficarra>
+hmm in some of the ACs that get passed to GeneratorStart, we return `ReturnCompletion(*undefined*)`, but we can also return `NormalCompletion(~unused~)` for the same behaviour
+
+[16:43:07.0689] <Michael Ficarra>
+is there a reason we would use a `ReturnCompletion` when the value is `*undefined*`?
+
+[16:43:22.0857] <Michael Ficarra>
+it seems like we should only use it when the value *isn't* `*undefined*`
+
+
+2025-05-15
+[17:14:47.0887] <bakkot>
+didn't we talk about this at some length?
+
+[17:16:04.0738] <bakkot>
+returning NormalCompletion is basically saying this is the "fall off the end of the function body without hitting a return" case
+
+[17:16:17.0647] <bakkot>
+returning ReturnCompletion is basically ending with an explicit `return`
+
+[17:16:24.0915] <bakkot>
+the latter is clearer
+
+[17:17:37.0613] <bakkot>
+the only reason we even support the NormalCompletion case in the machinery is to deal with implicit returns in syntactic generators, so it's weird to rely on it for non-syntactic generators which do not have implicit returns
+
+[17:18:27.0752] <jmdyck>
+3457 changed one `ReturnCompletion(*undefined*)` to `NormalCompletion(~unused~)`
+
+[17:19:19.0297] <bakkot>
+that's not inside of an AC though
+
+[17:21:07.0798] <bakkot>
+I guess it is fair to say that we could have built-in generators match non-generators by never returning a return completion
+
+[17:21:42.0696] <bakkot>
+but the machinery which consumes those completions is pretty different so I'm not sure that symmetry makes sense
+
+[17:24:47.0166] <bakkot>
+in particular, the machinery which consumes completions for built-in functions (https://tc39.es/ecma262/multipage/ordinary-and-exotic-objects-behaviours.html#sec-built-in-function-objects-call-thisargument-argumentslist) is not the same as the machinery which consumes completions for ES functions (https://tc39.es/ecma262/multipage/ordinary-and-exotic-objects-behaviours.html#sec-ecmascript-function-objects-call-thisargument-argumentslist), whereas for generators it's the same machinery in either case (https://tc39.es/ecma262/multipage/control-abstraction-objects.html#sec-generatorstart)
+
+[17:40:17.0109] <Michael Ficarra>
+alright, well leave your opinion on the PR then
+
+[17:40:34.0964] <Michael Ficarra>
+I've opened a few PRs related to completion records and ACs as discussed at editor call: https://github.com/tc39/ecma262/pulls?q=sort%3Aupdated-desc+is%3Apr+is%3Aopen+author%3Amichaelficarra
+
+[17:54:34.0291] <bakkot>
+hm so I think some of the generator stuff might be broken actually
+
+[17:55:34.0470] <bakkot>
+ah, wait, nevermind it's fine, just kind of weird
+
+[17:56:03.0638] <bakkot>
+GeneratorStart does Evaluation of a FunctionBody parse node, which I was thinking should be https://tc39.es/ecma262/multipage/ecmascript-language-functions-and-classes.html#sec-runtime-semantics-evaluatefunctionbody but it's actually not
+
+[17:57:25.0695] <bakkot>
+it just falls through to Evaluation of the FunctionStatementList
+
+[17:57:33.0770] <bakkot>
+which is also how EvaluateFunctionBody works: https://tc39.es/ecma262/multipage/ecmascript-language-functions-and-classes.html#sec-runtime-semantics-evaluatefunctionbody
+
+[18:10:36.0261] <bakkot>
+ok, so, we have four kinds of function: ordinary/async/generator/async+generator
+
+[18:10:49.0147] <bakkot>
+for each of these, we have to handle throw completions, return completions, and normal completions
+
+[18:20:28.0122] <bakkot>
+right now, evaluating any of them produces either a throw completion or a return completion.
+
+for ordinary functions this is handled by translating normal completions to `ReturnCompletion(*undefined*)` in EvaluateFunctionBody: https://tc39.es/ecma262/multipage/ecmascript-language-functions-and-classes.html#sec-runtime-semantics-evaluatefunctionbody
+
+the others explicitly return a return completion holding the promise (for async functions) or generator object (otherwise).
+
+Then [[Call]] handles the two cases (throw completion and return completion) explicitly https://tc39.es/ecma262/multipage/ordinary-and-exotic-objects-behaviours.html#sec-ecmascript-function-objects-call-thisargument-argumentslist.
+
+I am tempted to say that instead EvaluateFunctionBody should translate return completions into normal completions, so that evaluating the other bodies can return a normal completion. this is what the async generator machinery does, in AsyncGeneratorStart step 4.i https://tc39.es/ecma262/multipage/control-abstraction-objects.html#sec-asyncgeneratorstart
+
+[18:21:04.0242] <Michael Ficarra>
+@bakkot:matrix.org here's your answer to the desired semantics for compound assignment https://github.com/tc39/test262/pull/4459/files#diff-02f5df894e79077a1cab224a19f7489864719a2fcf3e821674c4eaa06a099159
+
+[18:21:25.0663] <bakkot>
+nice
+

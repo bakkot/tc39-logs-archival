@@ -507,3 +507,68 @@ Aapo Alasuutari Regarding https://github.com/Igalia/webengineshackfest/issues/48
 
 Hoo, interesting. I was not aware of this.
 
+
+2025-05-15
+[20:14:41.0288] <Domenic>
+I guess ES does not really have any "ASCII whitespace tests"? Anyway, people might find the fact that the web platform has multiple definitions of ASCII whitespace interesting. https://github.com/whatwg/infra/issues/670 plus, previously, https://github.com/whatwg/infra/pull/649
+
+[20:42:39.0237] <Meghan Denny>
+there's https://tc39.es/ecma262/#sec-white-space / https://tc39.es/ecma262/#prod-WhiteSpace
+
+[20:47:06.0746] <Domenic>
+Yeah, not ASCII-restricted though
+
+[21:31:57.0678] <ljharb>
+i would assume that anything that `/\s/` matches is considered whitespace. any other definition would be very surprising
+
+[21:47:39.0840] <Richard Gibson>
+well, the behavior of `\s` is based on General Category "Space_Separator" plus select additions and _not_ on property White_Space—as a result, U+0085 NEXT LINE (which has property White_Space) is not matched by it (regardless of flags), while U+FEFF ZERO WIDTH NO-BREAK SPACE (which does not have property White_Space) _is_ matched by it. See also https://github.com/tc39/ecma262/pull/3303 , which was unfortunately closed
+
+[21:54:31.0389] <ljharb>
+i'm just saying that "\s" literally means "whitespace", so regardless of specs or standards or web reality, it'll be surprising if that doesn't hold
+
+[21:54:44.0809] <ljharb>
+unicode nonsense doesn't change that either way :-)
+
+[21:54:49.0843] <Domenic>
+ASCII whitespace is a useful thing to have in specs when attempting to parse data formats, etc. JSON has its own definition (which does not match JS's `\s` or `White_Space`).
+
+[21:55:33.0979] <ljharb>
+sure, JSON is its own unique thing. we changed JS a number of years ago to include 2 more newline characters so it'd match JSON, as i recall
+
+[21:56:03.0594] <ljharb>
+i think that regardless of what the current reality is, we should be striving to make there be a single definition of "whitespace", and for all things to match it
+
+[21:57:10.0504] <ljharb>
+in particular, at least, i hope nobody would ever add an *additional* definition of "whitespace" :-)
+
+[21:57:11.0793] <Domenic>
+I don't agree; I think it's useful for there to be separate definitions for whitespace and ASCII whitespace.
+
+[21:57:29.0792] <Domenic>
+This is similar to how both lowercasing and ASCII lowercasing are useful operations, for example.
+
+[21:57:37.0272] <ljharb>
+if the latter is a subset of the former, it might be fine, sure
+
+[21:58:12.0925] <ljharb>
+i'm saying the ideal is one definition; more than one is fine, but we should be striving to minimize that. if we end up with two that's pretty decent.
+
+[22:00:45.0610] <bakkot>
+the base64 proposal is the first place to my knowledge that introduces "ASCII whitespace" to JS https://tc39.es/proposal-arraybuffer-base64/spec/#sec-skipasciiwhitespace
+
+[22:01:02.0822] <bakkot>
+it does not include vertical tab
+
+[22:01:49.0619] <bakkot>
+it does include form feed
+
+[22:02:46.0625] <bakkot>
+this matches the infra definition, which is probably where I copied it from
+
+[22:07:17.0111] <bakkot>
+ah, yes, because that's what btoa uses https://infra.spec.whatwg.org/#forgiving-base64-decode
+
+[22:08:20.0509] <bakkot>
+including excluding vertical tab https://github.com/tc39/proposal-arraybuffer-base64/issues/5#issuecomment-1783929861
+
