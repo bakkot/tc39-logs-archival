@@ -92,3 +92,62 @@ I think it's a similar problem raised in the above ResizeObserver scenario.
 
 There's no good way to currently link these things in user land, especially if the changes came from different parts of an application.
 
+
+2025-05-19
+[09:41:11.0448] <James M Snell>
+Looking over the slides for next weeks discussion around AsyncContext... in particular Mozilla's objections, and specifically the concerns over the niche use case. I wanted to ask if it would be helpful at all for me to discuss the way that the Workers runtime itself is making use of async context propagation for tracing and diagnostics independent of any frameworks and third-party libraries?
+
+[09:42:58.0973] <nicolo-ribaudo>
+I think browsers need to hear about _browser_ use cases, and hopefully they were satisfied with the answer about use cases we gave last time (even though I'd like them to confirm at this meeting that that answer was satisfying). I think the main problem now is the implementation complexity 
+
+[09:43:37.0411] <James M Snell>
+Fair, ok, that's what I was thinking but wanted to at least ask
+
+[09:47:43.0399] <Chengzhong Wu>
+IIRC, CF Workers implements some browser web APIs (as what WinterTC covers). Maybe you'd have thoughts about how the web APIs listed in the slides are implemented with AsyncContext/AsyncLocalStorage on CF Workers? 
+
+[09:47:57.0622] <Chengzhong Wu>
+* IIRC, CF Workers implement some browser web APIs (as what WinterTC covers). Maybe you'd have thoughts about how the web APIs listed in the slides are implemented with AsyncContext/AsyncLocalStorage on CF Workers? 
+
+[09:51:02.0505] <James M Snell>
+yes we do. Currently we don't do anything special for some of the more complicated cases. On `setTimeout`, `setInterval`, and `queueMicrotask` we capture the current context and propagate it, as well as in any promise-based apis. But for the higher level apis like `EventTarget`, streams, etc we have been intentionally waiting on see how this conversation in the committee plays out
+
+[09:51:38.0127] <James M Snell>
+fortunately for us we are not heavily dependent on `EventTarget` and we haven't hit many cases with other standard apis where it matters much
+
+[09:51:55.0674] <James M Snell>
+oh... we also capture and restore the context for unhandled promise rejections
+
+[09:52:08.0480] <Andreu Botella>
+For what is worth, I think although WinterTC includes events and EventTarget, the only specific events it includes are `error`/`unhandledrejection`/`rejectionhandled`
+
+[09:52:36.0848] <Andreu Botella>
+well, and AbortSignal's abort event, which doesn't need propagation because it's fired synchronously
+
+[09:53:53.0089] <James M Snell>
+for `UnderlyingSink` and `UnderlyingSource` in streams, it is possible to polyfill using `AsyncContext.snapshot` (I've done similar with `AsyncLocalStorage`).  It's not all that difficult to get close to exactly what you want there
+
+[09:55:17.0524] <James M Snell>
+the most difficult cases -- in terms of ambiguity -- are the EventTarget cases where it is just not clear when an event is triggered whether you want to propagate the context active when the event is dispatched or the context active when the listener was registered, but even that is possible to work around
+
+[09:59:05.0023] <Andreu Botella>
+No, for streams you also have an ambiguity between the context in which the stream is created and the context which causes e.g. the `pull` method to be called
+
+[09:59:16.0611] <Andreu Botella>
+* No, for streams you also have an ambiguity between the context in which the stream is created and the context from which the stream is read which causes e.g. the `pull` method to be called
+
+[09:59:35.0713] <Andreu Botella>
+and I think this should be clearer in the slides
+
+[10:02:27.0554] <Andreu Botella>
+if you implement things exactly according to the spec, the context in which `pull` would be called wouldn't be the one in which the ReadableStream is constructed. I think if the previous pull has already resolved, it would be the context from which you read from the reader
+
+[10:03:17.0897] <Andreu Botella>
+but now that I'm thinking through this, I realize that the interaction with fetch and anything else that consumes or produces a stream browser/runtime-internally would not be as easy to implement
+
+[10:03:17.0944] <James M Snell>
+Yeah, true. I haven't encountered this being an issue in the wild *yet* but it certainly is a valid concern
+
+[10:03:49.0247] <Andreu Botella>
+* but now that I'm thinking through this, I realize that the interaction with fetch and anything else that consumes or produces a stream browser/runtime-internally might not be as easy to implement
+

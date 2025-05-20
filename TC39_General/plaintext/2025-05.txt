@@ -623,3 +623,153 @@ that would make sense
 [01:40:11.0953] <rkirsling>
 Python picked a weird horse in that race
 
+[06:02:28.0782] <TabAtkins>
+Given the limited power of lambdas in Python, I think they made the right one for them
+
+[07:27:57.0880] <rkirsling>
+ah I'd always viewed it as "they made lambdas intentionally cumbersome such that comprehensions would become 'the one obvious way to do it'"
+
+[07:28:16.0490] <rkirsling>
+not sure if that's a post-hoc rationalization though
+
+[07:28:53.0860] <rkirsling>
+* ah I'd always viewed it as "they made lambdas intentionally cumbersome such that comprehensions would be 'the one obvious way to do it'"
+
+[07:29:35.0441] <jmdyck>
+I think Python lambdas long predate comprehensions.
+
+[07:32:44.0358] <rkirsling>
+I think either not existing must be prior to Python's popularity but I don't see a justification for making lambdas deliberately hard to use otherwise
+
+[07:32:54.0307] <jmdyck>
+lambdas were 1.0, comprehensions were 2.0
+
+[07:33:03.0142] <annevk>
+Whenever I write Python I tend to avoid lambdas and comprehensions, though I won't rewrite them away after some copypasta. Certainly aspects of the language I like less. (Though the 2 to 3 switch I still dislike the most of all things Python ever did.)
+
+[09:16:03.0578] <James M Snell>
+Hey all... trying to decide if a new proposal is worthwhile... Node.js recently received a request to add APIs to the `Buffer` interface that would allow a `Buffer` to maintain an internal position for relative writes.. for instance, the following code:
+
+```
+const buf = Buffer.alloc(10);
+let pos = 0;
+buf.writeInt8(1, pos++);
+buf.writeInt8(2, pos++);
+// ..
+```
+
+would become
+
+```
+const buf = Buffer.alloc(10);
+buf.writeInt8(1);
+buf.writeInt8(2);
+// ..
+```
+
+Or something similar, with the `pos` identifying the offset being held by an internal slot.
+
+There is, however, a preference within Node.js to avoid adding further to the `Buffer` API and we would instead prefer to see a mechanism added to the standard `DataView` for this purpose. The proposal would be to add a new `[[WriteOffset]]` internal slot and variations on the `setXXXXX` and `getXXXX` APIs that make use of it... for instance:
+
+```
+const dv = new DataView(new ArrayBuffer(10));
+dv.writeInt8(1);
+dv.writeInt8(2);
+// ...
+```
+
+
+
+[09:16:34.0913] <James M Snell>
+This idea is that by building this into `DataView`, user code could avoid potentially buggy bookkeeping around the position
+
+[09:16:54.0280] <James M Snell>
+But it's certainly not clear if there's enough motivation to formulate a full proposal
+
+[09:30:24.0249] <ljharb>
+i don't think it would be a good idea to add statefulness anywhere, personally
+
+[09:30:32.0880] <ljharb>
+the `pos++` code seems pretty simple as it is
+
+[09:32:43.0845] <James M Snell>
+it becomes a bit awkward and error prone when writing multiple values of different sizes but I share the concern about the statefulness. 
+
+[09:34:49.0408] <James M Snell>
+fwiw, here's the relevant issue in Node.js https://github.com/nodejs/node/issues/58348
+
+[10:17:03.0943] <Michael Ficarra>
+I was just gonna say "this sounds like they were inspired by Java's ByteBuffer", then I open the issue and that's exactly what they said
+
+[10:23:11.0708] <Michael Ficarra>
+I'd say they should use DataView and if they're concerned about the bookkeeping being messy, they should separate their business logic from the code that's responsible for serialisation to a bytestring so they're not interleaved
+
+[10:28:46.0317] <Aapo Alasuutari>
+This seems like it'd be awkward to fit onto the DataView API; either you'd have new APIs that move the cursor, or have some mode that makes the cursor move when the existing write APIs are called... At index 0? No, I guess new APIs are the only choice.
+
+[10:30:07.0012] <Aapo Alasuutari>
+8 bytes more memory on DataView isn't too horrible, it's a rare object after all, but I guess the non-interaction between the cursor and the existing APIs would be somewhat weird.
+
+[10:36:19.0320] <nicolo-ribaudo>
+That seems similar to how RegExp has .lastIndex, do we consider it something good or a mistake?
+
+[10:39:02.0716] <bakkot>
+I definitely consider it a mistake
+
+[10:39:22.0832] <bakkot>
+but a wrapper class which took a regexp and also kept an index would be fine
+
+[10:40:08.0553] <bakkot>
+similarly, I don't think DataView should have an offset, but I would be fine with having a different class which kept an offset
+
+[10:41:09.0758] <shu>
+we shouldn't retrofit DataView
+
+[10:41:17.0761] <bakkot>
+> Claude, please write me a wrapper for DataView in JS which keeps an internal offset which is updated when calling read/write methods, like Java's ByteBuffer. Also add a method for reading/writing TypedArrays (writing should use a wrapper TypedArray, with appropriate offsets, so that you can `.set`  the entire argument instead of needing to write individual values).
+
+https://gist.github.com/bakkot/6726adcf9ed361790d1063b41dbf4148
+
+[10:41:30.0512] <shu>
+this seems perfectly fine to be done in userland?
+
+[10:41:39.0979] <shu>
+not sure why it warrants a built-in
+
+[10:41:43.0641] <bakkot>
+that said I don't think this is worth adding to the language; the current state of things is fine and it's not hard to do
+
+[10:43:12.0319] <shu>
+not even done in userland, actually, Node can ship a thing if it thinks it's useful
+
+[10:43:28.0013] <shu>
+(unless it also doesn't want to do so unilaterally anymore due to other server runtimes. not sure what the situation is)
+
+[11:21:31.0858] <kriskowal>
+DataViewWithCursor is certainly useful and I’ve written one at least twice, for whichever methods the format demanded, most notably Zip. Same taste as bakkot for read/write methods, plus `seek` to rhyme with files. Agree with shu it’s not particularly important for it to be in the language. Not particularly important that it be omitted. There’s an async analogue (`File`) if it’s backed by I/O.
+
+[11:26:52.0503] <James M Snell>
+> <@shuyuguo:matrix.org> (unless it also doesn't want to do so unilaterally anymore due to other server runtimes. not sure what the situation is)
+
+The preference is to avoid new node specific apis when they likely overlap with standard options. We have been slowly trying to deemphasize use of Buffer, for instance
+
+[11:27:34.0703] <James M Snell>
+This could also be a web platform API consideration
+
+[11:27:52.0166] <James M Snell>
+That is, we could ask whatwg to consider a standard API here
+
+[11:29:03.0068] <shu>
+it also doesn't feel like a web api
+
+[11:30:12.0129] <James M Snell>
+Ok, I'll take this as a sign that a proposal is unlikely to advance ;-) ... appreciate the feedback all
+
+[11:30:29.0849] <shu>
+yeah, my read on the feedback for "overlap with standard options" you're getting in this room is "unlikely to overlap, because people don't think it's worth adding to the language"
+
+
+2025-05-20
+[22:51:23.0771] <Stephen Belanger>
+Maybe a new wrapper type specifically for writing, which holds the cursor data internally? The ArrayBuffer family of things already makes use of wrapper types, so it seems natural to me. 🤔
+
