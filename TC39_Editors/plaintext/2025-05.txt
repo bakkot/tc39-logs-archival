@@ -326,3 +326,129 @@ I mean, it's in the help modal...
 [11:03:21.0057] <bakkot>
 no one randomly hits the help button
 
+
+2025-05-20
+[09:43:38.0543] <Michael Ficarra>
+module namespace exotic objects should define their `[[SetPrototypeOf]]` as the immutable prototype exotic object `[[SetPrototypeOf]]` so that they're considered immutable prototype exotic objects
+
+[09:49:32.0051] <Michael Ficarra>
+I'll send a PR
+
+[10:00:57.0119] <bakkot>
+... but why
+
+[10:00:59.0113] <bakkot>
+you will also need to update the note:
+
+> Unlike other exotic objects, there is not a dedicated creation abstract operation provided for immutable prototype exotic objects. This is because they are only used by %Object.prototype% and by host environments
+
+[10:05:23.0169] <Michael Ficarra>
+yeah there will be a couple places to update
+
+[11:01:31.0819] <shu>
+why are you doing this?
+
+[11:04:22.0719] <shu>
+i'm not sure what value immutable prototype exotic objects provide, other than as a shorthand for "it's like a normal object, except [[SetPrototypeOf]] is overridden"
+
+[11:04:35.0823] <shu>
+and your proposed change would make it also lose that notion
+
+[11:04:47.0166] <shu>
+since module namespace exotic objects override the other internal methods itself
+
+[12:05:48.0535] <ljharb>
+is there any reason https://tc39.es/ecma262/2025/#sec-createiteratorfromclosure requires generatorPrototype to be an Object, vs "an Object or null"? (or is the reason just, we don't send it null ever)
+
+[12:07:04.0306] <shu>
+not that i recall, but having the narrowest type for how it's used is something we generally do, yes
+
+[12:08:41.0874] <shu>
+for this particular AO, creating a generator object with a null prototype seems like it'd always be an error, no?
+
+[12:40:47.0950] <Michael Ficarra>
+it just means "[[SetPrototypeOf]]" has this special behaviour, which is also true of module namespace exotic objects
+
+[12:41:27.0440] <Michael Ficarra>
+if you asked anyone whether module namespace exotic objects were immutable prototype exotic objects, they would say yes, but due to a technicality in the way we specified it, it's not actually the case
+
+[12:42:18.0123] <Michael Ficarra>
+because it's not "the same" definition, even though it's defined using the same steps
+
+[13:29:24.0733] <shu>
+i think the answer "anyone" would respond with is "what are immutable prototype exotic objects"?
+
+[13:29:28.0680] <shu>
+* i think the answer "anyone" would respond with is "what are immutable prototype exotic objects?"
+
+[13:34:35.0593] <bakkot>
+as one of the very few people in the world who actually does have familiarity with the term, I would have told you it refers to Object.prototype, and possibly the HTML windowproxy
+
+[13:35:00.0599] <bakkot>
+namespace exotic objects have immutable prototypes but "immutable prototype exotic object" means Object.prototype to me
+
+[13:56:39.0808] <shu>
+if anything i'd rather we remove the concept of "immutable prototype exotic object" at all
+
+[14:07:21.0330] <Michael Ficarra>
+> An object is an immutable prototype exotic object if its [[SetPrototypeOf]] internal method uses the following implementation. Its other essential internal methods may use any implementation, depending on the specific immutable prototype exotic object in question.
+
+[14:07:25.0327] <Michael Ficarra>
+it doesn't get much more clear than that
+
+[14:07:51.0265] <Michael Ficarra>
+that should apply to module namespace exotic objects
+
+[14:08:16.0463] <Michael Ficarra>
+PR is here: https://github.com/tc39/ecma262/pull/3611
+
+[14:18:57.0636] <shu>
+it does get clearer: you don't need to think of them as a special object
+
+[14:19:08.0239] <shu>
+you just think of them as having a certain implementation of [[SetPrototypeOf]]
+
+[14:19:22.0592] <shu>
+i don't see what we get out of assigning a term to objects with that certain implementation
+
+[14:20:14.0089] <shu>
+like, the information you're trying to communicate is "[[SetPrototypeOf]] has this behavior". why not communicate that directly instead indirectly by first defining "the set of objects with [[SetPrototypeOf]] with that behavior is called X"?
+
+[14:23:18.0953] <shu>
+* like, the information you're trying to communicate is "\[\[SetPrototypeOf\]\] has this behavior". why not communicate that directly instead of indirectly by first defining "the set of objects with \[\[SetPrototypeOf\]\] with that behavior is called X"?
+
+[15:12:10.0357] <Michael Ficarra>
+with the PR we do both
+
+[15:12:31.0498] <Michael Ficarra>
+we link to the implementation and we give those kinds of objects a name
+
+[16:01:01.0923] <shu>
+i am questioning the value of giving those kinds of objects a name
+
+[16:02:32.0779] <Michael Ficarra>
+given that we already do, we should use it for all the things it describes
+
+[16:02:53.0039] <Michael Ficarra>
+it's in a very weird state right now where the term applies to only some of the things that have the property
+
+[16:03:24.0358] <Michael Ficarra>
+I would make this change and then consider the usefulness of the term later
+
+[16:03:38.0552] <Michael Ficarra>
+but I think the term is probably something that at least the committee finds useful
+
+[16:03:52.0317] <shu>
+i have doubts about that the status quo is really that desirable
+
+
+2025-05-21
+[21:00:49.0139] <ljharb>
+multiple delegates have expressed interest in making immutable prototype exotic objects a user-exposed thing
+
+[21:22:34.0262] <bakkot>
+I am interested in exposing the capability to freeze prototypes of objects without freezing the object entirely
+
+[21:22:53.0705] <bakkot>
+but I would not have the resulting things be called "immutable prototype exotic objects"
+
