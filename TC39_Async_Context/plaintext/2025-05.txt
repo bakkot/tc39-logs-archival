@@ -151,3 +151,47 @@ Yeah, true. I haven't encountered this being an issue in the wild *yet* but it c
 [10:03:49.0247] <Andreu Botella>
 * but now that I'm thinking through this, I realize that the interaction with fetch and anything else that consumes or produces a stream browser/runtime-internally might not be as easy to implement
 
+
+2025-05-28
+[04:23:32.0021] <nicolo-ribaudo>
+Monkey-patching for postMessage the way it's used as a scheduler would be something like this:
+```js
+class MessageChannel extends globalThis.MessageChannel {
+  constructor(...args) {
+    super(...args);
+    this.port1.__channel = this;
+    this.port2.__channel = this;
+    patch(this.port1);
+    patch(this.port2);
+  }
+}
+```
+where `patch` wraps `onmessage`/`addEventListener` to get a registration-time snapshot, or as an alternative to store the `.postMessage`-time snapshot on this.__channel and run the event callback in it.
+
+[04:23:53.0556] <nicolo-ribaudo>
+(I think that this is bad code, but it's _possible_)
+
+[04:24:30.0075] <nicolo-ribaudo>
+And if the code patching is the same as the code needing the patch, it can just call `.wrap` instead (e.g. for React)
+
+[05:09:22.0954] <Andreu Botella>
+for MessageChannel, yes, but there's postMessage on window as well
+
+[05:16:46.0573] <Michal Mocny>
+Hey folks-- great presentation today.  Thanks for the invite.
+
+[05:17:26.0165] <Andreu Botella>
+thank you for attending and providing your use cases!
+
+[05:17:51.0595] <Michal Mocny>
+Well I didn't provide use cases today but I was prepared to :P Seems we didn't need more support in the room, though
+
+[05:18:43.0024] <Andreu Botella>
+right 😅
+
+[05:18:56.0035] <Andreu Botella>
+I'm not too cogent after these long discussions
+
+[07:54:39.0766] <Steve Hicks>
+I'm not sure this does work - if you want to get dispatch-time snapshotting, you need to mutate the message to refer to the right snapshot, but AIUI you can't know whether one of the ports has been transferred to another agent - if so, then the patching won't work and the mutation is wrong.
+

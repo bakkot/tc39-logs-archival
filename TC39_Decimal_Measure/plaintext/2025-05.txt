@@ -210,3 +210,308 @@ import plurals from 'make-plural'
 Object.entries(plurals).filter(([lc, fn]) => fn('1.1') !== fn('1.10'))
 ```
 
+[07:43:15.0466] <Jesse (🇪🇸)>
+ok we presented our case again
+
+[07:43:30.0214] <Jesse (🇪🇸)>
+congrats on getting preserve-trailling-zeroes to stage 1
+
+[07:43:31.0133] <Jesse (🇪🇸)>
+!
+
+[07:44:24.0903] <Jesse (🇪🇸)>
+it seems that there's some non-trivial interest in having a polymorphic amount
+
+[07:45:39.0642] <Jesse (🇪🇸)>
+one thing that I'd like to see are arguments for that, different from the (reasonable, understandable, valid) desire to have a numeric notion that can handle all "numerics"
+
+[07:45:58.0394] <Jesse (🇪🇸)>
+* one thing that I'd like to see are arguments for that, different from the (reasonable, understandable, valid) desire to have a notion of amount that can handle all "numerics"
+
+[07:46:45.0438] <Jesse (🇪🇸)>
+I thought that we walked back from the idea of supporting bigints (at least, bigints with more than 34 significant digits)
+
+[07:47:09.0761] <Jesse (🇪🇸)>
+IIRC the main motivation for that was cryptocurrency
+
+[07:47:38.0564] <sffc>
+That's not the conclusion I drew
+
+[07:48:20.0218] <ljharb>
+the motivation for me is "if it's not tied to one single numeric type, it should handle them all"
+
+[07:49:22.0712] <Jesse (🇪🇸)>
+I'd be interested to know how much slower a polymorphic amount would be compared to a decimal-backed amount
+
+[07:49:43.0894] <ljharb>
+* the motivation for me is "if it's not tied to one single numeric type, it should handle them all" (to be clear, decimal-only is fine, number-only is fine, but if it's decimal and number i'm going to insist it also include bigint)
+
+[07:49:54.0484] <Jesse (🇪🇸)>
+I mean, surely it's not *faster*, and I can see, without digging into any details, why it would be slower
+
+[07:50:15.0033] <Jesse (🇪🇸)>
+we also generally don't position decimal as something fast
+
+[07:52:03.0086] <Jesse (🇪🇸)>
+(I always hesitate to emphasize this becuase I don't want to be misunderstood as being totally insensitive to performance)
+
+[07:53:00.0863] <eemeli>
+Is performance being proposed as a rationalisation for Amount? I thought that it explicitly was _not_ for Decimal as a whole.
+
+[07:53:35.0650] <sffc>
+Polymorphic Amount is probably not _that much_ slower, but my point is that it's not _free_, and I haven't heard motivation for why we would otherwise prefer Polymorphic Amount over Decimal Amount
+
+[07:54:11.0364] <Jesse (🇪🇸)>
+right, performance isn't being proposed in connection with amount
+
+[07:54:40.0868] <eemeli>
+An Amount supporting all numeric types would not need to be fully polymorphic, like the polyfill it could hold one BigInt and one Number to represent all numeric values.
+
+[07:55:02.0467] <eemeli>
+(bigint for the value, number for the count of fractional digits)
+
+[07:55:47.0398] <Jesse (🇪🇸)>
+ah, a kind of bigdecimal amount?
+
+[07:55:53.0004] <eemeli>
+And then it could have separate `toNumber`, `toDecimal`, and `toBigInt` methods. Which could throw.
+
+[07:55:54.0745] <eemeli>
+Yeah.
+
+[07:57:53.0174] <eemeli>
+In particular considering non-intl use cases, I think supporting the numeric values that we already have in JS with Amount kinda counts.
+
+[07:58:01.0818] <sffc>
+I was in the middle of drafting a message saying that Decimal Amount avoids problems exactly like this
+
+[07:58:51.0486] <eemeli>
+It doesn't really "avoid" the problem, just moves it to happen in the constructor.
+
+
+2025-05-29
+[00:59:31.0104] <Jesse (🇪🇸)>
+the decimal continuatin will be this afternoon (early, not late)
+
+[01:42:19.0998] <Jesse (🇪🇸)>
+here are the continuation topics:
+
+[01:48:30.0349] <Jesse (🇪🇸)>
+not sure what WH has in mind with pi to 72 significant digits; this isn't one of the (many, many) Number values that are exactly representable in base-10 having > 34 significant digits
+
+[01:48:52.0281] <Jesse (🇪🇸)>
+* not sure what WH has in mind with pi to 72 significant digits; this isn't one of the (many, many) Number values that are exactly representable in base-2 and having > 34 significant (decimal) digits
+
+[01:49:41.0798] <Jesse (🇪🇸)>
+I'd love to hear more about use cases for `equals` for amounts
+
+[01:50:13.0235] <Jesse (🇪🇸)>
+it got removed not because of any opposition to it, just ignorance of any concrete need
+
+[01:50:40.0745] <Jesse (🇪🇸)>
+(I added it in the latest version of the Decimal polyfil, fwiw)
+
+[01:52:41.0046] <sffc>
+It confounds me how any value type wouldn't have an equals function. As the most basic use case, I would like the ability to store these in a hash set.
+
+[01:52:42.0986] <Jesse (🇪🇸)>
+MM's question at the top ("Why is amount tied to decimal?") might have been answered by N-ic's email
+
+[01:53:15.0557] <Jesse (🇪🇸)>
+but it might also be another form of "why a monomorphic decimal-backed amount instead of a polymorphic one"
+
+[01:53:17.0836] <nicolo-ribaudo>
+I still have to answer again to Mark
+
+[01:53:54.0318] <Jesse (🇪🇸)>
+sgtm -- that's convincing enough
+
+[01:54:48.0835] <Jesse (🇪🇸)>
+for the exponential notation question, I'm not sure if there's any issue. All the examples we listed use decimal digit strings but we intend to support exponential notation, too
+
+[01:55:02.0457] <sffc>
+The Equals function gets a bit more fraught with Polymorphic Amount (are numerically-equal Number, BigInt, and Decimal Amounts .equals to each other?)
+
+[01:55:08.0118] <Jesse (🇪🇸)>
+right
+
+[01:56:06.0075] <sffc>
+I think that instead of Polymorphic Amount, I like your idea of String Amount. Many of the Polymorphic Amount problems go away.
+
+[01:56:26.0872] <sffc>
+So the question should be Decimal Amount or String Amount.
+
+[01:56:51.0935] <Jesse (🇪🇸)>
+a String-backed amount definitely aligns with the main use cases for amount
+
+[01:57:23.0266] <Jesse (🇪🇸)>
+conversion function (`toDecimal` etc.) might throw but maybe that's not so bad
+
+[01:57:56.0450] <Jesse (🇪🇸)>
+* conversion functions (`toDecimal`, `toBigInt`, `toNumber` etc.) might throw but maybe that's not so bad
+
+[01:58:02.0065] <sffc>
+We can discuss that in an issue but I feel like `toDecimal` could have an options argument that tells it whether to round or throw
+
+[02:00:30.0971] <nicolo-ribaudo>
+If we do string amount, I'd prefer conversions to be cast-like operations, e.g. `Decimal(amount)` and `BigInt(amount)` rather than `amount.toDecimal()` and `amount.toBigInt()`
+
+[02:04:34.0846] <Jesse (🇪🇸)>
+I think E-emli suggested this approach, too?
+
+[02:04:57.0652] <eemeli>
+I would also prefer something like a "string amount". Provided that its `.toString()` was a numeric string, then `new Decimal(amount)`, `BigInt(amount)`, and `Number(amount)` would all work.
+
+[02:05:49.0873] <Jesse (🇪🇸)>
+a String-backed amount also leaves open the possibility of adding new numeric types
+
+[02:05:52.0047] <sffc>
+I don't want to get ahead of ourselves on `.toString()`; I want it to be able to hold a unit annotation
+
+[02:06:03.0686] <sffc>
+Or some other syntax for rationals
+
+[02:06:37.0404] <sffc>
+`"4/3"` or `"1.50[meter]"` might be valid string outputs
+
+[02:06:58.0483] <sffc>
+But not as part of the Decimal proposal
+
+[02:07:10.0959] <sffc>
+We should make it future-proof though
+
+[02:08:05.0952] <Jesse (🇪🇸)>
+the decimal continuation might happen after this talk (!)
+
+[02:09:29.0627] <eemeli>
+As in, before lunch?
+
+[02:09:39.0104] <Jesse (🇪🇸)>
+yes
+
+[02:09:58.0482] <sffc>
+As long as Waldemar and Mark Miller are on the call
+
+[02:10:18.0096] <Jesse (🇪🇸)>
+WH is here but MM isn't (and he might not be here in the early afternoon, either)
+
+[02:10:39.0800] <Jesse (🇪🇸)>
+but there are too many contraints for the late afternoon
+
+[02:10:45.0115] <Jesse (🇪🇸)>
+(that's my understanding from the chairs)
+
+[02:10:55.0378] <sffc>
+We could do a WH continuation now and a MM continuation later (both shorter and therefore easier to fit in)
+
+[02:11:07.0050] <ryzokuken>
+neither expressed a constraint fwiw
+
+[02:11:20.0930] <ryzokuken>
+we have enough constraints explicitly laid out \
+
+[02:11:51.0088] <ryzokuken>
+* we have enough constraints explicitly laid out that it feels a bit harder accommodating implicit constraints
+
+[02:12:06.0013] <sffc>
+Based on the queue, it looks like the WH items are most of what's left
+
+[02:17:31.0929] <sffc>
+In preparing my slides for the meetup talk this evening, I'm reminded that I still don't recall us getting an answer on whether "redefine BigInt" is feasible
+
+[02:18:33.0337] <Jesse (🇪🇸)>
+redefine bigint? was that the idea of extending bigint with a new property indicating a decimal point index?
+
+[02:19:53.0158] <Jesse (🇪🇸)>
+IIRC this was an alternative path towards getting "decimal" as a primitive
+
+[02:21:30.0116] <sffc>
+Yes. If we did that, then that would also be the Amount type, since it is a superset of the others.
+
+[02:22:12.0723] <eemeli>
+Re "the Amount type", do you mean the type of the numerical value within Amount?
+
+[02:22:38.0058] <sffc>
+yes
+
+[02:22:38.0604] <eemeli>
+If so, I agree.
+
+[02:22:52.0454] <sffc>
+* Yes. If we did that, then that would also be the [numeric portion of the] Amount type, since it is a superset of the others.
+
+[02:24:14.0651] <Jesse (🇪🇸)>
+one question would be the data model -- BigInt is an unlimited data type but Decimal128 has bounds
+
+[02:25:11.0377] <Jesse (🇪🇸)>
+I guess Decimal128 wouldn't be the way to go
+
+[02:25:15.0802] <Jesse (🇪🇸)>
+(for this approach)
+
+[02:25:19.0708] <eemeli>
+Yah.
+
+[02:26:04.0518] <sffc>
+"Modified BigInt" is more like "BigDecimal" which is closer to String than Decimal
+
+[02:27:56.0275] <Jesse (🇪🇸)>
+thinking about arithmetic on these values, it's a sort of back-door rational number (but restricted to values that have finite decimal representations)
+
+[02:28:53.0563] <Jesse (🇪🇸)>
+(btw that is definitley doable, and not slow; I'm not raising a performance concern)
+
+[02:28:55.0027] <eemeli>
+Is there any way in which a string-backed Amount could be distinguished from a bigdecimal-backed Amount by a JS user?
+
+[02:29:54.0417] <eemeli>
+(I don't think there is or should be any difference)
+
+[02:30:55.0358] <Jesse (🇪🇸)>
+to my mind nothing sticks out; they seem basically interchangeable
+
+[02:32:15.0403] <sffc>
+That's mostly correct, yes, except that it may prevent us from supporting rationals where a string like `"4/3"` could be a thing we support
+
+[03:01:03.0604] <Jesse (🇪🇸)>
+it seems that we're converging toward a String-backed Amount that would support all "numerics" via cast-like operations suggested by Eemeli and Nic
+
+[03:01:58.0571] <nicolo-ribaudo>
+Note that string amount is not a solution to all problems, as we might need to redefine that for example 1e+1 and 1e1 are the same number but different strings
+
+[03:02:18.0989] <Jesse (🇪🇸)>
+right we'd need to settle on normalization here too
+
+[03:02:51.0569] <Jesse (🇪🇸)>
+decimal does that kind of normalization in the sense that it accepts both of those but outputs only the 1st
+
+[03:05:28.0936] <Richard Gibson>
+I can say with extremely high confidence that redefining bigint is not feasible. It is a primitive type with existing well-defined integer-only semantics, e.g. `4n / 3n === 1n`.
+
+[03:05:42.0699] <sffc>
+No, I would say that we're converging on this being a feasible alternative, not necessarily converging on the preferred approach
+
+[03:07:22.0688] <sffc>
+Just add a new operator and define `/` as integer division. I see this as a papercut to be weighed with other pros and cons but not a fatal flaw
+
+[03:09:30.0704] <Jesse (🇪🇸)>
+for storage, it might be a bit odd to have bigints be either an integer or a decimal
+
+[03:09:50.0326] <Jesse (🇪🇸)>
+even if we could smooth out the ergonomics and surface area
+
+[03:10:11.0839] <sffc>
+bigints already require a heap, so I don't think it's much cost
+
+[03:10:49.0515] <sffc>
+In other words, they are _already_ not particularly efficient in their storage. We're making a slightly-inefficient-and-not-widely-used type into a slightly-more-inefficient-but-more-widely-used type
+
+[03:15:37.0770] <Richard Gibson>
+oh, "just" add a new operator? And it's not only that anyway, there's also existing ecosystem use of bigint for alignment with interoperable data models such as Syrup and CBOR, in which arbitrarily-sized integers constitute a distinct type from arbitrary decimal and/or binary fractions
+
+[03:17:25.0138] <sffc>
+Yes, the data model concerns are something worth discussing, the nature of the issues involved there
+
+[03:17:51.0555] <Richard Gibson>
+to be clear: not only do I have high confidence that redefining bigint is not feasible, but furthermore I am personally inclined to oppose any such attempt
+
