@@ -2468,3 +2468,75 @@ thank you Michael Ficarra 🙏
 [03:48:30.0747] <Rob Palmer>
 The plenary meeting has now fully closed.  There will not be a PM session.
 
+[11:21:05.0304] <James M Snell>
+hey all... a question has come up with regards to ERM in practical use.... the current definition gives no mechanism to determine what *kind* of completion has occurred in the block where the disposers are called. For instance 
+
+[11:22:34.0034] <James M Snell>
+For some kinds of resources, it would be good to know if the completion was normal or exceptional to determine how best to close the resource. For example, let's consider a socket... `{ using sock = connect(...) }` when this block exits, should the socket be closed gracefully or should it be abruptly aborted
+
+[11:24:32.0240] <James M Snell>
+I might want to customize the disposer behavior based on the answer to that question and currently the only way I can do so is to catch any error inside the block, like `{using sock = connect(...); try { ... } catch (err) { sock.hadError(err); } }` or some other similar kind of signal... in which case I just wouldn't use ERM and would call `sock.abort()` directly
+
+[11:28:27.0900] <bakkot>
+Discussed explicitly in  https://github.com/tc39/proposal-explicit-resource-management/issues/234 / https://github.com/tc39/proposal-explicit-resource-management/issues/49
+
+[11:29:13.0163] <bakkot>
+though the way I would do it right now is not with a try/catch but with a `.commit` method which you call at the end of the block; if it's not called you can assume the exit was exceptional (although this does not work if you have an early `return`)
+
+[11:30:12.0260] <James M Snell>
+oh awesome, somehow I managed to completely overlook those two issues :-/ .... thanks for the links!
+
+[11:42:27.0737] <rbuckton>
+I will probably ly transfer that issue (and any other related issues) to the Symbol.enter repo so the discussion can continue in that proposal. 
+
+[11:44:29.0513] <James M Snell>
+And FWIW, in our use cases in workers we really would have no desire for the disposer to suppress an error... for our purposes it mostly just ideal to have access to the error. For instance, if I have something like `using socket = connect(...)` and the block has an exception, it would be ideal to be able to `socket.abort(error)` with the error that was thrown, but as it stands now I have no way of getting to it
+
+[11:44:42.0217] <James M Snell>
+without hacks at least
+
+[12:05:42.0666] <bakkot>
+I liked the idea of passing the error (if any) as an argument to `Symbol.dispose`
+
+[12:05:46.0317] <bakkot>
+I forget what happened to that
+
+[12:06:19.0358] <bakkot>
+it does mean you have to check `arguments.length` to tell apart the case of no error vs throwing `undefined`, but otoh if someone throws `undefined` I think that's their problem
+
+[12:08:31.0413] <James M Snell>
+nothing good can come from throwing undefined lol
+
+[12:24:52.0235] <James M Snell>
+For our case, tho, it really wouldn't matter if they did throw undefined, we would end up passing it to, for instance, `socket.abort(error)` without really worrying too much about the specific thing that was thrown. We more just want to be able to (a) detect that it was, in fact, an exception return and (b) propagate whatever was thrown to the abort
+
+[12:25:31.0659] <James M Snell>
+I can definitely see the use cases for `Symbol.enter`/`Symbol.exit` as being useful but just having the `error` argument passed would be a major improvement
+
+[13:11:15.0846] <bakkot>
+the point about `undefined` is that if you just did `[Symbol.dispose](error) { if (error != null) socket.abort(error) }` then you would think that it didn't throw in the case that someone had thrown `undefined`
+
+[13:11:31.0088] <bakkot>
+so the correct thing to write would be `[Symbol.dispose](error) { if (arguments.length) socket.abort(error) }`
+
+[13:12:18.0170] <James M Snell>
+yep, unless we just kept always assuming disposal was the exception case
+
+[13:13:23.0930] <James M Snell>
+in which case we'd likely just do something like `[Symbol.dispose](error) { if (!socket.closed) socket.abort(error); }`
+
+[13:31:02.0174] <bakkot>
+ah, sure, yeah
+
+[15:39:43.0685] <Steve Hicks>
+Michael Ficarra: You summarized "Pull request #1923, access .value on the final IteratorResult object" - can you please clarify which #1923 that is?  I'm struggling to figure out the context here.  Thanks!
+
+[16:49:18.0048] <Michael Ficarra>
+@stephenhicks:matrix.org I did not write that summary
+
+[16:49:35.0099] <Michael Ficarra>
+I think it's supposed to say #19/#23 though
+
+[16:49:51.0052] <Michael Ficarra>
+I will fix up the notes next week when I'm back at work
+
