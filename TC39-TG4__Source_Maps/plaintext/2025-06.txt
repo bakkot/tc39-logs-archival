@@ -60,3 +60,110 @@ I made a PR https://github.com/bugsnag/sourcemaps.info/pull/6
 [04:37:58.0592] <jkup>
 Repo looks quite old, I'll give it a few weeks and then maybe try to find the owner on socials?
 
+
+2025-06-11
+[01:30:56.0677] <Shumaf Lovpache>
+Hi everyone. My team recently discovered an interesting technique used by React Server components.
+
+The React Server components machinery (in particular [react-client](https://github.com/facebook/react/tree/main/packages/react-client)) creates fake scripts with the same source map as a real user code to preserve source mapped traces in the browser. It allows recreating the top stack frame of the server code on the client preserving mapping to the original source code.
+
+Consider an example ([github repo](https://github.com/Soarex16/next-15-server-components-reproduction-app)):
+
+```js
+export default function Home() {
+  console.log('Home');
+  return <div>
+    <main>
+      <h1>Header</h1>
+      Some text
+    </main>
+    <footer>Footer</footer>
+  </div>;
+}
+```
+
+If you open this example in a browser, it will print to console the following message (first picture)
+And clicking to “page.tsx:3” points to the original source (second picture).
+
+From the user perspective, it’s a really neat feature, but unfortunately, this technique confuses js debuggers ([issue on GH](https://github.com/vercel/next.js/issues/77733)). This happens because debuggers think that this piece of code was bundled in different places multiple times.
+
+So when the user put a breakpoint, the debugger put breakpoints in all these fake scripts causing redundant breaks.
+
+Here is an example of one of the scripts:
+
+```js
+/* This module was rendered by a Server Component. Turn on Source Maps to see the server source. */
+
+({"Home":_=>
+
+        _()})
+
+//# sourceURL=rsc://React/Server/webpack-internal:///(rsc)/./app/page.tsx?0
+
+//# sourceMappingURL=http://localhost:3000/__nextjs_source-map?filename=webpack-internal%3A%2F%2F%2F%28rsc%29%2F.%2Fapp%2Fpage.tsx
+```
+
+We have several options for solving this problem, and all of them require coordination between debuggers and frameworks. Since it affects all major debuggers – Chrome DevTools, WebStorm, VS Code, I’m asking for your feedback as a starting point for discussion with the community.  
+Here they are:
+
+* Use some heuristics (like matching file structure, comments, etc.) to detect fake scripts that don't need breakpoints. This approach is unreliable and can easily break if React changes scripts structure in the future.  
+* Use some comment similar to \# sourceMappingURL to indicate that this file should be skipped by the debugger  
+* For fake scripts generate source maps with some extra field (like ignoreList but for generated code):
+
+```json
+{
+  "version" : 3,
+  "file": "out.js",
+  "ignored": true,
+  rest of the source map ...
+}
+```
+
+[01:49:36.0490] <Simon Zünd>
+Not sure I fully follow, why are the fake scripts needed? Is it because due to the server rendering no JS would actually run on the browser-side?
+
+[01:56:20.0304] <Holger Benl>
+If I understand correctly, these fake scripts are indeed for the code that runs on the server and it creates problems because the same code can run on both the server (when the component is first rendered) and the client (when the component is rendered after an update), in that case you have a real and a fake script, both pointing to the same original code.
+
+[01:57:48.0622] <Simon Zünd>
+I don't even understand how the server console.log is injected into the client (from the screenshot)
+
+[02:04:42.0799] <Shumaf Lovpache>
+Yes, thats because some `console.log` was actually executed on the server and in the browser we don't have the same code that rendered the page, so we need to construct a fake script with matching lines
+
+[02:08:22.0496] <Simon Zünd>
+Yeah, with `console.error` and source maps disabled i can kinda understand whats happening
+
+[02:09:19.0499] <Shumaf Lovpache>
+The answer is [ReactFlightClient](https://github.com/facebook/react/blob/ef4bc8b4f91023afac437be9179beef350b32db3/packages/react-client/src/ReactFlightClient.js#L2565). As I understood, ReactFlightClient [reads events from response stream](https://github.com/facebook/react/blob/main/packages/react-client/src/ReactFlightClient.js#L3121C10-L3121C30) and replays them on the client
+
+[02:12:13.0496] <Simon Zünd>
+So it receives an event that `console.log` happened on the server. It creates a  fake temporary script with that console.log and slaps a source map onto that that looks like the original `page.tsx`
+
+[02:12:22.0224] <Simon Zünd>
+is that a somewhat accurate summary?
+
+[02:12:44.0458] <Shumaf Lovpache>
+Yes, precisely :)
+
+[02:15:14.0741] <Simon Zünd>
+The only thing i can think of (in Chrome DevTools), is to explicitly ignore-list the temporary scripts if they follow some naming pattern.
+
+[02:16:52.0586] <Simon Zünd>
+Yeah, the breakpoint behavior on Chroem DevTools for this is atrocious
+
+[02:17:25.0650] <Shumaf Lovpache>
+Nice point, it's much easier to agree on some naming convention and use debugger capabilities
+
+[02:17:30.0697] <Simon Zünd>
+if you put one on the `console.log`, the "breakpoint moving" logic kicks in and will insert new breakpoints. So even though you "continue", it ends up as a stepping
+
+[02:25:19.0415] <Simon Zünd>
+Whats the reason for the odd temporary script formatting? Is it to preserve line numbers in `Error.stack` which doesn't go through source maps?
+
+[03:10:18.0810] <Shumaf Lovpache>
+What do you mean by 'odd temporary script formatting'?
+
+[03:37:47.0794] <Simon Zünd>
+The temporary script has different numbers of newlines and the `_()` call is usually indented a lot
+
