@@ -2,3 +2,165 @@
 [03:20:03.0894] <Michael Ficarra>
 FYI a student will be opening some PRs and issues related to https://github.com/tontonialberto/ecma262-spec-inconsistencies
 
+[05:24:44.0464] <jmdyck>
+They don't seem to be aware that there are semantically different uses for [[Foo]] notation.
+
+[05:39:21.0066] <jmdyck>
+or that objects don't have 'fields'.
+
+[05:52:05.0781] <Michael Ficarra>
+yes I spoke to him about that already
+
+[05:52:16.0440] <Michael Ficarra>
+he won't be opening a PR for that
+
+[05:53:15.0430] <jmdyck>
+the if/else stuff is valid, but he's missing some variations.
+
+[05:58:22.0548] <Michael Ficarra>
+those are the only ones he's interested in
+
+[05:58:51.0579] <Michael Ficarra>
+I also got a question today about what the repeat-until step's semantics should be https://tc39.es/ecma262/multipage/ecmascript-data-types-and-values.html#sec-bigintbitwiseop
+
+[05:59:16.0575] <Michael Ficarra>
+does it imply that the steps should be executed at least once?
+
+[05:59:47.0305] <Michael Ficarra>
+like a do-while with a negated condition
+
+[06:00:46.0084] <Michael Ficarra>
+by this, I mean ones that have the consequent/alternative on the same line as the if/else/else-if
+
+[06:01:38.0845] <jmdyck>
+CreateIntrinsics step 2 is indeed problematic, but I don't think it can be broken into a series of more-parseable steps.
+
+[06:02:15.0118] <Michael Ficarra>
+yeah I don't think it needs to be broken down, but its phrasing can probably be modernised
+
+[06:03:54.0456] <Michael Ficarra>
+and probably it would be better to explicitly loop over table rows
+
+[06:04:12.0096] <jmdyck>
+My inclination is that step 2 should become its own section, where you can at least let things breathe in separate paragraphs, lists.
+
+[06:05:34.0850] <Michael Ficarra>
+once he opens the issue about it, we can dump our ideas in there and I'll label it as "editor call"
+
+[06:05:55.0123] <Michael Ficarra>
+I think he was hoping that our changes to that step could get esmeta to automatically understand it, but I don't see that happening
+
+[06:06:49.0434] <jmdyck>
+The thing about explicitly looping over table rows is you can't make a single pass over the table and completely create an object at each iteration, because there are cycles in the references.
+
+[06:07:14.0172] <Michael Ficarra>
+ah, right
+
+[06:07:39.0870] <Michael Ficarra>
+you'd have to topo-sort the table, which is... not great if you want to peruse the table manually
+
+[06:28:15.0123] <jmdyck>
+You could conceivably do 2 passes, one pass to partially create the objects (without any references), then another pass to add the references (properties + [[Prototype]]).  Then you wouldn't need a topo-sort. However, the spec says that built-in functions are created with CreateBuiltinFunction, which takes a _prototype_ arg. So if you want to respect that, you have to do a topo-sort on [[Prototype]].
+
+[06:29:13.0041] <jmdyck>
+The table wouldn't have to be topo-sorted in the source, CreateIntrinsics can just say to sort it, which is basically what it does now.
+
+[06:29:55.0846] <jmdyck>
+"The creation of the intrinsics and their properties must be ordered to avoid any dependencies upon objects that have not yet been created."
+
+[06:30:25.0254] <jmdyck>
+However, the implications of that sentence aren't obvious.
+
+[06:38:53.0485] <jmdyck>
+But even if that part of the algorithm were made more explicit, esmeta would probably still need one-off stuff to parse it.
+
+[06:43:52.0104] <Michael Ficarra>
+this isn't a KAIST student btw
+
+[06:45:47.0562] <jmdyck>
+And that'd still leave the ~half of step 2 that talks about how you invoke CreateBuiltinFunction. I suppose you could do something like:
+If the intrinsic to be created is a built-in function, then
+- Let _steps_ be the definition of that function provided by this specification.
+- Let _length_ be the initial value of the function's "length" property.
+- [etc]
+- Let _intrinsic_ be CreateBuiltinFunction(_steps_, _length_, ...).
+- Set ... to _intrinsic_.
+
+[06:46:10.0935] <jmdyck>
+That would at least be more readable to humans.
+
+[06:48:02.0308] <Michael Ficarra>
+yeah that's exactly what I was thinking
+
+[06:52:11.0199] <jmdyck>
+Hm. So now I'm now more optimistic about breaking step 2 into steps, but (a) they're not necessarily more parseable, and (b) it's not trivial.
+
+[06:52:21.0875] <jmdyck>
+* Hm. So now I'm now more optimistic about breaking step 2 into substeps, but (a) they're not necessarily more parseable, and (b) it's not trivial.
+
+[10:56:19.0775] <shu>
+so for the week of july 7, we need a new time on either monday or friday
+
+[10:56:26.0256] <shu>
+my tue-thu literally have no free time
+
+[10:57:03.0777] <shu>
+Michael Ficarra: bakkot slots that work for you?
+
+[10:57:46.0982] <bakkot>
+after noon either day is currently free
+
+[10:57:51.0491] <bakkot>
+* after noon either day is currently free for me
+
+[11:04:36.0577] <jmdyck>
+Michael Ficarra: will there be videos of PLSS talks?
+
+[14:34:11.0035] <bakkot>
+jmdyck: https://www.youtube.com/live/r4imci31ntw?t=12168s
+
+[14:34:14.0805] <bakkot>
+unless you meant something else
+
+[14:39:37.0646] <jmdyck>
+That's PLDI, I was asking about PLSS this Friday. Some overlap in talks though.
+
+[14:39:59.0648] <bakkot>
+oh, sorry, I stopped reading after the first two letters apparently
+
+[14:40:06.0239] <jmdyck>
+heh
+
+[14:43:28.0684] <jmdyck>
+or I guess more specifically it was RPLS @ PLDI (vs PLSS @ ECOOP)
+
+[14:48:02.0321] <Michael Ficarra>
+I was asked for permission to record, so I guess that implies they will be recorded
+
+[14:48:29.0315] <Michael Ficarra>
+though my talk and Jihyeok's talk should be the same as RPLS
+
+[14:48:50.0456] <Michael Ficarra>
+or at least very very close
+
+[14:49:26.0045] <jmdyck>
+cool, thx
+
+[14:52:39.0732] <Michael Ficarra>
+you're gonna have to do before noon if we want to include Linus from now on (or move East)
+
+[14:52:59.0023] <Michael Ficarra>
+how about 11:30A Mountain?
+
+[14:54:10.0886] <bakkot>
+I was assuming we were just talking about the week of July 7
+
+[14:54:24.0705] <bakkot>
+not a permanent slot
+
+[15:34:09.0139] <shu>
+think about a permanent slot too
+
+[15:34:26.0002] <shu>
+my tue-thu are completely full for the foreseeable future
+
