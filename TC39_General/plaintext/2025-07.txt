@@ -56,3 +56,71 @@ they're different for a reason tho :-) there's a whole closed issue on ecma262 w
 [00:55:05.0850] <Ashley Claymore>
 This does not surprise me 😆
 
+[12:21:38.0593] <Timo Tijhof>
+Ashley Claymore: https://stackoverflow.com/q/47155141/319266  - https://github.com/tc39/ecma262/issues/687.
+
+TLDR: Object spread is equivalent to Object.assign which tolerates undefined. Array spread actually related to iterables, not arrays specifically, and so requires an iterator (value -> Symbol.iterator -> next -> etc), so there's more potential for unintended errors there (undefined? null? object without iterator? object with null/undefined iterator? iterator with null/undefined next function, etc).
+
+By now, many years later, the reason is of course simply that it is the way that it is, because changing it poses a web compat issue.
+
+[12:26:12.0825] <Timo Tijhof>
+* Ashley Claymore: https://stackoverflow.com/q/47155141/319266  - https://github.com/tc39/ecma262/issues/687.
+
+TLDR: Object spread is equivalent to Object.assign which tolerates undefined. Array spread actually related to iterables, not arrays specifically, and so requires an iterator (value -> Symbol.iterator -> next -> etc), so there's more potential for unintended errors there (undefined? null? object without iterator? object with null/undefined iterator? iterator with null/undefined next function, etc).
+
+In practice, though, the reason is simply that it is how it is because it is that way — for web compat.
+
+[12:27:54.0022] <Timo Tijhof>
+* Ashley Claymore: https://stackoverflow.com/q/47155141/319266  - https://github.com/tc39/ecma262/issues/687.
+
+TLDR: Object spread is equivalent to Object.assign which tolerates undefined. Array spread actually related to iterables, not arrays specifically, and so requires an iterator (value -> Symbol.iterator -> next -> etc), so there's more potential for unintended errors there (undefined? null? object without iterator? object with null/undefined iterator? iterator with null/undefined next function, etc).
+
+In practice, though, the reason is simply that it is how it is because it is that way — for web compat. Although having an API accept more than before and throw fewer errors would not be the most unthinkable change. Maybe, if someone puts in the time :)
+
+[12:32:35.0232] <bakkot>
+The time to do the change is trivial; the thing in the way of making the change is that a number of people think it should not be made
+
+[12:32:49.0992] <bakkot>
+(and it would indeed almost certainly be web-compat)
+
+[12:34:13.0638] <bakkot>
+Personally I am much more interested in changes along the lines of making `Array.prototype[Symbol.iterator]` unforgeable so that engines could trivially elide the allocation in `...(foo ?? [])`
+
+[12:34:42.0577] <bakkot>
+some people do not like unforgeable builtins for reasons of polyfills or whatever but I think this one would be worth it
+
+[12:34:44.0092] <bakkot>
+someday, maybe
+
+[12:47:16.0027] <ljharb>
+what do you mean unforgeable? or do you just mean, nonconfigurable
+
+[12:47:31.0551] <ljharb>
+it wouldn't be a problem for polyfills to make it nonconfigurable as long as we never, ever change the function in the future, fwiw
+
+[13:19:15.0468] <kriskowal>
+I think “incorruptible” might be the right word for what folks writing polyfills and platforms are looking for, in the sense that subsequently run code ideally can’t interfere with their integrity.
+
+[13:52:57.0516] <ljharb>
+well, tbf, in general nonconfigurable things suck for polyfills, because if they're implemented wrong, a polyfill can't fix it
+
+[15:38:03.0481] <bakkot>
+sorry, yeah, bu unforgeable mean nonconfigurable & nonwritable
+
+[15:38:12.0367] <bakkot>
+* sorry, yeah, by "unforgeable" I mean nonconfigurable & nonwritable
+
+[15:38:31.0423] <bakkot>
+so yes it would mean polyfills couldn't fix it
+
+[15:38:39.0608] <bakkot>
+but I think that in this specific case it would be worth it anyway
+
+
+2025-07-12
+[21:21:37.0210] <ljharb>
+in any case where we're like, 100% confident we'd never change it? i'm fully on board
+
+[21:22:17.0016] <ljharb>
+(to be clear, that doesn't mean i'd necessarily object if not 100% confident in the general case - polyfillability is always less important than making the web more correct/less shitty)
+
