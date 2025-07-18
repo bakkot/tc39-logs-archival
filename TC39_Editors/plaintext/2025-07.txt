@@ -309,3 +309,66 @@ I'd leave them split out so anyone who has already done a review can just review
 [16:19:45.0414] <jmdyck>
 ok, thanks
 
+
+2025-07-17
+[14:41:06.0630] <Michael Ficarra>
+`JSON.parse` does an `IsCallable` check on `reviver` before passing it to `InternalizeJSONProperty`, but `InternalizeJSONProperty` types that argument as "a function object"
+
+[14:41:18.0976] <Michael Ficarra>
+esmeta rightfully complains because those types don't match up
+
+[14:41:24.0928] <Michael Ficarra>
+what should we do?
+
+[14:44:37.0861] <Michael Ficarra>
+🤔 though it's strange that it wouldn't complain about the same thing with `Function.prototype.bind` and `BoundFunctionCreate`...
+
+[14:45:39.0893] <Michael Ficarra>
+it's possible that it's already skipping one of those for some other reason, I'll take a look
+
+[14:46:27.0236] <Michael Ficarra>
+btw this would be easier if someone stamped https://github.com/tc39/ecma262/pull/3651 and we merged it
+
+[15:07:48.0996] <bakkot>
+rubberstamped, I am just going to trust that this does what it looks like and not try to actually check anything about github actions
+
+[15:08:13.0828] <bakkot>
+how does `IsCallable` not imply "a function object"?
+
+[15:08:36.0279] <bakkot>
+"A function object is an object that supports the [[Call]] internal method"
+
+[15:09:11.0855] <bakkot>
+`IsCallable` is true iff the argument is an object and has a [[Call]] internal method
+
+[15:10:05.0508] <bakkot>
+I guess we could tweak the prose of IsCallable to say "determines if _argument_ is a function object", which would be an improvement over the current word salad:
+
+> a callable function with a [[Call]] internal method
+
+but I don't think that would affect esmeta by itself
+
+[15:13:58.0097] <Michael Ficarra>
+esmeta says it could also be a Proxy object that implements [[Call]]
+
+[15:14:54.0809] <jmdyck>
+and that's a function object
+
+[15:17:34.0969] <Michael Ficarra>
+ah, fair
+
+[15:19:42.0412] <Michael Ficarra>
+this is why we should rename that to callable object, it's so unintuitive
+
+[15:20:21.0735] <jmdyck>
+rename "function object" to "callable object" ?
+
+[15:21:45.0937] <ljharb>
+but a callable object is a function
+
+[15:21:50.0167] <ljharb>
+a proxy for a function is also a function
+
+[15:22:39.0488] <jmdyck>
+See also https://github.com/tc39/ecma262/pull/2889
+
