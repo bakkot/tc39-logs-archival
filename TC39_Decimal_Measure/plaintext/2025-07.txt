@@ -295,3 +295,255 @@ CSS.px(23).to('cm').value // 0.6085416666666668
 [06:31:46.0443] <eemeli>
 It holds the values as numbers and is limited to CSS units, but does (somewhat) support arithmetic and unit conversions.
 
+
+2025-07-29
+[14:48:43.0695] <nicolo-ribaudo>
+Tell WH that the spec is meant to contain accessors, it's an oversight if it doesn't contain them?
+
+[15:01:45.0191] <nicolo-ribaudo>
+If we do infinities, could we say that the fractional and significant digits always show up as 0?
+
+[15:01:59.0293] <nicolo-ribaudo>
+My main problem with infinities is that I don't know what precision means for them
+
+[15:02:00.0001] <ljharb>
+NaN, obv
+
+[15:02:04.0631] <nicolo-ribaudo>
+Maybe
+
+[15:03:01.0549] <nicolo-ribaudo>
+But we shouldn't round non-inifnities to infinity, you should only get infinity if you actually pass infinity in
+
+[15:03:59.0277] <nicolo-ribaudo>
+It seems like Kevin was unconvinced, but overall there was enough support that we would have gotten to stage 2 if we had time to think about infinity 
+
+[15:04:26.0063] <nicolo-ribaudo>
+Happy that we settled when rounding happens
+
+[15:05:44.0444] <sffc>
+The infinity thing seems like a minor issue to hold up Stage 2 for resolving. I don't know if we had moved forward with the request for Stage 2 if more people than Kevin would have come out of the woodwork to share his concern. But, it seems that there was some additional explicit support in the Delegates channel, which is positive.
+
+[15:07:59.0779] <sffc>
+I see infinities and limits as tightly coupled. If you pass in a number over the limit, you get an infinite Amount. This is how ToIntlMV works.
+
+[15:10:19.0690] <eemeli>
+My initial sense is that Amount would be more valuable if it could guarantee its value to be finite.
+
+[15:10:34.0142] <eemeli>
+And that specifically supporting NaN would almost certainly be a mistake.
+
+[15:10:51.0973] <sffc>
+I'm surprised that Waldemar didn't seem to realize how ToIntlMV worked, because it was in NumberFormatV3 for which I think he was a reviewer. But it might have been a change we added relatively late in the process.
+
+[15:12:15.0016] <sffc>
+I don't think guaranteeing a finite value is any more valuable than, say, guaranteeing that the value has a unit, and we decided that it was okay for units to be a runtime thing, not part of the type signature.
+
+[15:13:49.0289] <nicolo-ribaudo>
+> <@eemeli:mozilla.org> And that specifically supporting NaN would almost certainly be a mistake.
+
+Yeah I'd prefer to still disallow NaN if Waldemar would be willing to accept it
+
+[15:14:04.0131] <eemeli>
+In my own thinking, the Amount value is effectively the JSON number value. That doesn't work if it's not finite.
+
+[15:15:00.0154] <eemeli>
+Didn't think of that analogy before just now, otherwise I'd have included it in the presentation.
+
+[15:15:35.0627] <Jesse>
+my own preference is for finite values only, but we could consider infinities
+
+[15:15:46.0927] <nicolo-ribaudo>
+> <@eemeli:mozilla.org> In my own thinking, the Amount value is effectively the JSON number value. That doesn't work if it's not finite.
+
+JSON doesn't support infinities??? 😱
+
+[15:16:04.0664] <Jesse>
+since we don't do arithmetic, and hence don't aim to align with IEEE 754, I don't see why we should include NaN or -0
+
+[15:17:02.0189] <eemeli>
+JSON numbers are unquoted decimal strings. No infinities.
+
+[15:17:34.0536] <Jesse>
+if we settle on an unlimited range for finite values (at least in the spec), should we also have infinite values?
+
+[15:18:44.0260] <nicolo-ribaudo>
+We round Infinity to the smallest MV then when cast to a float gives infinity? :)
+
+[15:19:10.0526] <nicolo-ribaudo>
+* We round Infinity to the smallest MV that when cast to a float gives infinity? :)
+
+[15:21:59.0157] <eemeli>
+On keep-trailing-zeros, I think we might still get 2.7 at this meeting, If Shane has time to review it? I understood Waldemar's blocking concern to have been identified as being beyond its scope.
+
+[15:22:51.0516] <Jesse>
+my understanding was that he either has a concern with Intl.NF as it exists today, or maybe a concern with the decimal spec text not updating Intl.NF
+
+[15:23:47.0771] <sffc>
+Yeah I didn't have it on my to-do list to review keep-trailing-zeros for 2.7 for some reason (I've been spending most of my time on intl-era-monthcode) but I'll get it in before tomorrow's meeting
+
+[15:25:14.0458] <sffc>
+eemeli, what is your proposed behavior when passing `Infinity` into the Amount constructor, in the world where Amount is for finite values only?
+
+[15:26:19.0111] <eemeli>
+From our current spec:
+> 7. If toParse is in « "NaN", "Infinity", "-Infinity" », throw a RangeError exception.
+
+[15:26:50.0237] <eemeli>
+In the constructor, that is.
+
+[15:27:14.0360] <sffc>
+To voice support for supporting Infinity beyond Waldemar's concern, I think it's useful for `Amount.from(0, "sec").convertUnit("Hz")` to return a value and not throw an error
+
+[15:27:28.0586] <Jesse>
+feels odd to me to think about `new Amouit(Infinity, { unit: "mile" })`
+
+[15:28:13.0756] <eemeli>
+(It's 1:30 am here, so I've poured myself a glass of rum, and am no longer braining at full power)
+
+[15:28:15.0873] <sffc>
+"infinite Hz" is a valid thing. It is a wave with a period of 0. It's useful in scientific applications
+
+[15:28:16.0680] <Jesse>
+do we want to emit `∞[mile]`?
+
+[15:28:52.0698] <eemeli>
+`Infinity[mile]` would match Number more closely.
+
+[15:29:10.0147] <sffc>
+My expectation would be either `∞[mile]` or `Infinity[mile]`, no strong preference one way or the other
+
+[15:30:05.0863] <sffc>
+```
+new Intl.NumberFormat("en", { style: "unit", unit: "second" }).format(Infinity)
+'∞ sec'
+```
+
+[15:30:57.0306] <Jesse>
+ok, that's good precedent
+
+[15:31:12.0227] <eemeli>
+... for `.toLocaleString()`.
+
+[15:31:15.0711] <Jesse>
+what about having an `isFinite()` method for amount?
+
+[15:32:07.0360] <sffc>
+I previously held the position that we should use Decimal as the numeric type and we swat down any complaints about the nature of the number by saying "it's just a Decimal". But I was under the understanding that we wanted to instead shift the mindset to "anything you can currently pass to Intl.NF.prototype.format, you should be able to put in an Amount".
+
+[15:33:20.0990] <Jesse>
+following that approach, we could support infinity (since decimal does)
+
+[15:34:09.0313] <Jesse>
+I might still opt for having unlimited range of finite values though
+
+[15:34:34.0319] <Jesse>
+(or at least find something that can fully contain decimal, number, and intl)
+
+[15:34:41.0350] <sffc>
+We have an explicitly "during Stage 2" issue to answer that question
+
+[15:35:30.0679] <eemeli>
+I think we a multiplicity of understandings about what Amount is and is meant to be.
+
+[15:36:20.0777] <sffc>
+Yes, but that's not a bad thing: it means it has many different use cases and people want it for different reasons
+
+[15:37:18.0964] <Jesse>
+agree -- I approached it thinking of finite values only but am happy to concede that infinity might actually arise (and is already supported by Intl.NF)
+
+[15:37:23.0655] <Jesse>
+it complicates the thinking, but just a little bit
+
+[15:37:29.0814] <eemeli>
+Yes, very much so.
+
+[15:37:31.0841] <sffc>
+I'd like to see a PR for making Amount support Infinity; Jesse could you make it? I wonder if we could get a timebox extension to discuss this. I think it would be productive.
+
+[15:37:50.0292] <Jesse>
+sure, I can make it
+
+[15:38:53.0602] <Jesse>
+my read of the room is that NaN should be banned, though?
+
+[15:39:01.0713] <eemeli>
+I think I'd like to see use cases for infinite amounts before considering a PR. Especially use cases within the context of the wider use cases.
+
+[15:39:37.0184] <sffc>
+Do you not buy my use case of "∞ Hz" and "0 sec" round-tripping?
+
+[15:40:13.0345] <Jesse>
+looking ahead, is that something that proposal-smart-units should do?
+
+[15:43:05.0654] <Jesse>
+we also have our old bugbear -0
+
+[15:43:24.0370] <Jesse>
+I'm interested in talking about infinity but much less interested in -0 and NaN
+
+[15:45:19.0961] <Jesse>
+atm I think we accept -0 as valid syntax but normalize it to 0
+
+[15:47:23.0633] <eemeli>
+I think the round-tripping is beyond the scope; the relevant part here is that "∞ Hz" makes sense as a thing to want to present. But if that's the only one you've got, that's a bit spoiled by Hertz not being a supported unit for Intl.NF.
+
+[15:48:29.0560] <Jesse>
+just noticing that `hertz` is listed in https://github.com/unicode-org/cldr/blob/main/common/supplemental/units.xml
+
+[15:48:42.0045] <Jesse>
+(I guess there are plenty of such units)
+
+[16:06:25.0037] <sffc>
+Made an issue for Infinity: https://github.com/tc39/proposal-measure/issues/50
+
+[16:07:21.0789] <Jesse>
+I can PM a chair to ask for a continuation
+
+[16:09:05.0198] <Jesse>
+what do we want? 30 min?
+
+[16:10:57.0626] <sffc>
+And another issue for NaN and -0: https://github.com/tc39/proposal-measure/issues/51
+
+[16:11:24.0628] <eemeli>
+I'm on my second glass of rum; not going to commit to anything, but not objecting to a continuation either.
+
+[16:14:24.0059] <sffc>
+I'd be amenable to a continuation if we can have a PR open for Infinity and can discuss it on the merits.
+
+[16:14:55.0158] <sffc>
+It seemed like Waldemar on Infinity and Kevin on Motivation were the only two concerns, yes?
+
+[16:17:26.0414] <sffc>
+But also it seems like the chairs want to end the meeting a day early and I don't want us as a champions group to come off as too pushy :)
+
+[16:40:45.0705] <Jesse>
+I asked for a continuation
+
+[16:41:07.0894] <Jesse>
+(but the continuation might not happen)
+
+
+2025-07-30
+[20:31:17.0434] <Richard Gibson>
+FWIW, I do not buy this use case. I'm willing to be convinced with concrete worked examples, but conversion isn't even part of Amount right now, and infinite values are just not well-behaved like that (e.g., what would one do with ∞ degrees?)
+
+[22:27:52.0991] <ljharb>
+yeah i don't really buy this either, infinity isn't an amount
+
+[22:28:01.0509] <ljharb>
+the word "amount" is intrinsically finite/discrete
+
+[22:28:24.0387] <ljharb>
+if you want infinity (or NaN) you could use ±`Infinity` on its own
+
+[22:28:30.0551] <ljharb>
+* if you want infinity (or NaN) you could use ±`Infinity` on its own, alongside an Amount
+
+[23:02:59.0249] <sffc>
+Is infinity a valid "measure", but not "amount"?
+
+[00:58:58.0841] <Richard Gibson>
+please don't take things in that direction. We don't need synonyms, we need concrete worked examples. And like I said, I _am_ willing to be convinced... it's certainly possible to have an infinite estimated duration due to total lack of progress for e.g. file transfers at 0 bytes/s or speed of 0 m/s, so it's not like the concept is impossible or incomprehensible. But it does also cause problems like lack of valid decimal (and hence JSON number) representation, and we should try to avoid inclusion doing more harm than good—especially since support could be added later, but can never be removed.
+

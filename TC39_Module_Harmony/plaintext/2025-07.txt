@@ -131,3 +131,70 @@ Deno & Cloudflare considering new APIs for sandboxed JS execution
 
 https://x.com/rough__sea/status/1947745772050723114
 
+
+2025-07-30
+[02:20:33.0258] <nicolo-ribaudo>
+styfle guybedford The "JSON modules" proposal is stage 4 and part of ecma-262, there is no need for the import bytes proposal to "build o top of it"
+
+[02:21:27.0797] <nicolo-ribaudo>
+styfle Can you link to https://styfle.github.io/proposal-import-buffer/ in the repo metadata?
+
+[02:24:24.0189] <nicolo-ribaudo>
+Two questions also:
+- Why does CreateBufferModule accept a SharedArrayBuffer? If implementations don't want a mutable ArrayBuffer, a SharedArrayBuffer seems even worse
+- I missed when we switched from Uint8Array to ArrayBuffer. Why that change? Every API that accepts an ArrayBuffer also accepts a Uint8Array anyway, but Uint8Array avoid the "conversion step" for the most common use cases of needing the bytes.
+
+[02:26:22.0184] <nicolo-ribaudo>
+Editorially speaking, I think it would be enough to say in HostLoadImportedModule "must perform FinishLoadingImportedModule(referrer, moduleRequest, payload, result), where result is either the Completion Record returned by an invokation of  CreateDefaultExportSyntheticModule with an immutable ArrayBuffer parameter or a throw completion" without needing the new CreateBufferModule AO, but the current approach is also fine
+
+[02:26:28.0790] <nicolo-ribaudo>
+* Editorially speaking, I think it would be better to say in HostLoadImportedModule "must perform FinishLoadingImportedModule(referrer, moduleRequest, payload, result), where result is either the Completion Record returned by an invokation of  CreateDefaultExportSyntheticModule with an immutable ArrayBuffer parameter or a throw completion" without needing the new CreateBufferModule AO, but the current approach is also fine
+
+[02:31:24.0989] <nicolo-ribaudo>
+Note that https://github.com/styfle/proposal-import-buffer/issues/5 was asking for the _backing ArrayBuffer_ of the Uint8Array to be an immutable ArrayBuffer, not for the Uint8Array to be _replaced_ with an immutable ArrayBuffer
+
+[02:32:29.0697] <nicolo-ribaudo>
+Oh, I see, https://github.com/styfle/proposal-import-buffer/issues/5#issuecomment-3059482682. I'll bring it up in plenary
+
+[02:47:33.0912] <bakkot>
+w3c guidelines say to use Uint8Array for sequences of bytes https://www.w3.org/TR/design-principles/#uint8array
+
+[02:47:39.0276] <bakkot>
+(disclosure: I wrote this rule)
+
+[02:48:08.0525] <nicolo-ribaudo>
+Oh thank you
+
+[02:49:15.0370] <bakkot>
+the Response type has a `bytes` method for getting a Uint8Array as well as a now-consider-mistake `arrayBuffer` method for getting an ArrayBuffer and `json` for getting json and `text` for getting text
+
+[02:49:32.0032] <bakkot>
+whichever type we chose I think the names should match
+
+[02:49:44.0813] <nicolo-ribaudo>
+Do you know if there is any API that accepts array buffers but not uint8arrays?
+
+[02:49:54.0473] <bakkot>
+so if we do ArrayBuffer it should be `with { type: "arrayBuffer" }`
+
+[02:50:13.0544] <bakkot>
+well, the TypedArray constructors
+
+[02:50:31.0833] <bakkot>
+otherwise, no, everything on the web uses ArrayBufferView
+
+[02:50:59.0324] <bakkot>
+* the Response type has a `bytes` method for getting a Uint8Array as well as a now-considered-mistake `arrayBuffer` method for getting an ArrayBuffer and `json` for getting json and `text` for getting text
+
+[02:51:16.0955] <nicolo-ribaudo>
+Ok yeah -- for typed array constructor it's probably fine since they are a "conversion step" anyway so adding the `.buffer` is not annoying 
+
+[02:53:09.0908] <bakkot>
+I might be OK with having both `type: "arrayBuffer"` and `type: "bytes"` I guess, if people strongly want to be able to get a non-wrapped ArrayBuffer
+
+[02:53:28.0459] <bakkot>
+but my preference would also be just `bytes` for a Uint8Array
+
+[02:54:31.0473] <bakkot>
+web platform is probably not going to put `.arrayBuffer()` when adding this set of methods to new types, see thread starting at https://github.com/whatwg/streams/issues/1019#issuecomment-3014862880
+
