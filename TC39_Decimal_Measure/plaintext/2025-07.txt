@@ -547,3 +547,114 @@ Is infinity a valid "measure", but not "amount"?
 [00:58:58.0841] <Richard Gibson>
 please don't take things in that direction. We don't need synonyms, we need concrete worked examples. And like I said, I _am_ willing to be convinced... it's certainly possible to have an infinite estimated duration due to total lack of progress for e.g. file transfers at 0 bytes/s or speed of 0 m/s, so it's not like the concept is impossible or incomprehensible. But it does also cause problems like lack of valid decimal (and hence JSON number) representation, and we should try to avoid inclusion doing more harm than good—especially since support could be added later, but can never be removed.
 
+[04:46:41.0920] <eemeli>
+Amount's internal-slot access from Intl.NF was raised as a concern by at least KG and MM. If we want to avoid that, I think we may need to add a `.value: string` readonly property or a `.valueOf(): string` method on Amount instances. At the moment, the only full-precision accessor for the value that's guaranteed to only contain the numeric value is `.toString({ displayUnit: 'never' })`, which doesn't seem like it'd be a sensible thing to encode in a protocol.
+
+Another alternative would be to have Intl.NF be able to parse the serialized form `1.5[kg]` to a value+unit.
+
+Are there other choices here? The proposal's spec text currently looks for the [[Value]] and [[FractionDigits]] internal slots.
+
+[05:50:01.0703] <Jesse>
+I'm glad MM and KG brought up the internal slot issue. I like the idea that Intl.NF do lightweight parsing (grabbing the substring of `toString()` up to the first `[`, if any). Having `.valueof()` return a string also strikes me as intuitively appropriate though I wonder if we might be painting ourselves into a corner somehow
+
+[05:52:42.0839] <Jesse>
+Shane posted an interesting example: https://github.com/tc39/proposal-measure/issues/50#issuecomment-3134873158
+
+[05:56:29.0378] <Jesse>
+so far I think the example uses of infinite amounts arise not from direct use of infinity, but inferred/calculated infinity like division by zero. This makes me wonder whether we should support infinity out-of-the-box, now, or defer the discussion to proposal-smart-units, which is concerned with the kinds of examples we've seen so far
+
+[06:02:45.0101] <Jesse>
+regarding Ashley's request for `BigInt(new Amount(bigint))`, I guess that would be solved by having Amount's `valueOf` return a string (without unit)?
+
+[06:06:49.0032] <Jesse>
+(hmm, maybe not, nvm)
+
+[06:07:15.0186] <Jesse>
+how feasible would it be to add a new `bigint` hint to `ToPrimitive`?
+
+[06:08:53.0025] <nicolo-ribaudo>
+What if we just didn't add toPrimitive on amount 
+
+[06:09:17.0776] <nicolo-ribaudo>
+And made valueOf return the string
+
+[06:10:33.0677] <nicolo-ribaudo>
+It means that amount+amount would do string concatenation, but that seems fine
+
+[06:10:42.0526] <nicolo-ribaudo>
+You should extract the numbers before doing math anyway 
+
+[06:20:53.0626] <Jesse>
+I might be misremembering but my understanding of the discussion that brought us to the infinity topic was the possibility that Amount might generate an infinite value when converting to Number or BigInt (or, looking into the future, Decimal). There's a kind of mismatch between the vision we offer of (more or less) unlimited finite values and the hard reality that Number (and Decimal) are limited. One way to resolve this would be to have Amount's `toNumber()` throw if it produces ±Infintiy
+
+[06:21:22.0241] <Jesse>
+iow I wonder if the discussion was initially triggered not so much by whether we accept infinity, but whether we emit infinity
+
+[06:21:57.0836] <Jesse>
+* I might be misremembering but my understanding of the discussion that brought us to the infinity topic was the possibility that Amount might generate an infinite value when converting to Number or BigInt (or, looking into the future, Decimal). There's a kind of mismatch between the vision we offer of (more or less) unlimited finite values and the hard reality that Number (and Decimal) are limited. One way to resolve this would be to have Amount's `toNumber()` throw if it would produce ±Infintiy
+
+[06:24:42.0636] <Jesse>
+there could be an option in `toNumber()` to actually produce ±Infinity, but throw by default
+
+[08:58:43.0620] <eemeli>
+My understanding is that infinity was raised as a concern by WH as it's a value that's supported by Number. And that he would also want to see NaN being supported.
+
+[08:59:47.0837] <eemeli>
+So their support comes from wanting to have Amount work as an "annotated Number".
+
+[09:45:57.0614] <sffc>
+Before jumping in head-first on this, we should discuss it with TG3. They didn't seem to realize that Intl.DateTimeFormat does the internal slot thing too.
+
+If we did do this, I think it should be a getter for `.stringNumber()` and `.unit` separately
+
+[09:50:22.0593] <Jesse>
+I could invite MM to the next TG3 call and we could book a bit of time to walk through the internal slots issue
+
+[10:01:29.0044] <ljharb>
+it's neither, it's a concept, not an actual number.
+
+[11:30:38.0131] <Jesse>
+do we still want to discuss the infinity issue in a continuation? or would we prefer to iterate on that here and GH?
+
+[11:38:35.0598] <Jesse>
+done
+
+[11:38:53.0019] <Jesse>
+we should make an issue for this and add it to the agenda
+
+[13:29:18.0791] <nicolo-ribaudo>
+nice
+
+[13:36:48.0157] <Jesse>
+Mark says he'll attend the August 14th TG2 call
+
+[13:36:57.0462] <Jesse>
+to talk about internal slots and Intl
+
+[13:38:16.0473] <Jesse>
+(talking about this in TG3 would also make sense of course)
+
+[13:38:44.0172] <sffc>
+For Infinity, I think we need to get champion group alignment first
+
+[13:38:52.0821] <eemeli>
+The Amount repo has been renamed: https://github.com/tc39/proposal-amount
+
+[13:39:08.0670] <sffc>
+But I'm going to suggest that we could take some time to discuss the Intl MV limits issue
+
+[13:39:22.0024] <Jesse>
+sgtm
+
+[13:39:52.0870] <Jesse>
+I've poked CDA to add a continuation
+
+[13:40:19.0853] <sffc>
+It's less a continuation and more of a new topic, but sure
+
+[13:43:33.0699] <Jesse>
+would you like to screenshare that issue?
+
+[13:43:48.0733] <sffc>
+Yeah
+
