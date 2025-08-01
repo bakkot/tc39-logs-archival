@@ -1919,3 +1919,884 @@ I think it's https://www.w3.org/TR/design-principles/#uint8array
 [17:12:54.0999] <styfle>
 Thanks! I updated the readme and transferred it to the org: https://github.com/tc39-transfer/proposal-import-bytes
 
+[10:06:45.0296] <bakkot>
+queue needs to be advanced I think
+
+[10:06:47.0910] <Michael Ficarra>
+reminder: add your slides links to the notes
+
+[10:10:05.0718] <nicolo-ribaudo>
+Does anybody have the link to share here?
+
+[10:11:47.0025] <nicolo-ribaudo>
+Also, I still see the queue at the notetakers item
+
+[10:13:09.0467] <Justin Ridgewell>
+I advanced the queue
+
+[10:20:59.0183] <Chris de Almeida>
+if this gets stage 2, don't let us forget to assign reviewers  😇
+
+[10:25:14.0892] <ljharb>
+kevin, those don't cover symbols, only strings (re tcq)
+
+[10:26:15.0424] <ljharb>
+but if you mean the weird API design part, yes, and it's gross
+
+[10:30:17.0069] <nicolo-ribaudo>
+Are there use cases for having just the number of symbols?
+
+[10:31:43.0431] <Michael Ficarra>
+I like the -Length functions design
+
+[10:31:48.0759] <nicolo-ribaudo>
+The readme has a ton of links, last time I asked to write for the various links which option they are supporting, but it has not been done, so it's difficult to actually navigate through them
+
+[10:32:42.0204] <kriskowal>
+I like -Length and has- as a mnemonic pattern.
+
+[10:32:54.0310] <nicolo-ribaudo>
+I really struggle to imagine use cases other than for:
+- count all properties
+- count all enumerable properties
+
+maybe with the matrix of "include all properties, or just string properties"
+
+[10:34:08.0377] <kriskowal>
+MarkM wrote a summary of property enumeration for our own edification at Agoric/Endo and I captured them for posterity here https://kriskowal.com/enumerating-properties/
+
+[10:37:01.0871] <Michael Ficarra>
+steal time from the other presentations?
+
+[10:37:32.0569] <ljharb>
+@erights Mark Miller (Agoric) MM: fwiw it does whatever you'd expect it to do on proxies, via the internal methods, just like the existing methods
+
+[10:38:25.0827] <bakkot>
+Ruben: assuming you mean https://github.com/tc39/proposal-object-property-count/issues/2#issuecomment-2784901702, almost all of those examples are devtools or otherwise not super relevant (like babel's object spread helper)
+
+[10:38:38.0417] <Richard Gibson>
+I don't think "whatever you'd expect" is coherent, because property keys are reported by one trap while property attributes are reported by another, so the two can disagree
+
+[10:38:57.0807] <bakkot>
+* Ruben: assuming you mean https://github.com/tc39/proposal-object-property-count/issues/2#issuecomment-2784901702, many of those examples are devtools or otherwise not super relevant (like babel's object spread helper)
+
+[10:39:03.0255] <ljharb>
+i mean, in terms of impact - babel's object spread helper alone is probably more beneficial to the web than many of the proposals we've advanced in the last couple years
+
+[10:39:34.0542] <ljharb>
+* i mean, in terms of impact - babel's object spread helper alone being made faster is probably more beneficial to the web than many of the proposals we've advanced in the last couple years
+
+[10:39:46.0137] <bakkot>
+the spread operator isn't doing a count, to be clear
+
+[10:39:47.0800] <ljharb>
+ah, ok fair. the current spec did make a choice, iirc it's calling "ownpropertykeys"
+
+[10:39:51.0946] <bakkot>
+it's actually spreading enumerable symbols
+
+[10:39:54.0645] <ljharb>
+ah k
+
+[10:39:56.0694] <bakkot>
+so it isn't relevant to this proposal
+
+[10:41:10.0928] <Richard Gibson>
+right, but that doesn't expose enumerability
+
+[10:41:49.0478] <ljharb>
+it has to get the property descriptor for each key as well, yep
+
+[10:42:35.0726] <ljharb>
+same approach as https://tc39.es/ecma262/#sec-object.getownpropertydescriptors, iirc
+
+[10:42:52.0262] <bakkot>
+I still like my "just add fooLength versions of all the foo methods" suggestion, which answers this trivially
+
+[10:42:59.0465] <Richard Gibson>
+so the question basically comes down to: what happens when `getOwnPropertyDescriptor` reports nonexistence of a key that was returned from `ownKeys`?
+
+[10:43:25.0875] <ljharb>
+the same thing that Object.getOwnPropertyDescriptors does - it skips it
+
+[10:43:40.0772] <Ashley Claymore>
+What happens is you know you've found a proxy 
+
+[10:44:04.0301] <nicolo-ribaudo>
+|             | **enmumerable** | **non-enumerable** | **all** |
+| ----------- | --------------- | ------------------ | ------- |
+| **strings** | ✔️              |                    | ✔️      |
+| **symbols** | ?               |                    |
+| **all**     | ✔️              |                    | ✔️      |
+
+Fyi here the checkmark is for where I'm convinced that there may be a use case (the question mark is where I'm very little convinced but more than zero). I'd like to see examples showing that the usage of the rest is so widespread that it makes more sense to design an API to explicitly support it rather than just do the difference of the other two things in the same row/column.
+
+
+[10:44:07.0375] <ljharb>
+(tbh i'm not sure why it's important what happens with a misbehaving proxy as long as it accounts for it)
+
+[10:44:15.0510] <nicolo-ribaudo>
+Come on matrix
+
+[10:44:35.0407] <nicolo-ribaudo>
+Because a 3x3 matrix with only the corners filled in is just a complete 2x2 matrix
+
+[10:44:38.0377] <ljharb>
+i often need all symbols
+
+[10:44:50.0355] <nicolo-ribaudo>
+Can you show me one code example?
+
+[10:45:16.0063] <bakkot>
+I have ever needed all symbols but I don't think I've ever need the _number_ of all symbols
+
+[10:45:58.0993] <ljharb>
+true, the code example i was about to provide isn't getting the count, let me look more
+
+[10:53:33.0148] <ljharb>
+k well i can't actually find a case where i need the count of symbols and not the actual symbols themselves
+
+[10:54:01.0815] <ljharb>
+although if getting the count was much faster than getting the symbols themselves, i'd probably change a bunch of places to check the count first - that's a lot of "if"s tho
+
+[10:57:06.0128] <Ashley Claymore>
+`arr.toSliced()` will give you a dense array even if the original had holes
+
+[10:57:39.0650] <Ashley Claymore>
+oh no, not that one that my brain llm made up 
+
+[10:57:42.0311] <Ashley Claymore>
+The other ones 
+
+[10:58:47.0995] <bakkot>
+- Reflect.ownKeysLength
+- Object.keysLength
+- Object.getOwnPropertyNamesLength
+- Object.getOwnPropertySymbolsLength
+
+doesn't give you (string + symbol) x (enumerable) though I guess I would be open to a proposal for a new way to get _values_ for (string + symbol) x (enumerable), and then also have the `fooLength` version of that
+
+[11:00:07.0689] <Richard Gibson>
+that method doesn't exist, but `arr.toSpliced()` does
+
+[11:00:28.0349] <ljharb>
+`.slice()`
+
+[11:00:41.0708] <Richard Gibson>
+nope, `.slice()` preserves holes
+
+[11:00:49.0903] <ljharb>
+oh oof, ok
+
+[11:01:09.0388] <ljharb>
+`.flatMap(x => [x])` :-p
+
+[11:01:39.0112] <ljharb>
+so like, `Reflect.ownEnumerableKeys`?
+
+[11:01:51.0943] <bakkot>
+yeah sure
+
+[11:03:02.0837] <Richard Gibson>
+seeing those written out, I would prefer "count" rather than "length"
+
+[11:03:07.0327] <snek>
+`[...array]` kills holes right
+
+[11:03:11.0835] <snek>
+and ensures you have a real array
+
+[11:03:19.0999] <snek>
+all in one glorious expression
+
+[11:04:04.0819] <rbuckton>
+Yes, though holes are removed rather than replaced with `undefined`, so indices to elements change.
+
+[11:04:14.0746] <Chris de Almeida>
+nicolo-ribaudo: your topic is still in the queue
+
+[11:04:17.0630] <Chris de Almeida>
+(next)
+
+[11:04:49.0428] <snek>
+looks like they are replaced with undefined
+
+[11:05:09.0176] <ljharb>
+a glorious one that uses the much slower iterator protocol :-(
+
+[11:05:19.0709] <ljharb>
+`Array.from()` might work tho
+
+[11:05:37.0550] <snek>
+Array.from does it too
+
+[11:05:47.0014] <snek>
+both are probably better optimization targets than isSparse branches
+
+[11:05:54.0651] <waldemar>
++1 on Nicolo's comment
+
+[11:06:09.0228] <Richard Gibson>
+`.toSpliced()` does not use Symbol.iterator
+
+[11:06:32.0360] <ljharb>
+the problem tho isn't "we don't want sparse arrays", it's "to accurately describe this object we need to know if it's sparse", so densification doesn't help
+
+[11:07:04.0062] <Justin Ridgewell>
+My topic: we can solve this with the previous property count proposal.
+
+[11:07:17.0309] <Justin Ridgewell>
+We don't need a sparse check that depends on internal engine details
+
+[11:07:28.0594] <nicolo-ribaudo>
+Wouldn;t `[1, , 3, foo: 4]` look like it's dense
+
+[11:07:35.0753] <Justin Ridgewell>
+A dense array has `Object.keys(arr).length === arr.length`
+
+[11:07:36.0918] <Richard Gibson>
+only if there's an "index" filter
+
+[11:07:41.0673] <Justin Ridgewell>
+No
+
+[11:07:50.0341] <Justin Ridgewell>
+Yes
+
+[11:07:52.0633] <nicolo-ribaudo>
+It has three properties and a length of three
+
+[11:07:56.0306] <nicolo-ribaudo>
+Oh ok
+
+[11:08:08.0509] <Justin Ridgewell>
+It has 2 index properties
+
+[11:08:24.0153] <nicolo-ribaudo>
+Well, `Object.keys(arr).length === arr.length` returns true on that
+
+[11:08:56.0817] <Justin Ridgewell>
+That's why we need the property count proposal
+
+[11:09:02.0342] <Justin Ridgewell>
+I was giving a really basic case
+
+[11:09:13.0212] <Justin Ridgewell>
+But we can build on the previous proposal for "sparse" checks
+
+[11:09:35.0725] <nicolo-ribaudo>
+My point about time-of-check vs time-of-use still stands though
+
+[11:09:43.0294] <Justin Ridgewell>
+Yes
+
+[11:09:43.0501] <nicolo-ribaudo>
+Even if you check like that
+
+[11:09:53.0286] <waldemar>
+{0: 0, 1: 0,  3: 0, 17: 0, length: 4} would have a length of 4 and four index-named properties
+
+[11:11:05.0320] <ljharb>
+but it'd not be Array.isArray. almost all these use cases are inside a context where that's already been checked
+
+[11:11:20.0712] <Justin Ridgewell>
+I though the proposal only worked on Arrays
+
+[11:11:33.0772] <Justin Ridgewell>
+* I thought the proposal only worked on Arrays
+
+[11:13:16.0503] <waldemar>
+That's still being debated.
+
+[11:13:16.0947] <rbuckton>
+I continue to wish JS had syntax and semantics for custom indexers, much like how TypedArrays are handled. This proposal brings that back to mind.
+
+[11:13:57.0912] <Chris de Almeida>
+we are going to go over time most likely.  please indicate your preference:
+
+🦆 - continue the meeting into the lunch break, and conclude plenary
+🐓 - break for lunch, and return after to continue meeting ,then conclude
+
+[11:14:03.0829] <Justin Ridgewell>
+Wouldn't any handling of array-like (specifically excluding arrays here) have to be linear?
+
+[11:14:28.0698] <Justin Ridgewell>
+We could just implement in userland, there's no benefit of a native API
+
+[11:15:00.0554] <waldemar>
+Yes, it would be linear. But, given today's comments, a lot of cases on Arrays would also be linear.
+
+[11:15:37.0387] <Justin Ridgewell>
+Not if we use property count, since the length is 🪄
+
+[11:16:35.0704] <Justin Ridgewell>
+Index keys are stored in a special array (in V8), and length is always guaranteed to be the max index's value +1.
+
+[11:16:48.0759] <Justin Ridgewell>
+So the check could be constant for arrays specifically
+
+[11:17:45.0013] <waldemar>
+So you're saying that it is possible to implement Array.isSparse in O(1) time?
+
+[11:18:11.0497] <Justin Ridgewell>
+In V8 at least, without depending on the element's kind internal stucture.
+
+[11:18:44.0389] <Justin Ridgewell>
+Don't know about the other engines, but they had to implement special ordering rules for Object.keys(), so they may have index keys stored separately.
+
+[11:22:15.0522] <nicolo-ribaudo>
+Only `Object.keys` and `Object.propertyCount`, passing as the second parameter a bitflag to do all the filtering 🧠
+
+[11:23:02.0808] <Richard Gibson>
+now you're thinking like a 1990s DOM API 😎
+
+[11:25:32.0987] <snek>
+proposal: add a one true Object.getPropertyNames which accepts this options bag: https://docs.rs/v8/latest/v8/struct.GetPropertyNamesArgs.html
+
+[11:29:35.0084] <Olivier Flückiger>
+no. it's O(1) to skip indices (which might or might not have holes)
+
+[11:29:48.0065] <rbuckton>
+Rather than using `'all'` to fight defaults, why not have these APIs always include everything by default and use the presence and value of `enumerable` et al to control behavior, much like `defineProperty` (which ignores missing attributes as long as the property already exists).
+
+[11:31:28.0561] <Justin Ridgewell>
+This response seems like a negative of a negative? I'm not sure how to understand it.
+
+[11:31:42.0654] <rbuckton>
+for this API and `propertyCount`, have it be `propertyCount(target)` to count all properties, and use `propertyCount(target, { enumerable: true })` to count only enumerable keys. Much like how `getOwnPropertyKeys` gets all own keys
+
+[11:33:05.0831] <Olivier Flückiger>
+We can give you the max index. but not tell you how many elements up to that index exist in the array.
+
+[11:33:17.0130] <nicolo-ribaudo>
++1, maybe calling it `enumerableOnly`
+
+[11:33:31.0221] <Justin Ridgewell>
+It should be the count of the index keys array, right?
+
+[11:33:52.0058] <Olivier Flückiger>
+which is implicitly defined by not being a hole in the array backing store...
+
+[11:34:44.0095] <bakkot>
+has anyone ever enumerated a sufficiently large typed array to observe this
+
+[11:34:52.0820] <Justin Ridgewell>
+Does a the hole have an entry in the index keys arrays?
+
+[11:35:20.0783] <Olivier Flückiger>
+we don't separately store keys for arrays
+
+[11:35:46.0632] <bakkot>
+I don't think the thing Richard said is true
+
+[11:35:59.0546] <bakkot>
+Richard Gibson: https://tc39.es/ecma262/multipage/ordinary-and-exotic-objects-behaviours.html#sec-typedarray-ownpropertykeys
+
+[11:36:57.0483] <bakkot>
+exotic objects are allowed to have different key enumeration order than the default array-index-first behavior that ordinary objects have
+
+[11:37:09.0967] <ljharb>
+i agree with you; TAs already cover that
+
+[11:37:40.0456] <Richard Gibson>
+ack, I accept the correction
+
+[11:38:39.0267] <rbuckton>
+I'm a fan of just mirroring the attribute names, in the event we ever care about also supporting `configurable` or `writable`
+
+[11:39:12.0497] <ljharb>
+if it's called `enumerable` tho then it can't cover "all"
+
+[11:39:19.0758] <ljharb>
+only true and false
+
+[11:39:23.0622] <nicolo-ribaudo>
+The reason I suggested that is that `enumerable: true` could either be "include enumerable keys" or "include _only_ enumerable  keys"
+
+[11:39:43.0009] <rbuckton>
+It can cover it by being missing or `undefined`, just like how `defineProperty` handles it for existing properties.
+
+[11:40:24.0235] <ljharb>
+true, but it's very awkward to have a three-state boolean, and in this case the default would be `true`, and boolean option should always default to `false` when absent
+
+[11:40:51.0481] <rbuckton>
+i.e.:
+- `propertyCount(target, {})` count all properties. 
+- `propertyCount(target, { enumerable: true })` count only enumerable properties
+- `propertyCount(target, { enumerable: false })` count only non-enumerable properties
+
+
+[11:40:56.0496] <ljharb>
+also if we added "writable" how would it work with accessor properties
+
+[11:41:06.0286] <ljharb>
+* also if we added "writable" how would it work with accessor properties, i don't think we can ever add that one
+
+[11:41:13.0074] <ljharb>
+* also if we added "writable" how would it work with accessor properties, i don't think we could ever add that one
+
+[11:41:26.0368] <keith_miller>
+Named String and Symbol properties are mixed in JSC's Structures
+
+[11:41:50.0130] <keith_miller>
+That said, it's easy enough to skip over the symbols and we already have that functionality
+
+[11:41:52.0054] <snek>
+whether a setter is present?
+
+[11:41:57.0612] <rbuckton>
+If we ever wanted anything that detailed, we could use `propertyCount(t, { writable: true }) + propertyCount(t, { set: true })`
+
+[11:42:01.0841] <Michael Ficarra>
+`Object.getOwnEnumerablePropertySymbols`, can we go home now?
+
+[11:42:14.0137] <ljharb>
+lol but i mean, if you say "true" or "false" then you're skipping all accessor properties?
+
+[11:42:32.0460] <ljharb>
+so the mirroring is broken because the type of `set` no longer matches
+
+[11:42:40.0215] <nicolo-ribaudo>
+I have to leave now, but I'm +1 on this proposal going to stage 1, and -1 on the first two advancing. For the first one until the use cases for the various combinations are clarified with actual examples, then it'll turn into +1 at a future meeting. For the one about isSparse I'm not convinced that it's what actually is needed to get a fast path. (cc ryzokuken as both Igalian and chair :P)
+
+[11:42:47.0110] <nicolo-ribaudo>
+* I have to leave now, but I'm +1 on this array indexes proposal going to stage 1, and -1 on the first two advancing. For the first one until the use cases for the various combinations are clarified with actual examples, then it'll turn into +1 at a future meeting. For the one about isSparse I'm not convinced that it's what actually is needed to get a fast path. (cc ryzokuken as both Igalian and chair :P)
+
+[11:43:12.0732] <waldemar>
+What is doable in O(1)? Getting the total number of properties? Getting the number of indexed properties? Nonindexed properties?
+
+[11:43:14.0351] <nicolo-ribaudo>
+* I have to leave now, but I'm +1 on this array indexes proposal going to stage 1, and -1 on the other two advancing. For the first one until the use cases for the various combinations are clarified with actual examples, then it'll turn into +1 at a future meeting. For the one about isSparse I'm not convinced that it's what actually is needed to get a fast path. (cc ryzokuken as both Igalian and chair :P)
+
+[11:43:22.0345] <bakkot>
+Object.symbols, surely
+
+[11:43:23.0377] <nicolo-ribaudo>
+* I have to leave now, but I'm +1 on this array indexes proposal going to stage 1, and -1 on the first two advancing. For the first one until the use cases for the various combinations are clarified with actual examples, then it'll turn into +1 at a future meeting. For the one about isSparse I'm not convinced that it's what actually is needed to get a fast path. (cc ryzokuken as both Igalian and chair :P)
+
+[11:44:12.0729] <rbuckton>
+My concern with having a bunch of methods on `Object` over the property bag is that it is inflexible without the number of similar property names on `Object` ballooning out of control. I wouldn't look forward to scrolling through the autocomplete list for that case. An options bag keeps the API rational and flexible.
+
+[11:44:34.0620] <ljharb>
+and, as i argued earlier, more discoverable
+
+[11:44:37.0181] <bakkot>
+we already have almost the whole matrix
+
+[11:44:40.0027] <Michael Ficarra>
+WFM
+
+[11:44:54.0685] <bakkot>
+we have Object.keys, Reflect.ownKeys, Object.getOwnPropertyNames, Object.getOwnPropertySymbols
+
+[11:44:57.0697] <bakkot>
+these are all their own method
+
+[11:44:59.0169] <Olivier Flückiger>
+Probably number of nonindexed properties (but I would have to think about it) and if the array happens to have a particular internal shape, then the number of indexed propoerties.
+
+[11:45:02.0664] <ljharb>
+`Object.symbols`, but don't forget `Object.symbolValues` and `Object.symbolEntries`
+
+[11:45:07.0959] <rbuckton>
+Its still similar enough, IMO.
+
+[11:45:23.0058] <bakkot>
+any new thing in this matrix should also be its own method
+
+[11:45:36.0967] <ljharb>
+and if we add `Object.symbols()` then what about a `.symbols()` iterator method on Set/Map/Array?
+
+[11:45:39.0422] <bakkot>
+`entries` is not an item in this matrix; there's only one of it
+
+[11:45:50.0589] <rbuckton>
+And they could just be one method with options that allows for future extensibility without adding even more methods to `Object`.
+
+[11:45:53.0620] <bakkot>
+why would we want that?
+
+[11:45:57.0640] <ljharb>
+lol i'm just saying that we have a LOT of keys/values/entries parallels
+
+[11:46:01.0020] <bakkot>
+but they all already exist
+
+[11:46:07.0702] <snek>
+javascript i have seen your future https://gc.gy/d452a7e4-49d7-4b50-be21-ce3f6cdc0fb4.png
+
+[11:46:10.0740] <ljharb>
+if your argument for method over option bag is "filling in the matrix", then we have a much larger matrix to fill in
+
+[11:46:30.0402] <bakkot>
+no my argument is _if_ we are filling in part of the matrix _then_ it must be in keeping with the rest of the existing matrix
+
+[11:46:45.0681] <Michael Ficarra>
+you failed to predict when we add a new kind of property key in 2028
+
+[11:46:54.0538] <ljharb>
+and the matrix includes keys/values/entries on Object/Set/Map/Array.
+
+[11:46:59.0957] <snek>
+getOwnDecimalkeys
+
+[11:47:06.0782] <snek>
+* getOwnPropertyDecimals
+
+[11:47:08.0210] <bakkot>
+that is a matrix but is not the one we are talking about, no
+
+[11:47:11.0275] <rbuckton>
+That approach doesn't scale to a larger number of permutations. 
+
+[11:47:11.0949] <bakkot>
+it is just not relevant at all
+
+[11:47:22.0343] <bakkot>
+there's no more permutations
+
+[11:47:31.0790] <bakkot>
+if we start doing configurable vs not or whatever, we can do that as options bags
+
+[11:50:04.0099] <rbuckton>
+The fact that `keys` vs `getOwnPropertyNames` differentiates by enumerability is definitely non-obvious to a new developer.
+
+[11:50:16.0809] <bakkot>
+I agree but it is how it works
+
+[11:50:31.0567] <bakkot>
+we can't say "the existing way is not sufficiently obvious so we're going to add a new way"
+
+[11:50:39.0436] <bakkot>
+* we can't say "the existing methods names are not sufficiently obvious so we're going to add a new way"
+
+[11:50:45.0272] <ljharb>
+why can't we?
+
+[11:50:54.0924] <snek>
+i would personally not put filling out matrixes over like how we have learned to design better apis from the last 25 years
+
+[11:50:58.0455] <Richard Gibson>
+for generic property key enumeration, I think the current (incomplete) matrix is {string, symbol, both} × {enumerable, ignore-enumerability}
+
+[11:51:35.0373] <bakkot>
+that is _a_ matrix but { string, symbol } x { enumerable, all } is another matrix, which has three entries, and this is the fourth entry in that matrix
+
+[11:51:40.0738] <rbuckton>
+That sounds like a perfectly valid reason to consider a different design for an API. 
+
+[11:51:48.0018] <bakkot>
+the very slightest modicum of taste?
+
+[11:52:22.0501] <ljharb>
+taste is a subjective thing, and my taste tends to consider "deprecate the bad thing, make a much better new thing" more pleasant than "never learn from our mistakes"
+
+[11:53:02.0876] <Richard Gibson>
+I disagree that such a reduced matrix is relevant, but don't want to complete either for their own sake anyway
+
+[11:53:09.0483] <bakkot>
+it is a fine reason to consider designing new APIs in a different way, when they are not just extensions of the existing API
+
+[11:53:23.0216] <bakkot>
+I strongly agree that we don't want to complete either for their own sake and have said as much on several occasions
+
+[11:53:40.0014] <bakkot>
+however, _if_ we are filling a the matrix of functionality _then_ it must match the exiting parts of the matrix
+
+[11:53:44.0451] <bakkot>
+* however, _if_ we are filling a the matrix of functionality _then_ it must match the existing parts of the matrix
+
+[11:53:51.0667] <bakkot>
+* however, _if_ we are filling a matrix of functionality _then_ it must match the existing parts of the matrix
+
+[11:53:52.0739] <Michael Ficarra>
+Same, where it matters a whole lot, like with avoiding coercions. This does not matter a whole lot.
+
+[11:54:38.0988] <ljharb>
+"matter" is also subjective :-)
+
+[11:55:01.0196] <Michael Ficarra>
+aesthetics is at the bottom of the mattering ladder
+
+[11:55:23.0792] <rbuckton>
+Shifting from a 2x2 matrix to a 3x3 matrix when there is potential to shift to an _n_ x _n_ matrix seems like enough of a trigger to me.
+
+[11:55:25.0761] <ljharb>
+PropertyReflectionFactoryBean, then
+
+[11:55:35.0670] <Richard Gibson>
+I strongly disagree with this, for reasons that align with statements from others above. In short, the current representation is bad and should not be extended, although _reworking_ might be appropriate
+
+[11:55:52.0016] <bakkot>
+but this proposal is _not_ shifting from a 2x2 matrix to a 3x3 matrix
+
+[11:56:33.0055] <keith_miller>
+Have folks actually seen these enumeration+filters show up as a meaningful point of performance overheads? I don't think I've ever seen this as a hotspot any traces from benchmarks or live sites.
+
+[11:57:01.0251] <Justin Ridgewell>
+Mostly comes up in development and testing
+
+[11:57:02.0992] <keith_miller>
+I'm sure you can make a microbenchmark but in large codebases
+
+[11:57:05.0440] <ljharb>
+ruben's experience in node is directly having it be very meaningful
+
+[11:57:17.0021] <bakkot>
+node's experience does not generalize to the web at all
+
+[11:57:27.0892] <Justin Ridgewell>
+I don't think this is expected in prod code
+
+[11:57:32.0367] <ljharb>
+sure, not claiming it does
+
+[11:57:52.0020] <ljharb>
+production code does value inspection quite often, in the web and in node, sometimes in failure paths but not always.
+
+[11:58:35.0732] <Richard Gibson>
+Agoric code enumerates object properties as part of shape verification
+
+[11:58:36.0611] <keith_miller>
+Sure, but failure paths are not usually ™️ hot though
+
+[11:58:46.0950] <Richard Gibson>
+not limited to failure paths
+
+[11:58:50.0152] <ljharb>
+sure, which is why i said "not always" :-)
+
+[11:59:22.0017] <Justin Ridgewell>
+Making tests and logging faster would be valuable for me as the dev, but unlikely to impact my users.
+
+[11:59:41.0995] <bakkot>
+for extremely obscure things, I can _maybe_ buy this on a case-by-case basis, if there's some hope people might migrate off of the current representation. but `Object.keys` is the opposite of obscure
+
+[12:00:41.0448] <Richard Gibson>
+the *presence* of `Object.keys` is not obscure, but ignoring Symbol-keyed and non-enumerable properties **is**
+
+[12:02:23.0981] <Justin Ridgewell>
+I think using symbols is obscure. And making non-enumerables (outside prototype methods)
+
+[12:03:06.0643] <Michael Ficarra>
+🕰️ remember to leave time if we're looking for stage advacnement
+
+[12:04:03.0148] <bakkot>
+like, to be clear, the proposal is:
+
+- How do you get all own strings? Object.getOwnPropertyNames()
+- How do you get all own symbols? Object.getOwnPropertySymbols()
+- How do you get enumerable own keys? Object.keys()
+- How do you get enumerable own symbols? Object.getOwnPropertySymbols({ enumerable: true })
+
+[12:04:11.0531] <bakkot>
+that is dumb
+
+[12:04:14.0129] <bakkot>
+we are not doing that
+
+[12:04:30.0333] <bakkot>
+* that is extremely unpleasant to me
+
+[12:04:30.0840] <Chris de Almeida>
+tempted to break for lunch and come back.. my fear is that the calls for advancement may take more time than we think
+
+[12:04:48.0834] <ljharb>
+fwiw i can't come back after lunch; i'd planned on not going late
+
+[12:04:50.0278] <Chris de Almeida>
+though the ducks did win out easily over the chickens
+
+[12:04:55.0947] <Michael Ficarra>
+I am not coming back
+
+[12:06:03.0502] <Michael Ficarra>
+it's easy to make a call for advancement go fast FWIW
+
+[12:06:13.0001] <Michael Ficarra>
+"if it's not blocking, I don't want to hear it"
+
+[12:06:26.0709] <Michael Ficarra>
+we can do all 4 in under a minute if we do it right
+
+[12:06:38.0564] <ljharb>
+you think it's easy to get a group of language pedants to willingly not voice their opinion? O.o
+
+[12:06:49.0119] <ljharb>
+* you think it's easy to get an entire group of language pedants to willingly not voice their opinion? O.o
+
+[12:06:58.0808] <Richard Gibson>
+I agree with not doing that. But an alternative is introducing a single new thing that handles all four of those.
+
+[12:07:07.0018] <Michael Ficarra>
+yes, admins have a mute button
+
+[12:07:25.0461] <keith_miller>
+To further clarify, optimizing the enumerability is somewhat difficult in the semi-optimizing tiers of an engine because it's hard to prove how the JS is going to use the result of the `getOwnPropertyDescriptor` object without doing a full escape analysis.
+
+[12:07:54.0012] <bakkot>
+How do you get all own strings? Object.getOwnPropertyNames()
+How do you get all own symbols? Object.getOwnPropertySymbols()
+How do you get enumerable own keys? Object.keys()
+How do you get enumerable own symbols? Object.getEveryPossibleCombination({ symbols: true, enumerable: true })
+
+this is not better
+
+[12:08:10.0551] <ljharb>
+in that world you'd change the answer to the first 3 to use the new method
+
+[12:08:16.0241] <Michael Ficarra>
+y'all are lucky I'm not a chair because I would be *so* much stricter than our current chairs
+
+[12:08:18.0200] <ljharb>
+and the first three would just be legacy
+
+[12:08:18.0478] <bakkot>
+* How do you get all own strings? Object.getOwnPropertyNames()
+How do you get all own symbols? Object.getOwnPropertySymbols()
+How do you get enumerable own keys? Object.keys()
+How do you get enumerable own symbols? Object.getEveryPossibleCombination({ kind: 'symbols', enumerable: true })
+
+this is not better
+
+[12:08:44.0358] <bakkot>
+if these were very very obscure you might have some hope of that
+
+[12:08:45.0438] <ljharb>
+* and the first 3 would just be marked legacy
+
+[12:08:48.0907] <bakkot>
+Object.keys is not obscure and never will be
+
+[12:08:54.0882] <ljharb>
+true. the others are very obscure tho
+
+[12:09:01.0179] <Richard Gibson>
+but the others are
+
+[12:09:14.0497] <rbuckton>
+This is still an API that doesn't scale if you consider `propertyCount` or other APIs that would filter the results (like getNonIndexPropertyNames, etc.). From a blank slate, I would strongly have preferred an API like `getPropertyNames(o, { own, enumerable, ... })` and `propertyCount(o, { own, enumerable, ... })` than repeating 3-4 static methods for each output type.
+
+[12:10:43.0039] <bakkot>
+it scales fine, just tack "Count" on the end of all of those
+
+[12:10:46.0829] <bakkot>
+this is my preferred solution
+
+[12:11:16.0139] <ljharb>
+in a world where we trimmed dozens of methods from Temporal because engines don't want to add a ton of methods?
+
+[12:11:25.0121] <rbuckton>
+i.e., `getPropertyNames(o, { own: true, symbol: false })` -> `getOwnPropertyNames(o)`, `getPropertyNames(o, { own: true, enumerable: true, symbol: false })` -> `keys(o)`, etc.
+
+[12:11:35.0783] <bakkot>
+I agree from a blank slate we would probably do something different but this is javascript, the slate is never blank
+
+[12:11:48.0844] <ljharb>
+* in a world where we trimmed dozens of methods from Temporal because browsers don't want to add a ton of methods?
+
+[12:12:09.0656] <ljharb>
+like in the same way as browser implementation reality has basically meant "no new array prototype methods", aren't we already in the world of "minimize the number of added methods"? which would strongly push options bags as The Way to add stuff when it makes sense?
+
+[12:12:23.0315] <bakkot>
+to be clear I do not insist on a separate fooCount method being the solution to counting thing, just that I would be fine with that outcome
+
+[12:12:35.0573] <Justin Ridgewell>
+DIdn't we split this from a super-everything API a few meetings ago?
+
+[12:12:45.0072] <bakkot>
+we do not already have fooCount methods so we can do those however we'd like
+
+[12:13:44.0361] <rbuckton>
+It is, however, indicative of a preferred state. We only have ~3 methods in this category for now. this doubles that and more, and any other permutations would result in needing to switch and leave behind now 6-8 "legacy" methods.
+
+[12:13:56.0211] <rbuckton>
+I don't look forward to completions for `Object.getOwn|` expanding to a large list you have to scroll through to get the correct method.
+
+[12:14:12.0646] <nicolo-ribaudo>
+What was the consensus outcome, for those that left earlier?
+
+[12:14:24.0849] <Chris de Almeida>
+😑
+
+[12:14:38.0626] <snek>
+`Object.iterateProperties().filter(x => typeof x.name === 'symbol' && x.enumerable).reduce((c, _) => c + 1, 0)`
+
+[12:14:53.0708] <Michael Ficarra>
+I actually look forward to this
+
+[12:15:04.0218] <bakkot>
+"this" does not double that, "this" is literally just `Object.symbols`, I am only insisting on `Object.symbols` _specifically_ as the solution to the "get enumerable own symbols"
+
+[12:15:24.0830] <Michael Ficarra>
+there has been no request for consensus on anything yet
+
+[12:16:04.0062] <nicolo-ribaudo>
+Ugh good luck
+
+[12:16:15.0394] <bakkot>
+I have not claimed and do not believe this means we have to add a bunch of other methods as the solution to other problems
+
+[12:16:24.0723] <bakkot>
+* "this" does not double that, "this" is literally just `Object.symbols` (or some other name), I am only insisting on `Object.symbols` _specifically_ as the solution to the "get enumerable own symbols"
+
+[12:16:43.0705] <ljharb>
+that would destroy discoverability
+
+[12:16:56.0088] <ljharb>
+* that would destroy discoverability, much like how you can't meaningfully read through the list of methods on `window` anymore
+
+[12:17:16.0386] <rbuckton>
+IMO, `Object.keys()` is a terrible name that does not accurately describe what it does. `Object.symbols()` would be going down the wrong track, IMO.
+
+[12:17:42.0816] <rbuckton>
+I'd much rather have a more descriptive `getOwnEnumerablePropertySymbols` than `symbols` for clarity.
+
+[12:18:02.0083] <ljharb>
+none yet
+
+[12:18:16.0513] <ljharb>
+* none yet, still going
+
+[12:18:39.0648] <rbuckton>
+I'll admit I needed to check the documentation for `keys` to clarify whether it return only own keys or inherited keys. It's a terrible name.
+
+[12:19:31.0972] <Richard Gibson>
+I'm very much against adding a plethora of new functions. But if the **only** introduction here is "get enumerable own symbols", then I agree with bakkot that it must be `Object.symbols`.
+
+[12:20:01.0471] <ljharb>
+only own
+
+[12:20:20.0328] <ljharb>
+nothing returns inherited keys
+
+[12:20:36.0029] <bakkot>
+`Object.keys` is not a great name but it's also among the most widely used methods in the language, we are not getting away from it
+
+[12:27:17.0006] <Chris de Almeida>
+I meant 'elder' as in experience, not age!  😄
+
+[12:27:22.0693] <rbuckton>
+True, but that doesn't mean we should continue down that path.
+
+[12:32:14.0319] <Chris de Almeida>
+I forgot to thank our note-takers:
+
+```
+ABO
+JMN
+JRL
+KG
+MF
+NRO
+RGN
+SFC
+SHS
+ZTZ
+```
+
+thank you all very much!  👏👏👏👏👏👏👏
+
+[16:32:10.0565] <ljharb>
+k well my matrix is taking forever to send messages, and i have to run anyways, so i'm off 👋
+
