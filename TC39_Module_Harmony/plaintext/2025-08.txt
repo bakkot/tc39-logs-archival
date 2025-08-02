@@ -1,0 +1,142 @@
+2025-08-01
+[11:18:10.0689] <kriskowal>
+At plenary bakkot expressed dispreference for ModuleSource carrying a non-transferrable importHook. We pretty fully explored and I’ve shelved a design wit ha separate Module constructor, which I’m open to reexamining, but have come to appreciate primacy of ModuleSource as the target of dynamic import, avoiding a need for an `import module` and `import.module` to designate a module instance without forcing evaluation, and other questions like whether module expressions produce Module or ModuleSource instances.
+
+It occurs to me that we’ve already stepped away from having a per-module-instance module-map, just a module-map on `new Global`. I think that means that the only reason to prefer `importHook` on `Module` or `ModuleSource` is that resolution of import specifiers to full specifiers in the scope of the global module map. So, I am open to revisiting the idea of constructing a `ModuleSource` with some kind of transferable data bag that could express the base specifier.
+
+[11:21:05.0032] <kriskowal>
+I don’t think I’ve fully realized how far we’ve strayed from Caridy’s model, with per-module-instance module-map just with the concessions for ESM source phase imports. Agoric’s and the Endo project’s objectives are not hindered by this at all, but I need to adjust my mental model for the ramifications of transferrable `ModuleSource` identity for purposes of global module map keys.
+
+[11:21:44.0490] <bakkot>
+I didn't really get into this, but another way to address this is to make the import hook or other remapping mechanism something which is provided at import time, rather than being ambient data carried by the Module itself
+
+[11:28:14.0892] <bakkot>
+* I didn't really get into this, but another way to address this is to make the import hook or other remapping mechanism something which is provided at import time, rather than being ambient data carried by the ModuleSource itself
+
+[11:32:54.0161] <bakkot>
+though also, don't these have to be per-module-graph anyway? because of:
+
+- using the mapping { 'C' -> 'X' }, module 'A' imports 'B', which imports 'C'. 'B' now exists in the module graph and references objects from 'X'.
+- later, using the mapping { 'C' -> 'Y' }, someone else in the same module graph imports 'B'. presumably this gets the existing 'B' instance (that's what "in the same module graph" means). but then they get a confusing result, because 'B' has already been instantiated with a reference to 'X', whereas they're presumably expecting it to reference 'Y'. 
+
+import maps are global for this reason. they can be updated but updates which would conflict with things observed by previous modules are forbiddne.
+
+[11:32:56.0987] <bakkot>
+* though also, don't these have to be per-module-graph anyway? because of:
+
+- using the mapping { 'C' -> 'X' }, module 'A' imports 'B', which imports 'C'. 'B' now exists in the module graph and references objects from 'X'.
+- later, using the mapping { 'C' -> 'Y' }, someone else in the same module graph imports 'B'. presumably this gets the existing 'B' instance (that's what "in the same module graph" means). but then they get a confusing result, because 'B' has already been instantiated with a reference to 'X', whereas they're presumably expecting it to reference 'Y'.
+
+import maps are global for this reason. they can be updated but updates which would conflict with things observed by previous modules are forbidden.
+
+[11:38:09.0157] <kriskowal>
+Threading the referrer through dynamic `import` is interesting and I’ll have to think through that more, in particular for the case of importing a ModuleSource instance. I will have to think through the ramifications of that and whether it covers all the cases. The `importHook` would be obligated to always return something obtained from `import` or `import.source`, and that might be funny for `import.source(new ModuleSource(), { type, referrer/url/whatever })`.
+
+[11:39:10.0221] <kriskowal>
+But yes, my intuition is that this might cover all the motivating cases.
+
+[11:41:14.0109] <kriskowal>
+And the confusion you mention above, I believe, is adequately addressed by guybedford’s work in the ESM source phase proposal, where importing a ModuleSource uses a different keyspace than importing by specifier. At the first approximation, these are keyed by the identity of the instance, but that identity is transferrable through postMessage and structuredClone, so at a second approximation, they’re keyed by a transmissible unique identifier among agents of an agent cluster.
+
+[11:41:46.0314] <kriskowal>
+An `importHook` is thereby in a position to say “for this module specifier, this is the corresponding module source identity” as a sort of alias.
+
+[11:44:16.0687] <kriskowal>
+Consider:
+```
+importHook(importSpecifier, { type, fullSpecifier }) {
+  return import.source(new ModuleSource(''), {
+    type,
+    fullSpecifier: resolve(importSpecifier, fullSpecifier),
+   });
+ }
+```
+
+[12:29:07.0302] <bakkot>
+Hm, I'm still not understanding. Does the import hook govern only the imports from the module itself, or also its transitive imports? I was assuming the latter but if it's the former then I understand how it could work.
+
+[12:37:58.0437] <kriskowal>
+I believe the former. For the thought experiment, I’m assuming that there is a per-Global importHook that gets called to populate the module map for every `import` for a fully-qualified specifier **string** (importing by ModuleSource instances bypass the importHook and get injected by virtue of their own identity.)
+
+[13:29:32.0338] <bakkot>
+Gotcha, ok. The utility of an import hook which doesn't handle transitive imports is not obvious to me - indeed it seems somewhat suspicious, since then an otherwise transparent refactoring where you move things out of the entrypoint into another file which gets imported from the entrypoint is suddenly a breaking change.
+
+[13:32:16.0071] <kriskowal>
+I don’t follow. The importHook gets consulted for transitive imports of any module imported by its specifier string. It’s only not consulted when given a ModuleSource.
+
+[13:33:40.0771] <kriskowal>
+So, it’s this particular virtue that makes it possible to employ your recommendation of binding the referrer specifier to a ModuleSource when invoking dynamic import.
+
+[13:35:13.0569] <kriskowal>
+With the `importHook` I proposed above, that gets configured by `new Global({ importHook })` such that `newGlobal.import(specifier)` would bounce once for each of the transitive dependencies of `specifier`.
+
+[13:37:34.0402] <kriskowal>
+Each individual response from the `importHook` is necessarily the result of dynamic `import`  or `import.source`. Returning a namespace adopts that instance into the new global’s module map, and so exits the new global’s module graph to the host’s module graph. Returning a module source binds the specifier to a new module instance in the new global’s module map, and induces the `importHook` for all its transitive imports.
+
+[13:38:11.0078] <kriskowal>
+* Each individual response from the `importHook` is necessarily the result of dynamic `import`  or `import.source`. Returning a namespace adopts that instance into the new global’s module map, and so exits the new global’s module graph to the host’s module graph. Returning a module source binds the specifier to a new module instance in the new global’s module map, and induces the `importHook` for all its shallow imports.
+
+[14:19:48.0444] <bakkot>
+OK, I think I was missing the bit about returning namespaces vs returning imports. Though it seems fraught to return a namespace without first having analyzed its transitive dependencies.
+
+A concrete problem: suppose I have a module graph where I wish to mock `node:fs`. I'm going to mock it two different ways on different occasions. Anything in the graph which transitively imports `node:fs` must therefore not be shared when doing the first import vs the second import. But anything which does not transitively import `node:fs` should be re-used, so as to avoid identity discontinuities and so on.
+
+Is it possible to accomplish this without manually constructing my own complete view of the module graph in userland?
+
+[15:43:34.0856] <kriskowal>
+You have definitely identified a shortcoming, though I don’t think it’s reducible. There is a potential to configure an `importHook` such that it admits a module instance from the host but does not graft the host module’s transitive dependencies, such that the host and guest have discontinuous identities. But, it’s also entirely possible to configure an `importHook` without that defect, and though it’s a footgun on one hand, it’s a feature on the other. In some cases, we will want to avoid sharing mutable instances between the host and guest.
+
+[15:48:55.0134] <bakkot>
+I think this comes up as a consequence of trying to have the full dynamism of `importHook`, instead of matching the existing web platform mechanism of an import map. With an import map, the host can compute a mapping from module -> { set of resolved imports }, such that if you import a module on two occasions (potentially with different import maps) the host can determine whether that (module, resolved imports for that module) pair has already been imported and provide it.
+
+[15:49:40.0397] <kriskowal>
+That, I think is a shortcoming of importmaps that we will want to avoid.
+
+[15:50:42.0897] <kriskowal>
+I grok that it’s a footgun on the one hand. But, being able to deliberately isolate instances is an intentional consequence of this design that we would have to shore up for importmap, and then also deal with our desire to, for example, load from a zip file, a database, or just not places keyed by URL.
+
+[15:50:45.0529] <bakkot>
+Hm. In what way is that a shortcoming? Generally speaking, users expect that importing the same module twice should result in only a single evaluation.
+
+[15:51:01.0168] <bakkot>
+If you want to hook some dependencies so they differ, that's fine, but it's extremely weird for that to affect unrelated things.
+
+[15:51:49.0828] <bakkot>
+To be clear, I'm imagining an extension of import maps which allow not just specifier -> URL but also specifier -> ModuleSource (or some other representation)
+
+[15:52:06.0019] <bakkot>
+so you'd still be able to load from places not keyed by URL just fine
+
+[15:52:18.0441] <kriskowal>
+We very intentionally wish to be able to intercept all imports so that we can prevent a guest from reaching for capabilities of the host.
+
+[15:53:02.0128] <bakkot>
+I see, that's fair.
+
+[15:53:18.0303] <kriskowal>
+That’s fair too. I’ll try to internalize this idea.
+
+[15:54:12.0656] <bakkot>
+Probably people who have worked on node's import hooks will have more thoughts on this question.
+
+[15:54:21.0905] <kriskowal>
+If we could rely on transitive dependencies to be pure and have no mutable state, I think it would make sense to adopt the transitive dependencies, even if we prevented edges from linking across the host guest gap.
+
+[15:55:56.0315] <kriskowal>
+Yes, I think it’s on me to convene a parade of conversations and frequent updates. Your engagement with the topic is much appreciated.
+
+[15:57:05.0920] <kriskowal>
+I think that the key here is that you’re not merely suggesting we lift the serialized form of importmap, but adopt its schema for a living object representation.
+
+[15:57:54.0935] <kriskowal>
+Importmaps do a bunch of muxing that is effectively shorthand for what can be expressed in an importHook otherwise.
+
+[15:58:24.0834] <kriskowal>
+And perhaps it might limit a degree of freedom intentionally somehow. I don’t know.
+
+[15:59:21.0692] <kriskowal>
+But I can say that importmap was a muse for me in implementing a compartment mapper, which is a generalization on the idea, but for multiple globals and isolated but cross-linked namespaces.
+
+[16:15:00.0276] <bakkot>
+Ok actually this is false when there isn't a single global import map, because dynamic imports mean that mapping cannot be computed up front - you don't know what a module might choose to import later.
+
