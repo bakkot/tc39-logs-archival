@@ -1,0 +1,387 @@
+2025-08-05
+[06:39:31.0495] <Justin Ridgewell>
+PHP got a pipeline operator: https://thephp.foundation/blog/2025/07/11/php-85-adds-pipe-operator/
+
+[06:40:05.0513] <rbuckton>
+It looks like its using F# style, since the RHS must be callable
+
+[06:49:09.0782] <Justin Ridgewell>
+Yah, but PHP doesn’t have first class functions for every fn value, so it’s a bunch of `foo(…)`
+
+[06:49:51.0429] <Justin Ridgewell>
+Any arbitrary expressions are wrapped in a closure
+
+[06:50:28.0366] <Justin Ridgewell>
+I think our F# supporters would still be unhappy with this syntax.
+
+[06:50:45.0850] <rbuckton>
+In lieu of PFA, we would have had to do the same for F# style. And they did get first-class callables
+
+[06:50:52.0817] <rbuckton>
+https://wiki.php.net/rfc/first_class_callable_syntax
+
+[06:51:41.0233] <Justin Ridgewell>
+Yah, that’s the `(…)` to turn it into a first class callable function.
+
+[06:52:11.0765] <Justin Ridgewell>
+Functions aren’t callable by pipe by default
+
+[06:52:40.0524] <rbuckton>
+Ah. My PFA proposal did have `...` in addition to `?`
+
+[06:52:55.0740] <Justin Ridgewell>
+You could assign the `var f = foo(…)` and pass that to pipe directly
+
+[06:54:09.0499] <Nic>
+`x |> filter(isOnSale(...))`
+ 
+It this calling filter passing the closure to it, and then calling the result of filter with x?
+
+[06:56:24.0074] <Justin Ridgewell>
+> <@rbuckton:matrix.org> Ah. My PFA proposal did have `...` in addition to `?`
+
+They mirrored your proposal: https://wiki.php.net/rfc/partial_function_application
+
+[06:56:28.0432] <rbuckton>
+filter takes a closure and returns a closure
+
+[06:57:10.0997] <rbuckton>
+It looks like they didn't move forward with it though, due to engine complexity, per the pipeline article.
+
+[06:57:55.0490] <Justin Ridgewell>
+> <@nribaudo:igalia.com> `x |> filter(isOnSale(...))`
+>  
+> It this calling filter passing the closure to it, and then calling the result of filter with x?
+
+Yes
+
+[06:59:21.0103] <Justin Ridgewell>
+> <@rbuckton:matrix.org> It looks like they didn't move forward with it though, due to engine complexity, per the pipeline article.
+
+At the end of the article, they mention trying again for 8.5 or 8.6
+
+[07:00:47.0964] <Justin Ridgewell>
+They even call our performance of closure allocations when not using literal syntax directly in the RHS
+
+[07:01:14.0975] <Justin Ridgewell>
+https://wiki.php.net/rfc/pipe-operator-v3#:~:text=Performance
+
+[07:06:10.0504] <rbuckton>
+`x |> f(?)` could be statically optimized to `x |> (_) => f(_)`. 
+
+[07:11:19.0806] <Justin Ridgewell>
+Yup
+
+[10:51:52.0125] <TabAtkins>
+I'm not finding filter() or map() in the php manual. Are these meant to be assumed to be user-defined HOFs?
+
+[12:29:32.0978] <rbuckton>
+Assumed from context.:
+> Or, consider that the right-side can also be a function call that returns a Closure. That means with a few functions that return functions: ...
+
+and the definition of `maybe` further down:
+
+```php
+function maybe(\Closure $c): \Closure
+{
+    return fn(mixed $arg) => $arg === null ? null : $c($arg);
+}
+```
+
+[13:28:31.0033] <jschoi>
+This PHP first-class callable syntax is interesting because they call it out as an “alternative” to PFA syntax, insofar that “the vast majority of PFA uses” would be “to acquire a callable, without partially applying any arguments”. 
+
+The first-class callable proposal also notes, “A PFA-based optimization would entail significant overhead relative to simple function calls, unless special optimization for the pipe operator usage is introduced (which may not be possible, depending on precise semantics).” This is similar to the pushback we’ve gotten from the big JS engines. 
+
+And then this first-class callable syntax results in a pipe syntax that is *not tacit*—it requires using `(...)` on every unary function call.
+
+And then they require wrapping n-ary function calls in pipes with unary closures, like `fn($x) => array_map(strtoupper(...), $x)`.
+
+They punt this to a future PFA proposal. The pipe v3 proposal says, “Should the proposed follow-up RFC of Partial Function Application RFC (see below) be approved, it would be logical and recommended for a similar optimization to be made when a PFA appears on the right-side of pipe.” Which seems optimistic compared to the cautious statement in the first-class callable proposal?
+
+Lastly, like Justin mentioned, the pipe v3 proposal says that their pipe’s requiring that n-ary function calls be wrapped in unary closures “gives a little overhead over making all calls directly, but only in some cases, and not dramatically so”. This contrasts with the JS engines’ concerns about GC thrashing due to closure creation in hot paths. 
+
+[13:29:37.0068] <jschoi>
+> <@rbuckton:matrix.org> `x |> f(?)` could be statically optimized to `x |> (_) => f(_)`. 
+
+I vaguely remember an engine implementor saying this kind of closure substitution not being possible to stack traces and other side effects of closure creation…I’d have to double check. 
+
+[13:30:26.0823] <jschoi>
+> <@tabatkins:matrix.org> I'm not finding filter() or map() in the php manual. Are these meant to be assumed to be user-defined HOFs?
+
+They’re called array_map and array_filter. The pipe v3 proposal’s code samples link to their pages. 
+
+[13:30:49.0312] <jschoi>
+https://www.php.net/array_map
+
+[13:31:03.0185] <TabAtkins>
+No, `array_map`/etc take a closure *and* an array.
+
+[13:34:52.0489] <jschoi>
+I think Ron was talking about Nicolò’s `x |> filter(isOnSale(...))` question, but Nicolò was probably just abbreviating it from the PHP pipe v3 proposal’s `|> fn(array $ws) => array_filter(isOnSale(...), $ws)` example. 
+
+[13:36:46.0195] <rbuckton>
+This seems like inlining to me, plus an extra frame just to represent PFA here seems unnecessary.
+
+[13:37:16.0490] <rbuckton>
+All of the examples in the article are fairly handwavy
+
+[13:40:40.0656] <Justin Ridgewell>
+Filter is used in the blog post, it’s hand waved as a higher order closure returning function.
+
+[13:41:00.0049] <Justin Ridgewell>
+To avoid the inline closure in pipeline.
+
+[13:42:10.0335] <jschoi>
+> <@rbuckton:matrix.org> This seems like inlining to me, plus an extra frame just to represent PFA here seems unnecessary.
+
+Here’s the relevant part from my notes in https://github.com/tc39/proposal-pipeline-operator/issues/221. It’s more about named HOFs than PFA syntax per se?
+
+> The engine implementers have said that they would have much difficulty with optimizing these closures by inlining.
+> This is especially difficult when the closures were created by a named function and must appear in error stack traces.
+> For example, an engine might easily inline [1, 2, 3].map(x => x + 1).
+> But given a curried add function, [1, 2, 3].map(add(1)) may be difficult to inline—especially if add can throw an error.
+> Error stack traces are observable by the developer, and any function that may throw an error must be preserved for the error stack.
+
+[13:43:13.0647] <jschoi>
+But in the end everything is possible, so it’s more about to what extent it “would be difficult and complex for them to optimize for relatively little gain from their perspective”.
+
+[13:45:00.0557] <rbuckton>
+That seems to suppose `add` is something like `function add(x) { return _ => _ + x; }`? I'm talking about `[1, 2, 3].map(add(?, 1))`, where `add` is just `function add(x, y) { x + y }`. The inlining in question here is the transformation of `add(?, 1)` to `_ => add(_, 1)`, which would have the same inlining applied as regular `[1, 2, 3].map(_ => add(_, 1))`.
+
+[13:47:23.0091] <jschoi>
+Yes. It is a good point that a PFA syntax would allow engines to statically determine that a closure cannot throw and does not need an error frame, unlike curried functions or other names HoFs. 
+
+[13:47:32.0091] <rbuckton>
+Ignoring evaluation order (which can be preserved using temporary storage), in an F# pipe, `a |> B |> C` can be essentially rewritten to `C(B(a))`. In that case `a |> B(?, 1) |> C` would be rewritten to `C(B(a, 1))`, so a frame specific to PFA is unnecessary.
+
+[13:47:33.0693] <jschoi>
+* Yes. It is a good point that a PFA syntax would allow engines to statically determine that a closure cannot throw and does not need an error frame, unlike curried functions or other named HoFs.
+
+[13:49:35.0691] <jschoi>
+Do you recall many of the engine implementers’ specific objections to PFA syntax’s performance from back circa 2020? Other than general optimization complexity burden or concerns about encouraging developers to create more non-inlineable closures.
+
+[13:51:11.0264] <rbuckton>
+IIRC, the main objection was that ad-hoc arrows in general are expensive, and a syntax to make it easier to write ad-hoc arrows wasn't preferred.
+
+[13:51:33.0328] <TabAtkins>
+Yup, that's the general objection to FP-based pipeline
+
+[13:52:04.0134] <rbuckton>
+IMO you're not likely to use PFA anywhere you wouldn't already be writing an ad-hoc arrow except for F#-style pipes, in which case they could be inlined so the cost wouldn't be observed.
+
+[13:52:35.0146] <jschoi>
+Right, so it was that they were concerned about a general increase in closure creation.
+
+[13:52:35.0455] <TabAtkins>
+No, the PHP article uses `filter()` and `map()` itself, as HOFs.
+
+[13:52:45.0897] <jschoi>
+(Yeah, I missed those, sorry.)
+
+[13:52:51.0437] <rbuckton>
+The fact we advanced Iterator helpers, which also depends on ad hoc arrows, weakens that argument, IMO.
+
+[13:56:30.0246] <jschoi>
+The “F# pipes could easily inline PFA calls” argument only applies to the pipe operator (and Array.prototype.map, iterator helpers, etc.), and it would not obviate concerns about PFA syntax generally increasing non-inlinable calls outside those cases, e.g., whenever they’re assigned to variables.
+
+I suppose, Ron, you could argue that developers could be encouraged to use PFA syntax only as arguments to Array.prototype.map, iterator helpers, etc. or as operands to F# pipes. But that might not be too persuasive to the engines…
+
+[13:57:43.0654] <jschoi>
+* The “F# pipes could easily inline PFA calls” argument only applies to the pipe operator (and Array.prototype.map, iterator helpers, etc.), and it would not obviate concerns about PFA syntax generally increasing non-inlinable calls outside those cases, e.g., whenever they’re assigned to variables within hot paths.
+
+I suppose, Ron, you could argue that developers could be encouraged to use PFA syntax only as arguments to Array.prototype.map, iterator helpers, etc. or as operands to F# pipes. But that might not be too persuasive to the engines…
+
+[13:58:12.0793] <rbuckton>
+I'm not sure I agree with the concern that PFAs would result in more usage of ad-hoc function wrappers/arrows than already exists. There are already entire ecosystems in JS built around FP-style programming where arrows are commonplace.
+
+[13:58:16.0828] <jschoi>
+* Yes. It is a good point that, unlike curried functions or other named HoFs, a PFA syntax would allow engines to statically determine that a closure cannot throw and does not need an error frame.
+
+[13:58:41.0933] <jschoi>
+* Yes. It is a good point that a PFA syntax would allow engines to statically determine that a closure cannot throw and does not need an error frame—and this is *unlike* curried functions or other named HoFs.
+
+[14:00:18.0871] <jschoi>
+Yes, it’s not my argument, haha. Though the engine implementors do not generally seem to enjoy the performance characteristics of Ramda, Fantasy Land, or whatever tacit FP ecosystem is most popular in JavaScript nowadays.
+
+[14:01:13.0954] <jschoi>
+* Yes, it’s not my argument, haha. Though we’ve talked about Ramda, Fantasy Land, and the various other tacit FP ecosystems in JavaScript, and the engine implementors do not generally seem to enjoy their performance characteristics or be willing to really accommodate their styles in the core language.
+
+[14:01:16.0710] <rbuckton>
+I don't think PFA itself would push more people to FP-style, though it could potentially speed up existing FP-style applications that already depend on function currying scaffolding (since that scaffolding would no longer be necessary).
+
+[14:01:20.0896] <jschoi>
+* Yes, it’s not my argument, haha. Though we’ve talked about Ramda, Fantasy Land, and the various other tacit FP ecosystems in TC39, and the engine implementors do not generally seem to enjoy their performance characteristics or be willing to really accommodate their styles in the core language.
+
+[14:03:26.0855] <rbuckton>
+IMO, the argument against ad-hoc functions/wrappers should have been considered lost when we introduced `=>`. PFA would improve existing use cases with a clean syntax that slots well into `|>`. IMO it only really gets scary if we were to introduce a composition operator.
+
+[14:04:17.0583] <jschoi>
+You heard it here, folks: “I draw the line at function composition” — Ron Buckton, 2025
+Just kidding.
+
+[14:04:54.0307] <rbuckton>
+Hah, I don't, but I consider that to be a far bigger hurdle than PFA should have been.
+
+[14:06:15.0948] <rbuckton>
+I was investigating composition as well as functional operators (i.e., `{+}` as shorthand for `(a, b) => a + b`) to improve composition and higher-order operations
+
+[14:06:55.0309] <rbuckton>
+So you would end up with `[1, 2, 3].map(? {+} 1)`
+
+[14:07:23.0141] <rbuckton>
+* So you would end up with `[1, 2, 3].map(? {+} 1)` -> `[1, 2, 3].map({+}(?, 1)`
+
+[14:07:28.0062] <rbuckton>
+* So you would end up with `[1, 2, 3].map(? {+} 1)` -> `[1, 2, 3].map({+}(?, 1))`
+
+[14:07:54.0692] <jschoi>
+I remember that proposal.
+
+[14:07:56.0680] <jschoi>
+With regards to currying, I do agree with Tab’s opinion stated ages ago that there’s a fundamental “impedance mismatch” between n-ary functional languages like JavaScript and unary-functional currying-based languages like Haskell. Attempts to add auto-currying to functions in JavaScript may be trying overmuch to retrofit a familiar approach onto a fundamentally different core language design, square things in round holes.
+
+[14:08:35.0562] <jschoi>
+(This is also ignoring the fact that `await` and `yield` operators are function scoped…)
+
+[14:09:45.0992] <rbuckton>
+That was one of the reasons I proposed PFA since it avoided the need to bake currying into functions themselves. The other was to avoid "picking a winner" between lodash-style `f(it, ...args)` and ramda-style `f(...args, it)` 
+
+[14:09:47.0481] <jschoi>
+* With regards to currying, I do agree with Tab’s opinion stated ages ago that there’s a fundamental “impedance mismatch” between n-ary functional languages like JavaScript and unary-functional currying-based languages like Haskell. Attempts to add auto-currying to n-ary functions in JavaScript may be trying overmuch to retrofit a familiar approach onto a fundamentally different core language design, square things in round holes. The same may apply to a lesser extent to unary-function pipes, unary function composition, etc. N-ary function calls truly exist in JavaScript.
+
+[14:11:01.0466] <jschoi>
+Yes, it is a good goal to not promote subject-first function signatures or subject-last function signatures in core JavaScript. Which is why we also rejected Elixir pipes…
+
+[14:11:16.0670] <rbuckton>
+I did consider a syntactic currying syntax for functions, a.la. `function f(a)(b)(c) { }` which would curry when undersupplied.
+
+[14:11:23.0621] <rbuckton>
+* I did consider a syntactic currying syntax for functions, a. la. `function f(a)(b)(c) { }` which would curry when undersupplied.
+
+[14:11:31.0024] <jschoi>
+* Yes, it is a good goal to not promote subject-first function signatures or subject-last function signatures in core JavaScript. Which is part of why we also rejected Elixir pipes…
+
+[14:12:21.0647] <rbuckton>
+but I didn't like the overhead or complexity, plus it required libraries to be rewritten before they could be consumed in that fashion, while PFA worked on everything immediately.
+
+[14:13:06.0223] <jschoi>
+Yes, the ecosystem schism would be wild if we added that as syntax.
+Someone should add “ecosystem schism” to the old TC39 bingo card…
+
+[14:17:32.0312] <jschoi>
+Anyways, it amuses me greatly that PHP added a unary-function-based pipe operator…that is basically *non-tacit*. Its unary function calls (almost always?) require annotation with `(...)`.
+We’ve had some people lament about requiring an explicit topic with unary function calls in ES Hack pipes (four or five extra characters per pipe)…but, over there, PHP adds a new pipe operator based on unary function calls, but it *still* requires essentially the same argument annotation.
+
+[14:17:56.0630] <jschoi>
+* Anyways, it amuses me greatly that PHP added a unary-function-based pipe operator…that is basically _non-tacit_. Its unary function calls require annotation with `(...)`.
+We’ve had some people lament about requiring an explicit topic with unary function calls in ES Hack pipes (four or five extra characters per pipe)…but, over there, PHP adds a new pipe operator based on unary function calls, but it _still_ requires essentially the same argument annotation.
+
+[14:18:19.0099] <jschoi>
+* Anyways, it amuses me greatly that PHP added a unary-function-based pipe operator…that is basically _non-tacit_. Its unary function calls require annotation with `(...)`.
+We’ve had some people lament about requiring an explicit topic with unary function calls in ES Hack pipes (three or four extra characters per pipe)…but, over there, PHP adds a new pipe operator based on unary function calls, but it _still_ requires essentially the same argument annotation. With *five* extra characters.
+
+[14:18:55.0684] <jschoi>
+* Anyways, it amuses me greatly that PHP added a unary-function-based pipe operator…that is basically _non-tacit_. Its unary function calls require annotation with `(...)`.
+We’ve had some people lament about requiring an explicit topic with unary function calls in ES Hack pipes. They talk about extra characters: three or four extra characters per pipe.
+But, over there, PHP adds a new pipe operator based on unary function calls, but it _still_ requires essentially the same argument annotation. With _five_ extra characters per pipe. Are people complaining about this too?
+
+[14:20:19.0488] <jschoi>
+* Anyways, it amuses me greatly that PHP added a unary-function-based pipe operator…that is basically _non-tacit_. Its unary function calls require annotation with `(...)`.
+We’ve had some people lament about how ES Hack pipes require an explicit topic reference with its unary function calls. They count extra characters—three or four extra characters per pipe—and speak of terrible friction.
+But, over there, PHP adds a new pipe operator based on unary function calls, but it _still_ requires essentially the same argument annotation. With _five_ extra characters per pipe. Are people complaining about this too?
+
+[14:21:53.0179] <TabAtkins>
+Yeah, the "unary functions but not tacit" restriction that PHP restricted itself into is kinda *hilarious*
+
+[14:24:06.0032] <TabAtkins>
+Man what type of value do you even *get* if you, say, `$x = array_map;`? Is that just a reference error?
+
+[14:24:18.0166] <TabAtkins>
+(I haven't used PHP since 4.x)
+
+[14:30:28.0075] <jschoi>
+My understanding is that PHP’s functions and variables are in separate scopes or namespaces. It’s like a Lisp-2, not a Lisp-1. So you get a reference error. 
+Hence that first-class callable proposal: you can’t use `array_map` as a value (reference error), but you can use `array_map(...)` as a value.
+
+[14:31:12.0820] <jschoi>
+https://www.php.net/manual/en/language.variables.scope.php
+
+
+[14:31:13.0339] <jschoi>
+https://onecompiler.com/php/43su8xqsa
+
+[14:34:39.0904] <jschoi>
+* My understanding is that PHP’s functions and variables are in separate scopes or namespaces. It’s like a Lisp-2, not a Lisp-1. So you get a reference error.
+
+[14:34:41.0591] <jschoi>
+* Hence that first-class callable proposal: you can’t use `array_map` as a value (reference error), but you can use `array_map(...)` as a value.
+
+[14:34:56.0994] <jschoi>
+* My understanding is that PHP’s functions and variables are in separate “scopes” or “namespaces”. 
+It’s like a Lisp-2, not a Lisp-1. 
+So you would get a reference error.
+
+[14:36:50.0028] <jschoi>
+Hm, no, I’m wrong. There are “variable functions” and “language constructs”.
+https://www.php.net/manual/en/functions.variable-functions.php
+
+[14:37:08.0318] <jschoi>
+But in the end the answer is still the same: `$x = array_map` throws a reference error.
+
+[14:37:34.0012] <jschoi>
+* Hm, no, I’m wrong. There are “variable functions” and there are “language constructs”.
+https://www.php.net/manual/en/functions.variable-functions.php
+
+[14:39:40.0865] <jschoi>
+* Hm, no, I’m wrong. There are “variable functions” aka “user functions”, and there are “language constructs” aka “built-in functions”.
+https://www.php.net/manual/en/functions.variable-functions.php
+
+[14:41:24.0171] <jschoi>
+* Hm, no, I’m wrong. There are “variable functions” aka “user-defined functions”, there are “anonymous functions” aka “closures”, and there are “language constructs” aka “built-in functions”. 
+https://www.php.net/manual/en/functions.variable-functions.php
+
+[14:42:01.0178] <jschoi>
+* But in the end the answer is still the same:
+`$x = array_map` throws a reference error.
+Because only variable functions (or a closure assigned to a variable) can be directly referred to by name.
+
+[14:42:22.0093] <jschoi>
+* But in the end the answer is still the same:
+`$x = array_map` throws a reference error.
+Because only variable functions (or a closure assigned to a variable), and not built-in functions, can be directly referred to by name. 
+
+[14:47:11.0718] <TabAtkins>
+Omigod, right, pretend closures (that can't close over anything) via string passing, ugh.
+
+
+2025-08-06
+[19:57:22.0006] <Ashley Claymore>
+> <@rbuckton:matrix.org> The fact we advanced Iterator helpers, which also depends on ad hoc arrows, weakens that argument, IMO.
+
+But iterator helpers work on the receiver. So there is only one closure.
+
+`i.filter(f)` vs `filter(f)(i)`
+
+[19:58:07.0929] <Ashley Claymore>
+Engines aren't saying we can't have any APIs that take a callback
+
+[20:05:27.0155] <rbuckton>
+If PFAs are inlined in the presence of a `|>`, then the only other place they would have utility are places where you're already using `=>`.
+
+[20:07:23.0473] <rbuckton>
+In which case, `?` vs `=>` doesn't really change the math.
+
+[20:09:02.0966] <rbuckton>
+If I am doing `[1, 2, 3].map(x => add(x, 1))` today, then `[1, 2, 3].map(add(?, 1))` saves a few characters but is functionally similar.
+
+[20:12:47.0033] <rbuckton>
+There are more than a few interesting cases, but most boil down to something you could do with either `=>` or `.bind()` without some of the caveats. For example, you could do 
+```js
+const MyLogger = Logger("output.log", ...);
+...
+const logger = new MyLogger(Severity.Info);
+logger.log("hi");
+```
+You can't `new` an arrow, so its functionally similar to `.bind`, except that you can put placeholders anywhere in the argument list.
+
