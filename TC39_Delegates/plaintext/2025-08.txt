@@ -168,3 +168,49 @@ Mh ok
 [23:03:36.0454] <Mathieu Hofman>
 Unless throwing on a frozen animation instance is acceptable ?
 
+[06:00:31.0957] <bakkot>
+yeah seems fine
+
+[06:02:39.0428] <bakkot>
+options:
+- throw on a non-extensible animation instance. this has probably literally never come up so I doubt anyone will even notice
+- only use this functionality for newborn objects. doesn't solve the Animation CVE but does still address most of them
+- decide that since the above snippet gets us 99% of the way to a "resolveNonThennable", and the "must be extensible" restriction makes no sense from a user's perspective given that the object is not observably-to-them gaining a new property, we might as well just provide an actual "resolveNonThennable" function which works in the non-extensible case as well
+
+[09:05:18.0958] <Mathieu Hofman>
+If we're gonna introduce a new resolve function, why can't we simply delay the resolution in those cases by a tick instead of doing things that are weird and / or not 100% compatible.
+
+[09:12:43.0855] <bakkot>
+I would prefer not to make users of the web pay a cost, even a small one, just for the sake of avoiding things which are in some sense "weird" but which no developer much less user would ever even notice.
+
+[10:06:27.0203] <Mathieu Hofman>
+But unless the developer does something weird there may not be a cost!
+
+[10:07:40.0496] <Mathieu Hofman>
+Again my suggestion for a safe resolve spec op is to delay by a tick when it would trigger user code
+
+[10:12:09.0557] <bakkot>
+As I understood it, you didn't like that the "would trigger use code" check would let you to build a pretty straightforward gadget to detect proxies, so rather than "would trigger use code" the check would have to be "is an object", which is ~all of the cases in question
+
+[10:12:37.0397] <bakkot>
+so the extra tick would be incurred in ~all cases
+
+[10:14:06.0438] <bakkot>
+if that understanding is wrong then sure I'm open to going in that direction instead
+
+[10:14:55.0702] <bakkot>
+but if our choices are "do something which is theoretically kinda weird but is allowed by the language already, and which no one will ever notice, or make all web specs which resolve a promise with an object slower", I'm going to advocate for the former
+
+
+2025-08-07
+[23:14:26.0989] <Mathieu Hofman>
+First I think the main focus here is to build a safe resolve operation for spec and host, and not directly exposed to the programmer.
+
+Second even if that proxy sensitive operation was directly accessible to programs, we may find it preferable to changing the semantics of thenables.
+
+[23:16:46.0532] <bakkot>
+Several delegates have expressed the constraint that anything we do here should be implementable in userland; e.g. Node implements a bunch of web APIs in JS
+
+[23:18:51.0639] <bakkot>
+and I don't think this is changing the semantics of thenables given that it's doable in userland already, unless we handle the frozen objects case, which is not really part of how anyone thinks of thenables afaik
+
