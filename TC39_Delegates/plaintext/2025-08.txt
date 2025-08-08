@@ -214,3 +214,87 @@ Several delegates have expressed the constraint that anything we do here should 
 [23:18:51.0639] <bakkot>
 and I don't think this is changing the semantics of thenables given that it's doable in userland already, unless we handle the frozen objects case, which is not really part of how anyone thinks of thenables afaik
 
+[13:42:22.0888] <nicolo-ribaudo>
+Are AOs first class values? Can I maybe pass an AO name to something that expects an abstract closure?
+
+[13:45:52.0893] <nicolo-ribaudo>
+Oh I guess the answer is "yes", like in steps 6-7-8 of https://tc39.es/ecma262/#sec-applystringornumericbinaryoperator. Nice
+
+[14:54:14.0883] <Mathieu Hofman>
+I'm not sure I understand what you mean. My concern is that your "userland solution" relies on the resolution value to have a non-frozen `then`. It simply fails with frozen values, which I hope we can agree should be totally valid values to use as a resolution.
+
+[14:55:27.0850] <bakkot>
+you cannot specifically pass an AO name to something that expects an abstract closure, those are different operations
+
+[14:55:32.0993] <bakkot>
+* you cannot specifically pass an AO name to something that expects an abstract closure, those are different kinds of thing
+
+[14:55:55.0959] <bakkot>
+you can do the thing in ApplyStringOrNumericBinaryOperator but it's not a common pattern and I wouldn't recommend it in most cases
+
+[14:56:17.0064] <Mathieu Hofman>
+We can definitely consider exposing to userland a safe resolve operation that would let the caller asynchronously discover information about whether the value is a proxy (or has a proxy in its prototype chain).
+
+[14:57:13.0922] <Mathieu Hofman>
+I currently find that preferable to other alternatives I've heard so far.
+
+[15:00:38.0287] <Mathieu Hofman>
+* We can definitely consider exposing to userland a safe resolve operation, even if that operation would let the caller asynchronously discover information about whether the value is a proxy (or has a proxy in its prototype chain).
+
+[15:02:20.0942] <Mathieu Hofman>
+However I haven't heard a request for userland to be able to implement the safe resolve operation itself. Just that whatever hosts can do, that userland can do it just as much (aka a virtualization question)
+
+[15:02:55.0593] <Mathieu Hofman>
+* However I haven't heard a request for userland to be able to implement the safe resolve operation itself. Just that whatever hosts can do, that userland can do it just as much (aka a virtualization constraint, which of course I'm 100% behind)
+
+[15:13:20.0571] <Michael Ficarra>
+@nicolo-ribaudo:matrix.org according to our editorial conventions, it should be avoided https://github.com/tc39/ecma262/wiki/Editorial-Conventions
+
+[15:14:05.0258] <bakkot>
+I am primarily concerned about preventing this class of CVEs in browsers, which are about passing spec-defined objects, none of which expect to have a `then` or to be non-extensible. I think updating web specs to use the solution I suggest there, and throwing in case that a user has given the object a `then` or made it non-extensible in the mean time, is totally fine. Since this is already possible it presumably doesn't change the definition of "thenable".
+
+We could, additionally, provide a version which works even if the object has been modified in one of those two ways. I'm neutral on this; it's pretty much irrelevant to the case of web specs because users are not, in practice, going to do either of those things. However, if we did, I don't think it would meaningfully change the definition of "thenable" given what's already possible.
+
+[15:14:22.0225] <bakkot>
+sorry, to be clear, I meant the latter thing yes
+
+[15:17:26.0472] <Michael Ficarra>
+there's an easy solution here though, which is to define an AC that just forwards its parameters to an AO
+
+[15:22:35.0648] <bakkot>
+I'm fine with that too if everyone else is.
+
+
+2025-08-08
+[18:50:52.0690] <Justin Ridgewell>
+> <@mhofman:matrix.org> However I haven't heard a request for userland to be able to implement the safe resolve operation itself. Just that whatever hosts can do, that userland can do it just as much (aka a virtualization constraint, which of course I'm 100% behind)
+
+Unfortunately this approach may not be web compatible, based on Svelte.
+
+[18:51:40.0351] <Justin Ridgewell>
+I realize svelte just added it, but the fact that anyone’s done a get accessor that depends on immediate access makes me wary that others may have done it.
+
+[18:52:30.0057] <bakkot>
+The idea would be to only use this in certain places not by default, I think?
+
+[18:52:32.0884] <Justin Ridgewell>
+If we limit this to just a safe capability that does the proxy check, that’s work.
+
+[18:52:42.0701] <Justin Ridgewell>
+Yah, that’d be fine.
+
+[18:54:20.0159] <Justin Ridgewell>
+The default promise capability (and then return value, and promise constructor) could use the current immediate then access. The safe capability does a check to immediately resolve a non-thenable, or defers then access if proxy or then accessor is defined.
+
+[18:55:32.0791] <Justin Ridgewell>
+Although, `Fulfilled` wrapper could do this without us having to switch everything to a new capability
+
+[18:55:39.0680] <Justin Ridgewell>
+* Although, `Fulfilled` wrapper could do this without us having to switch everything to a new capability 😉
+
+[19:27:45.0942] <mgaudet>
+Catching up on the discussion right as I head into a late night chat, so can't participate too much at the moment, but, I just want to explicitly say how much I appreciate how much thought and discussion is going into trying to fix this. It really is wonderful to see. Thanks everyone. 
+
+[19:45:26.0432] <Justin Ridgewell>
+* If we limit this to just a safe capability that does the proxy check, that’d work.
+
