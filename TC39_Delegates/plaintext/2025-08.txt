@@ -298,3 +298,122 @@ Catching up on the discussion right as I head into a late night chat, so can't p
 [19:45:26.0432] <Justin Ridgewell>
 * If we limit this to just a safe capability that does the proxy check, that’d work.
 
+[12:49:23.0448] <Justin Ridgewell>
+mgaudet: Can we get access to the test case mentioned in https://bugzilla.mozilla.org/show_bug.cgi?id=1923344#c11?
+
+[12:49:40.0268] <Justin Ridgewell>
+I mainly want to see what the thenable implementation was
+
+[12:49:50.0943] <Justin Ridgewell>
+* I mainly want to see what the thenable implementation was, if it had some exploit code to it
+
+[12:50:10.0612] <Justin Ridgewell>
+Or does the animation just being a thenable cause the exploit?
+
+[12:51:00.0395] <Justin Ridgewell>
+This affects Mathieu Hofman's preferred solution to delay thenable access, if just being a thenable is the problem then this solution will not solve that case.
+
+[12:53:07.0847] <mgaudet>
+it definitely had exploit code in it; but the problem was _where_ the code ran (synchronously at a point not forseen) 
+
+[12:55:25.0974] <mgaudet>
+Now, IIRC that one did not require newborn objects, and thus would probably not have been fixed by our mitigations for newborn objects that have been discussed. Not paged in at the moment tho
+
+[12:55:26.0461] <Mathieu Hofman>
+Afaik the problem is almost always with synchronous then get operations
+
+[12:56:29.0077] <mgaudet>
+```
+Object.defineProperty(Object.prototype, 'then', {
+    get: function () {
+      if (this.toString() == "[object Animation]") { 
+```
+
+is the snippet from the simplified test acse
+
+[12:56:59.0163] <Justin Ridgewell>
+So it is something like `get then() {
+  exploit here;
+  return () => {}
+}`
+
+[12:57:12.0020] <Mathieu Hofman>
+And yeah from what I read, the object was available to userland before. And an own then would have worked (even though the exploit code used an object prototype version)
+
+[12:57:24.0014] <mgaudet>
+Yep 
+
+[12:58:09.0457] <Mathieu Hofman>
+There is a write up somewhere about that CVE 
+
+[12:58:15.0158] <Justin Ridgewell>
+Is it still possible to trigger the exploit with something like `then() { exploit here; }`?
+
+[12:58:34.0591] <Mathieu Hofman>
+Not it had to be a `get then`
+
+[12:58:58.0302] <Mathieu Hofman>
+(it could have been a proxy installed as the prototype too)
+
+[12:59:19.0744] <mgaudet>
+https://www.welivesecurity.com/en/eset-research/romcom-exploits-firefox-and-windows-zero-days-in-the-wild/
+
+[12:59:34.0824] <mgaudet>
+Oh wait that's not the writeup 
+
+[13:00:07.0560] <mgaudet>
+Oh no it's in there, just needed to scroll futher
+
+[13:00:57.0241] <Justin Ridgewell>
+(Matrix needs to add a profile image cropper and stop telling people I'm changing my pic)
+
+[13:01:18.0972] <Justin Ridgewell>
+Thanks for the link!
+
+[13:33:29.0521] <Justin Ridgewell>
+That link also links to https://dimitrifourny.github.io/2024/11/14/firefox-animation-cve-2024-9680.html, which provides the full exploit
+
+[14:12:32.0898] <Justin Ridgewell>
+So if we do this:
+```
+1. Safely inspect obj and prototype chain for `.then`
+    1. If safe, fulfill now and exit
+2. Assert: not safe
+3. Delay 1 tick
+4. get `.then`
+5. If `.then` is not a function, fulfill and exit
+6. Call(then, onFulfilled, onRejected)
+```
+
+That would fix the sync interleaving of C++ and JS code, wouldn't impact normal objects, and would keep the overall ticks for thenables the same
+
+[14:15:08.0406] <Justin Ridgewell>
+* So if we do this:
+
+```
+1. Safely inspect obj and prototype chain for `.then`
+    1. If safe, fulfill now and exit
+2. Assert: not safe
+3. Delay 1 tick
+4. get `.then`
+5. If `.then` is not a function, fulfill and exit
+// Note: we used to delay 1 tick here
+6. Call(then, onFulfilled, onRejected)
+```
+
+That would fix the sync interleaving of C++ and JS code, wouldn't impact normal objects, and would keep the overall ticks for thenables the same
+
+[14:16:11.0414] <Justin Ridgewell>
+But it would break Svelte, so everything would need to call the new Safe capability instead.
+
+
+2025-08-09
+[20:05:34.0891] <Mathieu Hofman>
+Right we unfortunately can't do this by default for `await`. We'd have to think through which 262 places using a promise capability could switch to a safe resolve without breaking userland. I expect all host resolves could switch.
+
+[20:38:30.0867] <bakkot>
+There's almost nothing in the spec currently which vends promises. It's basically just async generators and `Array.fromAsync`. (Both of which could use this although since `fromAsync` is spec'd as a built-in async function it is going to be somewhat tricky to do so.)
+
+[20:39:14.0117] <bakkot>
+`fromAsync` technically hasn't landed but it should be soon™
+
