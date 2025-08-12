@@ -1,0 +1,30 @@
+2025-08-11
+[15:34:08.0549] <Steve Hicks>
+Our tracing lead reached out to me today with a problem caused by a commonly-used API that uses promises for event handling - i.e. `dialog.after().then(() => ...)` - which of course makes it impossible to preserve the dispatch context when calling the "after" callbacks.  I wonder to what extent this pattern is used externally?  Our workaround is to deprecate the promise-based API and cut out the middle `).then(`, so that you just pass the callback directly to `after`, but this is a pretty big migration.  I don't see any other alternative, though, since it's pretty fundamental that promises shouldn't try to record their resolution context or something like that, which would lead to inconsistencies vs. await, etc.  Is this something anyone else has run into and/or thought about?
+
+[15:37:59.0304] <Chengzhong Wu>
+What's the tracing semantic on `dialog.after().then(() => /* what's the expected active span here */ )` ?
+
+[15:38:59.0263] <Justin Ridgewell>
+^ same question
+
+[15:39:39.0663] <Justin Ridgewell>
+I feel like it's pretty common to model a once event as a Promise instead of a `.onfoo = () => {}`
+
+[15:40:40.0854] <Chengzhong Wu>
+* What's the tracing library's semantic on `dialog.after().then(() => /* what's the expected active span here */ )` ?
+
+[15:40:48.0410] <Chengzhong Wu>
+* What's this tracing library's semantic on `dialog.after().then(() => /* what's the expected active span here */ )` ?
+
+
+2025-08-12
+[18:09:08.0579] <Steve Hicks>
+The hope would be that it the active span is the one that actually closed the dialog that triggered the after() promise to resolve (and thus the callback to run).  But since it's a `Promise`, we lose that context and (per every version of the spec we've considered) end up in the registration context that called `then()`.
+
+[02:47:32.0360] <Chengzhong Wu>
+I'd be curious how the library interprets the two spans, one that calls the `dialog.after().then` and one that triggered the dialog close event, are there any relationship between them?
+
+[02:52:05.0679] <Chengzhong Wu>
+My impression is that this is similar to https://github.com/WICG/observable?tab=readme-ov-file#concerns when wrapping an event handler in a promise and this handler will always been called in a new microtask, instead of the execution context when the event is been dispatched. If a library would like to avoid the microtask in this case but keep the `.then` API, it can return a thenable on `after()`, which invokes the handlers immediately, in the event's context.
+
