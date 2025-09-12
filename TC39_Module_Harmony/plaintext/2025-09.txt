@@ -19,3 +19,254 @@ hopefully it gets corrected soon!
 [20:35:23.0303] <guybedford>
 see you all tomorrow
 
+[09:02:09.0074] <nicolo-ribaudo>
+Meeting time!
+
+[14:28:56.0462] <kriskowal>
+nicolo-ribaudo guybedford what’s the current deal for preserving the referrer of a module source if it’s transferred over post message to another worker, such that relative module specifiers converge on the same sources for shallow dependencies?
+
+[14:30:23.0127] <kriskowal>
+I assume it’s currently an implementation- or host-defined behavior backed by the host data internal slot, made transferrable.
+
+[14:30:35.0579] <kriskowal>
+* I assume it’s currently an implementation- or host-defined behavior backed by the host data internal slot, made transferrable of postmessage and structuredclone.
+
+[14:34:07.0020] <kriskowal>
+I’m mulling a mechanism to bind a module source to its specifier explicitly like `import(new ModuleSource('import "../x.js"'), { base: new URL('lib/y.js', import.meta.url).href })` or `import.source` with same args to avoid execution (and incidentally have a different module memo key)
+
+[14:37:07.0853] <kriskowal>
+@bakkot hinted that using dynamic import to bind sources was an option, given that we (including me) disfavor using the `ModuleSource` constructor. He was referring specifically to `importHook`, which doesn’t necessarily apply to the base module specifier but could. If the base specifier is currently an implementation specific detail that of transferrable module sources, given that it’s necessarily a serializable string, we could adopt it in 262 and bind it either way.
+
+[15:12:53.0703] <guybedford>
+It's just the baseURL property of the HTML module script here, which is separately serialized and deserialized when transferring a module script. Because the module script is [[HostDefined]] on the module record, both the record and its "HTML wrapper" of the module script get serialized together
+
+[15:15:27.0789] <kriskowal>
+Yeah, that’s what I recall. Thanks.
+
+[15:15:30.0610] <guybedford>
+I think indirection would be needed either through an instance or through another field to support configurable ids. Alternatively this could be done specifically at registry injection time i.e. return { id, source } from the load hook
+
+[15:15:59.0489] <guybedford>
+* I think indirection would be needed either through an instance or through another field to support configurable ids. Alternatively this could be done specifically at registry injection time i.e. return { id?, source } from the load hook
+
+[15:16:42.0007] <kriskowal>
+The `importHook` case is actually fine, because the hook is invoked knowing the cache key, which is the base specifier already.
+
+[15:17:37.0257] <kriskowal>
+The case of a `ModuleSource(text)` lifted from text is not really germane yet since we don’t have a lift-from-text, but I’m thinking ahead to how we bind that to the supplementary base/referrer.
+
+[15:18:38.0541] <kriskowal>
+It can’t be the `[[HostDefined]]` slot because we can’t stomp over origin metadata for purposes of CSP.
+
+[15:19:21.0027] <kriskowal>
+So I think we just end up with a slot in 262 that tends to coïncide with information currently only in [[HostDefined]].
+
+[15:19:24.0939] <guybedford>
+in the ModuleSource(text) case we might have more flexibility to override the baseURL actually since theres another field on the module script I added to track whether it is 'evalish' or not
+
+[15:19:43.0508] <guybedford>
+so the baseURL is no longer a security check, but just for resolution at that point
+
+[15:20:07.0000] <guybedford>
+it's more in the non-eval case that it's a csp concern to override, although I guess we could always just have two baseURLs as well - cspBaseURL and resolverBaseURL
+
+[15:20:34.0785] <kriskowal>
+Alright, we agree up to this point and I think it’s just a flavor choice whether to bind the base with the ModuleSource constructor or `import.source`. I’m favoring `ModuleSource(text, { base })`
+
+[15:21:15.0915] <kriskowal>
+I think we agreed to have these separate a long while back.
+
+[15:21:25.0225] <guybedford>
+I wonder if we allow `new ModuleSource(existingModuleSource, { base })` for "reassigning" the base
+
+[15:21:39.0710] <guybedford>
+since `new ModuleSource()` is effectively the eval mode, that would bypass CSP concerns
+
+[15:21:43.0979] <kriskowal>
+Yeah, that’s an option in my opinion.
+
+[15:22:15.0932] <guybedford>
+I don't hate it either
+
+[15:22:43.0356] <kriskowal>
+There are cases where relocating the base for a host-imported source is useful. Moddable uses them.
+
+[15:23:31.0493] <kriskowal>
+For example, they often put a bunch of sources in ROM that are never executed in the initial realm but exist solely for mapping into a Compartment in different locations.
+
+[15:25:35.0621] <guybedford>
+I guess my remaining question is how to square this with registry hooks - if the result of the hook can override the URL
+
+[15:25:53.0519] <guybedford>
+maybe that's fine - the initial resolve picks a URL, the hook returns a module for that URL, the returned module overrides the URL
+
+[15:26:07.0562] <kriskowal>
+That’s actually table stakes.
+
+[15:26:33.0242] <kriskowal>
+There are lots of cases of aliasing, particularly through package.json exports/imports, where you import by one specifier and the module is executed from elsewhere.
+
+[15:27:04.0292] <kriskowal>
+But some of those cases are trickier than others and there are a variety of ways to handle it.
+
+[15:27:10.0323] <guybedford>
+the problem comes where the function is async - you would need the load hook to be sync with an async load - `load(url) -> { url, promise<ModuleSource> }`
+
+[15:27:27.0316] <guybedford>
+async resolver joyee pointed out earlier is a real concern
+
+[15:28:06.0346] <kriskowal>
+Yeah, the Compartment shim handles this case a bit more gracefully than that.
+
+[15:29:21.0177] <guybedford>
+fwiw in the module source proposal, I never precluded { id, moduleSource } from allowing identity distinct from moduleSource, and did call this out in a slide
+
+[15:29:30.0526] <kriskowal>
+The `importHook` can return a `ModuleSource`, and we’ve agreed that the `ModuleSource` carries a `base`. The Compartment is calling `importHook(specifier, options)` *after* creating an entry in the module map for the module record that the hook will fill, so cycles are handled.
+
+[15:30:12.0043] <guybedford>
+could be a poor version of instance identity to allow { id?, moduleSource } where id defaults to moduleSource.baseURL when otherwise unprovided
+
+[15:30:48.0221] <kriskowal>
+The `importHook` can also return a namespace or TBD a handle for a given module memo key (specifier, with options), to cover other cases.
+
+[15:32:16.0488] <kriskowal>
+Again, I think the binding to ID is adequately solved by `new ModuleSource(source, { base })` so `importHook` just returns a source that might be bound to a different base. For the purposes of `importHook`, the identity of the module source instance is not taken into account. That’s only germane if you `import(source)`.
+
+[15:32:36.0144] <guybedford>
+hmm I suppose `{ id, moduleSource }` is no different in ability than `new ModuleSource(moduleSource, { base })`, you're right ok I agree
+
+[15:33:03.0602] <guybedford>
+the problem is just the async resolver though, if we want to permit sync pipelines
+
+[15:33:12.0422] <kriskowal>
+That is, `import(specifier)` invokes `importHook` with a key based on the specifier and `import(source)` does not invoke `importHook` and uses the module source’s identity as the key in the module map.
+
+[15:33:57.0519] <guybedford>
+agreed
+
+[15:34:07.0574] <kriskowal>
+The Compartment shim handles synchronous pipelines with an `importNowHook` that is obliged to return synchronously.
+
+[15:35:15.0731] <kriskowal>
+In the absence of an `importNowHook`, `importNow(specifier)` works only if the transitive dependencies have already been loaded. As joyee mentioned today, a host like Node.js can avoid the races by implementing `importNowHook` and not providing an async hook at all.
+
+[15:35:58.0685] <kriskowal>
+But to cover the web and other environments, we have to provide the async loader path.
+
+[15:36:14.0704] <kriskowal>
+As a baseline.
+
+[15:36:43.0232] <guybedford>
+maybe we can discuss this more next time - but I still think it's nice to have a design that doesn't treat async and sync as separate whole implementations, but allows them to layer nicely
+
+[15:36:55.0945] <guybedford>
+of course, that's not a strong requirement, but if it's possible it seems slightly preferable to me
+
+[15:37:22.0462] <kriskowal>
+I agree. The question of possibility, given colored functions on the bottom.
+
+[15:37:30.0144] <kriskowal>
+* I agree. The question is possibility, given colored functions on the bottom.
+
+[15:37:44.0168] <guybedford>
+well it makes for a colourful discussion
+
+[15:39:07.0144] <kriskowal>
+It’s certainly possible to have async import fall through to the sync import if there’s a clear partition between synchronously and asynchronously loadable specifiers.
+
+[15:39:57.0903] <guybedford>
+The more I think about it I actually really like `new ModuleSource(moduleSource, { base })` so far, and the way it fits into the proposal. ModuleSource constructor spec when!?
+
+[15:41:50.0609] <kriskowal>
+Given the mood in the room, `ModuleSource(text)` might have to be in an Annex if anywhere.
+
+[15:42:09.0408] <kriskowal>
+But `new ModuleSource(source, { base })` would not have to wait.
+
+[15:42:33.0102] <guybedford>
+oh really? I wasn't aware there was still resistance to a new eval primitive
+
+[15:42:44.0225] <kriskowal>
+The proposal I’m working with Zb Tenerowicz (ZTZ/naugtur) on does not rely on `new ModuleSource(text)` but our big motivating use case really benefits from it.
+
+[15:42:56.0831] <guybedford>
+I mean, it already exists today with Blob, would just be much nicer to have a real representation
+
+[15:43:21.0027] <kriskowal>
+“No new paths to evaluating text” was in the feedback at last plenary.
+
+[15:44:55.0590] <guybedford>
+I see, I'd worry then if `new ModuleSource(source, { base })` could allow cross-agent violations between policies
+
+[15:45:03.0242] <kriskowal>
+I was just lamenting the other day that a `gzip(Uint8Array)=>Promise<Uint8Array>` function is trivialish on the current web and portable with Node.js but obligates the implementation to take a weird detour through `Blob` and `Response` with an arbitrary (`application/octet-stream` anyone?) MIME type.
+
+[15:46:13.0846] <kriskowal>
+That’s interesting. I would expect a mechanism like `postMessage` to serialize both the CSP origin and import base separately and not be a problem for cross-agent enforcement.
+
+[15:46:40.0371] <guybedford>
+right, so base is still required to be separate from the CSP-related baseURL, and we're back at two URLs on module scripts
+
+[15:46:49.0602] <guybedford>
+well three with the responseURL
+
+[15:47:47.0150] <kriskowal>
+This seems fine to me. Is that unpalatable?
+
+[15:47:59.0495] <guybedford>
+I don't think so, it's just another pointer
+
+[15:48:26.0485] <guybedford>
+but alternatively we could treat `new ModuleSource(source, { base })` as non-transferrable
+
+[15:49:54.0825] <kriskowal>
+I can’t imagine why that would be better but it also wouldn’t impact any of the cases I’m concerned with.
+
+[15:50:13.0294] <guybedford>
+also - if you don't need `new ModuleSource(text)` it might be an option to just permit `load -> Promise<{ id: string, module: ModuleSource }>` to not have to spec the constructor
+
+[15:51:06.0023] <guybedford>
+yeah it doesn't seem a major concern to me, just thinking it through as well. but these seem promising directions overall. please do feel free to ping me if I can help review
+
+[16:19:05.0719] <bakkot>
+that was probably me and I do still have that opinion
+
+[16:19:09.0469] <bakkot>
+I don't know if anyone else shares it though
+
+[16:20:17.0871] <kriskowal>
+(We can make progress without `new ModuleSource(text)` but I prefer `new ModuleSource(sourceOrText, { base? })` because it would be more coherent in the preferred end state. It’s been tough, in the face of irreducible requirements, to keep the `importHook` return type simple.)
+
+[16:25:58.0296] <kriskowal>
+I am hoping that, in the fullness of time, I can convince you that our carefully respecting CSP has your concerns covered, but until then, your’s is an opinion I’m accommodating to the extent I can, at least, by factoring these proposals so that the concern is separable from others. For some environments, having the option of lifting text will be attractive, so having an annex to keep them aligned is an accommodation that might work for everyone.
+
+[16:26:13.0361] <kriskowal>
+* I am hoping that, in the fullness of time, I can convince you that our carefully respecting CSP has your concerns covered, but until then, yours is an opinion I’m accommodating to the extent I can, at least, by factoring these proposals so that the concern is separable from others. For some environments, having the option of lifting text will be attractive, so having an annex to keep them aligned is an accommodation that might work for everyone.
+
+[16:26:26.0903] <bakkot>
+I don't think anyone should respect CSP :P
+
+[16:26:42.0778] <bakkot>
+(in the sense of, it is my opinion that it is a terrible specification, not in the sense of, we don't have to play by its rules)
+
+[16:26:49.0483] <kriskowal>
+Well, *respect* in a sense.
+
+[16:31:23.0220] <kriskowal>
+I too come from a camp that agrees that there are better ways to make the web safe than CSP, just not necessarily that SBOM provenance chains are always the best solution. Honestly, if CSP actually closed all exfiltration holes, I would consider it useful under certain circumstances.
+
+[16:33:40.0049] <bakkot>
+Definitely useful under certain circumstances but they're mostly either "you are literally google" or "you are a single-team shop", which covers approximately 0% of the web
+
+[16:33:46.0212] <bakkot>
+which reminds me I need to put together a talk on that subject...
+
+[16:34:02.0880] <kriskowal>
+I’m prepared to clap.
+
+
+2025-09-12
+[00:06:29.0717] <ljharb>
+i also have hands to put together for that topic
+
