@@ -59,3 +59,69 @@ but it's been a long time since I've looked at this
 [03:09:40.0002] <Aapo Alasuutari>
 https://rust-lang.zulipchat.com/#narrow/channel/213817-t-lang/topic/Writing.20a.20WebAssembly.20interpreter.20in.20Rust.20for.20wasm.20threads/with/488916330 for actually the exact same discussion (albeit from Wasm point of view, but it's the same point of view in the end)
 
+[09:51:20.0648] <Michael Ficarra>
+probably best to avoid installing any npm packages for a little while: https://www.reversinglabs.com/blog/shai-hulud-worm-npm
+
+[10:56:05.0286] <kriskowal>
+The best time to plug the postinstall scripts hole was yesterday, but today will do. There’s a tool for limiting postinstall script execution to a list configured by the project and by default denied. https://www.npmjs.com/package/@lavamoat/allow-scripts And I see that it might not be protecting people using some versions of yarn https://github.com/LavaMoat/LavaMoat/pull/1218 Please let me know if you have information we can post to provide guidance on how to use our package managers safely going forward. This would be a good use of the #tc39-tg3-security:matrix.org channel if folks would meet me there.
+
+[11:03:18.0720] <Michael Ficarra>
+nothing has changed in the last decade: https://blog.npmjs.org/post/141702881055/package-install-scripts-vulnerability
+
+[11:11:47.0319] <Michael Ficarra>
+hopefully enough people with publishing rights for major packages have MFA enabled on publish that it'll slow the spread
+
+[12:15:21.0062] <bakkot>
+npm enforces 2FA for people with publish right to popular packages
+
+[13:36:54.0849] <Aapo Alasuutari>
+Thinking on this a bit more, I don't think there's a way to implement ECMAScript SharedArrayBuffer related operations without inline assembly in Rust and C++: not only can you race (UB but could be fixed by using bytewise Relaxed operations), you can also do mixed-size atomic operations like CompareAndExchange: that's forbidden by C++ atomics as far as I can gleam but now we absolutely cannot fix this by using bytewise Relaxed operations as it would destroy the atomicity of the operation.
+
+So, it's ... problematic. At least until Rust decides to allow mixed-size atomics which it well might.
+
+[13:45:32.0967] <Andreu Botella>
+IIRC such atomic operations are always within an aligned 8-byte chunk
+
+[13:47:13.0465] <Andreu Botella>
+I think it's possible to implement the backing store as an `[AtomicU64]`
+
+[13:49:02.0309] <Aapo Alasuutari>
+Atomics can be used on any TypedArray backed by a SAB, so not limited to 8 bytes.
+
+[13:50:07.0115] <Andreu Botella>
+64 bits = 8 bytes
+
+[13:50:43.0908] <Andreu Botella>
+I don't think there's been proposals for a `Decimal128TypedArray` yet
+
+[13:51:01.0735] <kriskowal>
+There has not, but the possibility has been invoked.
+
+[13:51:58.0228] <Aapo Alasuutari>
+Ah sorry, I misunderstood your meaning. I thought you implied that the ECMAScript spec says that all atomic operations are secretly done in 8-byte chunks.
+
+[13:53:10.0650] <Aapo Alasuutari>
+But anyway, that leads to a possibly worse problem where all atomic operations less than 8 bytes, and all unordered operations, became CAS loops.
+
+[13:55:06.0430] <Andreu Botella>
+my understanding is that Rust's atomics do use CAS loops on a larger size sometimes
+
+[13:55:18.0812] <Aapo Alasuutari>
+Yes, but this would mean CAS loops on smaller types :)
+
+[13:55:50.0446] <Aapo Alasuutari>
+1 byte atomic write would need to CAS-loop on the whole 8 byte replacement to make sure it doesn't mangle the other 7 bytes.
+
+[13:58:32.0492] <Aapo Alasuutari>
+But I realise I'm actually talking silly things: there is a way to fix the problem of tearing appearing with atomic operations if the backing store is `[AtomicU8]`, and that is to just use a lock. Of course, ECMAScript spec says that at least 4 byte atomics should be lock free, so that's a little awkward.
+
+
+2025-09-17
+[19:20:54.0573] <Sacha Greif>
+hi all! just wanted to let you know I've started working on this year's State of JS survey questions. 
+
+If you'd like to preview them/leave feedback you can do so here: https://github.com/Devographics/surveys/issues/307
+
+[23:18:18.0818] <Aapo Alasuutari>
+* Yes, but this would mean CAS loops on smaller types :) (EDIT: oop, I misunderstood this; we're talking of the same thing)
+
