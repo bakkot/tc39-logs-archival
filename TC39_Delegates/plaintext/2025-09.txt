@@ -269,3 +269,57 @@ draft schedule link is up on the Reflector:  https://github.com/tc39/Reflector/i
 [13:27:08.0754] <Chris de Almeida>
 * 📢  draft schedule link is up on the Reflector:  https://github.com/tc39/Reflector/issues/568
 
+
+2025-09-20
+[17:56:19.0381] <Mathieu Hofman>
+Something is confusing me about AsyncGeneratorStart / AsyncGeneratorCompleteStep. Is the return value of an async generator not awaited? Does that mean the final iterator result may have a promise as its `value` ? From my testing that doesn't seem to be the case, but I don't see how that's happening in the spec.
+```
+(async function * () { return Promise.resolve(42); })().next().then(x => console.log(x)); // { value: 42, done: true }
+```
+
+[18:21:55.0198] <bakkot>
+awaiting of `return` values actually happens as part of the evaluation of the `return` itself
+
+[18:22:02.0510] <bakkot>
+https://tc39.es/ecma262/multipage/ecmascript-language-statements-and-declarations.html#sec-return-statement-runtime-semantics-evaluation 
+
+[18:24:48.0381] <Mathieu Hofman>
+Oh that is wild!
+
+[18:32:01.0010] <bakkot>
+This way it triggers finally statements 
+
+[18:32:05.0803] <bakkot>
+Which, also kinda weird
+
+[19:59:07.0594] <Mathieu Hofman>
+I'm not sure I understand, `finally` always executes if a `return` is in a `try`. Internally awaiting the return expression shouldn't change that. And if there was a `catch` it shouldn't trigger it, in the same way `yield`ing a rejected promise only triggers a `catch` if the consumer of the iterator called `throw`. (I might have gotten myself confused again with generator behaviors and afk so can't easily double check)
+
+[21:08:16.0729] <bakkot>
+sorry, I meant `catch` not `finally`
+
+[21:08:21.0429] <bakkot>
+and it doe trigger a `catch`
+
+[21:08:37.0974] <bakkot>
+```
+(async function*(){ try { return Promise.reject('hi'); } catch (e) { console.log('caught', e); } })().next()
+// caught hi
+```
+
+[21:09:13.0006] <bakkot>
+this is in contrast to async functions
+```
+(async function(){ try { return Promise.reject('hi'); } catch (e) { console.log('caught', e); } })().catch(e => console.log('did not catch', e))
+// did not catch hi
+```
+
+[21:09:53.0187] <bakkot>
+yielding a rejected promise does also trigger a `catch` incidentally
+
+[21:10:18.0504] <bakkot>
+which I am pretty sure is why `return` works that way in async generators
+
+[00:20:21.0718] <Mathieu Hofman>
+Well at least it's consistent. And now that you mention it, I think I knew that and just forgot about that oddity. 
+
