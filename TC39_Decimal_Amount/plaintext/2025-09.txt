@@ -254,3 +254,137 @@ https://github.com/tc39/proposal-amount/issues/54#issuecomment-3315302152
 [00:37:17.0549] <Jesse>
 the comment only makes sense if you realize that WH must have been looking at an old spec; we *did* make those changes
 
+[04:52:51.0659] <nicolo-ribaudo>
+sffc Does the discussion above mean that the V8 team would not be ok with adding unit conversion / smart units to these objects?
+
+[09:03:40.0256] <sffc>
+> <@nicolo-ribaudo:matrix.org> sffc Does the discussion above mean that the V8 team would not be ok with adding unit conversion / smart units to these objects?
+
+We didn't go into depth but I think it might actually be easier to make that argument than general arithmetic, if the goal is to exactly mirror what Intl would be doing, string to string
+
+[09:06:46.0509] <sffc>
+(I'm trying my best to channel the position I heard from them which probably is not 100% on the dot)
+
+[09:12:04.0395] <Rob Palmer>
+It seems important to have someone from V8 present during this topic. Do you know who will attend? 
+
+
+2025-09-22
+[23:06:09.0928] <Jesse>
+If we’re getting the calculations of significant digits wrong, even after adapting keep-trailing-zeros’s SDO, I wonder if there’s a bug in the SDO or whether I’m using it incorrectly
+
+[23:07:05.0892] <Jesse>
+what do we think of the suggestion to not even compute significant digits?
+
+[23:07:32.0141] <Jesse>
+JRL usually comes but I’m not sure if he’s in the V8 team
+
+[23:37:13.0431] <eemeli>
+Morning. I've not looked at issues yet, but not computing significant digits has been on my mind as a decent solution. As in, I don't think without further information we can know whether `'4200'` has two or four significant digits, or whether `'0.042'` and `'4.2e-2'` have the same or different numbers of significant digits. I'll go find an issue where to comment on this more publicly.
+
+[23:58:21.0934] <Jesse>
+regarding the issue of arithmetic, I thought we generally wanted to avoid that. At most, arithmetic would happen internally when doing unit conversions, but that's different from Amount offering you an API for doing arithmetic
+
+[23:58:47.0794] <Jesse>
+I'd say https://github.com/tc39/proposal-amount/issues/54 is a good candidate
+
+[00:02:21.0880] <nicolo-ribaudo>
+It seems like you just forgot to subtract from the number of fractional digits the exponent, for numbers written in exponential notation 
+
+[00:02:46.0631] <nicolo-ribaudo>
+And then use the conversion between fractional and significant that WH proposes in the issue?
+
+[00:03:02.0955] <Jesse>
+IIRC the spec already has a notion of "significant digit" whereby `4200` has 2 significant digits (a block of trailing zeros is ignored)
+
+[00:03:06.0944] <Jesse>
+*but*
+
+[00:03:16.0543] <Jesse>
+you're right that those *could* be significant
+
+[00:04:18.0611] <nicolo-ribaudo>
+We should convert between the two using the algorithm we've always told Mark when he asked about the relationship between the two
+
+[00:05:10.0600] <Jesse>
+the proposal as it stands does allow you to stipulate that `4200` has 4 digits
+
+[00:06:05.0397] <nicolo-ribaudo>
+That seems what I expect
+
+[00:06:10.0965] <nicolo-ribaudo>
+And 4.2e2 has 2
+
+[00:06:21.0183] <nicolo-ribaudo>
+> <@nicolo-ribaudo:matrix.org> We should convert between the two using the algorithm we've always told Mark when he asked about the relationship between the two
+
+significant = fractional + ceil(1+ log10(value)), I think
+
+[00:06:30.0442] <eemeli>
+Added my comment to #54.
+
+[00:07:37.0445] <Jesse>
+I thnk the keep-trailing-zeros would say `4200` has 4 if I understand http://tc39.es/proposal-intl-keep-trailing-zeros/#sec-runtime-semantics-stringintlmv 
+
+[00:07:56.0581] <nicolo-ribaudo>
+Idk I studied in school that for significant digits you include all the zeros on the right of the number
+
+[00:07:59.0596] <Jesse>
+right, we can calculate one from the other
+
+[00:08:02.0698] <eemeli>
+That's what it should be doing, yes.
+
+[00:08:08.0533] <Jesse>
+well, in a certain understanding of "significant digits"
+
+[00:08:19.0244] <nicolo-ribaudo>
+> <@nicolo-ribaudo:matrix.org> Idk I studied in school that for significant digits you include all the zeros on the right of the number
+
+Which makes the answer for 4200 quite clear
+
+[00:10:12.0950] <Jesse>
+I think the calculation approach doesn't work well with the current "ignore tailing zeroes, including in the integer part" perspective
+
+[00:10:38.0642] <Jesse>
+because it works with the mathematical value rather than a presentation of it
+
+[00:10:42.0220] <eemeli>
+I think saying how many significant digits 4200 has is problematic, and we should only do so if we need to. So, given that we can and do calculate how many fraction digits it has, what is the need for us to calculate significant digits for it?
+
+[00:11:27.0771] <eemeli>
+If it's in order to provide information about the number, then we'd be much better off reporting `integerDigits` in addition to `fractionDigits`.
+
+[00:11:44.0552] <Jesse>
+ah, interesting suggestion
+
+[00:13:20.0562] <eemeli>
+That pair is much more absolutely calculable from the value, match each other closely, and can e.g. give an indicator of how much space is needed to represent the number, or whether e.g. exponential notation might be appropriate for it.
+
+[00:14:06.0024] <nicolo-ribaudo>
+Mh I guess yeah if the goal is formatting/interchange you don't need significant digits
+
+[00:14:26.0564] <eemeli>
+To be clear, I'm not necesarily saying we _should_ include `integerDigits`, I'm trying to provide an alternative to the one use case I'm aware of for a calculated `significantDigits`.
+
+[00:16:02.0088] <Jesse>
+I think we should have that in our back pocket as a counterproposal; I expect WH to bring this up in discussion
+
+[01:59:33.0376] <Jesse>
+I don't quite see why the current spec fails to handle 0 and -0, but if I understand https://github.com/tc39/proposal-amount/issues/54#issuecomment-3316517702 correctly, the reason why we don't handle `"NaN"` correctly is because the SDO for StringIntlMV apparently doesn't handle that string? I took a look at the grammar and AOs and SDOs like `ToNumber` and `StringNumericValue` but don't see how those produce NaN. Is that the root cause of the concern?
+
+[02:03:11.0393] <Jesse>
+Ah, I think I see what is meant: we should "handle" `"NaN"` as a failure to parse a decimal string
+
+[02:05:01.0232] <Jesse>
+it took me a while to understand this becasue we've been talking about NaN as a valid string to be handled; but it seems that , following this approach,`"NaN"` is just an invalid notation for decimal strings, just like `"xyz"` would be an invalid decimal string
+
+[03:34:05.0439] <Jesse>
+there's a bit more: https://github.com/tc39/proposal-amount/issues/54#issuecomment-3317514477
+
+[03:35:36.0388] <Jesse>
+I wonder if we might want to just remove support for significant digits in the constructor and `with`, though we could keep the significant property (it would be calculated in the constructor)
+
+[03:36:08.0023] <Jesse>
+also, given the thinking of fraction digits that allows negative values, I wonder if we should also support that in the constructor and `.with`
+
