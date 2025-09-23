@@ -388,3 +388,166 @@ I wonder if we might want to just remove support for significant digits in the c
 [03:36:08.0023] <Jesse>
 also, given the thinking of fraction digits that allows negative values, I wonder if we should also support that in the constructor and `.with`
 
+[05:10:04.0255] <Jesse>
+https://github.com/tc39/proposal-amount/issues/64 is an attempt to settle on how we should address the issues raised by Agoric in recent TG3 calls
+
+[06:32:14.0339] <eemeli>
+I've just commented on both #54 and #64.
+
+I'm concerned that with negative fraction digits we'd be inventing a novel way of expressing numerical precision, and that this does not match what we already have in the language in Intl.NumberFormat and Number.p.toPrecision.
+
+[06:57:04.0509] <nicolo-ribaudo>
+I gave some examples in 54. Note that Intl.NumberFormat and Number.p.toFixed (toPrecision deals with significant digits, not fractionals) do not accept negative values but also never emit exponential notation. Negative fractional digits only ever happen with exponential notation.
+
+[06:57:12.0043] <nicolo-ribaudo>
+* I gave some examples in 54. Note that Intl.NumberFormat and Number.p.toFixed (toPrecision deals with significant digits, not fractionals) do not accept negative values but also never emit exponential notation. Negative fractional digits would only ever happen with exponential notation.
+
+[06:59:04.0098] <nicolo-ribaudo>
+The PostgreSQL case is actually more interesting than the Java one, since JS more frequently interfaces with it
+
+[07:03:20.0353] <Jesse>
+I just took a look at postgres.js and see that they just handle NUMERIC as strings https://github.com/porsager/postgres?tab=readme-ov-file#numbers-bigint-numeric 
+
+[08:44:26.0767] <sffc>
+I'll be channeling the Google position during plenary, fyi. Which is basically what I said on Friday
+
+[08:44:42.0512] <sffc>
+We had some additional discussion this morning
+
+[08:45:10.0404] <sffc>
+So I think keep the slides as they have been, and the name change will come as a comment from me
+
+[09:32:40.0272] <sffc>
+Oh I thought we were still asking for Stage 2
+
+[09:33:13.0946] <nicolo-ribaudo>
+Oh well, good that Ben still called out that it is for stage 2 on the agenda and stage 2 is on the table if the contention is resolved
+
+[09:33:25.0384] <sffc>
+ok
+
+[09:33:34.0322] <nicolo-ribaudo>
+Ideally we'll have a continuation for once WH is happy with Jesse's PR
+
+[09:53:43.0421] <nicolo-ribaudo>
+Rendering of negative fractional digits should always switch to exponential, right?
+
+[09:55:39.0927] <sffc>
+yeah if we allow them that's how they would need to behave, or we could reject them (and force significant digits to always be at least as many as integer digits)
+
+[10:01:17.0137] <sffc>
+30 minutes is optimistic Ben :)
+
+[10:01:54.0678] <nicolo-ribaudo>
+Is it correct that this is how Intl behaves? https://github.com/tc39/proposal-amount/issues/54#issuecomment-3320206259
+
+[10:03:22.0068] <sffc>
+"the table from Waldemar above" => which table? there are multiple tables in his OP
+
+[10:04:52.0615] <nicolo-ribaudo>
+_significantDigits_ section
+
+[10:04:57.0349] <Jesse>
+I think he means the corrected behavior table significant digits
+
+[10:06:04.0988] <Jesse>
+I'd prefer to work in a "safe space" with this significant digits, where we "know" what to do. What do we think about allowing significant digits to be present but throw if the given string uses exponential notation?
+
+[10:06:28.0991] <Jesse>
+(actualy even there we might run into trouble)
+
+[10:06:36.0597] <sffc>
+I believe the table under "significantDigits" aligns with my expectation and understanding of how Intl.NF behaves
+
+[10:07:18.0376] <sffc>
+Where the value 0 requires its own set of special rules
+
+[10:07:44.0257] <Jesse>
+I propose using -Infinity for zero; it makes the equation work
+
+[10:08:08.0446] <nicolo-ribaudo>
+I'm fine with either Infinity or 1 + fractional
+
+[10:08:11.0795] <nicolo-ribaudo>
+* I'm fine with either -Infinity or 1 + fractional
+
+[10:08:20.0429] <Ben Allen>
+I've messaged CDA about potentially getting more time than that
+
+[10:08:25.0524] <nicolo-ribaudo>
+(assuming that 1 + fractional is what Intl does)
+
+[10:31:56.0530] <eemeli>
+Not just Intl, also: `(0).toPrecision(3) === "0.00"`.
+
+[10:34:39.0283] <nicolo-ribaudo>
+I'm going to open a PR with how I think significant digits should be done
+
+[11:21:54.0906] <sffc>
+Since we have a continuation item now, would anyone like to have a meeting to plan how to address the issues from the V8 team?
+
+[11:22:10.0033] <sffc>
+(a champions call in advance of the continuation)
+
+[11:22:31.0077] <nicolo-ribaudo>
+I'd be happy to meet at :00, or right after the TC39 meeting
+
+[11:22:52.0169] <nicolo-ribaudo>
+Actually, I'm ready in 15 min too
+
+[11:26:05.0774] <Jesse>
+I could chat too
+
+[11:34:18.0890] <nicolo-ribaudo>
+https://github.com/tc39/proposal-amount/pull/66
+
+[11:56:50.0497] <sffc>
+I put a slot for right after TC39 but can move it up if there isn't otherwise a conflict with Mathieu's work
+
+[11:57:39.0697] <nicolo-ribaudo>
+I'm taking notes but I don't actually care to be present for these topics
+
+[11:57:58.0687] <nicolo-ribaudo>
+And for Eemeli it's already very late, I'd hate asking to stay around for longer :)
+
+[11:58:43.0411] <nicolo-ribaudo>
+I'll stop taking notes after this topic
+
+[12:04:09.0758] <Jesse>
+lmk where I should go
+
+[12:04:16.0196] <nicolo-ribaudo>
+eemeli / Ben Allen ? :)
+
+[12:04:17.0853] <Jesse>
+we can use the JS numerics call
+
+[12:05:27.0240] <eemeli>
+Yeah, I'm not up for a meeting after TC 39 ends, which will be at 23:00 my time.
+
+[12:05:35.0152] <nicolo-ribaudo>
+What about now?
+
+[12:05:39.0931] <sffc>
+I'm in https://meet.google.com/rnj-tbvq-qea
+
+[12:05:52.0579] <Jesse>
+joining
+
+[12:06:01.0406] <eemeli>
+Eh, fine.
+
+[13:11:05.0354] <nicolo-ribaudo>
+A slides duel where we keep switching screen between Shane's slides and Ben's slides
+
+[13:11:13.0310] <Ben Allen>
+no thank you
+
+[13:16:12.0524] <Jesse>
+a parallel zoom call
+
+
+2025-09-23
+[22:05:47.0413] <sffc>
+I've gotten one LGTM so far on my slides (which reiterate what I posted here earlier and what we discussed in the champions call). I like the idea of me presenting the position slides and then Ben presenting proposed solutions.
+
