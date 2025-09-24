@@ -7,3 +7,382 @@ Meeting time!
 [22:17:03.0691] <Steve Hicks>
 I spent some time today thinking about the yield issue.  I didn't come to any particularly compelling conclusions, but I listed out some use cases and considerations that I thought about here: https://hackmd.io/@sdh/SJmOBKAqeg - tl;dr is that I was expecting to find evidence that propagating context _into_ instead of _across_ the yield made the most sense, but instead it seemed a lot less clear.  One unanswered question I had (which I believe we've talked about but I don't recall the resolution) was the analogue with iterator helpers and whether `iter.map(mapper)` could be implemented with a generator or would need to use a hand-written iterator - ISTR it's the latter, that the mapper sees the dispatch context - in which case that would be a minor argument in favor of dispatch context for generators as well.  Anyway, no action is necessary here but I wanted to share the results of my thinking.
 
+
+2025-09-23
+[13:31:13.0995] <Steve Hicks>
+I had some personal issues come up this week and missed the session where we talked about yield*.  But I was remiss because I really wanted to use the opportunity to get a sense of how the broader committee might feel about extending this yield.  I don't know if there's any opportunity at this point, or if not, I suppose I could reach out individually to folks who we think might be most opposed?
+
+At this point, I'm still convinced that dropping all the spec around generators (so that there's no context preservation around any yields, and yield just propagates through from the next() call) is the right thing to do - (1) 99% of the time it's irrelevant, (2) it's better performance to not need to do the extra swapping, (3) in the rare cases where it's not irrelevant, I'm pretty sure dispatch-context is the correct choice, (4) it's much less invasive to wrap it to get the other behavior, (5) generators are more like data than code - e.g. https://gist.github.com/jkrems/04a2b34fb9893e4c2b5c
+
+[13:31:45.0945] <Steve Hicks>
+* I had some personal issues come up this week and missed the session where we talked about yield\*.  But I was remiss because I really wanted to use the opportunity to get a sense of how the broader committee might feel about extending this to also include ordinary yield.  I don't know if there's any opportunity at this point, or if not, I suppose I could reach out individually to folks who we think might be most opposed?
+
+At this point, I'm still convinced that dropping all the spec around generators (so that there's no context preservation around any yields, and yield just propagates through from the next() call) is the right thing to do - (1) 99% of the time it's irrelevant, (2) it's better performance to not need to do the extra swapping, (3) in the rare cases where it's not irrelevant, I'm pretty sure dispatch-context is the correct choice, (4) it's much less invasive to wrap it to get the other behavior, (5) generators are more like data than code - e.g. https://gist.github.com/jkrems/04a2b34fb9893e4c2b5c
+
+[13:32:15.0496] <Steve Hicks>
+* I had some personal issues come up this week and missed the session where we talked about yield\*.  But I was remiss because I really wanted to use the opportunity to get a sense of how the broader committee might feel about extending this to also include ordinary yield.  I don't know if there's any opportunity to still bring it up in plenary at this point, or if not, I suppose I could reach out individually to folks who we think might be most opposed?
+
+At this point, I'm still convinced that dropping all the spec around generators (so that there's no context preservation around any yields, and yield just propagates through from the next() call) is the right thing to do - (1) 99% of the time it's irrelevant, (2) it's better performance to not need to do the extra swapping, (3) in the rare cases where it's not irrelevant, I'm pretty sure dispatch-context is the correct choice, (4) it's much less invasive to wrap it to get the other behavior, (5) generators are more like data than code - e.g. https://gist.github.com/jkrems/04a2b34fb9893e4c2b5c
+
+[13:47:33.0569] <bakkot>
+my understanding of the presentation is that it made `yield*` more like repeated `yield`, so I don't know what "extending this to also include ordinary yield" means
+
+[14:05:51.0204] <Steve Hicks>
+This is the opposite of my understanding.  As I understand it, the previous situation was that `yield*` was basically just repeated `yield`, but the discussion this morning was to make it so that `yield*` would _not_ restore the generator's internal/initial context but would instead pass on the next() calling context into the delegate.
+
+[14:10:24.0593] <Justin Ridgewell>
+`for (const it of gen()) yield it` will now behave differently than `yield* gen()`
+
+[14:10:34.0733] <bakkot>
+oh, sorry, you're right, I'm wrong
+
+[14:10:51.0432] <Justin Ridgewell>
+Only the inner `gen()` sees the difference, the wrapping generator does not.
+
+[14:11:25.0139] <Steve Hicks>
+Adding one more point to my earlier paragraph: (6) this would also restore consistency between `yield` and `yield*`
+
+[14:12:56.0714] <bakkot>
+I'm still not totally sure what "extending this to also include ordinary yield" means though
+
+[14:13:08.0361] <bakkot>
+now both behave as, snapshot context before the expression, restore it after
+
+[14:13:48.0264] <bakkot>
+(or else I am still misunderstanding)
+
+[14:14:10.0756] <Steve Hicks>
+ah, I see what you're saying
+
+[14:15:06.0286] <Steve Hicks>
+Yes, that part hasn't changed - yield* and yield both snapshot and restore around them within the body of the generator
+
+[14:16:44.0213] <Steve Hicks>
+In that sense, it's less of an extension.  What I was referring to is that previously both versions prevented access to the next() calling context, whereas now yield* has access to it (if the delegate iterator is an ordinary object, rather than a generator), but yield doesn't expose that access at all (since there's no other next() call to delegate through).
+
+[14:17:37.0079] <Steve Hicks>
+What I'm talking about is dropping the snapshot-and-restore before/after yield behavior, which _would_ expose the context next() was called in to the generator body directly
+
+[14:18:21.0811] <bakkot>
+that seems very wrong to me
+
+[14:18:33.0711] <bakkot>
+I guess I just don't buy the argument about generators being more data-like
+
+[14:19:56.0405] <Mathieu Hofman>
+Yeah I think the restore semantics inside generators are still the correct ones
+
+[14:21:07.0573] <Mathieu Hofman>
+There is still a general problem that some code is interested in the trigger context rather than the continuation context, but that's not specific to generators
+
+[14:22:18.0414] <Jan Olaf Martin>
+A question here would be: What are the situations where yield would meaningfully restore context that _isn't_ already restored by the scheduling mechanism that calls next?
+
+[14:23:40.0146] <Steve Hicks>
+This is definitely still a general problem.  My point is that generators will almost never actually observe any difference (since they're almost always iterated in the same context they're instantiated in) but in the cases when that's not the case, the simpler "don't do anything with context" behavior seems more likely to be correct - and as a bonus, it's a performance win in the vast majority of cases where it didn't matter in the first place.
+
+[14:24:05.0321] <Steve Hicks>
+Which is basically what Jan was saying.
+
+[14:24:25.0900] <Steve Hicks>
+* Which is basically what Jan just said, in a few more words.
+
+[15:05:36.0233] <bakkot>
+Basically any time you're doing anything more complicated than just iterating the whole thing in one shot, I would think
+
+[15:06:12.0169] <bakkot>
+I guess this is not all that common, but e.g. I have this helper where I want a function to be sync when passed a sync callback and async when passed an async callback
+
+```
+function split(genFn) {
+  function runSync(...args) {
+    const it = genFn(...args);
+    let next = it.next();
+    while (true) {
+      if (next.done) return next.value;
+      next = it.next(next.value);
+    }
+  }
+
+  async function runAsync(...args) {
+    const it = genFn(...args);
+    let next = it.next();
+    while (true) {
+      if (next.done) {
+        return await next.value;
+      }
+      try {
+        next = it.next(await next.value);
+      } catch (err) {
+        next = it.throw(err);
+      }
+    }
+  }
+
+  return { sync: runSync, async: runAsync };
+}
+```
+
+[15:06:40.0518] <bakkot>
+and I think it would be pretty weird if the async output of this helper did not work like the equivalent async function
+
+[15:10:45.0566] <Justin Ridgewell>
+They will be exactly equivalent in the current spec text, the new spec text, and with Steve's suggested change.
+
+[15:11:31.0277] <bakkot>
+Ah, because the async wrapper handles the state? Ok
+
+[15:11:34.0091] <Justin Ridgewell>
+The 1 edge case that would cause a difference is so niche that I don't want to write it, it will almost never come up
+
+[15:11:42.0881] <Justin Ridgewell>
+Exactly
+
+[15:11:52.0390] <Justin Ridgewell>
+The `await next.value` will do the capture for you
+
+[15:12:07.0120] <bakkot>
+Ok I'm a bit less worried about the proposed change then
+
+[15:13:31.0793] <bakkot>
+I can imagine e.g. having multiple async "workers" which are pulling from a generator as a source of tasks, where the generator wants to use the state when it was created not the state in each worker
+
+[15:13:39.0405] <bakkot>
+but that's also pretty niche
+
+[15:14:58.0008] <Justin Ridgewell>
+That can be handled very easily with `Snapshot`
+
+[15:15:33.0679] <Justin Ridgewell>
+And whether you would need that depends on if the workers are created outside the snaphot you want to propagate anyways
+
+[15:15:40.0996] <bakkot>
+I mean, sure, you can always snapshot and restore around each `yield` manually, right? 
+
+[15:15:52.0470] <Justin Ridgewell>
+* And whether you would need that depends on if the workers are created outside the context you want to propagate anyways
+
+[15:16:02.0709] <nicolo-ribaudo>
+Fwiw I'm not against what Steve is proposing -- what I presented today is not my preferred solution but a compromise to push very slightly towards that direction.
+
+[15:16:35.0560] <Justin Ridgewell>
+No, not without accepting a snapshot as part of the gen's parameters
+
+[15:17:09.0825] <nicolo-ribaudo>
+Because the generator body already runs after the first .next() and not in the function call, right?
+
+[15:17:15.0858] <nicolo-ribaudo>
+* Because the generator body already runs after the first .next() and not in the gen function call, right?
+
+[15:17:24.0956] <bakkot>
+IIRC parameter expressions run at the time the generator is called so you can do `, snapshot = AsyncContext.snapshot()` and not require the caller to pass it explicitly
+
+[15:17:29.0917] <bakkot>
+but that is kind of weird yes
+
+[15:17:30.0149] <Justin Ridgewell>
+Also because you can't wrap `yield` or `await`
+
+[15:17:35.0509] <Justin Ridgewell>
+* Also because you can't wrap `yield` or `await` in a closure
+
+[15:18:31.0782] <Justin Ridgewell>
+You'd have to wrap the code before and after the `yield`/`await`, and break out of your snapshots everytime out wanted to yield/await a new value.
+
+[15:18:43.0493] <Justin Ridgewell>
+It's sooo cumbersome
+
+[15:28:22.0749] <Jan Olaf Martin>
+This sounds to me like the same issue you'd have if you had a "task factory function". And you could also argue for the exact opposite - that if it needs to do work in the context of the worker task, you maybe _want_ that work to be tracked in that context. Definitely all very speculative and niche but it seems like that would be even harder if yield "forces" a context restore?
+
+[15:29:18.0613] <bakkot>
+I have a hard time imagining a case where a generator is the natural way to express the production of work but you want the body of the generator to be evaluated in the context of the worker tasks
+
+[15:30:16.0631] <Justin Ridgewell>
+An easy one is storing `workerId` in an `Async.Variable`
+
+[15:30:41.0396] <Jan Olaf Martin>
+and the produced work might want to close over a trace or span id
+
+[15:30:57.0902] <Justin Ridgewell>
+The producer could then read the worker's id (or trace/span/etc)
+
+[15:30:58.0340] <Jan Olaf Martin>
+and it should close over the trace of the worker task, not the creation of the queue/generator
+
+[15:31:47.0364] <Jan Olaf Martin>
+tbh, that _feels_ more likely than the case where it needs to close over context from the generator creation. again, in the unlikely scenario that we're already in
+
+[15:31:56.0352] <bakkot>
+Why would the generator want the `workerId`?
+
+[15:32:11.0992] <bakkot>
+I would really naturally expect it to close over the creation of the queue
+
+[15:32:16.0625] <Jan Olaf Martin>
+because it might create values that do async work (e.g. run async functions and yield promises)
+
+[15:32:45.0633] <bakkot>
+but again why would those things want the context of the workers?
+
+[15:32:56.0744] <bakkot>
+the workers are not the thing which caused the work to be done
+
+[15:33:00.0701] <Jan Olaf Martin>
+because otherwise you wouldn't be able to trace IO to the worker task?
+
+[15:33:00.0840] <bakkot>
+the thing which made the generator is that thing
+
+[15:33:16.0945] <bakkot>
+... why would you want to trace IO to the worker task?
+
+[15:33:24.0210] <bakkot>
+Maybe you are imagining a different thing than I am?
+
+[15:34:07.0271] <Justin Ridgewell>
+We're just making hypotheticals, but I often deal with async logging that I'd like match
+
+[15:34:36.0589] <Justin Ridgewell>
+Eg, concurrent calls from worker1 and worker2, which are executing producer code with `await`s in it
+
+[15:34:59.0957] <Justin Ridgewell>
+Without `workerId.get()`, the logs will appear jumbled
+
+[15:35:38.0270] <Justin Ridgewell>
+With consumer side propagation, we could do `console.log(workerId.get(), …)` and match the sequential execution of both
+
+[15:38:07.0086] <Justin Ridgewell>
+* Without `workerId.get()`, the logs will appear jumbled `start start end end`
+
+[15:38:33.0461] <Justin Ridgewell>
+* With consumer side propagation, we could do `console.log(workerId.get(), …)` and match the sequential execution of both: `w1:start w2:start w1:end w2:end`
+
+[15:38:39.0646] <Justin Ridgewell>
+* Without `workerId.get()`, the logs will appear jumbled: `start start end end`
+
+[15:38:48.0345] <Jan Olaf Martin>
+Quick and dirty attempt from my side, very similar id: https://gist.github.com/jkrems/9fa7fe92bdc2b8a4b1964c971882c6bd
+
+[15:40:13.0123] <Jan Olaf Martin>
+* Quick and dirty attempt from my side, very similar idea to what Justin described: https://gist.github.com/jkrems/9fa7fe92bdc2b8a4b1964c971882c6bd
+
+[15:42:59.0637] <Jan Olaf Martin>
+bakkot: Did you have an example on your end of when the context when entering the generator would be the more useful one (in a case where the two are actively different)? That might complete the picture :)
+
+[15:45:49.0631] <Jan Olaf Martin>
+* Quick and dirty attempt from my side, very similar idea: https://gist.github.com/jkrems/9fa7fe92bdc2b8a4b1964c971882c6bd
+
+[16:17:59.0546] <bakkot>
+I am imagining something like
+
+```
+let treeId = new AsyncContext.Variable();
+
+async function fetchChildren(node) {
+  console.log(`fetching children for node in tree from file ${treeId.get()}`);
+  return thing;
+}
+
+async function* walk(node) {
+  for (let child of await fetchChildren(node)) {
+    yield child;
+    if (child.hasChildren) {
+      yield* walk(child);
+    }
+  }
+}
+
+let runner = new TaskRunner({ workers: 4 });
+
+document.querySelector('#process').addEventListener('click', async () => {
+  let file = document.querySelector('#file').files[0];
+  let tree = parse(await file.bytes());
+  treeId.run(file.name, () => {
+    runner.add(walk(tree).map(console.log));
+  });
+});
+```
+
+[16:19:00.0066] <bakkot>
+the fact that the TaskRunner is the thing coordinating work is not relevant to the generator or the things it's calling; it only care about the context which created the work
+
+[16:20:42.0250] <bakkot>
+(here I am imagining TaskRunner is something like, race reads from the first `workers` iterables, then read the next one, etc, looping back to the start when the end of the list is reached and removing an iterable once it is finished)
+
+[16:20:52.0463] <bakkot>
+* (here I am imagining TaskRunner is something like, `Promise.race` reads from the first `workers` iterables, then read the next one, etc, looping back to the start when the end of the list is reached and removing an iterable once it is finished)
+
+[16:55:40.0840] <Mathieu Hofman>
+> <@bakkot:matrix.org> I guess this is not all that common, but e.g. I have this helper where I want a function to be sync when passed a sync callback and async when passed an async callback
+> 
+> ```
+> function split(genFn) {
+>   function runSync(...args) {
+>     const it = genFn(...args);
+>     let next = it.next();
+>     while (true) {
+>       if (next.done) return next.value;
+>       next = it.next(next.value);
+>     }
+>   }
+> 
+>   async function runAsync(...args) {
+>     const it = genFn(...args);
+>     let next = it.next();
+>     while (true) {
+>       if (next.done) {
+>         return await next.value;
+>       }
+>       try {
+>         next = it.next(await next.value);
+>       } catch (err) {
+>         next = it.throw(err);
+>       }
+>     }
+>   }
+> 
+>   return { sync: runSync, async: runAsync };
+> }
+> ```
+
+We have the same thing in https://www.npmjs.com/package/@endo/trampoline
+
+
+2025-09-24
+[17:01:45.0045] <Mathieu Hofman>
+* We have a similar thing in https://www.npmjs.com/package/@endo/trampoline
+
+[17:34:05.0066] <Justin Ridgewell>
+Importantly, the TaskRunner's `promise.then()` (or `await`s) would automatically propagate the context that you started the walk from
+
+[17:34:55.0965] <Justin Ridgewell>
+You could code `TaskRunner` in a way where this breaks, eg, queueing multiple promises but not calling `.then()` until a much later flush call
+
+[17:35:20.0242] <Justin Ridgewell>
+But that's the reason we have `Snapshot`, to support that kind of usecase
+
+[17:36:29.0721] <Justin Ridgewell>
+I'd liken it more to doing
+```
+  const cb = () => {…}
+  treeId.run(file.name, cb);
+```
+
+[17:36:54.0922] <Justin Ridgewell>
+That `cb` isn't going to propagate a the registration context automatically
+
+[17:37:10.0630] <Justin Ridgewell>
+* That `cb` isn't going to propagate a the creation context automatically
+
+[18:34:04.0934] <Steve Hicks>
+That's exactly right - in most cases where you actually want to retain that initial context, you've already got something else that's seeing to it that it will happen.  But for cases where the calls to next() are happening from entirely different contexts, the tracing use case is very often interested in the most recent/immediate cause for the work being done, and other use cases may be as well.  For instance, an implicit abort signal could be attached to a request - if the request is doing a small increment of work in a generator, it's reasonable to want that abort signal to control that chunk of work (and if you want the "initialization" signal, you can capture it via a parameter initializer - I agree that's a little non-idiomatic, but it's a lot _less_ non-idiomatic than the `yield*` helper function NRO showed this morning, which (FWIW) doesn't even work for code before the first yield.
+
+[18:45:49.0615] <Justin Ridgewell>
+* I'd liken it more to doing
+
+```
+  const cb = () => {…}
+  runner.add(file.name, cb);
+```
+
