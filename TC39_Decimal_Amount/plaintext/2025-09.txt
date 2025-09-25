@@ -561,3 +561,526 @@ Slides for the Intl MV Limit: https://docs.google.com/presentation/d/1V1BC6PtJ7-
 - Slide 6: How do you get to 20k digits with a 10k limit on significant digits?
 - Slide 7 should probably mention removing the spec-mandated limits as an alternative, even if it's not preferred.
 
+[07:28:20.0995] <sffc>
+Slide 3 already says "The limit currently applies only to String, not to BigInt." I'll try to be more clear that everything that follows also applies only to String and not BigInt.
+
+20k digits because there are 10k before the decimal point and 10k after the decimal point.
+
+OK I'll add that alternative.
+
+[07:32:11.0645] <eemeli>
+> 20k digits because there are 10k before the decimal point and 10k after the decimal point.
+
+... of which the fraction digits will be all zeros due to the 10k significant digit limit, no?
+
+[07:49:55.0689] <sffc>
+The significant digit limit in the PR is not 10k digits; it is up to 10k digits before the decimal separator and up to 10k digits after the decimal separator, or up to 20k total
+
+[07:56:20.0741] <eemeli>
+sffc:  Ok, I'd misunderstood the limits based on _q_ in the algorithm, and got confused by your use of "significant digits" in the slides and previously. Isn't the limit then a limit on **fraction digits** instead?
+
+[08:14:29.0815] <ljharb>
+I’m confused; why would the name “amount” imply arbitrary math, and what’s the danger of someone thinking it does for the 3 seconds before they realize they can’t?
+
+[08:15:23.0426] <ljharb>
+(also the name is a major semantic imo and should block stage 2)
+
+[08:15:29.0718] <Jesse>
+I also don't quite register that implication but I'll sympathize with the thinking, in aligment with "naming is hard"
+
+[08:16:07.0591] <ljharb>
+right but what’s the problem of someone thinking that
+
+[08:16:15.0930] <sffc>
+Temporal names weren't decided until during Stage 2
+
+[08:16:19.0559] <ljharb>
+people intuit wrong things all the time
+
+[08:16:26.0539] <Jesse>
+Eemeli reminded us that "amount" -- which was not the original name -- was chosen to align with `<amount>`
+
+[08:16:51.0739] <ljharb>
+> <@sffc:mozilla.org> Temporal names weren't decided until during Stage 2
+
+the global “Temporal” was decided before stage 2; this isn’t within a namespace so it’s unrelated
+
+[08:17:47.0107] <ljharb>
+property names on an object aren’t a major semantic; the root container of a thing is
+
+[08:18:40.0294] <ljharb>
+> <@ljharb:matrix.org> people intuit wrong things all the time
+
+so why does it matter if a few people intuit the wrong thing? 
+
+[08:20:20.0205] <Jesse>
+my hope is that aligning with `<amount>` helps here because `<amount>` is also just basically a container
+
+[08:24:02.0063] <ljharb>
+also i do not understand why we'd remove tonumber and tobigint; you can already put the string into the constructors so why make it much less ergonomic and much more likely to be done incorrectly?
+
+[08:33:38.0018] <nicolo-ribaudo>
+eemeli I can't get on the queue right after you, but an interchange example is PostgreSQL. It supports "number with X fractional digits" column types, and a generic adapter can only represent it as an amount
+
+[08:33:42.0923] <nicolo-ribaudo>
+Then user code decides how to interpret it
+
+[08:33:57.0598] <nicolo-ribaudo>
+Just in case you want to mention it
+
+[08:39:04.0627] <Richard Gibson>
+more precisely, number with total digit count X with a fixed relationship to the decimal point: https://www.postgresql.org/docs/current/datatype-numeric.html#DATATYPE-NUMERIC-DECIMAL
+
+[08:57:27.0853] <eemeli>
+Should we ask for Stage 2?
+
+[09:01:17.0719] <sffc>
+In a continuation
+
+[09:01:54.0369] <ljharb>
+have we been listening to the same topic?
+
+[09:02:13.0873] <nicolo-ribaudo>
+Do we think a continuation is going to help convincing more people? The only thing that I think we could still explore is showing how annoying math is to the V8 team, even with toNumber()
+
+[09:02:59.0191] <ljharb>
+multiple delegates have expressed that they're unconvinced this is better than "an object shape", and i've indicated that the root name is a major semantic blocking stage 2
+
+[09:05:21.0172] <Jesse>
+I got the impression that the name isn't much of an issue; that is, the idea of renaming wouldn't be a solution
+
+[09:05:32.0065] <nicolo-ribaudo>
+I think we should present again the unit conversions proposal, asking:
+
+- do we want this
+- if so, where would we put it
+
+[09:06:05.0618] <nicolo-ribaudo>
+Because that answers:
+- why not just a protocol
+- why not in Intl
+
+And I was hoping that plain Amount is sufficiently self-motivated
+
+[09:06:16.0881] <nicolo-ribaudo>
+But that would show why you need _something_ to attach things on
+
+[09:26:33.0984] <sffc>
+I think there's still headroom to get an understanding between the V8 position and the Jordan position
+
+[10:43:01.0817] <sffc>
+My read of the room is that V8 is the only stakeholder who doesn't agree with the name Amount. Is that right?
+
+[10:43:48.0573] <Ben Allen>
+That appears to be correct
+
+[10:46:50.0221] <sffc>
+Ok so putting the name aside, V8 _seems_ okay with Amount as proposed if it has only toString, resulting in code such as `Number.parseFloat(amount.toString())` if someone wanted to make it into a Number. (Number.parseFloat conveniently appears to ignores annotations)
+
+[10:48:10.0825] <sffc>
+Besides trying to address V8's position, I think this is _better than_ Amount.prototype.toNumber() because it makes it explicit that rounding/truncation might happen
+
+[10:57:22.0405] <sffc>
+Also, my read of the last 20 minutes of discussion is that there's risk to introducing a protocol _without_ introducing a primordial, as we learned with Iterator. Is that right? Does that address Kevin's concern, or does he still prefer the protocol-only approach?
+
+[11:04:48.0090] <sffc>
+This proposal is getting to the point where it may appear to some like we're flailing and wasting committee time, but every time we engage in discussion, we _are_ making progress. It's just a really hard problem to solve.\
+
+[11:04:48.0331] <Jesse>
+that's also my read of the situation
+
+[11:05:35.0784] <Jesse>
+but it's phrased in such a way that I'm not confident that he'd be *ok* with a primordial
+
+[11:07:30.0339] <nicolo-ribaudo>
+What's our plan for unit conversion methods? Because if we want those on the prototype, that might be something to convince Kevin that we shouldn't do the protocol-only approach now
+
+[11:08:00.0532] <Jesse>
+I thought there some examples in the old measure slides & README
+
+[11:08:40.0910] <Jesse>
+like `new Amount("123.456", { unit: "km" }).convetTo("mile")` IIRC?
+
+[11:09:19.0319] <nicolo-ribaudo>
+I guess? But we have to be careful also to not imply "this proposal is motivated by a future proposal"
+
+[11:09:33.0743] <Jesse>
+I thought one skinny version of that involved just SI units (hence no "mile", etc.)
+
+[11:09:41.0331] <Jesse>
+right
+
+[11:10:13.0500] <nicolo-ribaudo>
+How's the current plenary topic going? Unfortunately it's going to be a little bit still until when I'm back
+
+[11:10:26.0452] <Jesse>
+typical security discussions: going long
+
+[11:10:26.0675] <Ben Allen>
+it seems like it'll be going for a while
+
+[11:18:19.0400] <eemeli>
+One way to motivate a reified Amount with unit conversion would be to propose `usage` as an Intl.NumberFormat c'tor option. In a separate proposal, mind.
+
+[11:18:55.0998] <eemeli>
+I.e. the Intl part of Smart Units.
+
+[11:23:34.0663] <ljharb>
+v8 hasn't made it clear why the name Amount is actually a problem btw - iow, what is the risk they see in someone having incorrect expectations that are immediately disproven when they interact with the api?
+
+[11:24:50.0206] <eemeli>
+I understood the concern to be that Amount starts a slippery slope to new arithmetic.
+
+[11:25:20.0284] <ljharb>
+"slippery slope" is also the most well-known logical fallacy, so i'd hope they have a better leg to stand on
+
+[11:34:50.0719] <Jesse>
+in a world with both Amount and Decimal, I would hope that programmers who might *think* they want arithmetic on Amount would discover arithmetic on Decimal, which I imagine is probably what they're looking for in most cases
+
+[11:37:27.0130] <sffc>
+Here's a comment that might clarify:
+> one concern with Amount is that it's somewhat overly generic, as evidenced by the observation that people have all sorts of expectations of what an Amount type should be able to do. For example, you have to explicitly tell them that Smart Units is a separate proposal. This is relevant because at the same time there are concerns that some of these expected use cases have questionable value and/or feasibility. So one way to decrease resistance is to make it clearer what the proposal is about by making the name more specific. And one of several ways of making it more specific is to make it at least hint at the use case. (I'm not saying that's the only or the best way; in fact perhaps NumberWithUnit would be preferable precisely because it's more neutral, more just-the-facts; OTOH it doesn't include the precision which IIUC is a big part of what motivates you personally to pursue this, and NumberWithUnitAndPrecision is getting rather unwieldy.)
+
+[11:37:37.0131] <ljharb>
+and they'd just `.toDecimal()` and do the math anyways, in that world
+
+[11:38:10.0554] <ljharb>
+but what is the *concrete damage* feared from it being overly generic?
+
+[11:38:23.0452] <ljharb>
+iow, ok, some people might have wrong expectations. why should i care about that?
+
+[11:39:30.0165] <ljharb>
+there's lots of things people expect to be able to do and then are sad to find out they can't or shouldn't. as long as that's not the majority, that's _fine_
+
+[11:39:47.0118] <ljharb>
+* there's lots of things people expect to be able to do and then are sad to find out they can't or shouldn't. as long as that's not the majority, that's _fine_. and if they want to be able to do it, or to "should" do it, then that's what new proposals are for
+
+[11:40:29.0997] <Jesse>
+well, we *did* start with "Measure", which is (imo) a good suggestive name
+
+[11:44:42.0000] <sffc>
+The position as I understand it is that it's good language design to lead people in the right direction and bad language design to mislead people.
+
+[11:48:33.0918] <Jesse>
+in the Prior Art issue it looks like "quantity" occurs pretty frequently
+
+[11:49:32.0126] <Jesse>
+maybe we could embrace the concern about "arbitraryt math" and say sure, we might end up doing a linear transformation (a*x + b) from one amount to another, but that's it
+
+[11:49:32.0584] <eemeli>
+If we do want to emphasize that this isn't meant for arithmetic, we should just call it Intl.Amount.
+
+[11:49:39.0440] <Jesse>
+(thninking ahead to unit conversion)
+
+[11:51:30.0015] <nicolo-ribaudo>
+I understand API misleading people, but "Amount" doesn't tell me "math" more than any of the other names (even NumberWithUnit) do
+
+[11:52:39.0314] <sffc>
+I agree, but there's at least one person on the V8 team who think that Amount does imply more. It might be something we can iterate on offline.
+
+[11:53:15.0491] <nicolo-ribaudo>
+I would actually say that anything that contains Number or similar in the name makes me think more of math
+
+[11:53:27.0729] <eemeli>
+Btw, I've generated a concern for myself about the meaning of this:
+```
+let nf = new Intl.NumberFormat('en', { style: 'percent' })
+nf.format(new Amount(0.1234, { fractionDigits: 2 }))
+nf.format({ value: 0.1234, fractionDigits: 2 })
+```
+should either/both of those format as `12%` or `12.34%`? If we consider an object protocol, that is.
+
+[11:53:29.0060] <Jesse>
+concretely, could we just iterate on a list? We did present that in the 1st continuation today is the name issue
+
+[11:53:46.0473] <Jesse>
+(I guess that's probably a good thing -- opportunity for endless bikeshedding)
+
+[11:53:58.0392] <nicolo-ribaudo>
+> <@eemeli:mozilla.org> Btw, I've generated a concern for myself about the meaning of this:
+> ```
+> let nf = new Intl.NumberFormat('en', { style: 'percent' })
+> nf.format(new Amount(0.1234, { fractionDigits: 2 }))
+> nf.format({ value: 0.1234, fractionDigits: 2 })
+> ```
+> should either/both of those format as `12%` or `12.34%`? If we consider an object protocol, that is.
+
+I'd say 12%
+
+[11:56:18.0914] <ljharb>
+i agree. but i think that the vast majority of people won't be misled here.
+
+[11:56:38.0150] <ljharb>
+then it's not meant for non-intl use cases, which is inaccurate.
+
+[11:57:07.0705] <ljharb>
+right but there will always be nonzero people who have incorrect expectations. that's notable but shouldn't ever force a rename
+
+[11:57:53.0740] <ljharb>
+iow just with our sample size of 100ish, it sounds like only 1-2 people might have the incorrect expectation here, and that seems perfectly acceptable to me
+
+[11:58:11.0243] <ljharb>
+* iow just with our sample size of 100ish, it sounds like only 1-2 people might have the incorrect expectation here, and that seems perfectly acceptable to me, esp when there's no equally good alternative
+
+[12:06:04.0307] <eemeli>
+The challenge with the object protocol form at least is that this is what we have now:
+```
+let nf = new Intl.NumberFormat('en', { style: 'percent', maximumFractionDigits: 2 })
+nf.format(0.1234)
+```
+results in `12.34%`.
+
+[12:19:05.0042] <sffc>
+Ben Allen or Jesse, it would be productive if you could scrub the notes as well as the matrix to identify a comprehensive list of delegates who had opinions one way or another about the proposal so that we can have an action plan to get alignment before the next meeting.
+
+[12:20:46.0514] <sffc>
+The goal should be to not return to plenary until we have out-of-band +1s from every organization with delegates who have opinions on the proposal.
+
+[12:21:30.0883] <sffc>
+I remain cautiously optimistic that there's still light at the end of the tunnel, but it will take time and creativity.
+
+[12:22:41.0765] <Jesse>
+agree
+
+[12:23:16.0044] <Jesse>
+it seems that the name is a real (mental) blocker for some; I propose creating an issue about that
+
+[12:23:30.0702] <Jesse>
+it would be great to spread that issue around
+
+[12:24:40.0776] <Jesse>
+there's also the issue of converters to Number and BigInt
+
+[12:25:47.0292] <ljharb>
+i think a container for stuff must provide a way to extract each item independently 
+
+[12:26:02.0679] <eemeli>
+Eh, conversion via string works fine esp. if the Amount has no unit. And if it might, user code will need to deal with that.
+
+[12:26:06.0225] <ljharb>
+if it's parsing from a string, nobody should ever have to replicate that parsing logic outside of a polyfill
+
+[12:26:16.0197] <eemeli>
+As in, `Number(amount)` and `BigInt(amount)`.
+
+[12:26:19.0992] <ljharb>
+* if it's parsing from a string, nobody should ever have to replicate that parsing logic outside of a polyfill - that'd be a recipe for disaster
+
+[12:26:30.0002] <ljharb>
+right but "stripping off the unit" is a problem, for bigint at least
+
+[12:26:55.0449] <ljharb>
+(and it's pretty obvious that `new Amount(3.5).toBigInt() === 3n`)
+
+[12:26:57.0194] <eemeli>
+`Number('1[kilogram]')` also fails.
+
+[12:27:03.0297] <Jesse>
+I can also put a Temporal-style coobook together
+
+[12:27:09.0628] <ljharb>
+true, but there's parseFloat too. there's no parseBigInt tho
+
+[12:27:11.0782] <Jesse>
+it wouldn't be nearly as big as Temporal's but it might help
+
+[12:27:49.0989] <Jesse>
+oh, interesting to hear that intuition -- atm that would throw (because it's not an integer)
+
+[12:28:16.0739] <Jesse>
+like rounding beforehand to make it into an integer
+
+[12:28:52.0408] <ljharb>
+i mean i could do something convoluted like "with zero fractional digits" first but it's pretty silly to make me jump through that hoop
+
+[12:29:11.0827] <ljharb>
+converting any numeric to a bigint obviously will drop the fractional part (assuming it doesn't throw)
+
+[12:29:22.0733] <ljharb>
+just because bigint made a bunch of user-harmful decisions wrt throwing doesn't mean the rest of the language has to
+
+[12:29:57.0164] <Jesse>
+the spec at the moment reflects the intuition that 3.5 would throw for the same reason that `BigInt("3.5")` throws
+
+[12:31:21.0257] <Jesse>
+these could even be cookbook item: "how to convert an Amount to a Number"; "how to convert an Amount to a BigInt"
+
+[12:33:28.0137] <ljharb>
+i really don't think we should use bigint as a precedent
+
+[12:33:48.0350] <ljharb>
+and altho that's not the hill i'll die on, i think there should be conversion methods regardless
+
+[12:34:41.0501] <Jesse>
+tbh I don't quite follow the thinking that says "if we have toNumber() this is a slippery slope to people doing math". I'm playing devil's advocate and trying to get into their shoes
+
+[12:35:54.0315] <Jesse>
+I thnk that comment was even packaged as a comment almost about decimal, not about amount as such
+
+[12:36:01.0535] <eemeli>
+Thinking of a protocol-only approach, that too should include a way to assign precision relating to the numerical value, rather than its formatted representation. Which is probably best done via a digit string representation. So that leads to something like `Math.stringify()` that would take a value and a bag of options that would look very much like the planned Amount options bag.
+
+[12:36:03.0951] <Jesse>
+but I would need to go back to the notes
+
+[12:37:31.0735] <eemeli>
+I'm going to need to firm up my thoughts a bit, but I'm starting to think that we ought to drop the `.fractionDigits` and `.significantDigits` accessors.
+
+[12:37:43.0355] <eemeli>
+* I'm going to need to firm up my thoughts a bit, but I'm starting to think that we ought to drop the `.fractionDigits` and `.significantDigits` accessors from Amount.
+
+[12:38:30.0582] <ljharb>
+again, if it's a container for a thing, it must provide access to each of those things
+
+[12:38:43.0503] <ljharb>
+so i don't think the accessor can be dropped without dropping the concept
+
+[12:38:46.0093] <eemeli>
+If this did result in a BigInt value, why would it be `3n` and not `4n`?
+
+[12:39:07.0531] <ljharb>
+ha, ok true, typical JS rounding would have that be 4n
+
+[12:39:17.0978] <ljharb>
+pretend i said 3.4 :-p
+
+[12:39:19.0195] <Jesse>
+in certain moments we talk about Amounts being opaque 
+
+[12:39:26.0726] <eemeli>
+The digit counters aren't things that are contained, but modifiers for the value.
+
+[12:39:53.0852] <eemeli>
+Or at least that's one potential approach.
+
+[12:39:55.0126] <ljharb>
+if it's being stored internally as state, there needs to be a way to read that state (and "parse a string" doesn't count)
+
+[12:40:07.0484] <sffc>
+I think `new Amount(3.5).toBigInt()` should throw and if you want to guarantee that it's safe you should `new Amount(3.5).withFractionDigits(0, { roundingMode: "trunc" }).toBigInt()`
+
+[12:40:35.0376] <ljharb>
+fwiw i think that'd be unfortunate but acceptable
+
+[12:40:52.0727] <eemeli>
+Or maybe even `new Amount(Math.round(3.5)).toBigInt()`.
+
+[12:41:16.0081] <sffc>
+Or `new Amount(3.5).toBigInt({ roundingMode: "trunc" })`
+
+[12:43:02.0428] <eemeli>
+From the Intl.NumberFormat PoV, the only precision indicator we need is something that indicates how many trailing zeros the value has.
+
+[12:43:27.0870] <Jesse>
+right the thinking for transformers is that we want to ensure that the thing in the domain belongs to the range, without preprocessing
+
+[12:43:44.0167] <Jesse>
+so in this case it was: if it isn't an integer, toBigInt ought to throw
+
+[12:43:56.0233] <eemeli>
+Do we have an explicit use case expressed somewhere for another precision consumer? Preferably with example code.
+
+[12:44:45.0119] <eemeli>
+If we don't, then we don't have a use case for `.fractionDigits` or `.significantDigits`.
+
+[12:46:18.0481] <Jesse>
+hmm but what about the "don't use internal slots in Intl.NF" concern? There were two ways out of that (1) use properties/accessors instead (i.e., solve it via duck typing), (2) call "toString" and do some lightweight parsing
+
+[12:47:06.0531] <eemeli>
+Not an issue, because `new Amount(3.5, { significantDigits: 4 }).toString()` is `'3.500'`.
+
+[12:47:46.0854] <eemeli>
+Intl.NF will only want the stringified value of the Amount.
+
+[12:48:10.0486] <Jesse>
+do we support killing the amount? like `new Amount(42, { unit: "miles" }).with({unit: undefined})`
+
+[12:48:23.0891] <Jesse>
+sorry unit
+
+[12:48:31.0583] <eemeli>
+That currently throws, and should continue to do so.
+
+[12:50:51.0069] <ljharb>
+every use case that uses the string is a use case for those parts, assuming they show up in it
+
+[12:51:22.0877] <ljharb>
+if the constructor parses a string, nobody else should ever have to replicate the parsing logic, which means *all* meaningful tokens must be separately accessible
+
+[12:52:33.0035] <eemeli>
+Do any of the pre-existing numerical value parsers in JS do that?
+
+[12:53:00.0503] <ljharb>
+i mean, the only meaningful part is the number itself
+
+[12:53:32.0188] <ljharb>
+but there really isn't a preexisting similar case here imo, something that's meant to parse a string or take individual parts, and be a container for the parts
+
+[12:55:02.0357] <eemeli>
+I think Amount is more about emitting a string, rather than parsing one.
+
+[12:59:07.0828] <Jesse>
+one use case I can imagine for exposing fraction/significant digits would be reading in a value from a DB that uses a numeric schema  I don't know (like, I don't know how many significant/fraction digits they use out-of-band). I make an amount from that value (or values), do some calculation, and can then make an amount based on the result of the calculation, passing along a suitable `{ fractiondigits: originalAmount.fractionDigits }`
+
+[12:59:48.0559] <Jesse>
+(if I know that info out-of-band, I can probably just do `computedValue.toFixed(5)` for example)
+
+[13:02:15.0268] <Jesse>
+I don't quite remember why we decided to expose that information, though; IIRC for a long time we were thinking of amounts as opaque, iow (as I understood it) providing essentially only `toString` and `with`
+
+[13:05:08.0661] <Jesse>
+it might have been the thinking that ljharb is following, along the lines of: if we think of this as a container, we should expose the component parts
+
+[13:05:30.0133] <Jesse>
+(not saying you're the originator of this argument ljharb)
+
+[13:06:22.0095] <ljharb>
+then it should just be a function that returns a string?
+
+[13:06:44.0912] <ljharb>
+* then it should just be a function that returns a string? the builtin can be a function that returns a function that takes options and returns a string.
+
+[13:07:36.0245] <Jesse>
+wow, we're getting functional up in here!
+
+[13:08:13.0035] <eemeli>
+ljharb: That's pretty much what I meant with this comment.
+
+[13:09:25.0658] <ljharb>
+don't get me wrong, i prefer an Amount instance, it's more idiomatic and natural
+
+[13:11:21.0231] <eemeli>
+And it makes including a unit much more convenient.
+
+[13:13:03.0705] <eemeli>
+As well as being a better platform for future unit conversion work.
+
+[13:32:47.0162] <sffc>
+I think the V8 team will have a visceral reaction to "just use a string" but that might be productive as it motivates the primordial 
+
+[13:43:41.0545] <ljharb>
+i mean imo either it's just a string, or a thunk factory for a string, or a proper class instance named Amount
+
+[13:52:34.0116] <Richard Gibson>
+you don't think the Temporal.$type.from functions fit that description?
+
+[13:52:49.0162] <ljharb>
+oh yeah maybe so
+
+[13:53:01.0424] <ljharb>
+and presumably basically everything they parse is accessible?
+
+[13:53:20.0132] <Richard Gibson>
+at least to a first approximation, yes
+
+[13:54:10.0724] <Richard Gibson>
+but they don't expose the difference between e.g. UTC offset `-05` vs `-05:00`
+
+[14:37:24.0746] <ljharb>
+sure, in that case precision isn't important and neither case has different semantics, right?
+
+[14:38:22.0266] <sffc>
+yeah, I care a lot about precision but in this case they are representing a UTC Offset and ISO _defines_ that `-05` and `-05:00` are exactly equivalent
+

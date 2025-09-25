@@ -1287,3 +1287,551 @@ Heh, sometimes node needs shade
 [17:30:41.0789] <joyee>
 I am fairly certain ESM in Node.js just isn’t optimized enough because [even require(esm) was 1.2x faster than import esm when it came out](https://github.com/nodejs/node/pull/51977#issuecomment-1995209126) 🤷‍♀️
 
+[08:06:06.0592] <Ryan Cavanaugh>
+TCQ isn't showing a Queue for me
+
+[08:06:43.0247] <Ryan Cavanaugh>
+oh, because the tab is too narrow.n m
+
+[08:06:46.0733] <Ryan Cavanaugh>
+* oh, because the tab is too narrow. nm
+
+[08:08:54.0352] <Jesse>
+I'll add this to the agenda, but here are Ben's slides for the amount continuation: https://notes.igalia.com/p/2025-09-tc39-plenary-amount-continuation#/
+
+[08:10:09.0288] <bakkot>
+Ryan Cavanaugh: can you comment on https://github.com/tc39/notes/pull/382
+
+[08:10:18.0453] <bakkot>
+we don't have an alias for you in the notes yet
+
+[08:11:01.0424] <Ryan Cavanaugh>
+Yeah I approved that earlier
+
+[08:11:17.0822] <bakkot>
+sorry, I mean, Rob had a comment about the choice of alias
+
+[08:11:24.0016] <Ryan Cavanaugh>
+oh
+
+[08:12:48.0777] <Ryan Cavanaugh>
+done thanks
+
+[08:13:38.0412] <Ashley Claymore>
+I've been wondering. Was the J a middle name? My money's on 'John'?
+
+[08:14:02.0876] <Ryan Cavanaugh>
+yep
+
+[08:15:06.0567] <nicolo-ribaudo>
+Missed opportunity for your parents to call you Ryan JavaScript Cavanaugh
+
+[08:16:21.0216] <kriskowal>
+I am just going to say that technicalities did not stop Kim Dot Com.
+
+[08:22:53.0045] <keith_miller>
+Where can I find the HTML amount proposal?
+
+[08:26:09.0137] <bakkot>
+"there's a unit on the end so you need to strip out the unit before converting to a string" hahaha if only our parseFloat actually worked like that
+
+[08:26:45.0341] <Ryan Cavanaugh>
+Making a unit called "e3" just for funsies
+
+[08:27:57.0830] <Chris de Almeida>
+there is no such proposal AFAIK
+
+[08:31:12.0600] <keith_miller>
+Oh maybe I misunderstood. Is there a an HML amount that's going to proposed? What was the context here?
+
+[08:31:55.0371] <bakkot>
+it was definitely good that BigInt was correctly pigeonholed by the name, people adopting it as a generic Integer would have been much much worse
+
+[08:33:53.0676] <ljharb>
+that's fair, but since then we got complaints about a lack of adoption…
+
+[08:34:13.0406] <ljharb>
+* that's fair, but since then we got complaints about a lack of adoption, perhaps we shouldn't have added it at all
+
+[08:34:16.0509] <bakkot>
+Lack of adoption was because the use cases it was for didn't actually end up happening that much, not because of the name
+
+[08:34:28.0811] <bakkot>
+engines would not have been happier if people started using it for the things they're currently doing, that would be worse
+
+[08:34:40.0635] <ljharb>
+i'll agree it's not the best example here
+
+[08:34:42.0163] <nicolo-ribaudo>
+https://github.com/mozilla/explainers/blob/main/amount.md
+
+[08:35:04.0079] <bakkot>
+(that said, it _is_ extremely useful for wasm interop so I'm still very glad we have it.)
+
+[08:35:11.0774] <nicolo-ribaudo>
+Right now the idea is that you hover over it, and it shows a localized popup
+
+[08:35:22.0306] <nicolo-ribaudo>
+Kind of like `<span title=...>...</span>`
+
+[08:36:22.0557] <James M Snell>
+> <@ljharb:matrix.org> that's fair, but since then we got complaints about a lack of adoption, perhaps we shouldn't have added it at all
+
+Eh, even with minimal adoption it's still a good primitive to have available. For the use cases it is used for it's very useful
+
+[08:36:26.0333] <Ryan Cavanaugh>
+It seems like you would only ever construct an `Amount` *right* before formatting a `number`
+
+[08:36:45.0964] <nicolo-ribaudo>
+No, as soon as you want to add information to that number, so that you pass them around as a single unit
+
+[08:36:52.0093] <nicolo-ribaudo>
+* No, as soon as you want to add information to that number, so that you pass them around as a single "thing"
+
+[08:37:01.0100] <ljharb>
+that's also fine. but browsers have blocked decimal primitives (and record and tuple primitives) because bigint didn't get enough adoption
+
+[08:37:24.0301] <nicolo-ribaudo>
+If it's right before, you can just pass the number to Intl as-is
+
+[08:37:45.0828] <bakkot>
+oh jeeze the idea of people using this for representing JSON output from other languages which can represent values not representable by double or BigInt is... not appealing to me
+
+[08:38:06.0805] <Ryan Cavanaugh>
+How do you write code that handles an arbitrary Amount?
+
+[08:39:45.0523] <nicolo-ribaudo>
+Mostly passes it around as-is, as an opaque set of information
+
+[08:40:54.0412] <James M Snell>
+> <@ljharb:matrix.org> that's also fine. but browsers have blocked decimal primitives (and record and tuple primitives) because bigint didn't get enough adoption
+
+For decimal I can see that argument. Blocking things like record/tuple because of bigint adoption is like saying we won't sell oranges because no one eats the apples
+
+[08:41:14.0312] <Ryan Cavanaugh>
+We already have a type that represents a value with an encoded number of significant digits and unit which you shouldn't do math on, it's `string`. Unless this can be sent natively over the wire it doesn't even help the case where you have a server "Amount" that the client should render in its own locale
+
+[08:41:49.0160] <ljharb>
+that type represents many other things too tho, this would basically be a structured subset of what strings can do
+
+[08:42:09.0080] <Ryan Cavanaugh>
+The "other things" are what though?
+
+[08:42:19.0024] <James M Snell>
+But even decimal and bigint serve a sufficiently different use cases from each other that even that argument is tenuous. There are more use cases for decimal than bigint. I'm far less convinced about Amount
+
+[08:42:58.0769] <ljharb>
+prose/poetry, bytes, anything that's not a value?
+
+[08:43:59.0836] <Ryan Cavanaugh>
+oh I thought "that type" referred to Amount
+
+[08:45:31.0435] <ljharb>
+sorry for the confusion
+
+[08:51:42.0865] <nicolo-ribaudo>
+Fwiw even with `.toNumber()` math is terrible to do.
+
+```js
+new Amount(amount1.toNumber() + amount2.toNumber(), { unit: amount1.unit })
+```
++ checking that the units match
+
+[08:51:47.0492] <nicolo-ribaudo>
+* Fwiw even with `.toNumber()` math is terrible to do.
+
+```js
+new Amount(amount1.toNumber() + amount2.toNumber(), { unit: amount1.unit })
+```
+
+\ + checking that the units match
+
+[08:52:21.0027] <nicolo-ribaudo>
+* Fwiw even with `.toNumber()` math is terrible to do.
+
+```js
+new Amount(amount1.toNumber() + amount2.toNumber(), { unit: amount1.unit, fractionDigits: Math.min(amount1.fractionDigits, amount2.fractionDigits) })
+```
+
+\\ + checking that the units match
+
+[08:53:05.0451] <nicolo-ribaudo>
+* Fwiw even with `.toNumber()` math is terrible to do.
+
+```js
+new Amount(amount1.toNumber() + amount2.toNumber(), 
+  unit: amount1.unit,
+  fractionDigits: Math.min(amount1.fractionDigits, amount2.fractionDigits)
+})
+```
+
+\\ + checking that the units match
+
+[08:53:13.0727] <nicolo-ribaudo>
+* Fwiw even with `.toNumber()` math is terrible to do.
+
+```js
+new Amount(amount1.toNumber() + amount2.toNumber(), {
+  unit: amount1.unit,
+  fractionDigits: Math.min(amount1.fractionDigits, amount2.fractionDigits)
+})
+```
+
+\\ + checking that the units match
+
+[08:53:43.0405] <ljharb>
+so then why bother removing it
+
+[08:54:15.0099] <nicolo-ribaudo>
+That message was directed to those that prefer to remove it. I'm neutral
+
+[08:55:37.0054] <nicolo-ribaudo>
+waldemar Do you think we could finish the 0.00&co discussion on GitHub?
+
+[08:55:43.0512] <nicolo-ribaudo>
+* waldemar Do you think we could finish the 0.00&co discussion on GitHub rather than now?
+
+[08:58:25.0471] <Ryan Cavanaugh>
+This feels like we're trying to create a new Array type that encodes which delimiter you should use when `toString`ing it (comma-separated, semicolon-separated, newline-terminated, etc).
+
+That's not a new noun, it's just metadata attached to an existing primitivelike. Combining those into one new object isn't precedented in the language AFAICT?
+
+[09:00:49.0910] <bakkot>
+MDN has a page for the duck-type Iterator incidentally: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Iterator
+
+[09:05:07.0529] <eemeli>
+One difference cf. the given examples of protocol objects is that Amounts are more likely to persist, i.e. be stored by a user and used in potentially multiplayer places. So if we go that way, should we provide an `isAmount()` function somewhere?
+
+[09:05:48.0777] <ljharb>
+i'd prefer yes, but we don't have an "is iterator result" function or "is regexp match object", so there's not much precedent
+
+[09:07:18.0559] <eemeli>
+Are either of those commonly stored, or just immediately used?
+
+[09:08:27.0072] <nicolo-ribaudo>
+I think there is a difference in that those two things are just a work-around because we don't support multiple return values from functions
+
+[09:08:33.0470] <nicolo-ribaudo>
+* I think there is a difference in that those two things are just a workaround because we don't support multiple return values from functions
+
+[09:08:47.0033] <nicolo-ribaudo>
+If we did those two object shapes would not exist
+
+[09:08:52.0475] <nicolo-ribaudo>
+But we'd still have this proposal
+
+[09:16:41.0987] <bakkot>
+iterables, and to a lesser extent iterators, are very likely to be stored by a user and passed around
+
+[09:20:22.0194] <bakkot>
+one difference with iterables is that you often (usually, in fact) want other behavior too when making an iterable, e.g. you're making a Map and it just happens to also be iterable
+
+[09:20:34.0789] <nicolo-ribaudo>
+And users very rarely write iterators by hand
+
+[09:20:40.0946] <nicolo-ribaudo>
+* And users very rarely write iterators by hand, we provide utilities for that
+
+[09:20:46.0741] <nicolo-ribaudo>
+* And users very rarely write iterators by hand, we provide utilities/factories for that
+
+[09:21:09.0751] <bakkot>
+this is probably less true for Amount. On the other hand, maybe it is not that rare? if you're representing some type of data, you might well want to e.g. provide arithmetic functions for that data.
+
+[09:21:30.0328] <bakkot>
+If this is a protocol you might want to implement on other objects, that would be a strong reason not to have a constructor.
+
+[09:21:58.0406] <bakkot>
+i'm guessing that is rare though
+
+[09:24:01.0770] <nicolo-ribaudo>
+If it was a protocol, do you think there should no built-in utility to make it more reachable? e.g. `Number.prototype.toAmount(unit) = return { value: this, unit }`, without it being a class
+
+[09:25:53.0216] <bakkot>
+`return foo.toAmount('kg')` is about the same as `return { value: foo, unit: kg }` IMO, and the latter is easier to learn
+
+[09:26:20.0682] <bakkot>
+* `return foo.toAmount('kg')` is about the same as `return { value: foo, unit: 'kg' }` IMO, and the latter is easier to learn
+
+[09:27:21.0518] <bakkot>
+so, probably no. but this opinion is not strongly held; if there's cases where making it more reachable actually does significantly improve usability I'm open to that
+
+[09:28:11.0158] <eemeli>
+To me, `isAmount` seems like a much more important function than `toAmount`, if going the protocol route.
+
+[09:28:24.0698] <bakkot>
+I cannot imagine when you would want an `isAmount` function
+
+[09:28:56.0072] <nicolo-ribaudo>
+If we had this being just a protocol, the main reason to have this be very easily reachable is that it needs to be easier for people to create these objects rather than to separately pass the precision and the values to Intl formatters
+
+[09:29:00.0390] <nicolo-ribaudo>
+Since that's a common source of bugs
+
+[09:30:21.0433] <eemeli>
+> <@bakkot:matrix.org> I cannot imagine when you would want an `isAmount` function
+
+How else could I know that a string value of { value } is a numerical string?
+
+[09:30:51.0659] <bakkot>
+why do you have a string value of `{ value }` whose provenance is not known to you?
+
+[09:43:25.0874] <eemeli>
+> <@bakkot:matrix.org> why do you have a string value of `{ value }` whose provenance is not known to you?
+
+Because of the interchange uses for Amount, when the value has come from elsewhere and I'd like to retain and represent it in a lossless way.
+
+[09:44:10.0398] <bakkot>
+in my experience interchange protocols are always either tagged with types or have out-of-band schemas
+
+[09:45:02.0977] <bakkot>
+you're not just taking an arbitrary collection of values and trying to interpret them
+
+[09:45:05.0217] <bakkot>
+that doesn't really work
+
+[09:58:14.0612] <bakkot>
+ljharb: as far as I am aware you are literally the only person in the world who is of the opinion that the point of having a class in general is that other things can't pretend to be that thing
+
+[09:58:41.0503] <bakkot>
+that is a valid opinion but other people aren't generally going to assume that reason without you making the case for it
+
+[09:58:44.0493] <ljharb>
+i mean, everything with internal slots and everything with private fields qualifies
+
+[09:59:00.0536] <ljharb>
+that's how every builtin in this language works, with a very short list of exceptions
+
+[09:59:31.0601] <bakkot>
+there is a massive distinction between "that is how it works" and "that is the point of it"
+
+[10:01:13.0324] <ljharb>
+fair enough
+
+[10:01:30.0989] <ljharb>
+that's something that comes with "having a class", regardless of hte point
+
+[10:01:44.0320] <ljharb>
+if we're not using internal slots at all then there's no point having anything but a plain object, like an iterator result
+
+[10:03:59.0397] <bakkot>
+the Iterator class doesn't use internal slots at all and is nevertheless extremely useful
+
+[10:06:41.0251] <ljharb>
+fair, it's IteratorHelper that has the internal slots, but iterator's a bit of a special case in lots of ways
+
+[10:09:18.0816] <ljharb>
+notably we don't have an IteratorResult class tho, and if there's no internal slots or helper methods, then Amount seems more like that than an iterator
+
+[10:09:29.0511] <ljharb>
+* notably we don't have an IteratorResult class tho, and if there's no internal slots or helper methods, then Amount seems more like that than a stateful iterator
+
+[11:04:48.0212] <bakkot>
+ok JS developers do often have lots of dependencies but hundreds of thousands of dependencies is probably not actually a thing
+
+[11:08:08.0266] <Chris de Almeida>
+perhaps worth noting, many (most?) are transitive and unshipped
+
+[11:08:26.0309] <bakkot>
+transitive I buy, unshipped I don't buy
+
+[11:08:41.0860] <bakkot>
+the static analysis developers are using is, unfortunately, still terrible
+
+[11:09:00.0082] <Chris de Almeida>
+one of our applications, out of thousands of deps, only like 30 have code that actually end up in the shipped bundle
+
+[11:09:19.0542] <bakkot>
+I'm assuming we're only talking about actual deps, not dev deps
+
+[11:09:43.0626] <bakkot>
+certainly most dev deps do not end up contributing shipping code, with exception of like babel or webpack
+
+[11:13:13.0290] <Chris de Almeida>
+yes, the actual deps. esp when using batteries-included libraries/frameworks, a lot of unused stuff gets shaken out
+
+[11:14:44.0694] <bakkot>
+huh, that is very much not my experience
+
+[11:15:33.0618] <keith_miller>
+Even if it's only on the order of hundreds, it still seems like an intractable problem to vet all of them for transitive problems.
+
+[11:15:33.0829] <kriskowal>
+That was certainly the least opportune moment for Google to insist I reauthenticate.
+
+[11:15:47.0858] <Chris de Almeida>
+bold of you to authenticate in the first place
+
+[11:17:31.0218] <keith_miller>
+The usefulness of Compartments also seems to depend on frozen globals. Does anyone deploy that at scale with lots of dependencies?
+
+[11:18:35.0998] <Rob Palmer>
+I thought V8 had a bunch of optimizations for proxies.  Would love to hear for sure if this include JITing across the boundary.
+
+[11:21:43.0658] <rekmarks>
+The dependencies can still collude to e.g. exfiltrate data, but preventing single dependencies from exceeding their authority eliminates an entire class of attacks, e.g. the event-stream incident. Compromising multiple dependencies and shepherding them to conduct an attack is a higher bar that makes a practical difference for the security of applications with many dependencies (i.e. the common case).
+
+[11:25:31.0426] <mgaudet>
+Yeah -- I appreciate Kris's comment -- particularly the "unknown" aspect; 
+
+[11:26:43.0311] <keith_miller>
+I guess I'd propose an alternative question. The approach that's becoming increasingly common on the web is that the core web process is assumed to be compromised. Instead privileged things are isolated from everything else.
+
+[11:27:12.0797] <keith_miller>
+* I guess I'd propose an alternative question. The approach that's becoming increasingly common on the web is that the core web process is assumed to be compromised. Instead privileged things are isolated from the core web process and are hardened.
+
+[11:27:23.0795] <keith_miller>
+* I guess I'd propose an alternative question. The approach that's becoming increasingly common on the web is that the core web process is assumed to be compromised. Instead privileged things are isolated from the core web process and are hardened much more aggressively.
+
+[11:27:36.0579] <rekmarks>
+What's the "core web process"?
+
+[11:27:41.0490] <keith_miller>
+* I guess I'd propose an alternative question. The approach that's becoming increasingly common on the web is that the core web process is assumed to be compromised. Instead privileged things are isolated from the core web process and are hardened much more aggressively. Why is that insufficient or intractable here?
+
+[11:27:58.0012] <keith_miller>
+The rendering process (JS/DOM)
+
+[11:28:13.0418] <bakkot>
+because the bank login runs in the core web process
+
+[11:28:20.0318] <bakkot>
+inherently
+
+[11:28:24.0360] <Olivier Flückiger>
+or even just JS, V8 has a heap sandbox now within the renderer...
+
+[11:28:46.0802] <keith_miller>
+I'm saying the same approach in JS. Not at the C++ layer
+
+[11:29:37.0092] <bakkot>
+I kind of doubt that you can feasibly move "access to the DOM" out of the root JS process
+
+[11:30:46.0381] <keith_miller>
+That's an analogy not what I'm actually proposing for sites. Although one could do it by origin isolating them.
+
+[11:31:50.0400] <mgaudet>
+This is just a small factoid, but hints at some of my personal worries: At least in SpiderMonkey we already have "oops wrong realm" objects that we're aware of, but have never fixed because it's been too low in our priority list (usually errors thrown that are from the wrong realm). 
+
+I say this not yet really having made the conceptual leap from the previous module-global propsal to the current more compartment like yet. 
+
+[11:32:00.0112] <mgaudet>
+* This is just a small factoid, but hints at some of my personal worries: At least in SpiderMonkey we already have "oops wrong realm" objects that we're aware of, but have never fixed because it's been too low in our priority list (usually errors thrown that are from the wrong realm). 
+
+I say this not yet really having made the conceptual leap from the previous module-global propsal to the current more compartment like one
+
+[11:32:46.0666] <bakkot>
+I know at least some engines had some inconsistencies about the realms of iterator result objects at some point, possibly also the realms of promises for certain kinds of async functions
+
+[11:33:25.0957] <bakkot>
+which, yes, I have usually avoided adding tests for these because I don't think we should usually care
+
+[11:33:35.0880] <mgaudet>
+(And to colour in the rest of my allusion -- if we make mistakes around this, it turns into compartment violation security bug) 
+
+[11:34:05.0713] <bakkot>
+the current proposal does not involve having separate versions of Error or Promise or anything, so I don't think it ends up really mattering directly
+
+[11:34:23.0735] <bakkot>
+it's only Function (and friends) specifically which are different. not even their prototypes, just the ctor itself.
+
+[11:34:52.0501] <bakkot>
+the reason this is thought to be OK is because it is assumed that all the intrinsics are frozen (by something)
+
+[11:35:06.0532] <bakkot>
+and also that any powerful intrinsics have not been provided to the compartment
+
+[11:35:34.0258] <mgaudet>
+That's nice at least. I'll be excited to read the updated readme so I can try to piece it together
+
+[11:35:45.0652] <Ashley Claymore>
+Yeah. Language level values like iterations and RangeError don't change 
+
+[11:35:57.0585] <Ashley Claymore>
+* Yeah. Language level values like Iterators and RangeError don't change
+
+[11:37:10.0029] <Ashley Claymore>
+Compartments: `with {}` done right 
+
+[11:43:49.0144] <bakkot>
+I should say part of my previous topic is that wasm is increasingly moving in the direction of exposing information about modules to runtime: https://github.com/WebAssembly/js-types/blob/main/proposals/js-types/Overview.md
+
+[11:43:59.0119] <bakkot>
+and this is good and allows you to do lots of useful things
+
+[11:48:01.0707] <kriskowal>
+We are very much in favor of also exposing more information on ModuleSource instances, like all the externally visible bindings.
+
+[11:49:00.0079] <kriskowal>
+Like, writing a bundler that uses ModuleSource to gather the static transitive dependencies of a module graph would greatly benefit from that analysis. Last updated 3 years ago https://github.com/tc39/proposal-compartments/blob/master/1-static-analysis.md
+
+[11:50:49.0739] <bakkot>
+re: LLMs writing attacks: there's also the "just have an LLM do the attack at runtime" approach https://www.anthropic.com/news/detecting-countering-misuse-aug-2025#vibe-hacking-how-cybercriminals-used-claude-code-to-scale-a-data-extortion-operation
+
+[11:54:58.0483] <Chris de Almeida>
+link to "w3c amount" ?
+
+[11:55:39.0801] <keith_miller>
+You mean https://github.com/mozilla/explainers/blob/main/amount.md?
+
+[11:56:51.0628] <Chris de Almeida>
+looks like it
+
+[12:03:31.0787] <Mathieu Hofman>
+I think this is really the crux of it. The way I see it, it's mostly adding a "terminating scope" before evaluating code (including modules). We already have all the logic around to evaluate code in an existing scope stack.
+
+[12:04:00.0199] <Bradford Smith>
+bakkot: in my personal notes from the very end of the previous Amount continuation I have "KG: In order to maintain invariants, it will be necessary to use internal slots." Did I misunderstand you there? Isn't that a clear indicator that a class is needed?
+
+[12:05:07.0555] <bakkot>
+That is a claim WH made, not a position I advocate
+
+[12:05:39.0593] <bakkot>
+it is not clear to me which invariants exist or whether consumers actually need to be able to rely on them; my inclination would be to answer the latter question in the negative
+
+[12:06:33.0301] <ljharb>
+i am very skeptical that this is good; it can make things about the way you wrote the code be part of your observable API :-/
+
+[12:06:52.0996] <bakkot>
+the exports of code is always part of its observable API
+
+[12:07:06.0946] <ljharb>
+oh sure, exposing metadata about existing observable things is great!
+
+[12:07:09.0929] <bakkot>
+the imports less directly so but they're still pretty observable in practice
+
+[12:07:27.0676] <ljharb>
+i'm not super clear on how one would do that
+
+[12:07:36.0847] <ljharb>
+* i'm not super clear on how one would do that (from code, obv you can do it from dev tools etc)
+
+[12:07:58.0723] <bakkot>
+and with Compartments as proposed imports would be very observable anyway because there is an `importHook`
+
+[12:08:35.0790] <ljharb>
+that is true, and that is a concern i have for that part of the proposal
+
+[12:10:16.0809] <kriskowal>
+There are some funny things about ESM that bindings reflection does need to hide. You can’t just ship the import and export statements, because they entrain too many implementation details. We’ve discussed this pretty hard at Module Harmony.
+
+[12:11:51.0479] <kriskowal>
+It also has the downside that you cannot trivially create a proxy for another module by copying all the bindings from a module source to the virtual module source. But, that’s just a reality we have to live with.
+
+[12:12:15.0605] <kriskowal>
+(Or not pursue virtual modules sources at all, to be clear, but they’d be useful for CJS migration, for one.)
+
+[12:12:35.0727] <ljharb>
+couldn't that be enabled without actually exposing the list? like, provide an opaque identifier that just represents the list
+
+[12:14:22.0824] <waldemar>
+An Amount is not like a tuple. When receiving an Amount it would be problematic if the various fields such as digit counts and stored value were inconsistent with each other. So you don't want to do duck typing. There are various other ways to ensure the invariants.
+
+[14:09:08.0626] <Chris de Almeida>
+the agenda for the next meeting is available and ready for your topics to be added!  😀
+
+https://github.com/tc39/agendas/blob/main/2025/11.md
+
+we currently have ~15 hours of time available
+
