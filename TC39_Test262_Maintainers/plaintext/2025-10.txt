@@ -1,0 +1,220 @@
+2025-10-01
+[08:55:42.0584] <ptomato (intermittent availability)>
+1000 distinct cases, but are they all _meaningfully_ distinct?
+
+[08:57:01.0620] <ptomato (intermittent availability)>
+I do quite like exhaustively testing large numbers of cases though! (I've been using that exact technique to search for bugs in Temporal implementations.)
+
+[08:57:56.0925] <ptomato (intermittent availability)>
+I think snapshot testing (like Jest has) is a good tool for that. if I had time, I'd build a snapshot testing facility for test262
+
+[08:59:24.0904] <ptomato (intermittent availability)>
+at least that way, IMO it'd be clearer that the intention isn't for implementations to conform to the results of the snapshots, but instead to investigate when a snapshot fails
+
+[09:00:22.0839] <ptomato (intermittent availability)>
+I think that's the risk with a mini-polyfill in test262 - it basically blesses the mini-polyfill as the reference implementation and says to all other implementations, "you must match this implementation bug-for-bug"
+
+[09:01:56.0950] <ptomato (intermittent availability)>
+anyway, I'll take another look at that PR and see if I have some suggestions to make it work more like "checking invariant properties of outputs that must hold across multiple inputs"
+
+[09:03:00.0388] <bakkot>
+> says to all other implementations, "you must match this implementation bug-for-bug"
+
+I'd argue that snapshot tests do the same thing except that you don't get to see the implementation which generated those snapshots, so it's harder to tell where the mismatch comes from.
+
+[09:03:55.0053] <ptomato (intermittent availability)>
+yes, I agree that's a risk as well. I think snapshots could better communicate the intention, though
+
+[09:04:18.0176] <bakkot>
+In my experience using both kinds of tests, the reference implementation has been a lot more useful for this kind of thing.
+
+[09:04:44.0020] <bakkot>
+In particular, sometimes there is a mismatch, and being able to track down why the implementations diverge is incredibly useful both in the case that my implementation is wrong and in the case that the one in the tests is wrong
+
+[09:05:26.0904] <ptomato (intermittent availability)>
+I agree! I have a reference implementation of Temporal and I've found it very useful for writing test262 tests. but I'm not putting that reference implementation into test262
+
+[09:07:17.0226] <bakkot>
+I mean, why not?
+
+[09:07:58.0116] <bakkot>
+For Temporal I suppose it's just very large but when it's small enough to be practical to check for correctness I don't see a strong reason not to.
+
+[09:09:15.0592] <bakkot>
+Obviously it doesn't substitute for having other tests as well, but having some tests of the form "compare a wide variety of cases vs a known-good implementation" is great.
+
+[09:21:29.0817] <ljharb>
+there was a ton of pushback about creating test262 in the first place because of the concern it would have reference implementations and be a "blessed" implementation; i think pragmatism has to lose out here
+
+[09:28:56.0928] <ptomato (intermittent availability)>
+oh, I'm absolutely not for pragmatism losing out in any way shape or form
+
+[09:33:42.0325] <ptomato (intermittent availability)>
+I think it should be possible to restructure that test like I suggested ^ above. maybe testing one invariant property at a time and making it clear what each of those tests is for.
+
+[09:34:08.0930] <ptomato (intermittent availability)>
+Richard may also have some suggestions, we discussed this PR at the last maintainers meeting
+
+[09:36:43.0493] <bakkot>
+So, the test is currently of the form "for each of these wide variety of cases, all of the following properties should always hold"
+
+[09:37:13.0683] <bakkot>
+you would want it to be a bunch of different tests which each repeat all of the setup for the wide variety of cases, and then test one property?
+
+[09:37:28.0233] <bakkot>
+that seems worse
+
+[10:16:58.0294] <bakkot>
+also it turns out to be somewhat difficult to cleanly separate: e.g. the `strict` option throws when you exhaust the shortest iterator if the iterators are not the same length, so you either need to not pass that option when testing other properties or you need to compute the expected length and catch that error anyway
+
+[10:29:23.0704] <bakkot>
+I dunno. I guess, what is the goal of splitting this? As an implementer, the test is fine in its current form (except that it would benefit from having descriptive messages for all the asserts so you know which case failed). When maintaining the tests I personally would find this much easier to maintain than a bunch of duplication across tests, but I'm not a test262 owner. When reviewing, you need to confirm that a.) each of the properties being verified is actually required to hold per spec and b.) the properties are are being verified correctly, which seems like it would be just the same if split up.
+
+[10:31:20.0947] <ptomato (intermittent availability)>
+I haven't looked at it since a couple of weeks ago so I'm not sure I have anything more specific to say right now until I have a chance to look at it again
+
+[10:31:21.0739] <Richard Gibson>
+I haven't looked at the PR, but am pretty firmly against including a reference implementation. I'm also against duplication, but that can be handled by common setup or a helper for that (given the stateful nature of iterators).
+
+[10:32:34.0162] <ptomato (intermittent availability)>
+at a minimum I'd want to make very clear in the assertion messages what the expectation is for implementations, i.e. do not blindly conform to this test
+
+[10:32:35.0775] <Richard Gibson>
+testing the *properties* with foreknowledge of what each iterator will produce should not require even a toy implementation, just a mapping of configuration inputs to expected properties
+
+[10:32:40.0581] <bakkot>
+I disagree on the reference implementation question but in this case that's not really what's happening. A representative example is, it's computing the expected length of the result iterator based on the lengths of the inputs and the mode:
+
+```
+  var lengths = iterables.map(function(array) {
+    return array.length;
+  });
+
+  var min = Math.min.apply(null, lengths);
+  var max = Math.max.apply(null, lengths);
+
+  // Expected number of iterations.
+  var count;
+  switch (mode) {
+    case "shortest":
+      count = min;
+      break;
+    case "longest":
+      count = max;
+      break;
+    case "strict":
+      count = max;
+      break;
+  }
+```
+
+[10:33:34.0814] <bakkot>
+Now, it _could_ hardcode these values for each of the 1000 cases it is testing, but... why? This is both clearer and easier to check.
+
+[10:33:47.0507] <Richard Gibson>
+that code looks good to me
+
+[10:34:48.0916] <Richard Gibson>
+and given that there probably are multiple files that need it, it should manifest as a helper function
+
+[10:35:29.0132] <bakkot>
+As is there is only one file which needs this.
+
+[10:35:55.0431] <Richard Gibson>
+then the file is probably covering too much
+
+[10:35:59.0431] <bakkot>
+The other tests are mostly asserting on one precise output
+
+[10:36:30.0575] <bakkot>
+(or errors)
+
+[10:37:34.0569] <bakkot>
+so, again, why do we care about "covering too much" for these kinds of many-inputs many-properties tests? Why is that important?
+
+[10:38:54.0124] <bakkot>
+sidebar: what does "helper" mean in this context? a new file in the harness? if we factor out all code which is shared across files into a file in the harness the harness is going to get very big very quickly
+
+[10:38:58.0193] <Richard Gibson>
+because test262 can only report one failure per file
+
+[10:40:02.0686] <Richard Gibson>
+a file in https://github.com/tc39/test262/tree/main/harness
+
+[10:42:18.0408] <bakkot>
+yeah, but we still verify multiple properties at a time all over the place - there's lots of `verifyProperty` calls, rather than one test for enumerability, one test for writability, etc
+
+[10:42:32.0800] <bakkot>
+when I'm doing an implementation I don't really care - I will fix the one failure and re-run until the errors go away
+
+[10:43:47.0831] <Richard Gibson>
+`verifyProperty` encompasses multiple assertions, but it's testing one logical thing (a property of an object)
+
+[10:44:18.0729] <Richard Gibson>
+at minimum, complete testing of `Iterator.zip` and `Iterator.zipKeyed` do not belong in a single file
+
+[10:45:14.0273] <bakkot>
+Those are not in the same file, no
+
+[10:45:35.0745] <bakkot>
+(but they can't share the `count` code above because the input shapes are different)
+
+[10:54:38.0151] <ljharb>
+* there was a ton of pushback about creating test262 in the first place because of the concern it would have reference implementations and be a "blessed" implementation; i think pragmatism has to lose out here (if the alternative is an implementation)
+
+[11:14:57.0446] <bakkot>
+splitting the one test into two: https://github.com/anba/test262/pull/1
+
+[11:15:13.0189] <bakkot>
+I don't think it makes to split it further and frankly I don't think this is really an improvement, but is this what you're looking for?
+
+[15:26:25.0957] <Richard Gibson>
+I agree that it's not an improvement, but because it split the wrong way: https://github.com/anba/test262/pull/1#pullrequestreview-3290747626
+
+[15:27:48.0504] <bakkot>
+I don't understand how your proposed improvement would be an improvement in any way over what I have there.
+
+[15:27:50.0163] <bakkot>
+Please explain?
+
+[15:28:24.0472] <bakkot>
+* I don't understand how your proposed split would be an improvement in any way over what I have there.
+
+[15:38:47.0121] <bakkot>
+The reason I did this split is because the request was to have it be "testing one invariant property at a time"
+
+[15:39:01.0752] <bakkot>
+whereas it seems like you don't actually want that and instead want to split by mode, even though it means testing many properties within a single test
+
+[15:39:28.0141] <bakkot>
+which, like, is fine? but I don't understand how it's better or consistent with the request above
+
+[15:40:26.0977] <bakkot>
+* which is fine? but I don't understand how it's better or consistent with the request above
+
+
+2025-10-02
+[17:28:52.0479] <Richard Gibson>
+I don't want "one invariant at a time" as an end in itself, I want test file **maintainability** (which has **comprehensibility** as a necessary but not sufficient condition) and **failure clarity**. test/built-ins/Iterator/zip/basic.js is weak on both, while test/built-ins/Iterator/zip/basic-iterator-*.js are good on the former but weak on the latter.
+
+[17:45:40.0490] <bakkot>
+I agree that having better messages for the assertions would be valuable, but that's unrelated to how the tests are split and I don't think changing the split changes much about failure clarity
+
+[18:07:27.0901] <Richard Gibson>
+it's not unrelated, because as noted there's a limit of one failed assertion per file. So which files fail is itself a relevant signal.
+
+[18:48:56.0792] <bakkot>
+I think with an appropriate message there's basically no marginal value in also having high granularity with the file names.
+
+[19:49:45.0263] <Richard Gibson>
+I've been told otherwise numerous times
+
+[22:09:46.0869] <bakkot>
+Fair enough; I can only speak to my own experience as a consumer
+
+[03:17:42.0765] <nicolo-ribaudo>
+I just noticed that test262-harness runs tests with `flags: [module]` both in "default" and "strict" modes
+
+[03:17:49.0176] <nicolo-ribaudo>
+Which does not hurt, but also is not very useful
+
