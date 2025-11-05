@@ -17,3 +17,92 @@ I don't remember, I'll get an answer in the next days
 [15:20:58.0959] <nicolo-ribaudo>
 * I don't remember, I'll get you an answer in the next days
 
+
+2025-11-04
+[06:38:54.0687] <dminor>
+It looks like we just shipped the telemetry. I think at this point if webkit and v8 are shipping, we should just remove the telemetry and ship the change.
+nicolo-ribaudo do you want to make the updates, or would you like me to take it over?
+
+[06:44:47.0645] <bakkot>
+I don't know if either of the other browsers are shipping to stable, to be clear
+
+[06:47:08.0460] <nicolo-ribaudo>
+> <@dminor:mozilla.org> It looks like we just shipped the telemetry. I think at this point if webkit and v8 are shipping, we should just remove the telemetry and ship the change.
+> nicolo-ribaudo do you want to make the updates, or would you like me to take it over?
+
+Mh yeah it looks like I ended up not finishing that patch because somebody was refactoring the same code at the same time 😅
+
+I am not able to type for a few weeks, please go ahead :) I'd be curious to see the telemetry data we have so far
+
+[07:12:02.0835] <dminor>
+bakkot: do you have links handy for the webkit and v8 changes? It would be helpful for coordinating shipping.
+
+[07:13:36.0272] <bakkot>
+Linked from the ecma262 issue iirc, I can dig them up when I'm at a computer next
+
+[07:13:49.0298] <bakkot>
+Or the pr rather 
+
+[07:16:42.0512] <dminor>
+Got them, thanks!
+
+[09:02:09.0545] <guybedford>
+There's an interesting discussion here on native error objects in Wasm - https://github.com/WebAssembly/custom-descriptors/issues/80.
+
+The driving motivation is Wasm GC objects being used as throwable errors, by being able to somehow relate the Wasm GC error object's descriptor to make it a real error object. This discussion comes under the proposal umbrella of turning "opaque" GC objects into real objects with descriptors.
+
+In particular the `Symbol.underlyingError` could be interesting to get feedback for from a TC39 perspective.
+
+[09:10:06.0769] <Michael Ficarra>
+@guybedford:matrix.org There's still time to add discussion items to the agenda for the next TC39 meeting.
+
+[09:10:51.0781] <guybedford>
+I'm not personally involved in the above discussion, I'm posting here in the hopes more folks can take these discussions on!
+
+[09:15:56.0262] <Michael Ficarra>
+my reading of this is that it would only affect debugger behaviour, which 262 does not constrain
+
+[09:16:38.0684] <bakkot>
+It is an interesting question how hosts should expose their own well known symbols though
+
+[09:18:03.0749] <Michael Ficarra>
+TG4 probably has a lot of the interested parties. This person may want to make a presentation to them. Not sure what TC39 could do about it though.
+
+[10:57:20.0741] <guybedford>
+The root problem is basically subclassing Error for Wasm GC objects, which is currently off the table as something in Wasm explicitly.
+
+[10:57:39.0297] <guybedford>
+so if non-Error objects might be able to define a symbol or otherwise to get error-level treatment
+
+[11:37:31.0123] <Mathieu Hofman>
+Haven't read the thread yet, but why not create an Error at the wasm boundary, with a `cause` being the wasm opaque object ?
+
+[14:27:17.0261] <bakkot>
+Wasm GC objects can be passed around to and from JS FFIs. Is the idea that you'd wrap every FFI call which involved a Wasm GC object to inspect the object and determine if you should substitute a wrapper?
+
+[14:27:26.0678] <bakkot>
+I think that would work but it's probably prohibitively expensive
+
+[14:27:37.0964] <bakkot>
+(possibly I am not understanding the suggestion)
+
+
+2025-11-05
+[18:00:52.0180] <Mathieu Hofman>
+are wasm opaque objects exposed directly to JS code? My impression was that there is currently glue code to wrap those. Now of course we could ask the question for when wasm objects are no longer opaque and gain prototypes, and possibly own props. My concern is that I don't want to introduce yet another "kind" of Error that all error aware code out there needs to recognize (not just debuggers). We have Error instances, and I guess we're also getting objects extended with `Error.captureStackTrace`.
+
+[18:03:20.0600] <Mathieu Hofman>
+especially now that we have `Error.isError`, I think it'd be a mistake to introduce something that isn't an error but behaves like one. It's already unfortunate enough we have to standardize captureStackTrace
+
+[18:19:01.0275] <guybedford>
+Mathieu Hofman: the wasm custom descriptors proposal turns the opaque objects directly into objects with descriptors allowing getters and setters etc.
+
+[18:19:34.0448] <guybedford>
+they thus effectively become resource types, backed by a wasm gc managed struct or array
+
+[18:23:15.0327] <guybedford>
+I'd have thought the solution though would be to call out to `wrapErr(scalaErr) => Object.assign(new Error(), { gcError: scalaErr })` through to JS when there is an error to have a JS error type wrapping a scala error type instead of the converse, but I haven't thought about it deeply enough to have a strong opinion
+
+[18:32:22.0332] <Mathieu Hofman>
+Right, even with custom descriptors support, this is effectively purpose built glue code creating JS objects to expose wasm things. In that case, I would find it natural to create a `new Error()` and define on it a `cause: wasmThrowable` property.
+
