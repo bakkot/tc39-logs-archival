@@ -17,3 +17,221 @@ Guy and I are hosts but don't see you
 [09:03:30.0228] <guybedford>
 This one right? https://meet.google.com/row-whjm-rpn
 
+
+2025-11-10
+[10:41:27.0121] <guybedford>
+Further to the discussion last meeting about source phase architecture in v8 being tough to integrate
+
+[10:41:51.0687] <guybedford>
+both Deno and Cloudflare now resolve dependencies of source phase moudles, effectively in violation of the spec, just because that's the natural implementation path .... :(
+
+[10:41:53.0041] <guybedford>
+https://github.com/denoland/deno/issues/31240
+
+[11:23:40.0608] <Chengzhong Wu>
+Deno didn't implement V8's source phase callbacks. Would you mind elaborating why this is a V8 issue?
+
+[11:24:31.0264] <Chengzhong Wu>
+In other words, Deno didn't implement V8's source phase support at all.
+
+[11:28:38.0139] <guybedford>
+Yeah I see that's the root cause here. Would be nice if implementers didn't have to do anything to get source phase though...
+
+[11:29:04.0579] <Chengzhong Wu>
+I'm not sure it will help in Deno's case
+
+[11:29:19.0149] <Chengzhong Wu>
+Deno is literally resolving before even reaching to V8
+
+[11:31:33.0591] <guybedford>
+yeah, I see that, and that makes sense I suppose. Ideally implementations would _just_ need to opt-out of their prefetching for source phase, and then all phases and imports work out after that.
+
+[11:32:55.0623] <Chengzhong Wu>
+If an embedder did not implement the source phase support, V8 does not enable the feature by default (at the moment, this is still hidden behind the flag `--js-source-phase-imports`)
+
+[11:33:36.0403] <Chengzhong Wu>
+I can see that this could be improved by asking V8 taking over the resolution step, so that V8 can stop resolving source import dependencies
+
+[11:33:43.0990] <Chengzhong Wu>
+* I can see that this could be potentially improved by asking V8 taking over the resolution step, so that V8 can stop resolving source import dependencies
+
+[11:34:51.0955] <Chengzhong Wu>
+However, I'd doubt the complexity of it because resolution can be either sync (node.js) or async (web).
+
+[11:35:06.0850] <Chengzhong Wu>
+* However, I'd doubt the complexity of it because resolution can be either sync (node.js) or async (web & node.js).
+
+[11:35:13.0126] <guybedford>
+resolution is always now synchronous on both the web and node
+
+[11:35:28.0293] <Chengzhong Wu>
+node still allows async resolution
+
+[11:36:03.0642] <guybedford>
+is it not fully deprecated yet?
+
+[11:36:19.0133] <Chengzhong Wu>
+it's.. not even under the discussion of deprecation
+
+[11:36:40.0904] <Chengzhong Wu>
+* it's.. not even under the discussion of deprecation AFAICT
+
+[11:38:09.0048] <guybedford>
+I guess there's two main architectures that might work for V8 - `HostResolveImportedModuleSource` as the new primitive that obtains sources first as a separate object (that can have compile cache etc)
+
+[11:38:37.0394] <guybedford>
+or we stick with `HostResolveImportedModuleV2` or `HostResolveImportedModuleWithPhase` that takes a phase argument as a hint, then returns a module without resolving dependencies
+
+[11:39:26.0755] <guybedford>
+Yeah, so a new v2 / or we extend it to apply to all modules
+
+[11:40:05.0382] <Chengzhong Wu>
+not sure if we are referring to the same thing. Are you referring to `HostImportModuleWithPhaseDynamicallyCallback`?
+
+[11:40:20.0500] <guybedford>
+yes, as either being replaced or extended
+
+[11:41:30.0110] <Chengzhong Wu>
+`HostImportModuleWithPhaseDynamicallyCallback` is only invoked for `import.source()` calls, it already takes an argument of `ModuleImportPhase`
+
+[11:41:47.0055] <guybedford>
+I understand that and I've implemented that in both Node.js and Cloudflare
+
+[11:42:20.0930] <guybedford>
+what I'm talking about is how we extend this to work for JS modules and sources more generally, while avoiding implementer complexity, as implementer feedback
+
+[11:44:03.0141] <joyee>
+It no longer does at least on the main thread (only allows it on the async loader hook thread when async loader hooks are registered)
+
+[11:44:15.0413] <Chengzhong Wu>
+Putting Deno's issue aside, it's not easy for me to understand what's the exact issue you are trying to improve. I assume you are trying to push V8 taking over the implementation of resolution steps, and ask host to resolve for each `referrer, specifier, attributes` pairs?
+
+[11:44:33.0812] <guybedford>
+no, just to separate source phase from instance phase in the V8 pipeline
+
+[11:44:41.0715] <Chengzhong Wu>
+but... it is still allowed, right?
+
+[11:44:44.0893] <guybedford>
+sources as first-class representations in v8
+
+[11:45:13.0598] <guybedford>
+i.e. both for WebAssembly Module Record, and for Source Text Module Record
+
+[11:45:24.0608] <Chengzhong Wu>
+i.e. we still need to support async resolution, not being able to remove the support entirely
+
+[11:47:35.0070] <joyee>
+We technically could, it's just going to be a breaking change for a fairly niche use case in an experimental feature (when you expect an async loader to affect the resolution of subsequent loader on the loader thread - say you register a typescript loader, and you want to load a zip loader written in typescript, that sort of thing)
+
+[11:47:53.0726] <Chengzhong Wu>
+I think the current `v8::Module` maps to the Module Record in the spec text. Both are essentially representation of module instance record
+
+[11:47:54.0702] <Chengzhong Wu>
+https://github.com/tc39/proposal-esm-phase-imports/issues/53
+
+[11:48:19.0083] <guybedford>
+right, but in the spec `[[ModuleSource]]` is a field on the module record
+
+[11:48:42.0322] <guybedford>
+so we need to use the module as the handle for the module source, or separate the module source wrapper into its own thing
+
+[11:48:48.0703] <guybedford>
+as I say two main paths
+
+[11:49:30.0270] <Chengzhong Wu>
+V8 did not expose internal AbstractModuleSource to the API. It could be exposed as a first class representation. But it'd still be great to distinguish it in the spec as a first step
+
+[11:49:41.0013] <Chengzhong Wu>
+* V8 did not expose internal AbstractModuleSource to the API. It could be potentially exposed as a first class representation. But it'd still be great to distinguish it in the spec as a first step
+
+[11:49:50.0545] <guybedford>
+having `v8::WasmModule` will help I think too
+
+[11:52:38.0756] <Chengzhong Wu>
+Not speaking on behalf of V8. `v8::WasmModuleObject` is already exposed as a public API. V8 could expose `v8::ModuleSource` and make `v8::WasmModuleObject` a subclass of it
+
+[11:52:44.0032] <Chengzhong Wu>
+* Not speaking on behalf of V8 team. `v8::WasmModuleObject` is already exposed as a public API. V8 could expose `v8::ModuleSource` and make `v8::WasmModuleObject` a subclass of it
+
+[11:54:41.0651] <guybedford>
+The source phase as fully compiled can work for that, would require the JS representation to also have a fully compiled analog then
+
+[11:55:06.0455] <guybedford>
+would be nice if it can be associated with arbitrary cache data though
+
+[11:56:21.0907] <Chengzhong Wu>
+The public API is not essentially 1:1 mapping with JS representation actually. When `--js-source-phase-imports` is set, JS `WebAssembly.Module` is a subclass of AbstractModuleSource, regardless of the `v8::WasmModuleObject` C++ hierarchy.
+
+[11:56:27.0301] <Chengzhong Wu>
+* The C++ public API is not essentially 1:1 mapping with JS representation actually. When `--js-source-phase-imports` is set, JS `WebAssembly.Module` is a subclass of AbstractModuleSource, regardless of the `v8::WasmModuleObject` C++ hierarchy.
+
+[11:56:39.0878] <joyee>
+That pattern of using loader might already be somewhat problematic, regardless of the async requirement - typescript/zip don't even need to be async anyway (suppose loader A requires B to be loaded before A, and loader C requires itself to be loaded after A but before B, or you have multiple versions of one of these loaders...things easily get out of hand)
+
+[11:56:53.0400] <guybedford>
+this is separate from `WebAssembly Module Record` though
+
+[11:58:33.0187] <Chengzhong Wu>
+Addressing https://github.com/tc39/proposal-esm-phase-imports/issues/53 could help engines like V8 to define what state should come with a source record, and what state should come with an instance record, being spec-complaint
+
+[12:00:04.0652] <guybedford>
+How would it help to see that addressed? A more detailed explainer document around semantics?
+
+[12:00:18.0446] <guybedford>
+* How would it help to see that addressed? A more detailed explainer document around semantics and state that is carried?
+
+[12:01:43.0246] <Chengzhong Wu>
+Like, as you mentioned, making Module Source Record a first class record in ecma262 could be a first step
+
+[12:01:58.0479] <Chengzhong Wu>
+right now, the spec says "ModuleSource instances have a [[SourceTextModuleRecord]] internal slot." which is totally confusing
+
+[12:02:18.0968] <Chengzhong Wu>
+* right now, the spec says "ModuleSource instances have a \[\[SourceTextModuleRecord\]\] internal slot." which could be confusing
+
+[12:03:21.0186] <guybedford>
+here's the diagram
+
+[12:04:38.0090] <guybedford>
+yes we need to decide if we want to split out module source, but from a spec perpsective we already discussed and determined this isn't necessary and because it affects three separate specifications that is a huge refactoring
+
+[12:04:48.0870] <guybedford>
+so I think addressing the question separately for the spec and v8 makes sense
+
+[12:04:58.0115] <guybedford>
+we're talking about v8 here - and need to answer that question now
+
+[12:05:25.0446] <Chengzhong Wu>
+I was saying that making this clearer in spec could help engines implement it correctly
+
+[12:05:50.0670] <Chengzhong Wu>
+and engines could expose 1:1 API mapping to the spec
+
+[12:05:53.0684] <guybedford>
+i appreciate that, but this might be one of those scenarios where spec complexity and implementation complexity require separate modularity approaches
+
+[12:07:27.0148] <guybedford>
+Allen always said that standards are not implementation algorithms but instead formal definitions that full cover the semantics
+
+[12:08:35.0722] <Chengzhong Wu>
+without a source of truth for the source / instance record hierarchy, i think defining the hierarchy in an engine by engine basis does not help in the long term. There are already name ambiguity in both spec and implementation that sometime "module" refers to a module instance, and sometime "module" refers to a source representation
+
+[12:09:26.0339] <guybedford>
+I think we iron this out with good tests and that is my focus here
+
+[12:09:40.0943] <guybedford>
+covering the cases of module serialization and importability across contexts
+
+[12:10:05.0479] <Chengzhong Wu>
+if not refactoring ecma262, an (official) explainer as a source of truth could also help
+
+[12:13:24.0530] <guybedford>
+Sure, that's good feedback, I'll put some thought to along with the test262 work. Appreciated spec on its own is not enough to clearly explain the model.
+
+[12:14:06.0117] <guybedford>
+(and especially if we have determined spec structure is not necessarily implementation structure)
+
+[12:14:19.0898] <guybedford>
+* (and especially if we have determined spec structure is not necessarily implementation structure, although tbd as well!)
+
