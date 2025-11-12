@@ -34,3 +34,52 @@ for the Error stack setter - i don't think we discussed whether it can throw if 
 [12:14:00.0314] <Mathieu Hofman>
 Would love to see a report of the accessor behaviors across engines today. 
 
+
+2025-11-11
+[13:15:04.0894] <Mathieu Hofman>
+Another thing to add to the list of existing stack accessor behaviors to test: https://github.com/tc39/proposal-error-stack-accessor/issues/13, whether setting the stack updates the internal data. We broached the topic last week, but felt comfortable with the shadowing behavior. I think I could be convinced to clear the internal data if (aka after) defining the stack property on the target succeeds.
+
+[13:17:15.0607] <Mathieu Hofman>
+I think it also has impact on the value returned by the getter for non error objects. Should the getter outcome distinguish between non-error objects and error objects that had their internal stack data cleared.
+
+[13:27:38.0518] <Mathieu Hofman>
+I am tempted to say that the stack getter should just return an empty string in all those cases.
+
+
+2025-11-12
+[18:12:06.0454] <ljharb>
+i would not ever want the original data to be cleared
+
+[18:12:17.0096] <ljharb>
+the original accessor must always be able to expose the immutable internal slot
+
+[18:17:22.0520] <Mathieu Hofman>
+I see the stack being a getter mostly as an explicit optimization for lazily processing stack info when needed. As such I'm not super concerned with the fact that overriding the stack would explicitly disable that lazy mechanism, but I honestly don't have a strong opinion either way at this point. 
+
+[18:32:41.0946] <kriskowal>
+Jacob Smith lmk if you’d like to cover deep difference of object graphs, by whatever name, at tomorrow’s meeting.
+
+[18:32:54.0178] <kriskowal>
+I think we’ll otherwise open the floor to discuss proposals for next week’s plenary.
+
+[00:35:37.0601] <Justin Ridgewell>
+Why though?
+
+[00:38:42.0924] <Olivier Flückiger>
+Also, that is not what V8 is doing right now. Once you set the stack property we will collect that memory. I don't really know how important that is, but I did hear nightmare stories of big websites leaking their whole application state through error objects :) That is where my worries come from...
+
+[00:49:20.0140] <Olivier Flückiger>
+So I guess my question is, what would be the argument against the setter also writing undefined into the internal slot should there be such a slot on the receiver...
+
+[00:51:42.0821] <Olivier Flückiger>
+* So I guess my question is, what would be the argument against the setter also writing undefined (or whatever constant) into the internal slot should there be such a slot on the receiver...
+
+[00:57:49.0295] <Mathieu Hofman>
+I personally don't have any, as long as that happens only after successfully defining the own stack property. 
+
+[00:58:07.0774] <Mathieu Hofman>
+* I personally don't have any, as long as that happens only after successfully defining the own stack property on the receiver . 
+
+[01:03:49.0432] <Justin Ridgewell>
+I think that would be fine.
+
