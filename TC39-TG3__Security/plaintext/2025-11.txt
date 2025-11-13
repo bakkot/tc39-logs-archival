@@ -83,3 +83,255 @@ I personally don't have any, as long as that happens only after successfully def
 [01:03:49.0432] <Justin Ridgewell>
 I think that would be fine.
 
+[05:24:22.0022] <dminor>
+That makes sense to me.
+
+[05:44:59.0708] <ljharb>
+because that's how every internal slot works, for one. but also because the stack trace is the thing that makes it an error
+
+[05:45:10.0272] <ljharb>
+v8 is doing a bunch of stuff around error stacks right now that need fixing.
+
+[05:46:21.0857] <Olivier Flückiger>
+"The only specified use of [[ErrorData]] is [...] to identify Error" https://tc39.es/ecma262/#sec-properties-of-error-instances
+
+[05:46:24.0429] <ljharb>
+* v8 is doing a bunch of stuff around error stacks right now that need fixing. for example, the hidden intrinsic own accessor property on every error instance
+
+[05:46:47.0616] <ljharb>
+i'm not talking about the spec, which doesn't discuss stacks at all right now - but about actual semantics in practice
+
+[05:46:52.0800] <ljharb>
+`new Error()` is the only way to get a stack trace
+
+[05:46:58.0764] <Olivier Flückiger>
+So currently in Ecma262 errors do not have a stack trace. Many engines will give you one. And at least two engines will allow you to remove it again...
+
+[05:47:09.0687] <ljharb>
+sure
+
+[05:47:26.0680] <ljharb>
+which means there's no web compat angle forcing a direction, which means we should do the normal thing for the language.
+
+[05:47:55.0083] <ljharb>
+and that's an immutable slot determined at instantiation time, with a prototype accessor to read it
+
+[05:48:05.0552] <ljharb>
+the setter only exists in the proposal for web compatibility, otherwise there wouldn't be one
+
+[05:50:12.0576] <Olivier Flückiger>
+Only this might turn out to be half-webcompatible. As in it behaves semantically like before, but pragmatically it might use up all your applications memory...
+
+[05:54:47.0956] <ljharb>
+i would be very surprised if a string attached to an error object used up lots of memory - what long-running application is going to keep error instances around, but the *string* is the thing that uses too much memory?
+
+[05:54:57.0136] <ljharb>
+* i would be very surprised if a string attached to an error object used up lots of memory - what long-running application is going to keep error instances around, but a _string_ is the thing that uses too much memory?
+
+[05:55:08.0696] <ljharb>
+tbh i just don't see how that's a remotely meaningful concern
+
+[05:55:38.0075] <Olivier Flückiger>
+ah, that's the thing. we don't have a string there. but some internal representation of the stack
+
+[05:55:49.0668] <Olivier Flückiger>
+that is for example accessible to formatStackTrace
+
+[05:55:56.0447] <ljharb>
+you don't need to keep that once the stack is fetched tho - just the string
+
+[05:56:12.0628] <ljharb>
+or at least, the JS spec isn't forcing that
+
+[05:56:24.0006] <ljharb>
+(i don't know what formatStackTrace is)
+
+[05:57:41.0385] <ljharb>
+(ironically v8 is the one that blocked the structured stack trace proposal back in like 2018 for reasons unrelated to this convo, so i'm surprised they now have a stack structure with important use cases)
+
+[06:00:28.0323] <Olivier Flückiger>
+ookay. I mean we can write spec text all day. I am just pointing out what might cause difficulties shipping it...
+
+[06:00:40.0906] <Olivier Flückiger>
+(prepareStackTrace I meant)
+
+[06:03:22.0751] <ljharb>
+totally, i appreciate you bringing it up
+
+[06:03:29.0739] <ljharb>
+i'm just trying to understand why it would make a difference
+
+[06:04:06.0175] <ljharb>
+like, can you describe the long-running web app where it keeps around error instances, nulls out the stack trace, and where the weight of the underlying stack structure sticking around would be punitive?
+
+[06:04:35.0662] <ljharb>
+i've been doing web dev for a long long time and while indeed devs do all sorts of wacky stuff, i can't even conceive of how such an application could come into existence or what it'd do
+
+[06:05:25.0757] <ljharb>
+* like, can you describe the long-running web app where it keeps around error instances, nulls out the stack trace, and where the weight of the underlying stack structure sticking around would be punitive? (but the weight of the error instances would not be)
+
+[06:07:24.0450] <nicolo-ribaudo>
+Just an idea but I don't actually want to be involved in this discussion so I won't defend it: maybe V8 could stringify the stack trace (calling .prepareStackTrace) when the setter runs (similarly to how it does it when the getter runs), and then store the string?
+
+[06:09:50.0222] <Olivier Flückiger>
+yeah, that would be the obvious solution, if we didn't have https://v8.dev/docs/stack-trace-api#customizing-stack-traces
+
+[06:10:05.0517] <Olivier Flückiger>
+but we do and that is another web reality unfortunately
+
+[06:11:10.0250] <ljharb>
+well, a chrome reality at least
+
+[06:12:13.0319] <ljharb>
+that API seems like it *accepts* a structure tho - the original error doesn't _provide_ it such that it matches the stack trace?
+
+[06:13:05.0733] <ljharb>
+eg in `Error.prepareStackTrace(error, structuredStackTrace)` - it's not retrieving the structure, it's forcing the user to pass one of their own
+
+[06:13:30.0615] <ljharb>
+* eg in `Error.prepareStackTrace(error, structuredStackTrace)` - it's not retrieving the structure, it's forcing the user to pass one of their own. the implication ofc is that there's one of these internally for each error, and i guess that's the memory you're concerned about?
+
+[06:14:54.0604] <Olivier Flückiger>
+Yes, the problem is that the error internally has all this stuff that you see listed on that doc attached. And turning it into a string can be observable via hooking into this prepareStackTrace function. So we can't do it transparently...
+
+[06:15:31.0159] <ljharb>
+i'm confused how it's observable - that page doesn't describe any hooks
+
+[06:15:49.0422] <ljharb>
+the stack string construction _from the structure i provided_ is observable, i see that
+
+[06:15:51.0175] <Olivier Flückiger>
+Anyway, I guess I can agree that this is a bit of a chrome specific issue.
+
+[06:16:00.0265] <ljharb>
+but the default stack trace's structure isn't accessible to me, is it?
+
+[06:16:22.0794] <Olivier Flückiger>
+it is, if you install your own code for prepareStackTrace
+
+[06:16:45.0582] <ljharb>
+… are you saying that the engine calls _the current value of Error.prepareStackTrace_ when making a string? O.o
+
+[06:17:06.0680] <ljharb>
+that… is a horrific capability to expose to users and it would be really good to move away from it :-(
+
+[06:17:56.0369] <Olivier Flückiger>
+ok, now we are on the same page I guess :)
+
+[06:18:12.0521] <nicolo-ribaudo>
+> <@ljharb:matrix.org> that… is a horrific capability to expose to users and it would be really good to move away from it :-(
+
+At least in Node.js packages rely on it — Babel does, for example 
+
+[06:18:19.0384] <nicolo-ribaudo>
+I don't remember for what
+
+[06:18:37.0612] <Olivier Flückiger>
+You can e.g., apply sourcemaps to stack traces
+
+[06:18:47.0348] <ljharb>
+oof
+
+[06:19:08.0851] <ljharb>
+do any of these use cases _not_ first use captureStackTrace?
+
+[06:19:53.0596] <ljharb>
+because then the cost of holding on to the structure would only be a problem for errors that go through captureStackTrace - the others could just memoize the string and collect the structure on first access
+
+[06:19:58.0820] <nicolo-ribaudo>
+> <@ljharb:matrix.org> do any of these use cases _not_ first use captureStackTrace?
+
+No, because there is no need for it. Most code is dealing with normal errors that already have a stack trace 
+
+[06:20:28.0912] <nicolo-ribaudo>
+You get them from a try/catch somewhere 
+
+[06:20:45.0850] <ljharb>
+hm
+
+[06:22:07.0567] <nicolo-ribaudo>
+https://github.com/evanw/node-source-map-support is a popular package relying on it. It seems like new Node.js versions do it by themselves, I don't know if using the same hook
+
+[06:23:00.0180] <Olivier Flückiger>
+I mean we can work around the problem, as long as you don't use that prepareStackTrace api. The extra horrific part is that you can install a prepareStackTrace at anypoint :) But I guess we could live with a solution where after installing a new prepareStackTrace the already evaluated errors would not be updated...
+
+[06:23:37.0755] <ljharb>
+definitely the stack string should never be changeable once observed, just like some proxy trap values
+
+[06:24:07.0020] <Olivier Flückiger>
+But it means the solution will be nice in the spec but ugly in reality.
+
+[06:24:45.0321] <Olivier Flückiger>
+And I also don't know if apps which explicitly delete the stack to free that memory, but I could imagine them existing. That's why I opened the issue...
+
+[06:24:46.0978] <ljharb>
+if the ugly can be avoided that's great, but when things are built organically by a single implementation instead of going through a broad standards process we're often left with ugly :-( look at typed arrays :-p
+
+[06:24:58.0998] <Olivier Flückiger>
+* And I also don't know of apps which explicitly delete the stack to free that memory, but I could imagine them existing. That's why I opened the issue...
+
+[06:25:26.0383] <ljharb>
+if chrome is willing to gather telemetry on that, that'd be helpful
+
+[06:26:15.0648] <Olivier Flückiger>
+it's actually more common than you would think. I think I have numbers
+
+[06:26:56.0099] <ljharb>
+i'd love to look into it. apps that delete the stack to free that memory but then keep the error objects around for a long time?
+
+[06:27:49.0701] <Olivier Flückiger>
+https://chromestatus.com/metrics/feature/timeline/popularity/2223
+
+[06:32:14.0420] <Olivier Flückiger>
+I get some hits with: https://github.com/search?q=%22.stack+%3D+null%22+language%3AJavaScript+&type=code 🤷
+
+[06:46:02.0484] <ljharb>
+that shows 1.5% of pageloads that call prepareStackTrace, but not pages that null out the stack
+
+[06:49:08.0479] <Olivier Flückiger>
+ah yes, for that I don't have numbers. I meant to say prepareStackTrace is surprisingly popular so we probably can't just remove or break it.
+
+[06:49:20.0821] <Olivier Flückiger>
+* ah yes, for that I don't have numbers. I meant to say prepareStackTrace is surprisingly popular so we can't just remove or break it.
+
+[06:49:33.0448] <ljharb>
+totally, i get that
+
+[06:49:50.0559] <ljharb>
+i was hoping for telemetry on the memory concern tho, since "uses prepareStackTrace" doesn't tell us that
+
+[06:52:16.0086] <ljharb>
+* i was hoping for telemetry on the memory concern tho, since "uses prepareStackTrace" doesn't tell us that (eg, "nulls out the stack but keeps the error around for awhile")
+
+[06:52:17.0702] <Olivier Flückiger>
+I only have anecdotal evidence of very widely used apps which did catch and store errors for reporting them, failed to release said errors and through our internal stack representation leaking a lot of memory. Idk if these apps were fixed by just not keeping the errors or by overriding the stack...
+
+[06:52:43.0272] <ljharb>
+i'd assume the former - serializing them to strings and throwing away the objects - but that'd be helpful to clarify
+
+[06:53:07.0428] <Olivier Flückiger>
+that info is probably lost in time
+
+[07:22:18.0368] <Mathieu Hofman>
+> <@nicolo-ribaudo:matrix.org> Just an idea but I don't actually want to be involved in this discussion so I won't defend it: maybe V8 could stringify the stack trace (calling .prepareStackTrace) when the setter runs (similarly to how it does it when the getter runs), and then store the string?
+
+This is the alternative I had also in mind. My understanding is that there is a compat concern that to release the stack structure, it would require v8 to call prepareStackTrace when the stack setter is called, if the stack structure hadn't been processed yet. This sounds like an even more niche case than using the setter: use the setter without using the getter / capturing an error but immediately discard the stack without using it. I really doubt this is happening much / at all, and if it is happening some, I doubt that the user implementation of prepareStackTrace would care being called extra. 
+
+
+2025-11-13
+[16:58:43.0446] <Justin Ridgewell>
+There are several that set internal slots:
+- https://tc39.es/ecma262/#sec-date.prototype.setdate (and all other `Date.setFoo()` methods)
+- https://tc39.es/ecma262/#sec-proxy.revocable 's `revoke()`
+
+It will also still be an error after we clear out the held stack frames, and will still have the internal slot.
+
+[17:01:47.0372] <Justin Ridgewell>
+As well as like every mutation method on Map/Set
+
+[18:45:23.0154] <Mathieu Hofman>
+While I agree some objects have internal slots with methods that mutate them, I don't consider error instances as having mutable state. A discussion we had for `Error.isError` was that errors can conceptually be considered pass-by-copy objects for which a membrane could create a new instance of. Map/Set/Date are all objects which are understood to contain mutable state (unfortunate for Date). I won't get into the horrible things Proxy let you do (and which is why we had brought up the stabilize proposal for them).
+
+[18:59:08.0013] <ljharb>
+fair point about Date (a legacy mistake Temporal is correcting) and collections, and Proxy is a nightmare regardless :-)
+
