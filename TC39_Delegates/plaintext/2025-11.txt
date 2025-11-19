@@ -1757,3 +1757,2057 @@ if something "sometimes has a problem", it means we always need to consider the 
 [23:59:03.0700] <Michael Ficarra>
 so given there exists at least one pair of encodings where this problem could happen, it's just as important of a problem as the text mixup
 
+[07:40:41.0895] <bakkot>
+I really do not understand the conversation above. There's no requirements that hosts even represent modules as bytes at any point. It would be perfectly valid for a host to allow importing you to do `import text from 'my sample text' as { type: 'text' }` and have that result in the text `'my sample text'`, for example.
+
+[07:41:19.0488] <bakkot>
+Some hosts do represent modules as bytes, in a variety of ways, but that's entirely out of our scope
+
+[07:41:29.0927] <bakkot>
+* I really do not understand the conversation above. There's no requirements that hosts even represent modules as bytes at any point. It would be perfectly valid for a host to allow you to do `import text from 'my sample text' as { type: 'text' }` and have that result in the text `'my sample text'`, for example.
+
+[07:42:48.0651] <bakkot>
+* I really do not understand the conversation above. There's no requirements that hosts even represent importable resources as bytes at any point. It would be perfectly valid for a host to allow you to do `import text from 'my sample text' as { type: 'text' }` and have that result in the text `'my sample text'`, for example.
+
+[07:42:55.0138] <bakkot>
+* Some hosts do represent resources as bytes, in a variety of ways, but that's entirely out of our scope
+
+[09:39:32.0917] <bakkot>
+* I really do not understand the conversation above. There's no requirements that hosts even represent importable resources as bytes at any point. It would be perfectly valid for a host to allow you to do `import text from 'my sample text' with { type: 'text' }` and have that result in the text `'my sample text'`, for example.
+
+[09:46:43.0781] <bakkot>
+More realistically, something like Graal or other cross-language interop runtimes could allow consumers to define text to be importable from JS, and these would be presumably defined in terms of strings, not bytes. Compartments could be extended to do something similar. There's just no relevant notion of "encoding" a string to be imported from the perspective of these sorts of things. It doesn't make sense for the ES spec to concern it with the subset which happen to have the host doing translation from bytes.
+
+[09:47:27.0035] <bakkot>
+I'm sure HTML will specify how bytes from the network are translated to text to be imported, because it's a host, which is the appropriate layer to define those semantics.
+
+
+2025-11-19
+[17:00:06.0885] <Rob Palmer>
+And we begin day 2!
+
+[17:11:05.0305] <Michael Ficarra>
+I think array iterators not closing when you call `return` was a mistake
+
+[17:12:12.0280] <ljharb>
+i think `return` was a mistake
+
+[17:13:05.0488] <Michael Ficarra>
+the generator protocol maybe, but return is fine
+
+[17:16:30.0970] <ljharb>
+separately, i'm not actually sure when you'd want to close the database connection - in most apps i've worked in, the database stays open and the connection is shared/pooled, and times out eventually
+
+[17:33:20.0602] <dminor>
+Michael Ficarra: Sorry, accidentally deleted your topic while clearing the +1s
+
+[17:33:30.0752] <rkirsling>
+these 1 or 2 or 2.7 presentations are a pretty amusing modern TC39 phenomenon
+
+[17:35:03.0850] <snek>
+that and conditional consensus 
+
+[17:35:17.0941] <snek>
+its nice we have ways to speed things up though
+
+[17:35:28.0462] <rkirsling>
+conditional consensus is good efficiency
+
+[17:37:05.0789] <Justin Ridgewell>
+@bakkot:matrix.org Can you link your async iterator slides when you’re done
+
+[17:38:28.0996] <mgaudet|travelling>
+Dumb question: Where is  CreateAsyncIteratorFromClosure defined? (re: async interator helpers-- it links to the main spec where I can't find it) 
+
+[17:39:56.0646] <Michael Ficarra>
+@mgaudet:mozilla.org https://github.com/tc39/ecma262/pull/3628
+
+[17:40:47.0896] <mgaudet|travelling>
+thanks :) 
+
+[17:44:15.0644] <waldemar>
+What happens if you get an infinite loop inside a spec function? Is there any defined behavior?
+
+[17:45:38.0058] <Richard Gibson>
+I guess the algorithm would just never terminate until the host process does
+
+[17:46:22.0979] <snek>
+i don't think any spec function current or proposed lets you get into a true infinite loop, they all dispatch on user code
+
+[17:46:55.0166] <snek>
+* i don't think any spec function current or proposed lets you get into a true infinite loop, they all predicate on user code
+
+[17:51:30.0069] <bakkot>
+sorry the async iterators item was so incoherent, I'd meant to do prep this weekend but I was/am down with some sort of horrible virus and am not able to think clearly enough for reasoning about concurrency code
+
+[17:51:53.0723] <bakkot>
+No special casing for infinite loops; the spec technically just says you have to keep doing it forever
+
+[17:52:03.0160] <bakkot>
+this is part of its general refusal to admit any resource constraints
+
+[17:52:07.0014] <Richard Gibson>
+maybe, but not if we introduce a built-in infinite iterator
+
+[18:03:19.0015] <Christian Ulbrich>
+forgive me for my naiivety (or for the lack of knowing the proper spelling), but composites are tought to be immutable, aren't they?
+
+[18:03:48.0170] <nicolo-ribaudo>
+Yes
+
+[18:03:50.0957] <nicolo-ribaudo>
+Shallowly 
+
+[18:04:09.0848] <Christian Ulbrich>
+Shallowly?
+
+[18:04:22.0673] <nicolo-ribaudo>
+They can contain mutable stuff
+
+[18:04:25.0776] <snek>
+is implementation concern the only factor for interned vs unique? or are there other constraints?
+
+[18:04:27.0069] <Christian Ulbrich>
+c1.wallet.amount is not immutable?
+
+[18:04:33.0249] <bakkot>
+correct
+
+[18:04:36.0331] <Christian Ulbrich>
+* `c1.wallet.amount` is not immutable?
+
+[18:04:51.0889] <nicolo-ribaudo>
+You can make wallet a composite too 
+
+[18:05:27.0023] <bakkot>
+can but shouldn't, wallets have identity
+
+[18:05:36.0503] <bakkot>
+my wallet is not your wallet just because we both have no money
+
+[18:05:59.0863] <Justin Ridgewell>
+@keith_miller:matrix.org Is spec convienence causing real slowdowns for TAs?
+
+[18:07:02.0320] <Christian Ulbrich>
+so `let c1 = Composite({wallet: amount: 20}); 
+let c2 = Composite({wallet: amount: 20});
+c1 === c2; // true
+c1.wallet.amount+=20;
+c1 === c2 // ??
+`
+
+[18:07:25.0289] <snek>
+i would hope that composites are never mutable
+
+[18:07:28.0772] <snek>
+in either case
+
+[18:07:33.0260] <nicolo-ribaudo>
+No, those two wallets are different objects, so the composites are different
+
+[18:07:36.0007] <Justin Ridgewell>
+You need nested composites, right?
+
+[18:07:38.0167] <Christian Ulbrich>
+* so ```
+let c1 = Composite({wallet: amount: 20});  
+let c2 = Composite({wallet: amount: 20}); 
+c1 === c2; // true 
+c1.wallet.amount+=20;
+ c1 === c2 // ?? 
+```
+
+[18:07:59.0060] <nicolo-ribaudo>
+But these would be the same:
+```
+let wallet = Composite({ amount: 20 });
+let c1 = Composite({ wallet });
+let c2 = Composite({ wallet });
+```
+
+[18:08:05.0991] <nicolo-ribaudo>
+* But these would be the same:
+
+```
+let wallet =({ amount: 20 });
+let c1 = Composite({ wallet });
+let c2 = Composite({ wallet });
+```
+
+[18:08:09.0414] <Justin Ridgewell>
+The alternative is `wallet = { amount: 20 }; c1 = Composite({ `… Nicolo beat me to it.
+
+[18:08:23.0104] <nicolo-ribaudo>
+* But these would be the same:
+
+```
+let wallet = { amount: 20 };
+let c1 = Composite({ wallet });
+let c2 = Composite({ wallet });
+```
+
+[18:12:11.0659] <keith_miller>
+Yeah, 100%
+
+[18:12:22.0238] <Christian Ulbrich>
+Mathieu Hofman: We also have current _custom Iterability_ with `Symbol.iterator`.
+
+[18:12:22.0939] <bakkot>
+please do not look at the current spec, it means nothing
+
+[18:12:24.0510] <bakkot>
+I should remove it
+
+[18:12:38.0595] <Justin Ridgewell>
+@olivf.o1o.ch:immer.chat Does V8 have this same problem?
+
+[18:12:38.0871] <keith_miller>
+In particular because you have to do n shape checks for each of the different views
+
+[18:12:59.0092] <Justin Ridgewell>
+Should we be splitting the methods onto the sepcific TA subtype classes?
+
+[18:13:01.0315] <Mathieu Hofman>
+That is ok-ish. The place it shows up in syntax (array spread) was a mistake
+
+[18:13:44.0628] <keith_miller>
+Sometimes it will get inlined enough that we can prove only one shape shows up but there's many examples I've seen where that doesn't happen
+
+[18:14:34.0186] <snek>
+my memory of v8 is that it generally does a switch over different object kinds. i guess that could be compiled to a bunch of if/else branches but hopefully it does better than 
+
+[18:14:39.0613] <snek>
+* my memory of v8 is that it generally does a switch over different object kinds. i guess that could be compiled to a bunch of if/else branches but hopefully it does better than that
+
+[18:15:12.0352] <snek>
+which is certainly still some overhead, but its not a function of the number of things you're switching over
+
+[18:15:37.0047] <Christian Ulbrich>
+Mathieu Hofman: `Array.prototype[Symbol.iterator] = function* () { yield 2; yield 3; }`
+
+[18:15:45.0211] <keith_miller>
+The problem is that you also need to make the index access polymorphic
+
+[18:15:58.0442] <keith_miller>
+So it's not just a check you're in bounds and load
+
+[18:16:13.0541] <keith_miller>
+It's a switch over the element size then pick the right load for the active size
+
+[18:16:24.0872] <snek>
+yeah it remains polymorphic until it can be found to be exactly 1 kind
+
+[18:16:49.0387] <keith_miller>
+Right but that wouldn't be a problem if each of the views had their own copy of the various methods
+
+[18:17:35.0801] <Christian Ulbrich>
+Mathieu Hofman: What I am trying to say, and I am leaning towards some, what I think Ron said, custom equality is not a bad thing per sè. We already have so many things in the language, that are powerful.
+
+[18:17:38.0873] <Justin Ridgewell>
+Let’s fix that. Doing something for convenience in the spec is much less important that actual impl difficulties.
+
+[18:18:01.0386] <snek>
+its definitely web reality at this point
+
+[18:18:02.0863] <keith_miller>
+There's some compatibility risk although I don't know how high it is in practice
+
+[18:18:32.0867] <snek>
+i've seen code in the wild using TypedArray.prototype.foo.call
+
+[18:18:53.0340] <snek>
+actually i guess that doesn't actually preclude adding more methods
+
+[18:19:04.0110] <keith_miller>
+Maybe you could just shadow the current one
+
+[18:19:05.0199] <snek>
+* actually i guess that doesn't actually preclude adding more methods on the subclasses
+
+[18:19:19.0585] <keith_miller>
+It would be weird but I doubt anyone would really know
+
+[18:20:03.0225] <snek>
+we did a similar change moving around where some error properties were located in webkit and chrome and no one noticed
+
+[18:20:16.0293] <Mathieu Hofman>
+That's just prototype pollution. Which is a much more general problem. But yeah you could have an array instance with an shadowed Symbol.iterator that does something weird, and I don't like that array spread would be affected by that.
+
+[18:21:29.0626] <bakkot>
+I think it is not weird to get custom behavior when spreading an object which happens to be IsArray but which has a custom `Symbol.iterator`
+
+[18:21:58.0076] <bakkot>
+as to the Array prototype Symbol.iterator pollution problem, I have a proposal for fixing that!
+
+[18:22:19.0247] <snek>
+ah actually it was the opposite direction https://github.com/WebKit/WebKit/commit/96efcf1f1c011efd5946d053272581e0a3d6c3b2 (my only webkit commit 😄)
+
+[18:35:35.0208] <Olivier Flückiger>
+What exactly is the spec convenience we are talking about? That they all share a common proto?
+
+[18:35:42.0722] <Christian Ulbrich>
+Looks like, _native equality_ comes quite at some cost, of those _interned objects_ not being so _native_ anymore...
+
+[18:39:03.0574] <Justin Ridgewell>
+Yah, and the methods are defined on the common proto
+
+[18:40:00.0351] <Justin Ridgewell>
+Though apparently index access is also slower than it should be
+
+[18:43:44.0648] <Christian Ulbrich>
+Would this be a first for the language? Is there any object, that is specially handled somewhere, somehow, besides being an object, I mean apart from `null`?
+
+[18:43:47.0103] <Olivier Flückiger>
+It's probably not our main worry for TA... But in principle all for not doing convenience in the spec if it makes implementation harder.
+
+[18:46:24.0613] <snek>
+also worth mentioning that a lot of TA baggage comes from khronos :P
+
+[18:46:41.0338] <snek>
+* also worth mentioning that a lot of TA baggage comes from khronos, not necessarily people making convenient spec decisions :P
+
+[18:48:41.0342] <ljharb>
+`document.all`
+
+[18:49:06.0689] <Justin Ridgewell>
+khronos?
+
+[18:49:46.0648] <ljharb>
+> "Khronos typed arrays" refers to the JavaScript Typed Arrays specification, which was originally developed under the Khronos Group for use in its graphics APIs like WebGL
+
+(google ai summary)
+
+[18:50:20.0258] <snek>
+yes they were developed for webgl and later merged into ecma262
+
+[18:50:45.0597] <rkirsling>
+that's the origin of all the detachedness f-ery
+
+[18:51:08.0187] <Christian Ulbrich>
+ljharb: In what context? This is a DOM API.
+
+[18:52:14.0000] <Justin Ridgewell>
+https://tc39.es/ecma262/multipage/additional-ecmascript-features-for-web-browsers.html#sec-IsHTMLDDA-internal-slot
+
+[18:52:28.0207] <Justin Ridgewell>
+“Is HTML Document Dot All"
+
+[18:52:47.0122] <bakkot>
+In the case ljharb describes, where developers know about weirdness or already have something wrong, throwing seems better?
+
+[18:53:07.0883] <snek>
+throw as early as possible
+
+[18:53:08.0357] <bakkot>
+Like I cannot imagine wanting to leak here, on purpose
+
+[18:53:25.0636] <bakkot>
+If someone doesn't know about this they should learn by the language telling them
+
+[18:53:51.0643] <bakkot>
+Not by mysterious leaks
+
+[18:53:54.0232] <ljharb>
+i mean an alternative would just be, require composites to have at least 1 object
+
+[18:54:03.0957] <bakkot>
+That is also terrible 
+
+[18:54:07.0761] <ljharb>
+why?
+
+[18:54:17.0964] <snek>
+because it breaks them
+
+[18:54:29.0777] <ljharb>
+no existing code uses composites, how does that break anything
+
+[18:54:30.0907] <bakkot>
+Because you want to be able to use them for, like, pairs of numbers
+
+[18:54:33.0217] <snek>
+if you want a composite of primitive types you then need to keep around some special identity object to put in them
+
+[18:54:39.0861] <bakkot>
+Coordinates in a map, eg 
+
+[18:54:58.0266] <ljharb>
+make one symbol and stick it in every composite
+
+[18:55:31.0744] <bakkot>
+That is so bad
+
+[18:55:44.0215] <Christian Ulbrich>
+I find waldemar argument convincing. If we have _prior art_ of handling something specifically (although I think the `document.all` to be very _exotic_ (hihi)), then I'd rather prefer a _fail-fast_ approach, then having to accept memory leaks.
+
+[18:55:53.0504] <ljharb>
+imo it's far less bad than making some objects not be weakable
+
+[18:56:01.0666] <bakkot>
+The benefit of keeping the consistency for weak maps is so, so far from being with the cost of having to do that
+
+[18:56:32.0147] <rkirsling>
+IsHTMLDDA is like, one of the most horrifying things in the web platform, to be certain
+
+[18:56:34.0431] <bakkot>
+As you already pointed out, weak maps are super niche!
+
+[18:56:34.0566] <ljharb>
+to me this all seems to lead back to "they need to be primitives or they shouldn't exist in the language"
+
+[18:56:53.0170] <bakkot>
+* The benefit of keeping the consistency for weak maps is so, so far from being worth the cost of having to do that
+
+[18:56:54.0161] <rkirsling>
+* document.all is like, one of the most horrifying things in the web platform, to be certain; that's why [[IsHTMLDDA]] is a sort of resentment-coded name
+
+[18:57:20.0219] <ljharb>
+we shouldn't commit minor crimes just because the thing we want to add shouldn't be an object but is forced to be one
+
+[18:57:57.0540] <bakkot>
+Ok that is a position you could have, but at that point this question does not matter
+
+[18:58:03.0732] <snek>
+i don't find weakmaps to be the fundamental primitive by which i decide what a value is. rather weakmap is a somewhat strange api that exposes the reality of values.
+
+[18:58:09.0687] <snek>
+* i don't find weakmaps to be the fundamental primitive by which i decide what a value is. rather weakmap is a somewhat strange api /becausae/ it exposes the reality of values.
+
+[18:58:12.0277] <bakkot>
+We are talking about what happens assuming that isn't the world we're in
+
+[18:58:42.0597] <Christian Ulbrich>
+I have a feeling, that the discussion is very academic. What would be a real-world library using WeakSets that would be easily affected by this?
+
+[18:58:48.0398] <snek>
+* i don't find weakmaps to be the fundamental primitive by which i decide what a value is. rather weakmap is a somewhat strange api /because/ it exposes the reality of values.
+
+[18:59:13.0838] <ljharb>
+also what would be a real-world application where this would be the biggest memory leak in the app
+
+[18:59:14.0517] <rkirsling>
+kinda feel sorry for Yusuke's queue item getting shoved to the bottom
+
+[18:59:18.0284] <snek>
+fwiw most use of weak apis do not deal with arbitrary values
+
+[18:59:28.0308] <snek>
+* fwiw most use of weak apis do not deal with arbitrary values, they are almost always contained within a single layer of an application
+
+[18:59:33.0609] <snek>
+* fwiw most use of weak apis do not deal with arbitrary values, they are almost always contained within a single layer of a codebase
+
+[18:59:43.0473] <Chengzhong Wu>
+why is Yusuke's topic kept pushing down the queue?
+
+[19:00:41.0633] <Chengzhong Wu>
+* why is Yusuke's topic kept pushing down the queue? feel like new topics are added before Yusuke's
+
+[19:00:53.0411] <bakkot>
+Next time we talk about this I vote implementations get priority 
+
+[19:01:22.0684] <Olivier Flückiger>
+We should really not add objects that cannot be collected. Websites running out of memory is really a terrible issue to debug for all parties involved.
+
+[19:01:29.0317] <bakkot>
+I care a lot more about what is implementable than about our design opinions unconstrained by implementation reality
+
+[19:07:40.0496] <bakkot>
+it is easy to imagine, for example, something which is serializing values to be passed to and from a worker, and uses a WeakMap to cache the serialization, with the serializations happening very frequently (it's a common pattern when splitting some computations to be done off the main thread, for example), and then it starts passing Composites some of the time, and now it is leaking a lot
+
+[19:08:11.0003] <bakkot>
+that is an unusually _easy_ example of a leak to track down, and is also very much a thing which would happen with totally normal use of WeakMaps
+
+[19:08:29.0061] <bakkot>
+throwing is much, much better here, so that the developer learns that actually WeakMaps do not work for Composites.
+
+[19:41:36.0343] <Aki>
+Congratulations to eemeli and Ashley Claymore for being the only speakers yesterday—including myself—who made sure the appropriate info was recorded in the notes.
+
+[19:43:52.0368] <Aki>
+bakkot, ryzokuken , ptomato , Mikhail Barash , FYT, nicolo-ribaudo , Richard Gibson , dminor , Michael Ficarra , ljharb , and James M Snell : here's what's missing https://kdrive.infomaniak.com/app/share/1777368/c4d6dca3-6847-4674-bf1d-87d2d0370871
+
+[19:45:58.0760] <bakkot>
+fwiw speakers generally aren't the ones who add the link to the slides, I don't typically check for that after having done my presentation
+
+[19:46:04.0405] <bakkot>
+(usually note takers do)
+
+[19:46:19.0010] <Aki>
+Yeah the notes are in _really_ rough shape this meeting. 
+
+[19:46:36.0645] <bakkot>
+anyway added slides link to editor update item
+
+[19:47:40.0087] <Chengzhong Wu>
+sometimes an agenda item was added without a link to slides. In this case, note takers are not able to add the link for the speakers. Please add the link after done the presentation
+
+[19:48:04.0261] <Chengzhong Wu>
+* sometimes an agenda item was added without a link to slides. In this case, note takers are not able to add the link for the speakers in the notes. Please add the link after done the presentation
+
+[19:54:06.0436] <ljharb>
+what on earth is kdrive, i was so confused when i wasn't logged in to google sheets and then i realized it wasn't sheets
+
+[20:04:45.0801] <Ashley Claymore>
+it jumps to labels: https://github.com/v8/v8/blob/638e32793f854790284bf613eca204550e1c8e56/src/builtins/builtins-collections-gen.cc#L211-L215
+
+[20:06:19.0207] <snek>
+that's just an if/else though. i was referring to these more: https://github.com/v8/v8/blob/638e32793f854790284bf613eca204550e1c8e56/src/builtins/builtins-typed-array-gen.cc#L546-L601
+
+[20:06:39.0687] <Mathieu Hofman>
+One motivation for them to be objects is to allow them to contain mutable objects. That is not acceptable as primitives
+
+[20:07:52.0078] <Ashley Claymore>
+that leaks in a worse and more subtle way. Which is why I don't want the answer to be: every composite must contain something non-forgable
+
+[20:08:27.0687] <Mathieu Hofman>
+Membrane style libraries that keep an association from any object to another object they created. We also have a classification library where we'll check the shape of a deeply frozen object and remember the classification.
+
+[20:08:41.0937] <snek>
+* that's just a single branch though. i was referring to these more: https://github.com/v8/v8/blob/638e32793f854790284bf613eca204550e1c8e56/src/builtins/builtins-typed-array-gen.cc#L546-L601
+
+[20:09:53.0238] <Ashley Claymore>
+I requested during my presentation that we keep the conversation to the slides, and not extend the conversation to a wider conversation. I would rather do that in a separate meeting that specifically talks about that - with prepared slides to reference.
+
+[20:12:08.0479] <bakkot>
+it should still be called Semaphore 💢
+
+[20:13:05.0258] <rkirsling>
+it seems like Governor would be a confusingly disconnected name if it's located right on globalThis but not sure whether that's the intent
+
+[20:14:10.0642] <rbuckton>
+I think `Semaphore` is the right name, but only if its API is usable both for async coordination and thread coordination (with shared structs), which is certainly feasible.
+
+[20:20:58.0944] <bakkot>
+I _think_ the only thing necessary to make it work for thread coordination is for it to be structured-cloneable?
+
+[20:21:11.0570] <bakkot>
+with the internal state not being shared not cloned, obviously
+
+[20:21:24.0776] <bakkot>
+I guess the spec would require some atomics stuff, probably
+
+[20:21:43.0270] <rbuckton>
+No, it wouldn't be structured clonable, it would be shared (just like Mutex, Condition)
+
+[20:21:58.0846] <rbuckton>
+Structured cloneable isn't shareable
+
+[20:24:24.0102] <rbuckton>
+Ideally it would be the same kind of object as we want Mutex to be (shared with a per-realm prototype). 
+
+[20:24:42.0727] <snek>
+structured cloneable includes shared values 
+
+[20:25:21.0912] <rbuckton>
+Structured clone requires postmessage. Shareable only requires assignment
+
+[20:25:59.0478] <rbuckton>
+You can't assign a structured clonable object to a property on a shared struct, only primitive and shareable values
+
+[20:26:29.0432] <snek>
+oh you are referring to a new category of value based on shared struct ok
+
+[20:26:33.0803] <rbuckton>
+Yes.
+
+[20:27:03.0417] <bakkot>
+sorry, I meant prior to shared structs existing
+
+[20:27:04.0685] <Mathieu Hofman>
+You could make it structure clonable, and when we have shared struct redefine is as a shared object, the distinction is not observable without shared structs anyway
+
+[20:27:08.0608] <rbuckton>
+Mutex and Condition both fall under this category and are essentially shared structs.
+
+[20:27:12.0469] <bakkot>
+we need inter-thread coordination even without shared structs
+
+[20:27:24.0906] <bakkot>
+and this proposal will probably go forward before that one
+
+[20:27:32.0378] <rkirsling>
+oh, I see "resource governor" is a SQL thing, so that must be the origin of this terminology?
+
+[20:28:08.0117] <rbuckton>
+IMO we shouldn't make it structured clonable, we should make it frozen and specially handled in postMessage.
+
+[20:28:10.0624] <snek>
+fwiw structured cloneable is a superset of basically everything, except host resources that explicitly can't support it
+
+[20:28:16.0738] <rbuckton>
+That would allow us to hedge 
+
+[20:28:58.0859] <rbuckton>
+The difference is that something structured clonable will create a *new* instance in another worker thread. A shared thing is the *same* instance in another thread.
+
+[20:29:53.0039] <Ashley Claymore>
+https://github.com/v8/v8/blob/638e32793f854790284bf613eca204550e1c8e56/src/builtins/builtins-collections-gen.cc#L1887-L1898 has more branches - haven't looked at exactly what this compiles to - if it's a jump table
+
+[20:29:54.0029] <snek>
+is SharedArrayBuffer a sharable value?
+
+[20:30:14.0017] <rbuckton>
+No
+
+[20:30:23.0962] <rbuckton>
+Unfortunately
+
+[20:30:27.0862] <Andreu Botella (🕑 JST, at TC39)>
+SharedArrayBuffer is cloned, i.e. posting it back and forth doesn't preserve equality, but it points to a shared internal thing
+
+[20:30:47.0754] <snek>
+well then we can make up whatever rules we want in the structured clone algo for "shared" values
+
+[20:31:01.0513] <snek>
+but yeah i see your point
+
+[20:32:33.0609] <rbuckton>
+Also, Shared Structs is already at Stage 2. Its delays have been mostly been as a result of both champions having major job changes in the past few months.
+
+[20:33:02.0025] <Mathieu Hofman>
+Again I maintain that having an object being sharable over postMessage doesn't prevent it from also becoming directly a shared object
+
+[20:33:46.0588] <rbuckton>
+I'm hoping to dedicate more time to getting it to Stage 2.7 in the coming year, though ideally I would like someone from V8 to take on @syg's co-champion role as he's indicated he is unable to participate regularly going forward.
+
+[20:33:49.0619] <Mathieu Hofman>
+(except maybe for all the exotic SAB stuff)
+
+[20:34:33.0984] <Mathieu Hofman>
+rbuckton: you might want to chat with Olivier Flückiger 
+
+[20:35:54.0151] <rbuckton>
+Minor point: The audio coming from the room is very quiet compared to those joining remotely, so I either can barely hear the room or my speakers are blown out by remote attendees depending on who I adjust the audio for. 
+
+[20:36:40.0792] <bakkot>
+... huh, audio's fine for me
+
+[20:37:03.0696] <rbuckton>
+The issue with structured clone is that a value going from thread A to thread B and back to thread A will not produce the same instance.
+
+[20:37:20.0809] <bakkot>
+Seems fine?
+
+[20:37:29.0075] <bakkot>
+I don't actually see a reason why that would matter for this.
+
+[20:37:33.0052] <rbuckton>
+That isn't what happens for shared structs.
+
+[20:37:37.0989] <bakkot>
+... OK?
+
+[20:37:47.0591] <rbuckton>
+So if you change it from being cloneable to shareable, that's an observable change
+
+[20:37:50.0700] <snek>
+i don't particularly care what structured clone does as long as i get some sort of native shared state out of it, like SAB
+
+[20:38:02.0541] <Rob Palmer>
+New topic:  how is the quality of the original transcription for the notes today?  We had quality drop-off at 16:15 yesterday.
+
+[20:38:14.0717] <Mathieu Hofman>
+how ?
+
+[20:38:44.0048] <bakkot>
+doing fine so far
+
+[20:39:45.0648] <rbuckton>
+Correct me if I'm wrong, but you can't currently rely on reference equality for something like SAB bouncing between two threads, can you? \
+
+[20:39:47.0930] <rbuckton>
+* Correct me if I'm wrong, but you can't currently rely on reference equality for something like SAB bouncing between two threads, can you?
+
+[20:39:52.0998] <snek>
+you can not
+
+[20:40:05.0684] <snek>
+and i don't care about it maintaining reference equality
+
+[20:40:08.0857] <rbuckton>
+You can rely on reference equality for this case with Shared Structs
+
+[20:40:21.0006] <snek>
+i care about it for shared structs, sure
+
+[20:40:48.0547] <rbuckton>
+I care about something like `Semaphore` behaving like a shared struct, so maintaining reference  equality.
+
+[20:41:23.0917] <rbuckton>
+If it starts out behaving like SAB, we have to be ok with changing that behavior later.
+
+[20:41:46.0405] <snek>
+yeah i have no strong opinion over whether it behaves like a shared struct or not
+
+[20:42:11.0854] <snek>
+either way it can be shared between threads somehow
+
+[20:42:15.0958] <snek>
+that's good enough for me
+
+[20:42:33.0417] <rbuckton>
+I think we can work out a solution that hedges towards availability of shared structs.
+
+[20:42:43.0835] <Mathieu Hofman>
+right but if you admit there can be multiple objects identities that are back by the same internal thing, all these objects could be shared, it's just you cannot rely on identity to differentiate them, which I don't think is a requirement?
+
+[20:42:52.0554] <Mathieu Hofman>
+* right but if you admit there can be multiple objects identities that are backed by the same internal thing, all these objects could be shared, it's just you cannot rely on identity to differentiate them, which I don't think is a requirement?
+
+[20:43:23.0472] <rbuckton>
+I think you need to be able to rely on identity.
+
+[20:43:34.0465] <Mathieu Hofman>
+what's the use case?
+
+[20:43:38.0570] <rbuckton>
+We can't do SAB because it has quirks like this.
+
+[20:43:56.0341] <bakkot>
+sorry, who's talking? for the notes
+
+[20:44:05.0045] <Chris de Almeida>
+Oli
+
+[20:44:10.0349] <James M Snell>
+bakkot: +1 on everything there with AbortSignal... if you want some help on getting that proposal going in WHATWG, I'm more than happy to help
+
+[20:44:19.0042] <rbuckton>
+Not having `Semaphore` behave differently than `Mutex` when writing code. It's a major quirk that you would run into regularly.
+
+[20:44:36.0445] <bakkot>
+note, thanks, will probably take you up on that
+
+[20:45:35.0612] <rbuckton>
+IMO, with structs at Stage 2 we should renew the effort to get that proposal to Stage 2.7 and perhaps we won't run into a timing issue. 
+
+[20:45:49.0594] <jkup>
+I'm missing the context around the can of worms / current issues with the state of AbortSignal, is there anything good I can read to get up to speed?
+
+[20:46:14.0889] <rbuckton>
+Or we ship this proposal without `CountingGovernor` since it can be implemented in userland until such time as both proposals have hit stage 4.
+
+[20:46:53.0591] <bakkot>
+there's a bunch of things, some of it here: https://matrixlogs.bakkot.com/WHATWG/2025-09-25#L18
+
+[20:47:04.0597] <rbuckton>
+I can discuss some of my concerns at length after the plenary, if you'd like.
+
+[20:47:10.0294] <bakkot>
+just negate all of those bullets and that's how it currently works
+
+[20:47:17.0222] <danielrosenwasser>
+Is it just me or do people have wildly different mic volumes today?
+
+[20:47:26.0081] <rkirsling>
+that was blastingly loud, yeah
+
+[20:47:33.0892] <Chris de Almeida>
+not just you
+
+[20:47:54.0784] <Mathieu Hofman>
+rbuckton: I understand how identity preservations is important for actors, but these seem like very specialized tools purely meant to implement low level synchronization, and I fail to understand the use case where identity preservation matters here. I do understand it may be beneficial to in the future share these tools over existing shared object instead of postMessage 
+
+[20:47:55.0486] <danielrosenwasser>
+yeah, but a lot of the presenters have had extremely low mics today
+
+[20:47:58.0118] <rbuckton>
+bakkot: How is your audio OK? I can barely hear michael with my audio set to a level where Steve Hick's audio doesn't make my ears bleed.
+
+[20:48:14.0704] <bakkot>
+maybe my computer or browser is doing some equalization? idk
+
+[20:48:16.0580] <snek>
+can you adjust audio per-person?
+
+[20:48:25.0243] <rbuckton>
+Not that I can find
+
+[20:49:20.0093] <James M Snell>
+I think there's a fair number of folks potentially interested in this discussion. Maybe organizing a call would be worthwhile?
+
+[20:50:59.0299] <Jake Archibald>
+bakkot: I'm interested in the abort controller stuff
+
+[20:51:20.0953] <Jake Archibald>
+(I'm the original author of the abort controller spec. pls don't hate me)
+
+[20:51:25.0900] <nicolo-ribaudo>
+Me too
+
+[20:52:19.0567] <bakkot>
+I don't hate you, I just wish you'd given userland the nice behavior that the web platform gets, is all
+
+[20:52:32.0125] <bakkot>
+users deserve nice things too
+
+[20:52:36.0204] <Mathieu Hofman>
+Kris Kowal has opinions too
+
+[20:53:06.0405] <Jake Archibald>
+bakkot: is the behaviour gap documented anywhere?
+
+[20:53:28.0422] <Ashley Claymore>
+I just wish AbortSignal wasn't an EventTarget.
+
+[20:53:46.0713] <Ashley Claymore>
+But I also use it on the web all the time and thanks Jake Archibald for adding it!
+
+[20:53:50.0765] <bakkot>
+lots of random griping on the web, but the best place I've got to hand is https://matrixlogs.bakkot.com/WHATWG/2025-09-25#L18
+
+[20:54:17.0106] <bakkot>
+specifically, for the web, you have these things:
+
+- someone manually doing a dispatchEvent on the signal won't trigger your callback
+- another listener doing stopImmediatePropagation won't prevent your callback from being triggered
+- the callback is automatically released once the signal is aborted
+- adding a callback after the signal is already aborted won't do anything (and in particular won't hold a reference to your callback)
+
+users consumers of AbortSignal don't get any of those
+
+[20:54:31.0161] <James M Snell>
+Grab the pitchforks everyone... we know who to chase down
+
+[20:54:31.0988] <rbuckton>
+I'll admit I've had a number of gripes (some vocal, some not so) with the `AbortController` API, but my biggest frustration was that it felt very rushed out while I was in the middle of trying to get cancellation into the core language.
+
+[20:54:41.0283] <bakkot>
+* specifically, for abort listeners added from web machinery instead of userland, you have these things:
+
+- someone manually doing a dispatchEvent on the signal won't trigger your callback
+- another listener doing stopImmediatePropagation won't prevent your callback from being triggered
+- the callback is automatically released once the signal is aborted
+- adding a callback after the signal is already aborted won't do anything (and in particular won't hold a reference to your callback)
+
+users consumers of AbortSignal don't get any of those
+
+[20:55:01.0038] <James M Snell>
+I'll put together a doodle poll early next week and post it to get a call set up
+
+[20:55:03.0523] <snek>
+if we add EventTarget and DOMException to 262 this becomes a very simple problem to solve
+
+[20:55:09.0885] <ljharb>
+what i wish is that abortsignal hadn't been shipped before notifying TC39 that it was happening :-/
+
+[20:55:24.0113] <Michael Ficarra>
+https://en.wikipedia.org/wiki/Governor_(device)
+
+[20:55:39.0759] <rkirsling>
+whoa
+
+[20:55:48.0307] <rbuckton>
+That's precisely one of my gripes.
+
+[20:56:41.0763] <Jake Archibald>
+rbuckton: interesting. I was told at the time that cancellation primitives has been abandoned in TC39. Hm.
+
+[20:56:51.0871] <bakkot>
+I refuse to write a standard library function which has as one if its steps "and then call `.addEventListener('abort', fn)`"
+
+[20:57:01.0008] <bakkot>
+even DOM consumers of AbortSignal don't stoop to that
+
+[20:57:22.0943] <bakkot>
+* I refuse to write a standard library function which has as one of its steps "and then call `.addEventListener('abort', fn)`"
+
+[20:57:26.0475] <rbuckton>
+Certainly not. See https://github.com/tc39/proposal-cancellation
+
+[20:58:06.0905] <danielrosenwasser>
+I feel like `keyCount` reads less awkwardly than `keysLength`.
+
+[20:59:00.0481] <ljharb>
+that's a reasonable thing to bikeshed within stage 2 :-)
+
+[20:59:02.0976] <rkirsling>
+or generally xsLength -> xCount
+
+[20:59:24.0072] <ptomato>
+sign me up for the abort call plz 😄
+
+[20:59:37.0898] <Justin Ridgewell>
+Promise cancellation as a 3rd state was abandoned, not cancellation
+
+[21:00:35.0179] <Ashley Claymore>
+do web-machinery things also remove their listener once their task has finished?
+A thing I've come across is: long lived abortSignal with lots of shortLived user tasks and it leaks listeners
+
+[21:00:42.0714] <bakkot>
+yes
+
+[21:00:53.0850] <danielrosenwasser>
+I think `getOwnPropertyNameCount` is actually worse 😅
+
+[21:00:54.0984] <rbuckton>
+My major concerns with AbortController were:
+- Dependence on DOM-specific eventing/exceptions.
+- DOM APIs privileged over user code
+- Poor separation of concerns (user listeners for `abort` can be fooled by `.dispatchEvent`)
+- No single use `abort` for user code (again, due to `dispatchEvent`)
+- No cancellation graphs (somewhat addressed over the years, but not well), so memory leaks abound
+
+[21:00:58.0611] <bakkot>
+see https://dom.spec.whatwg.org/#run-the-abort-steps
+
+[21:01:04.0791] <rbuckton>
+* My major concerns with AbortController are:
+
+- Dependence on DOM-specific eventing/exceptions.
+- DOM APIs privileged over user code
+- Poor separation of concerns (user listeners for `abort` can be fooled by `.dispatchEvent`)
+- No single use `abort` for user code (again, due to `dispatchEvent`)
+- No cancellation graphs (somewhat addressed over the years, but not well), so memory leaks abound
+
+[21:01:11.0602] <James M Snell>
+I'm gonna totally lose track of everyone interested in this chat. I'll post the doodle link likely on monday and will send invites to anyone who responds
+
+[21:01:15.0859] <bakkot>
+"Empty signal’s abort algorithms." is the bit which removes existing web-machinery listeners
+
+[21:01:18.0509] <Jake Archibald>
+bakkot: The reason AbortSignal uses events is just because that's kinda the standard on the web platform for callbacks. But given there are other benefits to avoiding events, your proposal seems reasonable
+
+[21:01:46.0720] <eemeli>
+Almost always when I find a need to call `Object.keys(...).length`, all I really want to know is whether I have an empty `{}` object, or something else.
+
+[21:01:49.0290] <bakkot>
+or, wait, I think I read your question backwards?
+
+[21:02:07.0023] <bakkot>
+I don't actually know but I don't think it's observable, because the listeners are purely internal
+
+[21:02:33.0546] <rbuckton>
+Can you imagine if DOM shipped `Future` using DOM events instead of `then`? IIRC, that wasn't even on the table for `Future` before it was adopted by 262 as `Promise`.
+
+[21:02:54.0133] <Christian Ulbrich>
+What is there to be gained? Is this really totally un-optimizable for implementers, if it such a common pattern?
+
+[21:03:05.0424] <Ashley Claymore>
+I kinda want abortSignal listener add to have Symbol.dispose 
+
+[21:03:23.0135] <Mathieu Hofman>
+TCQ doesn't let me add a reply 
+
+[21:03:42.0111] <jkup>
+see Nic's clarifying Q :)
+
+[21:03:46.0757] <ptomato>
+hey! I hoist the options bags
+
+[21:03:49.0774] <Michael Ficarra>
+yeah this completely perplexes me
+
+[21:04:08.0706] <Michael Ficarra>
+refresh? I had to re-auth recently
+
+[21:05:34.0776] <Ashley Claymore>
+static interned inline composites could be safely hoisted by tools 😎
+
+[21:05:44.0792] <Jake Archibald>
+bakkot: 
+> I don't understand why the web platform uses a completely different set of infrastructure for abortables
+
+Web specs never use events internally.
+
+[21:05:49.0979] <Christian Ulbrich>
+I mean apart from a theoretical point of view, how often is this used in critical paths?
+
+[21:06:04.0383] <Jake Archibald>
+* bakkot:
+
+> I don't understand why the web platform uses a completely different set of infrastructure for abortables
+
+Web specs never listen to events internally.
+
+[21:06:06.0526] <bakkot>
+well... but like... why
+
+[21:06:27.0709] <bakkot>
+like if it's recognized that web platform should get to use better infrastructure... why doesn't userland get to use better infrastructure?
+
+[21:06:38.0648] <Chris de Almeida>
+reply button is back!  🎉
+
+[21:06:50.0174] <rbuckton>
+My proposal originally had something like:
+```
+class CancelSource {
+  constructor(...linkedTokens: CancelToken[]);
+  token: CancelToken;
+  cancel(): void;
+  close(): void;
+}
+class CancelToken {
+  static canceled: CancelToken;
+  static none: CancelToken;
+  subscribe(cb): CancelSubscription; // disposable
+  get canceled(): boolean;
+  get canBeCanceled(): boolean;
+}
+```
+
+[21:06:50.0667] <ljharb>
+the many many use cases that ruben and i looked over were definitely not just needing that simple a semantic
+
+[21:07:24.0873] <Jake Archibald>
+bakkot: it's not a better vs worse thing. It's the same reason why internal methods are called rather than directly calling exposed interfaces.
+
+[21:08:08.0871] <rkirsling>
+this discussion as a whole feels very like, supportive of a problem statement and not a solution, hm
+
+[21:08:25.0153] <bakkot>
+it could be using entirely internal methods and still same the same machinery, though
+
+[21:08:29.0101] <snek>
+keith_miller: what was that 40% metric specifically?
+
+[21:08:32.0403] <Christian Ulbrich>
+so it is about counting keys, properties or symbols and wether they are enumerable or not, how about them configurable? :D
+
+[21:08:35.0345] <eemeli>
+Any idea what sort of percentage is testing the value against 0, vs. doing somethign else?
+
+[21:08:56.0519] <bakkot>
+there's no reason that AbortController needs to have a separate privileged list of web-platform things to trigger on abort, instead of just adding web-level things to the existing list of callbacks to call
+
+[21:09:00.0528] <Jake Archibald>
+bakkot: similar to JS, if you override `globalThis.Array`, that isn't called by internal JS things that create arrays
+
+[21:09:05.0105] <ljharb>
+the vast vast majority where it's just counting care about enumerable properties and/or symbols
+
+[21:10:04.0926] <nicolo-ribaudo>
+Code that goes through the optimizing compiler
+
+[21:10:05.0873] <bakkot>
+I'm not asking about literally doing `.addEventListener`, just about having only a single internal list of things to trigger on abort, instead of having two lists
+
+[21:10:14.0398] <Ashley Claymore>
+the one place this does happen (which is evil) is `Array.prototype.toString` dynamically looks up `Array.prototype.join` - not the original.
+
+[21:10:17.0437] <Jake Archibald>
+bakkot: basically, it isn't a deliberate choice to give web devs something bad and retain something good for internal use - and taking it to the WHATWG with that as an immutable assumption will get in the way of progress
+
+[21:10:30.0449] <Michael Ficarra>
+tip for newcomers: some people find it a bit rude to look ahead on the queue and make assumptions about what somebody is going to say (and pre-reply, putting words in their mouth)
+
+[21:10:38.0728] <keith_miller>
+40% of code on internal page loads or Speedometer get to optimizing tiers yeah
+
+[21:10:58.0802] <rbuckton>
+* My proposal originally had something like:
+
+```
+class CancelSource {
+  constructor(...linkedTokens: CancelToken[]);
+  token: CancelToken;
+  cancel(): void;
+  close(): void;
+}
+class CancelToken {
+  static canceled: CancelToken;
+  static none: CancelToken;
+  get canceled(): boolean;
+  get canBeCanceled(): boolean;
+  get reason(): unknown;
+  subscribe(cb): CancelSubscription; // disposable
+  throwIfCanceled(): void;
+}
+```
+
+[21:11:23.0746] <Jake Archibald>
+bakkot: otherwise I understand your proposal and it seems reasonable. I'm just giving context for why things were designed as they were
+
+[21:11:31.0513] <bakkot>
+sorry, to be clear I didn't think it was deliberately good for web and bad for users! just that the actual effect of splitting the machinery is that it has had the consequence that the user things are stuck with something with a bunch of bad properties which the web gets to avoid
+
+[21:11:45.0223] <bakkot>
+yes, thank you, I appreciate the context
+
+[21:12:01.0399] <Aki>
+Infomaniak, swiss hosting
+
+[21:16:44.0564] <rbuckton>
+I ended up implementing something like this (`@esfx/canceltoken`, docs here: https://esfx.js.org/esfx/api/canceltoken/canceltoken.html#_esfx_canceltoken_CancelToken_class). It even theoretically works in place of `AbortSignal` on the web as it repurposes an `AbortSignal` instance with custom `[[Prototype]]`.
+
+[21:22:00.0343] <mgaudet|travelling>
+chipmorningstar: https://bugzilla.mozilla.org/show_bug.cgi?id=1914502 shallowEquals in react is one of the hottest functions, and uses this pattern 
+
+[21:22:17.0613] <Jake Archibald>
+bakkot: It'd be nice to keep `throwIfAborted()`. I guess JS will need an `AbortError`. As long as it passes `err instanceof Error && err.name === 'AbortError'`, that seems fine
+
+[21:23:45.0218] <Christian Ulbrich>
+Yeah chipmorningstar I am totally with you. And giving what nicolo-ribaudo said, I think we have to see real usages in the wild with actual numbers in critical paths.
+
+[21:23:51.0343] <rbuckton>
+I'd also considered `source.cancel(reason)` so you could cancel with a specific reason, not just `AbortError`.
+
+[21:24:26.0043] <snek>
+it can also be `HostCreateAbortError()`
+
+[21:24:54.0343] <Jake Archibald>
+rbuckton: `controller.abort()` has that too
+
+[21:25:31.0947] <Jake Archibald>
+snek: yeah that's fine, I'd just like there to be a cross-platform way to tell an 'abort' from other things.
+
+[21:25:39.0759] <nicolo-ribaudo>
+Can we just have a cancellation protocol (`obj[Symbol.subscribeForCancellation](cb)`), and have web AbortSignal do that? And the web AbortSignal uses the good algorithm for it
+
+[21:25:45.0451] <nicolo-ribaudo>
+And then our APIs can just use that protocol
+
+[21:25:53.0594] <Jake Archibald>
+rbuckton: https://dom.spec.whatwg.org/#dom-abortsignal-abort
+
+[21:26:20.0904] <rbuckton>
+See https://github.com/tc39/proposal-cancellation/issues/22. Back in 2018 the answer ended up being "No"
+
+[21:26:37.0159] <Jake Archibald>
+* rbuckton: https://dom.spec.whatwg.org/#dom-abortcontroller-abort
+
+[21:27:41.0356] <nicolo-ribaudo>
+The more time passes without a solution happening, the more people need to relax their constraint (if we gree that want some solution to happen)
+
+[21:27:43.0796] <rbuckton>
+Jake Archibald: if you haven't seen it, here is the Stage 0 cancellation proposal from 2017: https://github.com/tc39/proposal-cancellation/tree/master/stage0
+
+[21:28:00.0669] <Michael Ficarra>
+I don't think the API name (in this proposal's case) is a Stage 2 concern
+
+[21:28:07.0621] <nicolo-ribaudo>
+But I don't see in that issue why the answer ended up being no
+
+[21:29:11.0880] <bakkot>
+is there a reason to want this to be a symbol-named protocol instead of a string-named protocol? Because my plan was to add a string-named `whenAborted` or something to AbortSignal, which does the good algorithm, and have consumers like Governor do a call to the user-observable `.whenAborted`, which would make it de-facto a protocol 
+
+[21:29:20.0447] <Michael Ficarra>
+also percent of spec text that the name occupies does not make one bit of difference
+
+[21:29:24.0597] <bakkot>
+I think symbol-named protocols are good for things where you want the protocol implemented on arbitrary objects
+
+[21:29:28.0044] <bakkot>
+like iterator
+
+[21:29:34.0079] <bakkot>
+but don't see much reason for symbols for cases like this
+
+[21:29:39.0052] <rbuckton>
+I'd been working with Domenic Denicola on a solution and ended up being told later that the protocol idea was not going to be accepted and only thing WHATWG would consider would be a host hook.
+
+[21:29:40.0758] <Jake Archibald>
+eemeli: do you know why Map & Set don't use `count`?
+
+[21:29:42.0304] <bakkot>
+* but don't see much reason for symbol-named protocols for cases like this
+
+[21:29:54.0397] <nicolo-ribaudo>
+That the web API already has one way to register, and it can be confusing to have two
+
+[21:29:56.0776] <ljharb>
+you think it needs to happen before stage 2?
+
+[21:30:01.0882] <ljharb>
+* you think it needs to be decidd before stage 2?
+
+[21:30:02.0917] <rkirsling>
+I don't want to object but this really feels premature
+
+[21:30:03.0680] <ljharb>
+* you think it needs to be decided before stage 2?
+
+[21:30:06.0292] <nicolo-ribaudo>
+Unless we want every of its users to consider the event-based API to be deprecated
+
+[21:30:12.0950] <nicolo-ribaudo>
+* Unless we want every of its users to consider the event-based API to be basically considered to be deprecated
+
+[21:30:16.0550] <Michael Ficarra>
+@ljharb:matrix.org no I was objecting to @eemeli:mozilla.org's objection
+
+[21:30:18.0361] <nicolo-ribaudo>
+* Unless we want every of its users to consider the event-based API tobe deprecated
+
+[21:30:22.0145] <nicolo-ribaudo>
+* Unless we want every of its users to consider the event-based API to be deprecated
+
+[21:30:36.0513] <bakkot>
+uhhhh yeah that's pretty much what I'm hoping for
+
+[21:30:51.0085] <nicolo-ribaudo>
+Then a string-based protocol is good
+
+[21:30:54.0059] <bakkot>
+it's got a bunch of footguns so that's desirable anyway
+
+[21:31:07.0779] <rbuckton>
+See https://github.com/tc39/proposal-cancellation/issues/22#issuecomment-916548469
+
+[21:32:13.0644] <nicolo-ribaudo>
+It seems like the motivation there is that we have a good API on the web and we shouldn't use a second one. Kevin is now saying that it'd be good to provide a second API on the web (which would be good regardless of the ECMA-262 interop)
+
+[21:32:31.0454] <rkirsling>
+oh oops I see, I mistook the conclusion. I'm definitely okay with the conclusion Jordan stated
+
+[21:33:10.0029] <eemeli>
+No; I don't find their `size`s awkward though. Is the story relevant here?
+
+[21:33:29.0784] <Mathieu Hofman>
+One reason why splitting doesn't really make sense to me
+
+[21:33:57.0463] <Jake Archibald>
+eemeli: just that it's another word the platform uses for "number of items"
+
+[21:33:59.0106] <Justin Ridgewell>
+@rbuckton:matrix.org What was the proposal that prompted you to create Cancellation?
+
+[21:34:08.0297] <Justin Ridgewell>
+I remember there being something that needed the ability to cancel
+
+[21:34:11.0352] <rbuckton>
+I've always contended that we have a less than adequate API on the web with numerous footguns. We can possibly address the footguns, but that requires deprecating older parts of the API
+
+[21:34:39.0499] <Jake Archibald>
+Justin Ridgewell: on the web side, a lot was driven by cancellable fetch
+
+[21:34:58.0468] <rbuckton>
+`Promise` and `async function`. 
+
+[21:35:29.0056] <Justin Ridgewell>
+Wasn’t there something more recent than that?
+
+[21:35:39.0167] <Justin Ridgewell>
+Those both predate my joining the committee
+
+[21:35:43.0834] <Justin Ridgewell>
+I remember there being something
+
+[21:36:08.0714] <rbuckton>
+Not really, I started working on the proposal before `async function` was finalized.
+
+[21:36:15.0794] <Ashley Claymore>
+A standard CancellationAsyncContext
+
+[21:36:25.0179] <Ashley Claymore>
+also if Observables was done in TC39
+
+[21:36:36.0775] <bakkot>
+I think this would still count as the same API, just a different way of using it, and fwiw I think domenic agrees er https://matrixlogs.bakkot.com/WHATWG/2025-09-26#L7
+
+[21:36:44.0067] <bakkot>
+* I think this would still count as the same API, just a different way of using it, and fwiw I think domenic agrees per https://matrixlogs.bakkot.com/WHATWG/2025-09-26#L7
+
+[21:37:30.0891] <eemeli>
+Tbf my stated preference continues to be for `isEmpty`, but `keysLength` rubs me the wrong way because "keys length" is not grammatically correct English.
+
+[21:38:00.0640] <rbuckton>
+I'd already been using cancellation in .NET for years, and had an early implementation of `Promise` for JS back in 2015. When `Promise` was proposed for JS, I wanted cancellation for async programming.
+
+[21:39:47.0472] <rbuckton>
+I wanted cancellation for `new Promise(init, token)` and `Promise.prototype.then(onfulfill, onreject, token)` as a way to unregister callbacks as a more memory friendly version of `p.then(() => { token.throwIfCanceled(); ... })`. I also wanted it for dynamic `import()`.
+
+[21:40:58.0549] <rbuckton>
+What held up cancellation to the point that WHATWG shipped something before we could standardize, was a number of delegates wanting cancellation to be somehow transparent, which I was strongly opposed to.
+
+[21:41:28.0202] <snek>
+i don't love cancellation at the promise layer specifically, I think it leads to a footgun of stopping listening when you meant to stop the actual work that is happening, but cancellation in general seems quite nice.
+
+[21:42:58.0315] <rbuckton>
+I based that consideration on my experience with .NET's `new Task()` and `Task.ContinueWith()`, which both accept a cancellation token as a way to cancel work up-front and avoid memory leaks due to holding on to closures longer than necessary.
+
+[21:44:44.0795] <snek>
+detaching promise callbacks also seems useful
+
+[21:44:56.0955] <rbuckton>
+That's the same reasoning why I think `AbortController`/`CancelSource` needs a `close()`/`[Symbol.dispose]()` that unregisters all callbacks, to avoid memory leaks from entire cancellation graphs that can no longer be canceled.
+
+[21:44:57.0217] <Mathieu Hofman>
+* One reason why splitting proposals doesn't really make sense to me
+
+[21:45:08.0101] <Justin Ridgewell>
+Isn’t this effectively what `fetch({ signal })` does?
+
+[21:45:44.0293] <snek>
+fetch's signal can actually cancel the native operation 
+
+[21:45:57.0240] <Ashley Claymore>
+right. the signal should be given to the producer - not the result
+
+[21:46:06.0405] <Ashley Claymore>
+promise != task. promise = result
+
+[21:46:27.0413] <Ashley Claymore>
+* promise != task. promise == result
+
+[21:46:32.0097] <bakkot>
+a Promise is a producer of calls to its `.then` listeners
+
+[21:47:09.0092] <Ashley Claymore>
+program-counter++ is a producer of progress
+
+[21:47:27.0874] <nicolo-ribaudo>
+The .then callback can do actual significant work
+
+[21:47:47.0418] <rbuckton>
+Ignore the names. A .NET `Task` is virtually the same as a JS `Promise`. The only difference is that a .NET `Task` can delay starting.
+
+[21:48:02.0180] <Ashley Claymore>
+that's a big difference
+
+[21:48:06.0001] <rbuckton>
+In .NET, a `Task` generally represents an eventual result.
+
+[21:48:41.0996] <rbuckton>
+Yes, but in the Venn diagram if Task and Promise, Task covers Promise entirely.
+
+[21:48:51.0003] <Ashley Claymore>
+an `async function` that was lazy would have been very different
+
+[21:48:51.0435] <rbuckton>
+* Yes, but in the Venn diagram of Task and Promise, Task covers Promise entirely.
+
+[21:49:11.0142] <Justin Ridgewell>
+I think you’re confusing promise `p1` and the callback’s returned result `p2` in `p2 = p1.then(() => work())`
+
+[21:49:20.0687] <Ashley Claymore>
+I agree that tasks have results
+
+[21:49:28.0585] <snek>
+my concern is when people write `fetch(url).then(cb, { signal })` instead of `fetch(url, { signal }).then(cb)` these do very different things while being very similar
+
+[21:50:11.0488] <snek>
+I also I think both use cases are valid 
+
+[21:50:19.0277] <Ashley Claymore>
+I'm saying that even though a task can be a promise, that doesn't mean it's better. Restrictions are powerful
+
+[21:50:26.0282] <keith_miller>
+@erights Mark Miller (Agoric) MM: IIRC, you had strong opinions on WeakRef and the [[KeptValues]] list. Do you have thoughts on relaxing the behavior to match JSC in https://bugs.webkit.org/show_bug.cgi?id=301334.
+
+[21:50:57.0068] <Aki>
+Perhaps TG1 & WHATWG could take some inspiration from TG2 & W3C I18N: TG2 stage advancement requires _asking_ for a horizontal review from W3C I18NWG, but does not require _receiving_ it
+
+[21:51:18.0552] <keith_miller>
+TL;DR JSC only keeps the target alive as long as there exists some WeakRef that has `deref()`ed the target this cycle is still alive
+
+[21:51:18.0843] <nicolo-ribaudo>
+How do I add myself to the end of the queue?
+
+[21:51:24.0273] <rbuckton>
+Imagine a .NET `Task` being something like:
+
+```js
+function Task(init, opts) {
+  if (opts?.delay) {
+    const { promise, resolve, reject } = Promise.withResolvers();
+    promise.start = () => init(resolve, reject);
+    return promise;
+  }  
+  const p = new Promise(init);
+  p.start = () => {};
+  return p;
+}
+```
+
+[21:51:32.0638] <nicolo-ribaudo>
+It keeps inserting my topic before James's
+
+[21:51:57.0575] <jkup>
+It's been doing that all day, that is *not* the normal behavior, right?
+
+[21:52:13.0066] <nicolo-ribaudo>
+It's now TCS instead of TCQ
+
+[21:52:34.0926] <jkup>
+People who submit New Topic's early during the presentation are kept at the bottom and often don't get to speak
+
+[21:53:00.0147] <ljharb>
+splitting them doesn't change that all the names will have to be consistent full stop
+
+[21:54:36.0606] <Mathieu Hofman>
+is this an observable difference?
+
+[21:54:46.0930] <Mathieu Hofman>
+(didn't read the issue yet)
+
+[21:54:54.0686] <Mathieu Hofman>
+let's chat on the break
+
+[21:56:20.0188] <keith_miller>
+Only when you have two WeakRefs that point to the same target. My thinking is that's probably impossible to mentally model that two WeakRefs point to the same target correctly anyway.
+
+[21:56:56.0212] <keith_miller>
+I also think (once you know the GC of a given engine) that the current behavior is a communications channel
+
+[21:57:30.0248] <Mathieu Hofman>
+So we're admitting we want the other methods? The `Count` suffix for the longer Object methods don't read well to me. Advancing keys separately opens the risk it advances with Count
+
+[21:57:51.0646] <Mathieu Hofman>
+* So we're admitting we want the other methods? The `Count` suffix for the longer Object methods don't read well to me. Advancing keys separately opens the risk it advances as keyCount
+
+[21:57:54.0818] <ljharb>
+it doesn't
+
+[21:58:05.0850] <bakkot>
+I am admitting no such thing
+
+[21:58:07.0937] <ljharb>
+keysX won't advance with any X that wouldn't also be palatable for all the other methods
+
+[21:58:17.0672] <ljharb>
+* keysX won't advance with any X that wouldn't also be palatable for all the other methods, that would violate the "cross-cutting concerns" part of stage 2
+
+[21:58:28.0156] <ljharb>
+* keysX won't advance with any X that wouldn't also be palatable for all the other methods, that would violate the "cross-cutting concerns" part of stage 2 (whether we have the other methods eventually or not)
+
+[22:03:11.0482] <sffc>
+I wrote out an example of loading JSON with ESM and non-UTF-8 encodings at https://github.com/eemeli/proposal-import-text/issues/6. It has the behavior I described yesterday: early error, triggered by syntax.
+
+I also collected some examples of prior art: https://github.com/eemeli/proposal-import-text/issues/5#issuecomment-3550911025
+
+[22:03:42.0501] <Michael Ficarra>
+@sffc:mozilla.org I don't think that makes a difference
+
+[22:04:52.0895] <Michael Ficarra>
+there are occasions when you *won't* get an early error, even though you have the wrong encoding, so any warning you want to convey to hosts about mismanaging the encoding for text also applies to JSON because it's the exact same error
+
+[22:05:23.0151] <Michael Ficarra>
+and we don't have such a warning about JSON, and I don't think we need it
+
+[22:06:17.0364] <bakkot>
+the `encoding` option doesn't make sense here because there is no reason to assume the resource is backed by bytes from the perspective of the importing machiner
+
+[22:06:20.0259] <bakkot>
+* the `encoding` option doesn't make sense here because there is no reason to assume the resource is backed by bytes from the perspective of the importing machinery
+
+[22:06:30.0705] <Eli Grey>
+MIME types could include a universal `codecs` sub-parameter or similar
+
+[22:06:40.0481] <bakkot>
+that assumption is true in e.g. HTML, but whatwg is pretty dogmatic these days about interpreting any text over the wire as UTF-8 in any new APIs, so I don't think they'd be on board with allowing specifying any other encoding anyway
+
+[22:06:48.0305] <nicolo-ribaudo>
+Could HTML only support UTF-8, but throw if it detects somehow a non-UTF-8 encoding?
+
+[22:06:58.0098] <Eli Grey>
+and we could add a way to include the expect mime type
+
+[22:07:22.0045] <nicolo-ribaudo>
+The Content-Type header is already mime type + charset
+
+[22:07:23.0891] <Eli Grey>
+* and we could add a way to include the expected mime type
+
+[22:07:46.0580] <Eli Grey>
+that's what i meant; re-using that if possible
+
+[22:08:45.0410] <nicolo-ribaudo>
+Btw, the scope of the proposal in TC39 is "if an import with type:text succeeds, it must return a string". HTML doesn't actually need our proposal to do type:text, our proposal just prevents returning random stuff there
+
+[22:14:51.0725] <bakkot>
+nicolo-ribaudo: are there slides for your "Module-declarations-like proposals in other areas of the web platform" topic? it sounds interesting but I might be asleep
+
+[22:15:17.0326] <nicolo-ribaudo>
+I recently added them to the agenda
+
+[22:15:37.0216] <bakkot>
+oh nice, just hadn't refreshed
+
+[22:16:05.0125] <nicolo-ribaudo>
+It's mostly code snippets though, I was planning to just say the descriptions out lound
+
+[22:21:41.0627] <ljharb>
+https://tc39.es/proposal-object-keys-length/, thanks eemeli and james
+
+[22:24:53.0393] <James M Snell>
+Spec text lgtm
+
+[22:26:18.0464] <Michael Ficarra>
+I'm gonna be real upset if this presentation doesn't mention call stack limit
+
+[22:27:53.0881] <Chris de Almeida>
+it does not
+
+[22:28:13.0750] <Ashley Claymore>
+or arguments limit
+
+[22:29:06.0579] <Ashley Claymore>
+there used to be a limit of unique `Symbol.for` calls in v8 but I think that's fixed now
+
+[22:29:35.0718] <Richard Gibson>
+strings have a limit of 2**53 - 1 code units, but what happens when trying to exceed that is not specified: https://github.com/tc39/ecma262/issues/2623
+
+[22:30:13.0060] <Ashley Claymore>
+and engines fail before getting to that length too right
+
+[22:30:18.0199] <Ashley Claymore>
+* and some engines fail before getting to that length too right
+
+[22:31:54.0852] <Richard Gibson>
+all of them; it's a big limit
+
+[22:34:30.0023] <snek>
+i don't know how we can discuss any of these questions without a more concrete problem 
+
+[22:34:31.0314] <snek>
+like
+
+[22:34:43.0090] <snek>
+basically every single expression in js can cause an oom
+
+[22:35:04.0000] <snek>
+what is the scope here
+
+[22:35:31.0262] <ljharb>
+i think it's less about avoiding OOMs and more about, in the presence of sufficient memory, knowing what ranges are guaranteed vs impossible vs "up to the implementation"
+
+[22:35:52.0453] <snek>
+what is sufficient memory 
+
+[22:35:57.0039] <Chris de Almeida>
+it's an open-ended discussion
+
+[22:36:45.0693] <Andreu Botella (🕑 JST, at TC39)>
+assume infinite memory
+
+[22:36:52.0106] <Andreu Botella (🕑 JST, at TC39)>
+also assume a spherical frictionless cow
+
+[22:36:59.0241] <snek>
+well now we don't need any limits
+
+[22:37:25.0199] <Chris de Almeida>
+yes, I have proposed exactly that in TDZ
+
+[22:37:34.0045] <Michael Ficarra>
+IMO it would be nice to have the spec define minimum upper bounds
+
+[22:37:47.0548] <Michael Ficarra>
+otherwise how are you supposed to program this crazy machine?
+
+[22:38:06.0406] <Chris de Almeida>
+you will immediately have non-conformant impls, no?
+
+[22:38:26.0965] <Michael Ficarra>
+MIMUMUM upper bound
+
+[22:38:33.0319] <Michael Ficarra>
+* MINIMUM upper bound
+
+[22:38:34.0995] <snek>
+so like if a system doesn't have enough memory for that, and it can't throw a rangeerror up front, it has to just oom?
+
+[22:38:40.0218] <Rob Palmer>
+test262 implicitly defines certain minimum limits - maybe those could be turned into spec limits to make them explicit
+
+[22:38:51.0896] <Christian Ulbrich>
+having a non-orientable surface, too?
+
+[22:38:57.0846] <Michael Ficarra>
+it should never even start if it can't support the minimums
+
+[22:39:13.0966] <bakkot>
+test262 has some quite expensive tests which are skipped even on production-grade engines
+
+[22:39:51.0345] <snek>
+> Moddable XS has a minimum RAM requirement of approximately 6-7 KB for a basic virtual machine
+
+[22:40:06.0942] <bakkot>
+https://github.com/v8/v8/blob/37adb436086fca29284fea8b8440bcda73bbb0fb/test/test262/test262.status#L393
+
+[22:40:34.0454] <keith_miller>
+Summary of my chat Mathieu Hofman  was that changing this seems not-insane so maybe we should think deeper thoughts about this
+
+[22:40:59.0531] <Michael Ficarra>
+For example, I make function calls with more than 1 argument sometimes. For some number of arguments N (N > 1), it's unsafe to do that because browsers may OOM. As a programmer, I'd like to know that my argument list length is less than N so that won't happen.
+
+[22:41:10.0471] <mgaudet>
+@erights Mark Miller (Agoric) MM: I should note that one of my current background tasks is investigating exactly this change 
+
+[22:42:29.0479] <eemeli>
+The function body is fine, but the name is not: It needs to unpack into something that's valid English, and "keys length" is not.
+
+[22:42:46.0867] <bakkot>
+this number depends on the current size of your stack, so, good luck with that
+
+[22:43:38.0564] <Michael Ficarra>
+fair, I guess this is a more difficult limit than some of the others
+
+[22:43:59.0050] <rkirsling>
+honestly you could make N=5 there and just encourage people to write nicer code
+
+[22:44:42.0823] <rkirsling>
+oh wait I'm thinking of formal params and not concrete args
+
+[22:44:43.0781] <bakkot>
+`array.push(...vals)` is nice!
+
+[22:44:52.0225] <rkirsling>
+yeah, never mind
+
+[22:45:09.0794] <bakkot>
+oh yeah we should limit you to 5 formal parameters, I'm on board with that
+
+[22:45:23.0675] <bakkot>
+we have a function in our codebase which takes 13 and I feel bad every time I look at it
+
+[22:47:14.0584] <Michael Ficarra>
+I don't feel very bad about functions with excessively long parameter lists, in the same way I don't feel very bad about variables with excessively long names
+
+[22:47:32.0799] <Michael Ficarra>
+some things are just complicated and pretending otherwise just makes things worse
+
+[22:48:27.0964] <Christian Ulbrich>
+Yeah, but **13** params!
+
+[22:48:44.0353] <Michael Ficarra>
+I can count to 13
+
+[22:48:51.0673] <Richard Gibson>
+https://en.wikipedia.org/wiki/Sorites_paradox
+
+[22:49:15.0005] <Christian Ulbrich>
+How? I only have 10 fingers!
+
+[22:49:35.0664] <bakkot>
+your parents didn't teach you to count binary on your fingers?
+
+[22:50:39.0103] <Christian Ulbrich>
+My dad showed me how to open a beer bottle with my <dev>eye hole</del> basically anything. We had nothing!
+
+[22:50:55.0834] <ljharb>
+10 fingers and 10 toes, that should get you up to base 20
+
+[22:51:00.0047] <Ashley Claymore>
+Chrome doesn't seem to kill the whole agent. If I OOM in a web worker in chrome, only the worker crashes
+
+[22:51:11.0896] <Ashley Claymore>
+the fail fast proposal was the whole agent cluster right?
+
+[22:51:13.0963] <Christian Ulbrich>
+* My dad showed me how to open a beer bottle with my <del>eye hole</del> basically anything. We had nothing!
+
+[22:51:21.0383] <Mathieu Hofman>
+yes
+
+[22:51:28.0120] <rbuckton>
+count each knuckle too
+
+[22:51:35.0064] <Mathieu Hofman>
+* yes, because of SAB
+
+[22:52:22.0796] <Ashley Claymore>
+I suspect that's likely the disagreement that @erights Mark Miller (Agoric) MM was remembering
+
+[22:52:29.0124] <Ashley Claymore>
+as a guess
+
+[22:53:22.0252] <Mathieu Hofman>
+might be able to say only crash the set of agents that have a SAB shared with
+
+[22:53:39.0825] <Ashley Claymore>
+crashing the main thread is the bad one
+
+[22:53:50.0800] <Ashley Claymore>
+as that's where the website is
+
+[22:53:53.0206] <Mathieu Hofman>
+but I also remember something about the OS killing interfering with that
+
+[22:53:53.0800] <Ashley Claymore>
+:D
+
+[22:54:56.0693] <Mathieu Hofman>
+if the main thread shares a SAB with a worker that failed, it's likely unsafe to let it continue
+
+[22:55:14.0967] <bakkot>
+yeah but as a user I prefer that to my whole tab crashing
+
+[22:55:43.0089] <Ashley Claymore>
+if the website is a random blog post, I don't want it to crash even if the analytics library has a bug
+
+[22:55:43.0777] <Mathieu Hofman>
+as a user you like your applications to misbehave ?
+
+[22:55:47.0048] <James M Snell>
+OOM's in V8 can be problematic. They do have a host hook to handle them but new OOM paths that crash instead of using the hook pop up a lot. In workers we have to actively watch out for these since we have thousands of isolates all in the same process... crashing hard is not really an option.
+
+[22:55:56.0987] <Ashley Claymore>
+when it's not critical, yes
+
+[22:56:04.0475] <Michael Ficarra>
+do you? the alternative might be that the JS can now read uninitialised/reclaimed memory
+
+[22:56:17.0927] <Ashley Claymore>
+some bugs in games actually lead to fun qwirks
+
+[22:56:24.0554] <bakkot>
+I like my applications to not crash more than I care about them maintaining arbitrary other invariants, yes
+
+[22:57:01.0078] <bakkot>
+there are very few webpages that I use where I would prefer a page crash over the sort of bugs likely to arise from a worker crashing, even a worker with access to a SAB
+
+[22:57:10.0868] <Chengzhong Wu>
+if the web page is show your wallet balance, and the balance is incorrect rather than crashing due to worker failure, it would cause human panic I think
+
+[22:57:36.0393] <bakkot>
+it is true that there are some very few applications where a crash is preferable, but they are _very_ few
+
+[22:58:07.0922] <ljharb>
+ooh isn't that how some cultures did base 4 or 8 or something?
+
+[22:58:15.0727] <James M Snell>
+server side there are way more cases where crash is absolutely preferable
+
+[22:58:48.0974] <Mathieu Hofman>
+we very much advocate for a host hook. I didn't understand yusukesuzuki 's point because I would think host hooks are not affected by JS heap limits (unless they themselves decide to delegate to JS)
+
+[22:58:56.0308] <James M Snell>
+often way better to just crash, throw away current state, then start fresh
+
+[22:59:19.0192] <Olivier Flückiger>
+I mean you can always catch RangeError and terminate the process in node when you get it, not?
+
+[22:59:43.0647] <yusukesuzuki>
+Ah, sorry for misleading. I was mentioning to delegating to user defined logic after that.
+
+[23:00:14.0271] <Mathieu Hofman>
+And those webpage cannot be simply reloaded? I mean what page hold important state that would suffer and yet can sustain corruption ?
+
+[23:00:27.0853] <James M Snell>
+yeah, our host hook for OOM definitely does not defer to user code. We actually hard terminate the isolate and force a cold start fresh
+
+[23:00:28.0590] <yusukesuzuki>
+But also, if it is coming from system allocator exhausting memory, it is hard to guarantee that the handler can work safely too.
+
+[23:00:38.0120] <Mathieu Hofman>
+* And those webpage cannot be simply reloaded? I mean what page hold important state that would suffer from a reload and yet can sustain corruption ?
+
+[23:01:37.0740] <Mathieu Hofman>
+no because other code might catch it before it reaches the process handler
+
+[23:01:45.0640] <Mathieu Hofman>
+* no because other code might catch it before it reaches the process unhandled handler
+
+[23:02:17.0831] <Olivier Flückiger>
+sure, but if it catches it then it takes responsibility to correctly handle it.
+
+[23:04:05.0023] <James M Snell>
+Yes, but there are, of course, cases where we just can't let the user code do that. Lots of cases where "correctly handle it" *is* a hard crash and cold start
+
+[23:04:23.0385] <Mathieu Hofman>
+lib A trigger OOM and let it throw, lib B made the call to lib A and handles the thrown error. lib A is now in inconsistent state. App has no clue of what happened
+
+[23:05:54.0282] <Olivier Flückiger>
+B should not have caught it if it can't ensure A stays consistent. How is that different from any other exception that is thrown by A.
+
+[23:06:33.0698] <Mathieu Hofman>
+yeah B shouldn't, lots of code out there doing things it shouldn't, and inflicts pain on the rest of the app
+
+[23:06:45.0336] <James M Snell>
+Unfortunately not that straightforward. some frameworks unconditionally catch in an attempt to be "helpful"
+
+[23:07:12.0546] <Christian Ulbrich>
+Looks like we need uncatchable Errors in JS too.
+
+[23:07:20.0498] <Olivier Flückiger>
+sure, but now you want a crash on all errors proposal?
+
+[23:08:09.0930] <James M Snell>
+oh no no ... never that. just don't want an All Failures Are Catchable proposal
+
+[23:08:17.0704] <Mathieu Hofman>
+we did advocate for a userland `panic()`. We are concerned about situations where invariants go out the window
+
+[23:09:01.0896] <rkirsling>
+ooh interesting, I did not see this on the agenda
+
+[23:11:44.0225] <Olivier Flückiger>
+I see. I still think that websites seem to be doing fine with handling range errors.
+
+[23:12:24.0382] <James M Snell>
+Websites yeah, I agree that's different. I'm largely thinking about server-side cases
+
+[23:13:14.0904] <Mathieu Hofman>
+web apps "think" they're doing fine, but they really have no clue. web sites could just reload
+
+[23:17:07.0046] <sffc>
+Right, I acknowledge this in my post. With non-UTF-8 JSON imports, you get an error _sometimes_: almost always when the source encoding is utf16, and occasionally when the source encoding is latin1. However, with non-UTF-8 Text imports, you get an error _never_. Sometimes is better than never.
+
+[23:19:23.0511] <ljharb>
+why would it necessarily be an error case tho
+
+[23:20:32.0896] <sffc>
+Sure, but some expressions are much more likely to cause an OOM than others.
+
+[23:21:15.0068] <snek>
+right that was my point
+
+[23:21:37.0536] <snek>
+that i thought the whole topic is too vague 
+
+[23:22:11.0179] <ljharb>
+* shane, why would it necessarily be an error case tho?
+
+[23:23:21.0641] <James M Snell>
+definitely needs to be grounded a bit more. there's lots of nuance that gets lost without more detail
+
+[23:26:01.0854] <rkirsling>
+wait, we have 50 min of topic left for 35 min of day?
+
+[23:26:14.0582] <rkirsling>
+* wait, we have 50 min of topic left for 30 min of day?
+
+[23:27:50.0824] <mgaudet>
+Huge props to everyone who does note-taking. The transcription can be _very hard_ to follow sometimes! 
+
+[23:31:28.0444] <sffc>
+Right, I agree with this type of sentiment. Ideally, I think the spec authors should use their judgement to decide a minimum for these things (such as length of a bigint/amount). An engine _could_ throw errors for anything that would exceed the minimum and be compliant and also be able to run 99.9% of programs. But, engines are permitted to allow more than that.
+
+[23:32:49.0909] <Chengzhong Wu>
+the schedule says we have 15min overflow
+
+[23:34:35.0251] <snek>
+i'm still just like... you can make usable bigints in v8 that are larger than the entire minimum heap size for xs. so do we set the minimum really really low? if the minimum is too low it becomes kind of useless
+
+[23:34:57.0426] <snek>
+* i'm still just like... you can make usable bigints in v8 that are larger than the entire minimum heap size for xs. so do we set the minimum really really low? if the minimum is too low it loses the point for having it
+
+[23:35:43.0994] <Justin Ridgewell>
+Ok `for (const el of divergences) { …; break; }` would be `first` mode.
+
+[23:35:48.0784] <Justin Ridgewell>
+* Or `for (const el of divergences) { …; break; }` would be `first` mode.
+
+[23:36:53.0204] <sffc>
+One of the things I was hoping to get out of the discussion today was just this. My position is that the spec should be more explicit when it comes to acknowledging implementation constraints. But, _where_ or _under what conditions_ should the spec be more explicit? This was question 1: "Under what circumstances should an implementation-defined limit be preferred over a spec-defined limit, and vice versa?"
+
+[23:37:55.0813] <snek>
+this is why i mentioned that it would be helpful to have a more concrete problem statement.
+
+[23:38:08.0877] <snek>
+like some sort of program you want to write but can't due to platform divergence 
+
+[23:39:08.0911] <James M Snell>
+yep, understood. unfortunately I think it's too hard to talk about the general case. I think likely best to focus on a smaller set of specific cases with a definitive problem statement, then try expanding whatever decision we make there out to the other cases
+
+[23:39:29.0766] <snek>
+one example given was arr.push(...other)
+
+[23:40:08.0189] <snek>
+i would generally not write that code because i would assume it would throw somewhere
+
+[23:40:12.0903] <ljharb>
+or to close the iterator (if that matters) `divergences.take(1).next().value`
+
+[23:40:14.0044] <snek>
+so that could be something to explore
+
+[23:40:54.0278] <snek>
+but a solution to that could be adding array.extend rather than setting a minimum number of arguments
+
+[23:40:58.0994] <snek>
+i don
+
+[23:41:14.0408] <snek>
+* i'm not pushing for anything in particular here, just pointing this out as an example
+
+[23:42:01.0929] <sffc>
+My "problem" is that I am an implementer and I want to write code that can make assumptions about how big a thing can be. I don't want to be forced to write code that is less efficient for the 99.9% case because the spec requires me to keep growing until I panic.
+
+[23:42:36.0977] <snek>
+do you have examples of this less efficient code?
+
+[23:42:53.0236] <Justin Ridgewell>
+Does `take()` close immediately, or during the next `.next()` (that returns `{ done: true }`)
+
+[23:44:00.0024] <sffc>
+Yes, for example, I have the metadata of ICU/ICU4X decimals bitpacked into a u32, because I am able to make assumptions about how big the number can be.
+
+[23:44:36.0602] <ljharb>
+i think on the `next()`
+
+[23:44:50.0580] <snek>
+you mean to fit safely into the bitwise safe range of js?
+
+[23:44:58.0074] <sffc>
+On the GitHub post, I show that importing a UTF-16 JSON file currently triggers a SyntaxError.
+
+[23:45:02.0584] <snek>
+* you mean to fit into the bitwise safe range of js?
+
+[23:45:18.0981] <ljharb>
+right but i mean, if i'm choosing to import utf-16 text. why would that necessarily be an error
+
+[23:45:29.0144] <snek>
+* you mean to fit into the bitwise safe range of js numbers?
+
+[23:47:33.0131] <rkirsling>
+I have to agree that this presentation seems very "solution before problem statement"
+
+[23:51:50.0110] <ljharb>
+deep-equal has 23m downloads a week and that's just one package this proposal would obsolete. dequal has 28m.
+
+[23:52:06.0076] <Justin Ridgewell>
+I think this would actually work if the chars were > 256 code units
+
+[23:52:24.0971] <Rob Palmer>
+The repo leads with the problem statement, but this presentation does not.
+
+[23:52:32.0000] <nicolo-ribaudo>
+But " and { are not, right?
+
+[23:53:41.0965] <Justin Ridgewell>
+Correct, so you can’t use `”`. But you could use `0x22 …`
+
+[23:53:49.0950] <Justin Ridgewell>
+The problem is `”` writes `0x00 0x22`
+
+[23:53:58.0717] <Justin Ridgewell>
+* The problem is `”` writes `0x22 0x00`
+
+[23:54:16.0672] <Justin Ridgewell>
+And the JSON parser will error on that unescaped nil char (because it’s a control char)
+
+[23:54:28.0055] <nicolo-ribaudo>
+You need a " at the beginning and one at the end
+
+[23:54:34.0060] <nicolo-ribaudo>
+So one of the 0x00 will be out of the quotes
+
+[23:54:37.0818] <Justin Ridgewell>
+No, you need `0x22` at the beginning
+
+[23:54:41.0700] <Justin Ridgewell>
+That will open the string
+
+[23:54:51.0782] <Justin Ridgewell>
+The problem is the `0x00` that immediately follows
+
+[23:54:53.0460] <nicolo-ribaudo>
+But then you need to close the string
+
+[23:55:08.0012] <Justin Ridgewell>
+That’s also possible with a high code unit char
+
+[23:55:42.0109] <nicolo-ribaudo>
+Oh you are saying if JSON was not ASCII-based for its separators?
+
+[23:55:49.0887] <Justin Ridgewell>
+With 100% confidience, I can fool this JSON parser using utf16-le
+
+[23:55:58.0097] <sffc>
+My position is that spec authors should decide whether such bigints are _useful_. The minimum shouldn't be "too low". The authors are in a better position to communicate that than implementers who want to make assumptions to improve memory use or performance.
+
+[23:56:15.0397] <Justin Ridgewell>
+It will parse, it won’t result in code points that the input actually feeds it
+
+[23:56:51.0462] <Justin Ridgewell>
+I just need to feed it a byte stream that can parse when interpreted as UTF-8.
+
+[23:57:09.0205] <Justin Ridgewell>
+That’s completely possible within utf16-le.
+
+[23:57:18.0525] <Christian Ulbrich>
+ljharb: But only if we are to standardize the same equalityAlgorithm as deepEqual. There are several mechanisms for deepEquality, as presented before.
+
+[23:57:30.0180] <nicolo-ribaudo>
+What would the bytes be? If you have a string you need to close it. The string `""` encoded as UTF-16 would result as either 0x22-0x00-0x22-0x00 or 0x00-0x22-0x00-0x22, which when decoded as UTF-8 is either `"\0"\0` or `\0"\0"`, both of which have a 0x00 out of the quotes
+
+[23:57:37.0889] <Christian Ulbrich>
+* ljharb: But only if we are to standardize the same equalityAlgorithm as deepEqual. There are several algorithms for deepEquality, as presented before.
+
+[23:57:45.0899] <nicolo-ribaudo>
+* What would the bytes be? If you have a string you need to close it. The text `""` encoded as UTF-16 would result as either 0x22-0x00-0x22-0x00 or 0x00-0x22-0x00-0x22, which when decoded as UTF-8 is either `"\0"\0` or `\0"\0"`, both of which have a 0x00 out of the quotes
+
+[23:57:51.0638] <sffc>
+This might be true and is why I used the language "almost always" instead of "always" for utf16le causing a SyntaxError to be thrown
+
+[23:57:53.0133] <Justin Ridgewell>
+You cannot use the literal chars `”` or `{`/`}`.
+
+[23:57:54.0166] <ljharb>
+i maintain at least 2 of them. but it's not actually all that important in practice which one is chosen imo, since they all check similar things
+
+[23:58:24.0193] <nicolo-ribaudo>
+Ok, then you can only do either numbers or booleans
+
+[23:58:29.0450] <nicolo-ribaudo>
+Both of which use ASCII characters
+
+[23:58:32.0067] <Justin Ridgewell>
+But there are other code points that emit the _bytes_ `0x22`, `0x7b`/`0x7d`
+
+[23:58:47.0364] <Justin Ridgewell>
+Again, it’s an arbitrary byte stream being misinterpreted
+
+[23:58:51.0966] <Justin Ridgewell>
+I control the byte stream
+
+[23:58:55.0400] <nicolo-ribaudo>
+Oh you are not saying something that is both valid JSON when decoded as UTF-8 and UTF-16, just different results?
+
+[23:59:04.0242] <nicolo-ribaudo>
+* Oh you are not saying something that is both valid JSON when decoded as UTF-8 and UTF-16?
+
+[23:59:14.0364] <Justin Ridgewell>
+It won’t be valid JSON in UTF-16
+
+[23:59:25.0626] <nicolo-ribaudo>
+Ok then I do not disagree
+
+[23:59:48.0880] <nicolo-ribaudo>
+But it seems very unlikely that you try to import as JSON that was not meant to be JSON, and it randomly happen to work due to using the wrong encoding
+
+[23:59:49.0393] <sffc>
+You mean it won't be valid JSON in UTF-8?
+
+[00:00:00.0206] <nicolo-ribaudo>
+* But it seems very unlikely that you try to import as JSON something that was not meant to be JSON, and it randomly happen to work due to using the wrong encoding
+
+[00:00:00.0578] <Justin Ridgewell>
+I’m saying the opposite.
+
+[00:00:25.0457] <Justin Ridgewell>
+I can craft a utf16-le byte stream that will be valid JSON when interpreted as UTF-8. It will be invalid when interpreted as UTF-16.
+
+[00:00:54.0647] <Justin Ridgewell>
+I’m saying that the JSON parser is not actually enforcing UTF-8 encoded input, it’s just a dumb byte parser
+
+[00:01:15.0994] <Justin Ridgewell>
+Whether the stream is actually UTF-16 or UTF-8 is up to the implementer to decide
+
+[00:02:06.0674] <sffc>
+ok, yeah. You have UTF-16 that, if interpreted as UTF-8, happens to form syntactically valid JSON. But, if you were to convert the UTF-16 to code points and then to UTF-8, you would get something that is not valid JSON. I agree that such cases exist.
+
+[00:02:35.0104] <Justin Ridgewell>
+Correct
+
+[00:09:08.0533] <Zb Tenerowicz (ZTZ/naugtur)>
+> <@nicolo-ribaudo:matrix.org> But it seems very unlikely that you try to import as JSON something that was not meant to be JSON, and it randomly happen to work due to using the wrong encoding
+
+Unless the author of the file intended for that to happen. But to support your point, there's little to gain with that beyond an error being thrown
+
+[00:13:10.0031] <Richard Gibson>
+which JSON parser is just consuming bytes? The ECMA-262 ParseJSON operates on a sequence of code points (which it gets from interpreting an ECMAScript string as UTF-16 per the normal convention). And even a hand-rolled one would implicitly interpret raw octets as something, be that ASCII, a UTF, EBCDIC, etc.
+
+[00:14:24.0293] <Justin Ridgewell>
+It’s not, per Shane’s comment. It’s interpreting it as a UTF-8 byte stream
+
+[00:14:49.0054] <Justin Ridgewell>
+* It’s not, per Shane’s issue. It’s interpreting it as a UTF-8 byte stream
+
+[00:24:12.0364] <Jacob Smith>
+I skipped the problem statements presented last time because they were already agreed last time; the proposal itself was blocked by its dependency on its sibling proposals. That dependency is now removed.
+
+This presented a refinement on a potential solution based on quite a lot of feedback from delegates.
+
+[02:12:54.0215] <sffc>
+> <@sffc:mozilla.org> Yes, for example, I have the metadata of ICU/ICU4X decimals bitpacked into a u32, because I am able to make assumptions about how big the number can be.
+
+Also, another key example where a spec limit definitely impacts implementation constraints is the max Temporal date.
+
