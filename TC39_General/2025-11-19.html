@@ -10,7 +10,7 @@
 <div class="title">TC39 General<br>2025-11-19<br><a href="plaintext/">plaintext logs</a></div>
 <div class="nav">
 <a href="2025-11-18" class="nav-link"><span>prev</span></a>
-<span style="float:right">next</span>
+<a href="2025-11-20" class="nav-link"><span style="float:right">next</span></a>
 </div>
     <div class="all-rooms"><noscript>JavaScript is required to load the channel index, but you can go to <a href="../..">the static index</a> directly.</noscript></div>
 <div class="footer"><a href="https://github.com/bakkot/matrix-archive-bot">source on github</a></div>
@@ -28,6 +28,23 @@
 <div class="log"><table id="log-table"><tbody id="log-tbody">
 
   <tr class="msg" id="L0"><td class="ts-cell"><a class="ts" href="#L0" alt="Tue Nov 18 2025 22:16:09 GMT-0800 (Pacific Standard Time)">06:16</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-4" title="@aapo.alasuutari:matrix.org">Aapo Alasuutari</span>&gt;</div></td><td class="msg-cell">Anyone have any idea regarding the wait(Async)/notify thing above? I'm planning on just writing my implementation as a Futex syscall wrapper, and thus doing the "fail-fast" path outside of the critical section. Of course, the syscall will also perform the same read inside its critical section (presumably) so rather than moving anything, I'm just adding an extra read of the SAB to check if a syscall should be made or not.</td></tr>
+  <tr class="msg" id="L1"><td class="ts-cell"><a class="ts" href="#L1" alt="Wed Nov 19 2025 12:54:43 GMT-0800 (Pacific Standard Time)">20:54</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-4" title="@aapo.alasuutari:matrix.org">Aapo Alasuutari</span>&gt;</div></td><td class="msg-cell"><p>Uhh, am I crazy or is the <code>DoWait</code>'s timeout handling text just plain wrong? This is the text:</p>
+<blockquote>
+<ol start="8">
+<li>Let q be ? ToNumber(timeout).</li>
+<li>If q is either NaN or +∞𝔽, let t be +∞; else if q is -∞𝔽, let t be 0; else let t be max(ℝ(q), 0).</li>
+</ol>
+</blockquote>
+<p>But then there's a bunch of tests testing that passing <code>undefined</code> as <code>timeout</code> coerces to 0. <code>ToNumber(undefined)</code> returns <code>NaN</code> so we should go into the first branch and set t as +∞.</p>
+</td></tr>
+  <tr class="msg" id="L2"><td class="ts-cell"><a class="ts" href="#L2" alt="Wed Nov 19 2025 12:55:06 GMT-0800 (Pacific Standard Time)">20:55</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-4" title="@aapo.alasuutari:matrix.org">Aapo Alasuutari</span>&gt;</div></td><td class="msg-cell">But presumably the tests are the correct source here.</td></tr>
+  <tr class="msg" id="L3"><td class="ts-cell"><a class="ts" href="#L3" alt="Wed Nov 19 2025 12:59:01 GMT-0800 (Pacific Standard Time)">20:59</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-4" title="@aapo.alasuutari:matrix.org">Aapo Alasuutari</span>&gt;</div></td><td class="msg-cell"><a href="https://github.com/tc39/test262/blob/main/test/built-ins/Atomics/waitAsync/bigint/undefined-for-timeout.js">https://github.com/tc39/test262/blob/main/test/built-ins/Atomics/waitAsync/bigint/undefined-for-timeout.js</a>
+<a href="https://github.com/tc39/test262/blob/main/test/built-ins/Atomics/waitAsync/undefined-for-timeout.js">https://github.com/tc39/test262/blob/main/test/built-ins/Atomics/waitAsync/undefined-for-timeout.js</a>
+<a href="https://github.com/tc39/test262/blob/main/test/built-ins/Atomics/wait/undefined-for-timeout.js">https://github.com/tc39/test262/blob/main/test/built-ins/Atomics/wait/undefined-for-timeout.js</a></td></tr>
+  <tr class="msg" id="L4"><td class="ts-cell"><a class="ts" href="#L4" alt="Wed Nov 19 2025 13:00:05 GMT-0800 (Pacific Standard Time)">21:00</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-4" title="@aapo.alasuutari:matrix.org">Aapo Alasuutari</span>&gt;</div></td><td class="msg-cell">I guess it's just the few tests that are wrong after all.</td></tr>
+  <tr class="msg" id="L5"><td class="ts-cell"><a class="ts" href="#L5" alt="Wed Nov 19 2025 14:31:30 GMT-0800 (Pacific Standard Time)">22:31</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-2" title="@bakkot:matrix.org">bakkot</span>&gt;</div></td><td class="msg-cell"><span class="nick-8">shu</span> is the atomics person</td></tr>
+  <tr class="msg" id="L6"><td class="ts-cell"><a class="ts" href="#L6" alt="Wed Nov 19 2025 15:19:22 GMT-0800 (Pacific Standard Time)">23:19</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-4" title="@iain:mozilla.org">iain</span>&gt;</div></td><td class="msg-cell"><span class="nick-4">Aapo Alasuutari</span>: It looks to me like the tests are correct except for the description comment. Note that the text you quote is also summarized in the tests (eg <a href="https://github.com/tc39/test262/blob/main/test/built-ins/Atomics/wait/undefined-for-timeout.js#L11-L14">here</a>). If the last argument is undefined, the intended behaviour is to not set a timeout; that's what's being tested.</td></tr>
+  <tr class="msg" id="L7"><td class="ts-cell"><a class="ts" href="#L7" alt="Wed Nov 19 2025 15:20:08 GMT-0800 (Pacific Standard Time)">23:20</a></td><td class="nick-cell"><div class="m-ov">&lt;<span class="nick nick-4" title="@iain:mozilla.org">iain</span>&gt;</div></td><td class="msg-cell">So basically I think the only problem is that <a href="https://github.com/tc39/test262/blob/main/test/built-ins/Atomics/waitAsync/bigint/undefined-for-timeout.js#L6">this line</a> should say "Undefined timeout arg coerced to +∞", or maybe "Undefined timeout arg should not set timeout"</td></tr>
 
 </tbody></table></div></div></div>
 </body></html>
