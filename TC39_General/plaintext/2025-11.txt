@@ -82,3 +82,48 @@ Also the document is seemingly missing a note about `setTimeout` which seems to 
 https://github.com/tc39/test262/pull/4692
 https://github.com/tc39/test262/pull/4693
 
+[07:15:13.0942] <Jedel>
+> <@aapo.alasuutari:matrix.org> On a related note, the `INTERPRETING.md` is a little out of date, eg. broadcast doesn't take or pass two parameters but instead just takes and passes a single SharedArrayBuffer between agents.
+> 
+> Also the document is seemingly missing a note about `setTimeout` which seems to be a requirement for a whopping three `waitAsync` tests. `atomicsHelper.js` does set up a custom `setTimeout` function if none exist in the global but that function is based on just `Promise.resolve().then(cb)`'ing recursively. That exercises the microtask queue until timeout, which means that the `Atomics.waitAsync` timeouts that the test is exercising do not get a chance to run (best as I can tell anyway). eg. Running the test in Node with the custom `setTimeout` function used unconditionally fails from a timeout.
+
+> That exercises the microtask queue until timeout, which means that the Atomics.waitAsync timeouts that the test is exercising do not get a chance to run (best as I can tell anyway).
+
+Is that the correct behaviour? I would expect the event loop to interweave promise jobs with timeout jobs instead of trying to execute all pending promise jobs first
+
+[09:42:19.0985] <Ashley Claymore>
+That does sound like yes, those 3 tests do seem to rely on the host providing a event loop with a timeout event 
+
+[09:50:26.0689] <Ashley Claymore>
+trying to emulate such an environment purely within 262 is naturally quite a challenge as the language does not have an event loop 
+
+[09:59:15.0533] <Ashley Claymore>
+Maybe there is a way to avoid the setTimeout dependency, or mock it using a subagent + broadcast - but that might mean the test uses the API under test to test that API 🌀
+
+[09:59:47.0180] <Ashley Claymore>
+* Maybe there is a way to avoid the setTimeout dependency, or mock it more faithfully using a subagent + broadcast - but that might mean the test uses the API under test to test that API 🌀
+
+[13:32:11.0159] <Andreu Botella (🕑 JST, at TC39)>
+it's true that the JS spec doesn't specify anything about the ordering of promise jobs vs other kinds of jobs, but HTML does run all of the "microtasks" (which do include promise jobs) before any other kind of task
+
+[13:32:30.0511] <Andreu Botella (🕑 JST, at TC39)>
+* it's true that the JS spec doesn't specify anything about the ordering of promise jobs vs other kinds of jobs, but the HTML spec does say to run all of the "microtasks" (which include promise jobs) before any other kind of task
+
+[13:54:01.0433] <James M Snell>
+Which is of itself rather difficult for anything outside of browsers to follow. It's going to be nearly impossible to get consistency with that for stuff that needs to run across multiple runtimes :-/
+
+[13:54:30.0011] <James M Snell>
+node.js, for instance, of course drains next ticks before microtasks and runs immediates and timers on an entirely separate mechanism
+
+[13:57:30.0579] <Andreu Botella (🕑 JST)>
+leaving next ticks aside, I don't think node.js is inconsistent with the HTML spec here, because in HTML tasks are not a single queue, they're multiple task queues and it's up to the browser to decide which queue the next task comes from
+
+[13:58:58.0974] <James M Snell>
+Yeah, not inconsistent, just difficult at time to ensure the timing lines up
+
+[13:59:59.0429] <James M Snell>
+it's an unfortunte sad reality that there's so much code out there... particularly in tests... that rely on assuming  strict ordering of timers and other tasks
+
+[14:57:33.0572] <shu>
+am i still needed for atomics or no, seems like confusion was resolved
+
