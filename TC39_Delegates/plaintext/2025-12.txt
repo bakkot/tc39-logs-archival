@@ -152,3 +152,85 @@ would be neat if references in js engines could be poisoned somehow
 [22:23:54.0587] <snek>
 maybe being able to see whether a call to Function is "direct", like with eval, could be beneficial
 
+[07:17:39.0662] <Jan Olaf Martin>
+Trusted types could be some part of the answer but obviously as opt-in as CSPs or the all-or-nothing flag in nodejs to disallow string eval.
+
+[07:22:46.0972] <Ashley Claymore>
+maybe not a common use case, but if code is only using the Function constructor to feature check syntax - that only requires the constructor - and doesn't need to call the actual function AFAIK
+
+[07:23:29.0899] <Ashley Claymore>
+as a slightly less restrictive form of dissalow-eval that still prevents these exploits
+
+[07:33:34.0800] <bakkot>
+https://github.com/tc39/proposal-symbol-proto did discuss defanging Function.prototype.constructor as well
+
+[07:34:22.0706] <bakkot>
+though I don't think its ideas are actually workable as written
+
+[07:35:48.0994] <bakkot>
+I do kind of enjoy the idea of saying that you can only access `Function.prototype.constructor` by literal `fn.constructor` syntax, not `fn['constructor']`, even though that would be a crazy violation of the language invariants
+
+[07:46:14.0598] <Ashley Claymore>
+we can just say that it's kinda like `{ __proto__: null }` and `{["__proto__"]: null }` being different and runway
+
+[10:26:06.0917] <Mathieu Hofman>
+> <@devsnek:matrix.org> yeah I've been wondering about ways to defang Function.prototype.constructor for a while
+
+Does any legit code actually rely on `Function.prototype.constructor` being functional, or even matching `Function`? Why can't we just change it with something that doesn't evaluate? Possibly opt-in
+
+[10:27:37.0915] <Mathieu Hofman>
+> <@aclaymore:matrix.org> we can just say that it's kinda like `{ __proto__: null }` and `{["__proto__"]: null }` being different and runway
+
+I think there's a difference between declaration and property access. On the access side, only `eval` behaves strangely. 
+
+[10:28:05.0643] <Mathieu Hofman>
+* I think there's a difference between declaration and reference access. On the access side, only 
+eval behaves strangely.
+
+[10:31:55.0987] <Michael Ficarra>
+make it a function that's the same as the Function constructor but param lists must be simple and the body is prefixed with `return`?
+
+[10:55:38.0626] <kriskowal>
+In HardenedJS, we replace Function.prototype.constructor with an exception thrower. Users of HardenedJS do sometimes run into libraries that are not ecosystem compatible, but I don’t recall any cases where this was a relevant hindrance. It doesn’t break `instanceof`. Nobody seems to legitimately depend on `(() => {}).constructor(code)` to do what is much more easily accomplished with `Function(code)`.
+
+[11:16:35.0772] <bakkot>
+lots of stuff depends on it matching; being functional is much rarer https://github.com/search?q=%28lang%3Ajs+OR+lang%3Ats%29+%22.constructor+%3D%3D%3D+Function%22&type=code
+
+[11:19:39.0079] <bakkot>
+has there been a proposal for like a `parses(src: string): boolean` method people could use instead of checking if calling `Function` throws?
+
+[11:19:39.0662] <bakkot>
+so that people could use it in no-eval contexts
+
+[11:19:53.0989] <bakkot>
+I guess ideally a `parses(src: string, asModule: boolean)`
+
+[13:54:59.0070] <Ashley Claymore>
+what I was suggesting was relaxing no-eval to throw when the code is actually evaluated - rather than when the function is constructed.
+assuming the goal was to support existing code.
+
+[14:15:18.0529] <bakkot>
+Richard Gibson: re https://github.com/tc39/ecma262/pull/3087 Chrome used to have a flag for setting timezone but apparently no longer does https://issues.chromium.org/issues/341232991 (also I don't know if actually allowed sub-minute offsets; it might have just been named timezones)
+
+
+2025-12-09
+[21:28:48.0938] <Mathieu Hofman>
+> <@bakkot:matrix.org> lots of stuff depends on it matching; being functional is much rarer https://github.com/search?q=%28lang%3Ajs+OR+lang%3Ats%29+%22.constructor+%3D%3D%3D+Function%22&type=code
+
+Why are people doing this instead of `instanceof`!? 
+
+[21:31:30.0040] <bakkot>
+`instanceof` is syntax you'd have to learn whereas property access and `===` you learn on your first day
+
+[21:32:07.0212] <bakkot>
+(also I expect `instanceof` is slower though I doubt anyone doing this would actually know that)
+
+[21:32:11.0094] <Mathieu Hofman>
+Right but it's also the wrong check. It'd exclude AsyncFunction for example 
+
+[21:32:33.0333] <bakkot>
+sometimes you want that! but yes
+
+[21:32:43.0018] <bakkot>
+I imagine a fair bit of this code predates AsyncFunction also
+
