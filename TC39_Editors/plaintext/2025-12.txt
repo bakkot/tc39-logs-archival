@@ -164,3 +164,91 @@ and yeah, I should probably replace promise resolve/reject functions with ACs as
 [23:14:02.0602] <ljharb>
 bakkot: i think you can log in as tc39-user on npm? if so, it’d be great if you could make a new granular token for that one package that lasts 90 days, and update it in the spec repo secrets 
 
+[07:13:56.0620] <bakkot>
+ljharb: I would prefer to merge https://github.com/tc39/ecma262/pull/3706 instead, unless there's a reason not to. You've said it has security issues, which would be a good reason, but I'd like to understand what those are before rejecting that approach.
+
+[08:27:33.0866] <ljharb>
+OIDC tokens can be exfiltrated, allowing an attacker to mint new publish tokens forever and there's no way for maintainers to mitigate it
+
+[08:27:50.0199] <ljharb>
+when github fixes that, then it'll no longer be worse than a 1FA token
+
+[08:46:07.0598] <bakkot>
+OIDC tokens are normally pretty short-lived. Are the OIDC tokens really eternal? That definitely does seem bad
+
+[08:46:13.0996] <bakkot>
+* OIDC tokens are normally pretty short-lived. Are the OIDC tokens in trusted publishing really eternal? That definitely does seem bad
+
+[08:49:58.0189] <bakkot>
+docs definitely claim it is short-lived https://docs.github.com/en/actions/concepts/security/openid-connect#adding-permissions-settings
+
+[08:50:16.0832] <bakkot>
+someone else claims 5 minutes https://github.com/google-github-actions/auth?tab=readme-ov-file#inputs-workload-identity-federation
+
+[08:51:04.0879] <bakkot>
+do you have a specific reason to think that the ODIC token lives forever? I could go to the effort of exfiltrating one and confirm I guess
+
+[08:52:16.0698] <bakkot>
+their sample token in the docs also lives for 5 minutes so that number seems plausible
+
+[09:04:01.0845] <ljharb>
+i'm not talking about the short-lived npm publish token that oidc generates
+
+[09:04:12.0001] <ljharb>
+i'm talking about the oidc credentials THEMSELVES that let you mint infinite short-lived tokens
+
+[09:05:08.0347] <ljharb>
+(that github shouldn't be exposing to the actions workflow, which is the flaw)
+
+[09:05:36.0028] <ljharb>
+this isn't just me, to be clear, this is why the public position of OpenJS is that nobody should use OIDC yet
+
+[09:20:15.0154] <bakkot>
+Is there more about that written somewhere? The only guidance from openjs I can find is talking more about lack of 2fa and manual setup https://openjsf.org/blog/publishing-securely-on-npm
+
+[09:24:22.0124] <ljharb>
+no, the discoverer hasn't published a blog post yet
+
+[10:22:34.0413] <Michael Ficarra>
+I think we should go with whatever publicly available guidance we have from trusted sources
+
+[10:23:03.0788] <Michael Ficarra>
+if we're really concerned, can't we do something like this temporarily? https://github.com/step-security/wait-for-secrets#publish-to-npm-registry-using-one-time-password-otp
+
+[10:24:04.0350] <bakkot>
+that would be on every single commit though
+
+[10:25:21.0842] <Michael Ficarra>
+well they're often batched, so every time Jordan lands a batch of commits, that would be putting a OTP in once for the last one
+
+[10:29:12.0552] <bakkot>
+ljharb: my understanding of the trusted publishing flow is like
+
+- the action requests a short-lived JWT from github, signed with their private key (which is global, not per-project)
+- it sends it to npm, which checks the signature, expiration, and repo+workflow filename
+- npm sends a short-lived publish token to the action
+- the action publishes using that token
+
+If _github's signing key_ is compromised that's a very big deal. If the JWT is not actually short-lived, or the publish token is not actually short-lived, contrary to the docs, that would allow eternal publishing. but otherwise I don't understand what issue you could be talking about here. leaking the JWT is not a big deal because it expires after five minutes. leaking the publish token is not a big deal because it expires after... however long it is.
+
+[10:40:16.0882] <ljharb>
+Yes that’s what I’m saying, you can exfiltrate GitHub’s signing key
+
+[11:05:54.0707] <Michael Ficarra>
+I feel like we shouldn't be having this conversation in a public space
+
+[11:06:09.0511] <Michael Ficarra>
+even the existence of such an issue would be very sensitive info
+
+[12:14:23.0329] <ljharb>
+it's long since been discussed in a public space.
+
+[12:14:46.0508] <ljharb>
+btw apparently you can go to https://www.npmjs.com/settings/tc39-user/new and generate a new long-lived classic token, and the token just won't be listed on the tokens page, so that's an option too
+
+[12:15:54.0111] <ljharb>
+* btw apparently you can go to https://www.npmjs.com/settings/tc39-user/new and generate a new long-lived classic token, and the token just won't be listed on the tokens page, so that's an option too (with a nice side of 🤦‍♂️ for the github security folks)
+
+[13:08:05.0766] <Michael Ficarra>
+lol so they revoked all existing ones but still allow you to create new ones?
+
