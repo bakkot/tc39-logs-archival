@@ -12,3 +12,44 @@ Ecma maintains a number of "standards for standards", and [TR-18 (The Meaning of
 [08:45:55.0016] <snek>
 new impl dropped https://github.com/bellard/mquickjs
 
+
+2025-12-30
+[10:11:32.0352] <Aapo Alasuutari>
+Does anyone know what's the intended way to pass the test `staging/sm/lexical-environment/block-scoped-functions-deprecated-redecl.js`?
+
+In it we have a block that contains two function declarations with the same name, tested in noStrict to not cause a syntax error. https://tc39.es/ecma262/#sec-blockdeclarationinstantiation just says to go through lexically scoped declarations of the block and CreateMutableBinding or CreateImmutableBinding for each. That goes into https://tc39.es/ecma262/#sec-declarative-environment-records-createmutablebinding-n-d which asserts that the envRec doesn't already have a binding for the given name; this assertion is triggered by the two functions of the same name, best as I can tell anyway.
+
+Am I holding the spec wrong, or is this something of a spec bug? The Annex B Block-Level Function Declarations Web Legacy Compatibility Semantics of course changes this (though I haven't grokked how exactly), but assuming that extension is not applied, how should an implementation handle duplicate functions without asserting and crashing?
+
+[10:12:53.0481] <bakkot>
+I'm not sure we've actually reasoned through the non-Annex B semantics carefully, Annex B is the one ~all implementations actually use
+
+[10:13:25.0920] <bakkot>
+I assume that test is intended to run under an implementation which follows Annex B, given that it comes from SpiderMonkey, which is such an implementation
+
+[10:24:49.0884] <Aapo Alasuutari>
+Yeah, I phrased myself poorly: the test shouldn't pass without Annex B, but currently without Annex B it triggers a spec assertion.
+
+[10:25:36.0767] <Aapo Alasuutari>
+Or at least it does so in my implementation, and reading the spec that does _seem_ to be the correct thing to do.
+
+[10:29:57.0706] <bakkot>
+ah, it's because https://tc39.es/ecma262/multipage/ecmascript-language-statements-and-declarations.html#sec-block-static-semantics-early-errors
+
+[10:30:02.0433] <bakkot>
+makes it a SyntaxError
+
+[10:30:39.0458] <bakkot>
+so the assertion is valid: you're not supposed to get to the runtime semantics at all
+
+[10:30:43.0835] <bakkot>
+also, oops, rendering's a bit weird there
+
+[10:31:31.0212] <Aapo Alasuutari>
+Yup, surprisingly hard to read.
+
+Right okay, so it seems my syntax checking (3rd party :) ) is assuming Annex B here.
+
+[10:31:33.0544] <Aapo Alasuutari>
+Thank you <3
+
