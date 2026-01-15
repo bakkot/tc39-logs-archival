@@ -14,3 +14,63 @@ not that I recall, but I suspect we could defer to a lot of https://unicode.org/
 
 We recently discussed https://github.com/tc39/ecma402/issues/947 which is somewhat related, but I don't recall discussing codification of BestFit
 
+
+2026-01-14
+[12:54:35.0407] <shu>
+@sffc:mozilla.org @dminor:mozilla.org i think we have a webcompat issue in CLDR 48: https://issues.chromium.org/issues/475851786
+
+[12:55:30.0858] <shu>
+haven't had a chance to test Firefox yet, do you what CLDR version Firefox is shipping with @dminor:mozilla.org ?
+
+[12:55:44.0809] <shu>
+* haven't had a chance to test Firefox yet, do you know what CLDR version Firefox is shipping with @dminor:mozilla.org ?
+
+[12:58:05.0384] <dminor>
+We just landed an update to ICU78 in Firefox 147 (https://bugzilla.mozilla.org/show_bug.cgi?id=2000225), that's probably just going to release now.
+
+[12:58:18.0576] <dminor>
+That should be using CLDR 48.
+
+[12:59:25.0493] <shu>
+interesting, would be interested to hear if you run into any compat issues. we found this in pre-release testing
+
+[12:59:52.0857] <shu>
+our preference is for CLDR to roll back this change
+
+[13:46:36.0198] <dminor>
+Looks like Firefox is affected as well, I've raised this with webcompat and I'll file a bug.
+
+[14:18:53.0342] <dminor>
+For reference, here's the Firefox bug: https://bugzilla.mozilla.org/show_bug.cgi?id=2010411
+
+[15:39:37.0330] <sffc>
+It's too late for CLDR 48 to "roll back" the change; they even already did a patch release 48.1 with minor fixes. It's possible a change could still be considered for 49.0 but the data freeze is in one week.
+
+[15:44:05.0430] <sffc>
+But, what about this change does shu feel makes it more likely to break the web than other changes? Is it because we have evidence that it breaks the web, or is it based on a heuristic like being in English?
+
+[15:46:05.0458] <sffc>
+I see, there's a link to https://order.jetspizza.com/tx026 in the chromium issue.
+
+
+2026-01-15
+[16:00:00.0136] <shu>
+i'm pretty sure the culprit is an old version of the date-fns library (not that old, from 2024): https://github.com/date-fns/tz/commit/213903702d7c5fcd4f01479ba7370fe917195a65
+
+this library is fairly popular: https://www.npmjs.com/package/date-fns
+
+[16:00:16.0668] <shu>
+so i'm more confident that this is likely to manifest in more places than that one pizza website
+
+[16:03:53.0015] <sffc>
+interesting. It suggests that the impact might be narrow to en-GB, at least based on the evidence we have so far.
+
+[16:06:53.0077] <shu>
+i agree, based on the evidence so far
+
+[16:10:21.0535] <sffc>
+the parsing code switched from using a fixed offset to assuming the substring "GMT", which is fine for now but I know CLDR has considered proposals to change it to "UTC" instead. I don't think those proposals are currently active.
+
+[16:16:21.0396] <sffc>
+I opened https://unicode-org.atlassian.net/browse/CLDR-19205
+
