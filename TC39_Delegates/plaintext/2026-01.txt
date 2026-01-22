@@ -469,3 +469,1013 @@ Thank you, everyone, for your summaries and conclusions so far. Right now, I am 
 - guybedford Import Sync for Stage 2 slides were not linked in the agenda, also need summary of presentation/conversation and to record any decisions or conclusions
 - Ruben Error option limit & Error option framesAbove are both missing slides, summaries, and conclusions
 
+
+2026-01-21
+[07:16:57.0366] <bakkot>
+my takeaway from this poll is not "we need a bunch more syntax for accessors"
+
+[07:18:22.0839] <nicolo-ribaudo>
+Oh damn I missed the beginning of plenary, thank you for writing a message here
+
+[07:20:29.0232] <nicolo-ribaudo>
+Is there a link to the slides?
+
+[07:20:41.0677] <Aki>
+reminder to note-takers that if the captioner is inserting newlines, they don't have to worry about those. I'll take care of them at conversion time.
+
+[07:22:06.0196] <Chris de Almeida>
+proposal repo, it's html
+
+[07:22:12.0635] <Chris de Almeida>
+https://github.com/LeaVerou/proposal-composable-accessors
+
+[07:22:34.0826] <Chris de Almeida>
+`slides` dir
+
+[07:22:45.0466] <nicolo-ribaudo>
+Thank you
+
+[07:25:23.0818] <bakkot>
+I am confused about what this "internal property" is that is not the existing `accessor` property
+
+[07:27:22.0979] <nicolo-ribaudo>
+Maybe this proposal is pointing to a need to split off accessor from the decorators proposal so that it's not blocked on them?
+
+[07:28:12.0374] <rbuckton>
+`accessor` is sort of split off. It was originally introduced in Grouped and Auto-Accessors and brought over to decorators to meet implementor requirements
+
+[07:31:01.0501] <nicolo-ribaudo>
+I think I would prefer for these things to be reified as accessors and not directly visible in descriptors, to avoid making descriptors being more complicated 
+
+[07:31:10.0167] <nicolo-ribaudo>
+* I think I would prefer for these things to be reified as accessors and not directly visible in descriptors, to avoid making descriptors being more complex
+
+[07:54:48.0632] <nicolo-ribaudo>
+What's the time box? I noticed we are almost at the hour, and my reply is low priority so I can drop it if needed
+
+[07:54:58.0577] <bakkot>
+1 hour
+
+[07:59:33.0001] <keith_miller>
+nicolo-ribaudo: Which syntax were you talking about the one on the slide now with the decorator?
+
+[07:59:59.0691] <nicolo-ribaudo>
+The one with the validate keyword
+
+[08:00:04.0604] <keith_miller>
+Or the `class Foo { accessor x = 2; }` syntax?
+
+[08:00:54.0501] <nicolo-ribaudo>
+I meant that `class Foo { validate x(val) { ... } }` looks a lot like `class Foo { set x(val) { ... } }`, so I'd expect similar performance
+
+[08:01:16.0684] <nicolo-ribaudo>
+I'd also expect similar perf with the decorator example, since I'm literally seeing a function attached to the property
+
+[08:01:35.0226] <nicolo-ribaudo>
+I would have less of that expectaton for a plain `accessor x = 2`, but I guess most times you'd want to decorate that anyway
+
+[08:02:06.0910] <nicolo-ribaudo>
+I wonder if `accessor x = 2` is more optimizable though, since there is no user code running there even if it's a get/set pair
+
+[08:02:26.0091] <keith_miller>
+The motivation for this, as I understand it anyway, is to use it everywhere
+
+[08:02:48.0023] <keith_miller>
+* The motivation for this, as I understand it anyway, is to use it everywhere for reflection/metaprogramming
+
+[08:03:55.0464] <keith_miller>
+Which is the reason I mentioned hiding the cost of the call. Not sure about others
+
+[08:04:09.0575] <nicolo-ribaudo>
+Ok I think I was mostly focusing on the second use case, I'm not sure I agree with the first one
+
+[08:04:13.0584] <ljharb>
+only for the use cases where the instance shape is needed from outside
+
+[08:04:44.0527] <nicolo-ribaudo>
+For this could we have a bult-in `@public` decorator, with the decorators metadata proposal?
+
+[08:04:50.0800] <nicolo-ribaudo>
+That marks it as "public" in the metadata
+
+[08:06:02.0097] <ljharb>
+ true - and a class decorator could do it all in one
+
+[08:06:04.0881] <keith_miller>
+Are people realistically going to add the mental overhead of figuring that out though? My assumption would be that codebases that don't particularly care about performance would just apply it everywhere
+
+[08:07:00.0599] <ljharb>
+sure but if they don’t care about performance then it doesn’t matter there, right?
+
+[08:07:49.0468] <bakkot>
+_we_ care about performance even if they don't
+
+[08:08:02.0400] <nicolo-ribaudo>
+"people are not thinking about what things make their code slow" and "people want their code to be fast" unfortunately have a large intersection
+
+[08:08:20.0693] <bakkot>
+we should design the language such that even people who don't care about performance end up on the happy (= reasonably performant) path
+
+[08:09:08.0765] <ljharb>
+fair
+
+[08:20:21.0576] <rbuckton>
+New features aren't necessarily free, especially when we implement whole new capabilities to the language.
+
+[08:27:02.0675] <nicolo-ribaudo>
+I'm looking at my accessors usage, and they are (numbers are not measured):
+- 75% "property forwarding"
+- 15% lazy initial computation
+- 10% validation
+- 5% other
+
+[08:27:27.0951] <nicolo-ribaudo>
+The % symbol obviously means " / 105"
+
+[08:27:40.0950] <rbuckton>
+For point 1 in the problem statement, would we ever consider adding something like `Function.getInstanceFieldNames(ctor)`?
+
+[08:28:14.0899] <nicolo-ribaudo>
+Some feedback that was shared at last plenary is that class fields should behave similarly to properties defined in the constructor
+
+[08:28:28.0122] <rbuckton>
+You could add a proxy trap for it like `apply`/`construct`
+
+[08:29:17.0816] <rbuckton>
+I don't necessarily agree with that position, though I do agree you shouldn't be able to just grab them via `getOwnPropertyDescriptors`.
+
+[08:30:01.0231] <rbuckton>
+A `getInstanceFieldNames` would be simpler than a `@Public` decorator that uses `Symbol.metadata` to do the same thing
+
+[08:34:39.0583] <waldemar>
+Test message; please ignore
+
+[08:36:45.0985] <waldemar>
+(Matrix seems to have glitched and kicked me out for a while)
+
+[08:44:52.0447] <rbuckton>
+If Decorators were at stage 4, the composable accessors piece would easily be a public API proposal a.la iterator helpers or similar, which would likely be easier to discuss and advance
+
+[08:45:04.0595] <rbuckton>
+* If Decorators were at stage 4, the composable accessors piece would easily be a public API proposal a la iterator helpers or similar, which would likely be easier to discuss and advance
+
+[08:48:45.0381] <rbuckton>
+That said, most of the composition pieces presented or in the explainer could be implemented in userland decorators first before standardizing
+
+[08:49:50.0974] <rbuckton>
+The built-in decorators that can't be implemented in userland that I'm mostly interested in are not these composable decorators, unfortunately.
+
+[08:49:59.0700] <rbuckton>
+* The built-in decorators that can't be implemented in userland that I'm mostly interested in are not these composable decorators, however.
+
+[08:57:29.0408] <nicolo-ribaudo>
+Let's continue with this please, to keep context
+
+[09:02:17.0053] <Michael Ficarra>
+overall the transcription was pretty good but there was a writer switchover at 11:00 while @rbuckton:matrix.org was speaking and that paragraph got completely mangled
+
+[09:02:30.0008] <Michael Ficarra>
+you'll know it when you see it
+
+[09:02:50.0281] <Michael Ficarra>
+@rbuckton:matrix.org do your best to fix it up
+
+[09:05:33.0903] <hax (HE Shi-Jun)>
+Yeah I have similar usage, and I think lazy init is especially hard to expresss even with current decorator proposal. 
+
+[09:16:56.0688] <hax (HE Shi-Jun)>
+But if u consider validate/sideeffect use cases, it actually don't require to be use accessor but only some observer ability. Force it to become accessor have performance result (To be clear, I don't care much about perf issue, but I always hear some delegates attack some proposals use this reason).
+
+[09:18:49.0024] <hax (HE Shi-Jun)>
+I think lea already suggest similar proposal in last meeting and be refused? Or maybe I misunderstand it?
+
+[09:20:42.0177] <Lea Verou>
+Oooh yes, lazy init is another big one. 
+
+[09:21:47.0389] <Lea Verou>
+
+While most things can be done with decorators, I suspect alias accessors likely would need _some_ syntax if we want to support private members. And property chains would be a lot elegant as an actual language construct (like in `delete`) as opposed to e.g. an array of property names.
+
+[09:21:48.0529] <hax (HE Shi-Jun)>
+To be honest, my question is, whether decorator could really go to stage 4, considering the position of browser vendors? (If there was any news on that, pls tell me...)
+
+[09:23:00.0018] <Lea Verou>
+Another advantage of the decorators direction is that it's a lower-cost way to prototype and test the waters. E.g. if this ends up being used tremendously much, we could introduce a syntax-level solution *down the line*. For this alone, I'm actually now myself in favor of the decorators direction
+
+[09:23:31.0201] <Lea Verou>
+* While most things can be done with decorators, I suspect alias accessors likely would need _some_ syntax if we want to support private members. And property chains would be a lot more elegant as an actual language construct (like in `delete`) as opposed to e.g. an array of property names.
+
+[09:23:40.0720] <hax (HE Shi-Jun)>
+`@lazy accessor x = lazy.of(() => init)` // example provided by Jack Works 
+Full of syntax noise 🙃
+
+[09:25:00.0630] <rbuckton>
+Which paragraph?
+
+[09:25:06.0935] <Lea Verou>
+hax (HE Shi-Jun): it doesn't need to, it could be `let { lazy } = SomeObject` and then just `@lazy(init) accessor x` . I'm less worried about O(1) DX issues, it's the O(N) (per property) DX issues that are the main problem 
+
+[09:28:28.0271] <hax (HE Shi-Jun)>
+I'm afraid @lazy(init) does not work if u want to access something on the instance in initializer?
+
+[09:31:24.0922] <nicolo-ribaudo>
+`@lazy accessor x = () => init`?
+
+[09:36:12.0976] <hax (HE Shi-Jun)>
+I think u can't make it type safe in ts. Though it maybe the fault of TS 😆
+
+[09:38:07.0655] <hax (HE Shi-Jun)>
+Anyway, I really feel lazy init is too common and should have better DX. If u check other morden langauge, in Kotlin u write `var x by lazy { ... }`, in swift u write `lazy var x = { ... }()`, in cala u write `lazy val x = { ... }`. It's shame that we can't provide js programmers a 
+
+[09:38:20.0230] <ljharb>
+> <@rbuckton:matrix.org> A `getInstanceFieldNames` would be simpler than a `@Public` decorator that uses `Symbol.metadata` to do the same thing
+
+it is critically important that it be opt in and not available by default.
+
+[09:38:25.0869] <hax (HE Shi-Jun)>
+* Anyway, I really feel lazy init is too common and should have better DX. If u check other morden langauge, in Kotlin u write `var x by lazy { ... }`, in swift u write `lazy var x = { ... }()`, in Scala u write `lazy val x = { ... }`. It's shame that we can't provide js programmers a good solution
+
+[09:39:17.0015] <Lea Verou>
+hax (HE Shi-Jun): A way I often implement lazy accessors myself is to set a symbol property in the getter and just return that if set. I believe that can totally be done with decorators, right?
+
+[09:39:38.0922] <Steve Hicks>
+That's my point about well-known builtin decorators - TypeScript could learn the type calculus behind them.
+
+[09:44:26.0249] <hax (HE Shi-Jun)>
+Obviously 10 js developers can have 10 different way to do it. If u ask GPT it may teach u write `class C { get val() { Object.defineProperty(this, 'val', { value: expensive(), writable: false }); return this.val; } }`
+
+[09:45:26.0994] <Lea Verou>
+Yes, but if it's a built-in decorator that's not an issue
+
+[09:46:32.0683] <hax (HE Shi-Jun)>
+I'm very curious how engine vendors see such re-defining prop descriptor which LLM like to encourage but they refused in decorator proposal.
+
+[09:52:55.0054] <hax (HE Shi-Jun)>
+Is there any specific reason that it should be opt in? And what opt-in mechnism will u like to see?
+
+[10:00:40.0377] <Jack Works>
+> <@haxjs:matrix.org> `@lazy accessor x = lazy.of(() => init)` // example provided by Jack Works 
+> Full of syntax noise 🙃
+
+(my version is to let TypeScript happy, otherwise it can be @lazy accessor x = () => init
+
+[10:01:00.0349] <rbuckton>
+It's certainly feasible for TS to implement. It's on the backlog and I planned to work on it at some point.
+
+[10:01:31.0028] <rbuckton>
+* It's certainly feasible for TS to implement. It's on the backlog and I had planned to work on it at some point.
+
+[10:02:31.0279] <nicolo-ribaudo>
+Put those that didn't help yet during this meeting on random.org and pick two!
+
+[10:03:13.0663] <nicolo-ribaudo>
+* Put those that didn't help yet during this meeting on random.org/lists and pick two!
+
+[10:03:14.0316] <Aki>
+yoooo it's Julie captioning
+
+[10:03:16.0789] <Aki>
+she's really good
+
+[10:05:40.0321] <Andreu Botella>
+we should do this every time – maybe excluding first-timers
+
+[10:06:00.0632] <ljharb>
+because anything that's introspectable is part of the public API and a breaking change if altered. i don't care what the mechanism is, it just has to be solely up to the class author.
+
+[10:06:43.0520] <ljharb>
+* because anything that's introspectable is part of the public API and a breaking change if altered. i don't care what the mechanism is, it just has to be solely up to the class author.
+
+separately, public class fields are sugar for statements in the constructor, and statements inside function bodies are *never* introspectable in the language, nor should they be.
+
+[10:06:58.0439] <Aki>
+the only reason the chairs haven't done that in the past (at https://takingnotes.rocks) is that there are some people who can't for personal reasons and it's not fair to put them on the spot
+
+[10:07:28.0181] <rbuckton>
+Isn't that why we have private fields? public fields are introspectable on an instance, just not from a constructor. IMO, you shouldn't need to construct an instance for that introspection.
+
+[10:07:50.0041] <nicolo-ribaudo>
+I mean the chairs could do the extraction privately, and those people can privately ask them in advance to be excluded
+
+[10:08:12.0087] <ljharb>
+nope, they're not. public _properties_ on the resulting instance are, certainly. but the existence of a field does not guarantee it will end up as a property, nor will the list of fields be exhaustive.
+
+[10:08:23.0732] <ljharb>
+* nope, they're not. public _properties_ on the resulting instance are, certainly. but the existence of a field does not guarantee it will end up as a property, nor will the list of fields be exhaustive (meaning there could eventually be properties not in that list).
+
+[10:10:26.0432] <ljharb>
+* nope, they're not. public _properties_ on the resulting instance are, certainly. but the existence of a field does not guarantee it will end up as a property, nor will the list of fields be exhaustive (meaning there could eventually be properties not in that list). (remember any subclass can arbitrarily delete a property that a field created, for example)
+
+[10:10:46.0763] <rbuckton>
+A field declaration will definitely guarantee its presence as a data property. They are always installed on an instance (barring use of `delete`, which is rarely a good idea).
+
+[10:11:06.0913] <ljharb>
+ok but the existence of that caveat means that it's not a guarantee.
+
+[10:11:07.0207] <hax (HE Shi-Jun)>
+But u already can use Object.getOwnPropertyNames() or other api or syntax to get the own properties... I don't see any difference here (except u can only get them via object not class).
+
+[10:11:17.0909] <ljharb>
+*of the instance*. you can't do that from a constructor alone.
+
+[10:11:37.0677] <ljharb>
+nor should you be able to, without the permission of the class author.
+
+[10:11:49.0869] <rbuckton>
+You can `delete` methods and accessors as well
+
+[10:11:55.0265] <ljharb>
+indeed you can
+
+[10:12:04.0035] <ljharb>
+but that you can introspect on the class.
+
+[10:12:23.0254] <ljharb>
+overall, implicit reflection/introspection is a horrifically bad language "feature" and we should go out of our way to not introduce any additional cases of it.
+
+[10:12:46.0550] <ljharb>
+explicit/opt-in reflection is great though! i fully support an author's freedom to expose what they want. but it must be a choice.
+
+[10:13:01.0554] <rbuckton>
+I strongly disagree with that sentiment.
+
+[10:13:03.0019] <ljharb>
+* explicit/opt-in reflection is great though! i fully support an author's freedom to expose what they want. but it must be a choice. (ideally it's an easy one, just explicit)
+
+[10:13:11.0060] <ljharb>
+that is unsurprising :-)
+
+[10:13:57.0496] <ljharb>
+but suffice to say there's no consensus to add any new implicit/default introspection mechanisms, though.
+
+[10:14:18.0669] <rbuckton>
+IMO, it's a terrible idea to use `delete` on any member of a class.
+
+[10:14:22.0823] <ljharb>
+oh i agree
+
+[10:14:42.0761] <ljharb>
+lots of things in any language are a terrible idea. but they still exist.
+
+[10:14:54.0364] <rbuckton>
+And you certainly won't be able to `delete` fields from `struct` instances.
+
+[10:15:04.0833] <ljharb>
+which is great
+
+[10:15:15.0991] <hax (HE Shi-Jun)>
+ljharb: " public class fields are sugar for statements in the constructor, and ..." --- No they are not sugar. No one write "Object.defineOwnProperty(this, "name", ...) in constructor. 😂
+
+[10:15:26.0941] <ljharb>
+that nobody writes it is *why* it's sugar
+
+[10:15:39.0399] <ljharb>
+and prior to the [[Define]] decision it was sugar for the thing *everyone* writes, which is `this.foo = 'bar'`
+
+[10:17:27.0074] <hax (HE Shi-Jun)>
+Ok. I mean, no one want to [[Define]] before this feature, so it's really weird to me to see it as sugar. I always see sugar should not introduce uncommon semantic.
+
+[10:18:24.0456] <nicolo-ribaudo>
+Oh well I can't speak sorry.
+
+It's for Trusted Types, it is being implemented 
+
+[10:19:16.0106] <nicolo-ribaudo>
+It's not ready for stage 4 yet though, according to my colleague working on it 
+
+[10:21:16.0738] <hax (HE Shi-Jun)>
+ljharb: On the other side, why it should be opt-in but not opt-out?? For example, in TS you use `private x` which seems match the case you want (by default it's public api, but private means it's not public)
+
+[10:26:03.0443] <keith_miller>
+Can uhh, I convince one of the chairs to add the 3.md agenda so I can add Atomics.pause to stage 4 before I forget... :)
+
+[10:26:50.0102] <hax (HE Shi-Jun)>
+ljharb: To be clear, I think opt-in is ok, I even like everything is not public by default, but JS class already make methods public, it's really weird that only fields need to opt-in for public.
+
+[10:29:38.0205] <ljharb>
+TS's `private` is bad for a ton of reasons so i don't think it should be used as an argument
+
+[10:30:02.0629] <ljharb>
+because a "field" isn't a first-class thing. a field is just instructions to set up a property - which is indeed public by default.
+
+[10:30:07.0988] <ljharb>
+* because a "field" isn't a first-class thing. a field is just instructions to set up a property - which is indeed public by default. iow, it's sugar.
+
+[10:30:54.0100] <ljharb>
+yes, i will do that now
+
+[10:34:45.0459] <Zb Tenerowicz (ZTZ/naugtur)>
+I might be interested in co-championing ljharb: but will need a comprehensive intro
+
+[10:39:36.0464] <hax (HE Shi-Jun)>
+I am not sure what "first-class" means. In my opinion, the whole point of fields proposal is to make it declarative and get the "first-class" support in the language.
+
+[10:43:25.0108] <Olivier Flückiger>
+@erights Mark Miller (Agoric) MM: I have a counter for last match, left context and right context. It is surprisingly not that small: https://chromestatus.com/metrics/feature/timeline/popularity/5641#V8RegExpStaticPropertiesWithLastMatch
+
+[10:44:17.0257] <Olivier Flückiger>
+We would also have counters for the rest (and most probably more common) of the static properties, but it seems there is a feature id collision so that counter is broken...
+
+[10:45:20.0779] <ljharb>
+it means "a thing you can pass around". variables are not first-class; objects are, for example.
+
+[10:45:38.0880] <ljharb>
+things that aren't first-class aren't reified "things"
+
+[10:45:59.0465] <ljharb>
+k, now done
+
+[10:47:08.0413] <Olivier Flückiger>
+* We would also have counters for the rest (and most probably more common) of the static regexp properties, but it seems there is a feature id collision so that counter is broken...
+
+[10:48:12.0272] <hax (HE Shi-Jun)>
+So why some class members (methods and accessors) are first-class, others (fields) are not? very inconsistent.
+
+[10:48:49.0990] <nicolo-ribaudo>
+Interesting, I can see usage of `.lastMatch`/leftContext/rightContext on the xiaomi website but not in the other two of the top 3
+
+[10:49:34.0960] <ljharb>
+that's not a consistency that i'd expect anyone to expect, but sure, it's inconsistent. the "why" doesn't change that it's the way it is.
+
+[10:50:05.0356] <ljharb>
+* that's not a consistency that i'd expect anyone to expect, but sure, it's inconsistent. the "why" doesn't change that it's the way it is.
+
+classes are declarative - they're instructions. that some pieces of them turn into first-class things and some don't is just based on the semantic of the instructions.
+
+[10:51:10.0078] <ljharb>
+* that's not a consistency that i'd expect anyone to expect, but sure, it's inconsistent. the "why" doesn't change that it's the way it is.
+
+classes are declarative - they're instructions. that some pieces of them turn into first-class things and some don't is just based on the semantic of the instructions. static blocks aren't first-class either, and neither are private fields.
+
+[10:51:45.0316] <nicolo-ribaudo>
+And the fourth one is coming from a twitter sdk (https://github.com/twitter/twitter-text)
+
+[10:52:52.0845] <nicolo-ribaudo>
+* And the fourth one is coming from a twitter sdk (https://github.com/twitter/twitter-text): https://github.com/twitter/twitter-text/blob/30e2430d90cff3b46393ea54caf511441983c260/js/src/extractUrlsWithIndices.js#L70
+
+[10:54:37.0596] <nicolo-ribaudo>
+Which is unmaintained but has 50k downloads/week
+
+[10:58:22.0396] <rbuckton>
+I'm back, sorry for the interruption
+
+[11:00:27.0427] <Olivier Flückiger>
+I found that the combined counter is probably correctly working: https://webstatus.dev/features/regexp-static-properties?q=RegExp . 7% :((
+
+[11:01:05.0507] <nicolo-ribaudo>
+Unfortunately not only that library has no recent activity, but every single person that worked on it seems to not be working at that company anymore
+
+[11:02:40.0594] <rbuckton>
+Built-in decorators (+ function decorators) would allow something like C#'s `StackTraceHiddenAttribute` https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.stacktracehiddenattribute?view=net-10.0
+
+[11:05:12.0661] <Olivier Flückiger>
+Yeah, but I think the fact that the other static properties are used even more is worse. Unless we split the proposal to only remove the little used ones.
+
+[11:05:49.0226] <ljharb>
+I have to drop, tty all next time
+
+[11:06:31.0460] <nicolo-ribaudo>
+Looking at that file, we can work on a proposal to remove `RegExp.$6`! 😛
+
+[11:09:41.0787] <hax (HE Shi-Jun)>
+Have no idea why xiaomi website use such legacy feature, I will try to find and ask the guys in xiaomi 🤨
+
+[11:09:59.0254] <Michael Ficarra>
+thank you for hosting this session Peter!
+
+[11:10:44.0713] <Steve Hicks>
+I'm a Matrix n00b, is there a place where these different spaces are listed?
+
+[11:11:23.0728] <Chris de Almeida>
+if only there were...some kind of guide... like a matrix guide.. with information on matrix
+
+[11:11:38.0849] <Chris de Almeida>
+https://github.com/tc39/how-we-work/blob/main/matrix-guide.md
+
+[11:11:59.0946] <Chris de Almeida>
+https://matrix.to/#/#tc39-space:matrix.org
+
+[11:12:15.0113] <Chris de Almeida>
+☝️ TC39 space
+
+[11:22:54.0435] <peetk>
+what was this in response to? isTemplateObject?
+
+[11:26:28.0237] <peetk>
+my pleasure!
+
+[11:26:55.0932] <rbuckton>
+For simple field wrapping to support public read/private write, I'd argue for this feature in grouped accessors:
+```js
+class C {
+  accessor x { get; #set; } // paired public getter/private setter
+  m() {
+    this.x; // ok
+    this.#x = 1; // ok
+  }
+}
+const c = new C();
+c.x; // ok
+// can't use c.#x
+```
+For more complex cases, `alias` is maybe interesting?
+
+[11:27:24.0891] <rbuckton>
+* For simple field wrapping to support public read/private write, I'd argue for this feature proposed in grouped accessors:
+
+```js
+class C {
+  accessor x { get; #set; } // paired public getter/private setter
+  m() {
+    this.x; // ok
+    this.#x = 1; // ok
+  }
+}
+const c = new C();
+c.x; // ok
+// can't use c.#x
+```
+
+For more complex cases, `alias` is maybe interesting?
+
+[11:27:49.0096] <rbuckton>
+* For simple field wrapping to support public read/private write, I'd argue for this feature proposed in grouped accessors:
+
+```js
+class C {
+  accessor x { get; #set; } // paired public getter/private setter
+  m() {
+    this.x; // ok
+    this.#x = 1; // ok
+  }
+}
+const c = new C();
+c.x; // ok
+// can't use c.#x
+```
+
+For more complex cases (like subproperty access), `alias` is maybe interesting?
+
+[11:35:00.0953] <rbuckton>
+I *have* been tempted to propose something like C#'s "expression bodied methods", which use `=>`, i.e.:
+```csharp
+// C#
+class C
+{
+  int _x = 0;
+  public x => _x; // public getter with shorthand expression body
+  public y {
+    get => _x;
+    set => _x = value;
+  }
+}
+```
+Which could could cut down on boilerplate for the `alias` case:
+```js
+class C {
+  #x;
+  get x => this.#x.value;
+  accessor y {
+    get => this.#x.value;
+    set => this.#x.value = value;
+  }
+}
+
+// vs.
+
+class C {
+  #x;
+  get x() { return this.#x.value; 
+  accessor y {
+    get () { return this.#x.value; }
+    set (value) { this.#x.value = value; }
+  }
+}
+```
+
+[11:35:14.0738] <keith_miller>
+nicolo-ribaudo: How many lines of code did your numbers come from BTW?
+
+[11:35:24.0510] <rbuckton>
+* I _have_ been tempted to propose something like C#'s "expression bodied methods", which use `=>`, i.e.:
+
+```csharp
+// C#
+class C
+{
+  int _x = 0;
+  public int x => _x; // public getter with shorthand expression body
+  public int y {
+    get => _x;
+    set => _x = value;
+  }
+}
+```
+
+Which could could cut down on boilerplate for the `alias` case:
+
+```js
+class C {
+  #x;
+  get x => this.#x.value;
+  accessor y {
+    get => this.#x.value;
+    set => this.#x.value = value;
+  }
+}
+
+// vs.
+
+class C {
+  #x;
+  get x() { return this.#x.value; 
+  accessor y {
+    get () { return this.#x.value; }
+    set (value) { this.#x.value = value; }
+  }
+}
+```
+
+[11:38:20.0796] <Zb Tenerowicz (ZTZ/naugtur)>
+Yes
+
+[11:38:31.0046] <nicolo-ribaudo>
+Around 200k in a few repos, but I didn't _measure_ as I said above. I scrolled to search results and eyeballed it.
+
+[11:38:55.0444] <nicolo-ribaudo>
+All property forwarding was about getters btw, setters are much rarer
+
+[11:39:27.0081] <nicolo-ribaudo>
+One codebase uses typescript, the others do not. Validation is higher in the one that does not use TS
+
+[11:39:35.0307] <nicolo-ribaudo>
+* One codebase uses typescript, the others do not. Validation is higher in the ones that do not use TS
+
+[11:40:07.0671] <nicolo-ribaudo>
+* Around 200k in a few repos, but I didn't _measure_ as I said above. I scrolled through search results and eyeballed it.
+
+[11:41:00.0469] <Zb Tenerowicz (ZTZ/naugtur)>
+I have some appreciation for the feature and have been looking at ASTs of tagged templates recently
+
+[11:44:44.0649] <rbuckton>
+This seems like a good use case for expression-bodied getters, IMO.
+
+[11:46:00.0524] <rbuckton>
+* I _have_ been tempted to propose something like C#'s "expression bodied methods", which use `=>`, i.e.:
+
+```csharp
+// C#
+class C
+{
+  int _x = 0;
+  public int x => _x; // public getter with shorthand expression body
+  public int y {
+    get => _x;
+    set => _x = value;
+  }
+}
+```
+
+Which could could cut down on boilerplate for the `alias` case:
+
+```js
+class C {
+  #x = { value: 0 }; // for something more complex
+  get x => this.#x.value;
+  accessor y {
+    get => this.#x.value;
+    set => this.#x.value = value;
+  }
+}
+
+// vs.
+
+class C {
+  #x;
+  get x() { return this.#x.value; 
+  accessor y {
+    get () { return this.#x.value; }
+    set (value) { this.#x.value = value; }
+  }
+}
+```
+
+[11:46:34.0266] <rbuckton>
+* This seems like a good use case for expression-bodied getters, IMO.
+i.e., `get x => this.#x`
+
+[11:46:58.0460] <Lea Verou>
+is there a proposal for this?
+
+[11:47:31.0381] <Lea Verou>
+* is there a proposal for this? (edit: nvm, just saw the earlier messages!)
+
+[11:48:11.0343] <Steve Hicks>
+Couldn't aliases/forwarding be done with a decorated accessor? It would be a little wasteful of the unused underlying accessor, but there's any number of ways you could write
+```
+@alias({get: () => this.foo.bar, set: (x) => this.foo.bar = x})
+accessor bar;
+```
+or
+```
+@alias({owner: this.#foo, prop: 'bar'}) // obviously order matters here, could be lazy () => this.#foo
+```
+
+And if you wanted to define a bunch of them, you could compose your own decorator that saved some boilerplate
+```
+@myalias('foo') accessor foo;
+@myalias('bar') accessor bar;
+```
+where `@myalias` could effectively "close over" any `this.#owner`.
+
+[11:48:21.0626] <rbuckton>
+Not yet. I'd considered it when I proposed grouped/auto-accessors but since that proposal was blocked from Stage 2 until decorators hit Stage 4, I held off.
+
+[11:49:00.0423] <Lea Verou>
+Separating the object from the prop like that seems even more awkward than the status quo
+
+[11:49:18.0252] <Lea Verou>
+though this makes me wonder if instead of alias accessors we need a syntax-level feature for referencing property chains
+
+[11:49:26.0688] <rbuckton>
+that certainly isn't very concise, imo. 
+
+[11:49:29.0165] <Lea Verou>
+then regular decorators could do it
+
+[11:49:37.0945] <Lea Verou>
+plus, lots of other use cases outside accessors
+
+[11:50:45.0765] <rbuckton>
+C# has `Expression<T>` that's used in LINQ, but that requires reifying a subset of the AST
+
+[11:50:46.0807] <Lea Verou>
+E.g. filtering, various helpers (e.g. lodash's get/set)
+
+[11:51:58.0341] <rbuckton>
+Well, not quite the same. `Expression<T>` is used by an expression rewriter to turn C# expression syntax into other languages like SQL to convert a LINQ pattern into a database query.
+
+[11:52:14.0343] <Lea Verou>
+basically a type of literal that returns some kind of `PropertyReference` object
+
+[11:53:00.0397] <Lea Verou>
+which could have methods to get/set/etc the property chain for a given object, perhaps. (Just brainstorming out loud here
+
+[11:53:02.0968] <rbuckton>
+I have a proposal for reified references that I have yet to bring to committee (https://github.com/rbuckton/proposal-refs) that would do that.
+
+[11:53:05.0317] <Lea Verou>
+* which could have methods to get/set/etc the property chain for a given object, perhaps (Just brainstorming out loud here)
+
+[11:54:35.0976] <Lea Verou>
+I'll need to look at this more closely later, I tried skimming but it needs more time than that
+
+[11:54:53.0037] <Lea Verou>
+* Thanks! I'll need to look at this more closely later, I tried skimming but it needs more time than that
+
+[11:55:39.0635] <Lea Verou>
+It could be useful to include examples of property chains and privates (if it covers them too)
+
+[11:57:19.0390] <rbuckton>
+It does. 
+
+[11:58:01.0396] <rbuckton>
+Though "property chain" isn't the right term. It captures the Reference resulting from the property chain.
+
+[11:58:27.0193] <Steve Hicks>
+FWIW (probably not much), my Closure Compile-addled brain tends to go to something along the lines of `{foo: {bar: true}}` to represent a property chain... but that's more due to limitations with how our optimizer handles property rewriting.  I don't know if `{#foo: {bar: true}}` could work (assuming privates in object literals landed), but it's certainly neither pretty nor performant and probably a non-starter.
+
+[11:59:25.0746] <Steve Hicks>
+* FWIW (probably not much), my Closure Compile-addled brain tends to go to something along the lines of `{foo: {bar: true}}` to represent a property chain... but that's more due to limitations with how our optimizer handles property renaming.  I don't know if `{#foo: {bar: true}}` could work (assuming privates in object literals landed), but it's certainly neither pretty nor performant and probably a non-starter.
+
+[12:02:03.0918] <Steve Hicks>
+But at the end of the day, what we're talking about is a pair of functions: {get: (T) => V, set: (T, V) => void}, so I think the question is whether there could be a reasonably ergonomic way to write that object.
+
+[12:05:52.0903] <rbuckton>
+The idea with `ref` is that a `ref`-expression captures a _Reference_ to an expression and reifies it:
+```js
+let x = 0;
+let rx = ref x; // ref expression
+rx.value; // 0
+rx.value = 1;
+x; // 1
+```
+While a `ref`-declaration _dereferences_ that reference as if it were the roughly the same binding:
+```js
+let x = 0;
+let rx = ref x; // ref expression takes reference
+
+let ref y = rx; // ref declaration dereferences
+y; // 0
+y = 1;
+x; // 1
+```
+
+[12:07:20.0239] <rbuckton>
+There's no concept of a `ref` declaration for a field or accessor however, so while you could _take_ a ref to a property, you can't necessarily install the ref as a property (at least, not yet)
+
+[12:13:03.0353] <rbuckton>
+There is a suggestion for `ref` properties, though (https://github.com/rbuckton/proposal-refs/issues/12)
+
+[12:13:36.0502] <rbuckton>
+I really should just present this and at least get stage 1, since one way or another it's worth discussing.
+
+[12:18:29.0913] <Lea Verou>
+That seems to be the desirable behavior? Are there any cases where that would break expectation?
+
+[12:19:51.0882] <Lea Verou>
+Oof, that's quite a problem. Do you think it's fixable?
+
+[12:19:53.0508] <rbuckton>
+Yes, I'm just saying "property chain" is the wrong terminology. to me, "property chain" implies that if some part of the chain is replaced, re-evaluating would produce a different result. 
+
+[12:20:08.0623] <rbuckton>
+See https://github.com/rbuckton/proposal-refs/issues/12
+
+[12:21:23.0972] <Lea Verou>
+For that to work for the intended use cases, it basically needs to re-evaluate the chain itself, kind of like a very very limited eval almost. Which seems like the case here? (aside from the issue above)
+
+[12:25:05.0252] <rbuckton>
+For the intended use case, only the Reference at the end matters. Consider:
+
+```js
+let x = { y: { z: 0 } };
+
+let rz = ref x.y.z;
+```
+`rz.value` will always point to the Reference for `y.z` at the time the `ref` was taken even if you change `x.y` to something else. This is no different from
+```
+let y = x.y;
+let rz = ref y.z;
+```
+the intermediates don't matter, only the trailing Reference
+
+[12:25:45.0661] <hax (HE Shi-Jun)>
+Yeah, I’ve always liked the refs proposal. Just one thing I’m a bit concerned about is the syntax `ref x` — for example, the syntactic ambiguity of `ref (x)`, and also that `ref a.b.c` could easily be misunderstood as re-evaluating the entire chain every time.  
+
+Maybe a syntax like `x.&` could be an alternative — it has better ergonomics (in my opinion) and can express capabilities more clearly (for example, `x.&r` could mean only expose read capability). Anyway, syntax is just bikeshed issue.
+
+[12:26:31.0709] <rbuckton>
+`ref` is a placeholder. It could easily be `&`. I just was veering away from C-like addresses and pointers.
+
+[12:27:11.0128] <rbuckton>
+However, `ref x.y.z` works with a Reference the same way `delete x.y.z` does and is consistent with JS on the whole.
+
+[12:27:32.0175] <rbuckton>
+`x.&r` looks highly confusing to me
+
+[12:28:11.0845] <rbuckton>
+`ref` (as expression and as declaration) also has prior art in C#
+
+[12:28:24.0095] <hax (HE Shi-Jun)>
+ah, I forgot `delete x.y.z`, I suppose no one use `delete` in most morden JS/TS 😂
+
+[12:29:03.0630] <rbuckton>
+I would not want `&` or `ref` to come in the middle of a property access. It could get lost in a deeply nested chain.
+
+[12:29:05.0145] <Lea Verou>
+For alias accessors, the entire chain matters. E.g. suppose I have 
+```js
+class C {
+  alias foo = #foo.value 
+}
+```
+
+If I replace `#foo`, I don't want `this.foo` to still be pointing to the old value (and it's the same for deeply nested objects)
+
+[12:29:29.0623] <Lea Verou>
+Also, there are use cases that need access to the intermediate properties (e.g. lodash's get/set that I mentioned earlier)
+
+[12:29:55.0421] <rbuckton>
+If that's the case, then `ref` is not what you want. But I also wouldn't use `=` as that implies an immediate assignment
+
+[12:30:19.0567] <Lea Verou>
+Yes, that exact issue was an open question in the explainer (that `=` is probably not appropriate)
+
+[12:30:33.0155] <rbuckton>
+You could just as easily use `as` or `for` or `->`, etc.
+
+[12:30:56.0245] <Lea Verou>
+But also, after this discussion I'm starting to think that this should _also_ be done with decorators, and we should instead introduce a syntax primitive to make it nice (even if it's not `ref`)
+
+[12:31:26.0571] <Lea Verou>
+There was another proposal in the previous meeting that also needed a way to reference property chains, I forget which one, and there was no good story
+
+[12:31:30.0520] <hax (HE Shi-Jun)>
+It's a interesting question, let me check other language, eg. Kotlin code `var x by a::b::c` Not sure which behavior it adopt.
+
+[12:32:26.0316] <Lea Verou>
+* There was another proposal in the previous meeting that also needed a way to reference property chains, I forget which one, and there was no good story (perhaps the deep diffing one?)
+
+[12:34:20.0258] <Lea Verou>
+The main challenge I see is not syntax of the literal, it's how to handle privates. For it cover forwarding use cases, privates are MVP, but we have no way to represent them in a ComputedPropertyName
+
+[12:34:27.0847] <Lea Verou>
+* The main challenge I see is not syntax of the literal, it's how to handle privates. For it to cover forwarding use cases, privates are MVP, but we have no way to represent them in a ComputedPropertyName
+
+[12:37:00.0626] <Lea Verou>
+Perhaps it could end up behaving like an array of objects to represent the chain, then privates could have e.g. `private: true`, and if you try to construct a literal with a private property that doesn't exist in your current context the construction itself would throw. 
+
+[12:37:38.0026] <Lea Verou>
+* Perhaps it could end up behaving like an array of objects (once created) to represent the chain, then privates could have e.g. `private: true`, and if you try to construct a literal with a private property that doesn't exist in your current context the construction itself would throw.
+
+[12:38:18.0525] <hax (HE Shi-Jun)>
+Shouldn't that be a earlyerror?
+
+[12:38:50.0480] <Lea Verou>
+Yes, that's what I'm saying
+
+[12:39:48.0220] <rbuckton>
+You could potentially do this with a decorator and `ref`:
+
+```js
+class C {
+  #x = { y: { z: 0 } };
+
+  @alias(_ => ref _.#x.y.z) accessor x;
+}
+```
+Where the get/set are replaced with an invocation of the callback that returns a `ref` you can read from or assign to
+
+[12:40:04.0256] <Lea Verou>
+e.g. 
+```js
+let foo = .a.#b.c.d; /* property chain literal */
+```
+which could throw if your current context doesn't include `#b` (if it does but `a` doesn't have it that _could_ throw later)
+
+[12:42:58.0235] <Lea Verou>
+* e.g.
+
+```js
+let foo = .a.#b.c.d; /* property chain literal */
+```
+
+which could throw if your current context doesn't include `#b` (if it does but `a` doesn't have it that _could_ throw later)
+Especially since in a lot of these use cases, the "root" of the property is not fixed but the chain can be applied to a variety of root objects
+
+[12:43:14.0615] <rbuckton>
+I think arrows and `ref` might be sufficient. `_ => _.a.#b.c.d` would generally work find as a deferred way to read a value, you just can't write to it. `_ => ref _.a.#b.c.d` would let you do both:
+
+```js
+let foo = x => ref x.a.#b.c.d;
+
+let obj1 = ...;
+let obj2 = ...;
+
+foo(obj1).value; // read
+foo(obj1).value = ...; // write
+
+foo(obj2).value; // read
+foo(obj2).value = ...; // write
+```
+
+[12:43:19.0873] <Lea Verou>
+* e.g.
+
+```js
+let foo = .a.#b.c.d; /* property chain literal */
+```
+
+which could throw if your current context doesn't include `#b` (if it does but `a` doesn't have it that _could_ throw later)
+Especially since in a lot of these use cases, the "root" of the property is not fixed but the chain can be applied to a variety of root objects (e.g. in alias accessors there is an implicit `this`)
+
+[12:43:53.0934] <Lea Verou>
+Yes, that would work. I do find it awkward though. 
+
+[12:44:37.0379] <Lea Verou>
+Also, there are use cases where you may want to *break* the chain
+
+[12:44:53.0794] <Lea Verou>
+E.g. "return the last non-null/undefined object"
+
+[12:46:38.0201] <Steve Hicks>
+nicolo-ribaudo: I don't see PKA in this channel, but I was reachout out to Krzysztof Kotowicz about https://github.com/tc39/proposal-dynamic-import-host-adjustment and I think there was a transcription error somewhere since he's not actually mentioned _anywhere_ in that repo.  It looks like it's entirely Mike Samuel (who _used_ to be at Google, but is no longer).
+
+[12:46:54.0771] <Steve Hicks>
+* nicolo-ribaudo: I don't see PKA in this channel, but I was reaching out to Krzysztof Kotowicz about https://github.com/tc39/proposal-dynamic-import-host-adjustment and I think there was a transcription error somewhere since he's not actually mentioned _anywhere_ in that repo.  It looks like it's entirely Mike Samuel (who _used_ to be at Google, but is no longer).
+
+[12:53:31.0075] <hax (HE Shi-Jun)>
+Ok, kotlin behave same like ref proposal, the syntax is `var x by a.b::c` which is much clear the last part is the reference (a::b::c is invalid)
+
+[12:56:31.0767] <rbuckton>
+I'd still rather not mix `&` or similar inside a property access. We already have `.` and `?.`, and have had proposals for other property-access-likes in the past. IMO that's too noisy.
+
+[12:59:25.0226] <rbuckton>
+C, C++, Go, C#, and Rust (among others) use a prefix operand
+
+[13:13:07.0256] <Lea Verou>
+rbuckton: What about a leading `.` ? I have a hunch it would be ambiguous or break existing stuff in some cases, but I can't think of any offhand. It seems like it could be quite elegant if it worked
+
+[13:14:44.0103] <Lea Verou>
+* rbuckton: What about a leading `.` ? I have a hunch it would be ambiguous or break existing stuff in some cases, but I can't think of any offhand. It seems like it could be quite elegant if it worked. E.g. 
+```js
+class C {
+	@alias (.#foo.value)
+	accessor value;
+}
+```
+
+[13:56:48.0823] <rbuckton>
+Maybe? At first glance it doesn't seem ambiguous, but I'm not 100% sure that's what I would use a leading `.` syntax for, if we had one. There's a lot of complexity being stuffed into that syntax. IMO, the upside of using `x => ref x.#foo.value` is that it depends on arrows, which are well known at this point, and `ref` has a lot more use cases outside of this narrow case, plus it clearly indicates what you have is a Reference. `.#foo.value` seems almost like partial application, except even that proposal doesn't magically handle References
+
