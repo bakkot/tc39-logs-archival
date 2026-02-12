@@ -5,3 +5,25 @@ Gentle reminder, there's only a few weeks left till plenary and there's still on
 [11:55:57.0006] <ptomato>
 I already put it on the agenda for Wednesday's maintainers meeting. I started going through it, but realistically the only way it will get done is if we divide the labour
 
+
+2026-02-11
+[04:13:17.0889] <Caio Lima>
+Hi all, I just opened a PR to test Promise.prototype pollution combined with `import.defer` here https://github.com/tc39/test262/pull/4918. It still need to be discussed on plenary, but I'd like to get some early feedback from you regarding the way I'm testing `Promise.prototype.then` there, since I'm feeling it's a bit hacky right now. Since I'm polluting `.then`, If I do `import.defer(...).then(ns => { ... })`, this will cause the new defined `.then` function to be called and it will increase `thenCallCount`. Because of this, I took the direction to save built-in `Promise.prototype.then` to `originalThen` and use `originalThen.call` to chain promises. I can think in a couple of alternatives for it, like checking if `thenCount == 1` and keep using `.then`, or having a `Promise.prototype.originalThen`, to avoid `originalThen.call`. Do you have an opinion about it?
+
+[13:00:39.0914] <ptomato>
+IMO each test file can basically pollute whatever it wants, the priority should be on making the test understandable (for reviewers, and for implementations debugging why it doesn't pass) and removing as much complexity as possible (less code, fewer hidden bugs)
+
+[14:29:17.0898] <ljharb>
+personally i would *prefer* if each file cleaned up after itself, and i think that's much better for test design. however, that is extremely not the case rn and so it's fine.
+
+[14:32:07.0814] <ptomato>
+Yeah, I try to make sure that any new tests that I add, clean up after themselves
+
+[14:32:44.0692] <ptomato>
+But as for what exactly gets polluted in what way, you have free rein
+
+
+2026-02-12
+[01:28:20.0815] <Ms2ger>
+The main thing I was wondering about polluting core stuff like Promise#then is whether the harness code is robust to that
+
