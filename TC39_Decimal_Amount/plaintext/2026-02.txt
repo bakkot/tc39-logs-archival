@@ -81,3 +81,185 @@ shall we go for Stage 2?
 [02:50:24.0047] <eemeli>
 I think so, if we get the spec text in good enough shape.
 
+
+2026-02-25
+[04:27:46.0364] <eemeli>
+Richard Gibson: Just to make sure I understand [this comment](https://github.com/tc39/proposal-intl-keep-trailing-zeros/pull/10#issuecomment-3949688212) right, do you mean that you'd prefer the following formatting results?
+```
+let sf = new Intl.NumberFormat('en', { notation: 'scientific' })
+sf.format('101') // '1.01E2'
+sf.format('100') // '1E2'
+sf.format('1.00') // '1.00E0'
+```
+
+If so, I don't think I agree, as I think the trailing zeros of `'100'` should also be retained. Note that this only affects formatting with scientific or engineering notation, as those are the only cases where we might end up formatting trailing zeros that are parts of the integer in the input as fractional zeros of the output.
+
+[04:28:19.0399] <eemeli>
+* Richard Gibson: Just to make sure I understand [this comment](https://github.com/tc39/proposal-intl-keep-trailing-zeros/pull/10#issuecomment-3949688212) right, do you mean that you'd prefer the following formatting results?
+
+```
+let sf = new Intl.NumberFormat('en', { notation: 'scientific' })
+sf.format('101')  // '1.01E2'
+sf.format('100')  // '1E2'
+sf.format('1.00') // '1.00E0'
+```
+
+If so, I don't think I agree, as I think the trailing zeros of `'100'` should also be retained. Note that this only affects formatting with scientific or engineering notation, as those are the only cases where we might end up formatting trailing zeros that are parts of the integer in the input as fractional zeros of the output.
+
+[08:25:21.0807] <Richard Gibson>
+yes, that is what I mean. There is ambiguity regarding zeros in `"100"`, but the conventions with which I'm familiar treat them as insignificant (as described in material from e.g. [Significant Figures Calculator](https://www.sigfigscalculator.com/articles/significant-figures-rules.php#title:~:text=Rule%204%20%2D%20final%20or%20trailing%20zeroes%20are%20significant%20only%20after%20a%20decimal%20point), [Columbia University](https://ccnmtl.columbia.edu/projects/mmt/frontiers/web/chapter_5/6665.html#:~:text=Trailing%20zeros%20in%20a%20whole%20number%20with%20no%20decimal%20shown%20are%20NOT%20significant), [Texas A&M University](https://www.chem.tamu.edu/class/fyp/mathrev/mr-sigfg.html#:~:text=x%20102-,Trailing%20zeros%20are%20significant%20only%20if%20the%20decimal%20point%20is%20specified,-.), and [Khan Academy](https://en.khanacademy.org/science/grade-11-physics-snc-aligned/x1d0fed5276339e80:measurements/x1d0fed5276339e80:analyzing-accuracy-precision-and-derived-quantity-uncertainties/v/more-on-significant-figures))
+
+[08:29:44.0871] <Richard Gibson>
+but further note that specific rules regarding disambiguation of trailing zeros are independent of the main point about how the spec should represent string-based decimals
+
+[08:31:52.0556] <Richard Gibson>
+* but further note that specific rules regarding disambiguation of trailing zeros are independent of the main point about how the spec should internally represent string-based decimals
+
+[08:39:49.0695] <Richard Gibson>
+* but further note that specific rules regarding disambiguation of trailing zeros are independent of the main point about how the spec should internally represent string-based decimals. Treating integer zeros as significant would change only the second data row of that table, from ["d₁…dₖ", x + s] (*d × 10^(x + s)*) to ["d₁…dₖ0₁…0ₛ", x] (*(d × 10^s) × 10^x*)
+
+[08:40:21.0171] <Richard Gibson>
+* but further note that specific rules regarding disambiguation of trailing zeros are independent of the main point about how the spec should internally represent string-based decimals. Treating integer zeros as significant would change only the second data row of that table, from \["d₁…dₖ", x + s\] (_d × 10^(x + s)_) to \["d₁…dₖ0₁…0ₛ", x\] (_(d × 10^s) × 10^x_).
+
+[11:01:34.0969] <eemeli>
+While I agree that there is some ambiguity here, we do also have a convention on this directly within ECMA-262:
+```
+(100).toPrecision(1) // '1e+2'
+(100).toPrecision(3) // '100'
+```
+
+As I see it, we should follow the existing spec precedent, especially as this only impacts the results when formatting with scientific or engineering notation.
+
+[11:02:50.0966] <Richard Gibson>
+I don't think that is a relevant precedent
+
+[11:08:53.0349] <eemeli>
+Context here is that I'm currently working on an update to the proposal's PR #10 that'll disregard the exponent in the string digits calculation, along with any and all leading zeros. This will match your latest proposal pretty closely, only diverging by considering "100" and "1.00" as belonging to the same sequence, as you put it.
+
+[11:11:33.0322] <eemeli>
+My own sense here is that this understanding is more useful, as it's easier to get the ignore-integral-trailing-zeros behaviour by wrapping the formattable numeric string in `Number()`.
+
+[11:15:55.0839] <eemeli>
+If we understood `"100"` to have only one significant digit, you'd need to transform it as `(100).toExponential(2)` to ensure that it's parsed as having three significant digits.
+
+[11:16:12.0812] <eemeli>
+* If we understood `"100"` to have only one significant digit, you'd need to transform it as `Number("100").toExponential(2)` to ensure that it's parsed as having three significant digits.
+
+[11:19:45.0145] <eemeli>
+I think it would also mean that we'd want to do this to ensure that round-tripping was not lossy, while keeping the value as simple as possible:
+```
+let a = new Amount(100, { significantDigits: 3 })
+a.value // '1.00e+2'
+
+let b = new Amount(101, { significantDigits: 3 })
+b.value // '101'
+```
+That seems unnecessarily clumsy?
+
+[11:22:15.0074] <eemeli>
+(yes, that's mixing in Amount stuff with keep-trailing-zeros, but I'm pretty sure we want those to match each others' logics)
+
+[11:28:19.0099] <eemeli>
+And that then loops us back to `Number.p.toPrecision()`, as a consideration of 100 as having one significant digit would mean that
+```
+n.toPrecision(p)
+```
+and
+```
+new Amount(n, { significantDigits: p }).value
+```
+would not always be equal for Number values of `n`.
+
+
+2026-02-26
+[23:08:21.0323] <Jesse>
+Richard brings up an aspect of Amount + Intl that wasn't on my radar at all: measurement systems and unit overrides. Could we discuss that at today's call?
+
+[23:56:09.0026] <sffc>
+I think we just need to define whether 100 has 1 or 3 significant digits. I lean toward 3. 100 and 101 intuitively have the same number of significant digits. You count 99, 100, 101. I shouldn't be forced to write "1.00E2" to make a 3-digit number. I consider a low-precision integer sufficiently uncommon that I'm okay if you need to write "1E2" in order to get it.
+
+[00:09:53.0745] <eemeli>
+Jesse: In [this commit](https://github.com/tc39/proposal-amount/pull/84/changes/06ca77bb26164932088507d33ba5be470530c825) you're presenting Claude Opus 4.6 as a co-author. Is that not a problem, given our [AI policy](https://github.com/tc39/how-we-work/blob/main/AI_POLICY.md)?
+
+[00:11:25.0583] <sffc>
+Heh, I think that AI Policy was written in the brief period when chatbots were going viral but before AI coding agents became viable. It probably needs to be updated again.
+
+[00:12:02.0221] <eemeli>
+It was merged in two weeks ago.
+
+[00:12:38.0636] <sffc>
+Yes but I remember reviewing the text of it at a TG1 meeting in 2025, I think in the middle of 2025.
+
+[00:12:59.0584] <sffc>
+I'm tasked with writing a similar AI usage policy for contributions to Unicode. It's likely going to say that AI tool usage is acceptable so long as it is disclosed.
+
+[00:15:42.0954] <sffc>
+My recollection is that bakkot wrote the policy in response to a whole bunch of AI slop comments on proposal issues. We definitely need to address this new use case of AI tools that produce halfway-decent spec text and potentially save time.
+
+[00:18:18.0168] <nicolo-ribaudo>
+Fwiw I remember mentioning copilot autocompletions during that discussion, and that seemed to be acceptable 
+
+[00:29:47.0068] <eemeli>
+To clarify, I personally don't find the private use of LLMs like here objectionable, but I do think that it's technically speaking against the current policy, which clearly states:
+> Any contributions or comments must be your own writing, not the product of large language models (LLMs) or other tools.
+
+Furthermore, our IP policy requires contributors [to sign](https://github.com/tc39/how-we-work/blob/main/ip.md#contributor-ipr-license) the non-member contributor agreement, which Claude has not/cannot do.
+
+[00:44:10.0722] <sffc>
+---
+If Amount contains the Intl.NF.prototype.format change, then Intl Unit Protocol basically amounts to pulling that specific change out into its own mini proposal, right?
+
+[00:51:41.0973] <Jesse>
+happy to drop that commit; I just used the tool to find an AO (`CopyDataProperties`) that I had been overlooking. This was a case of using Claude as a sort of power grep
+
+[00:54:20.0552] <nicolo-ribaudo>
+Let's maybe just amend the commit and remove the attribution then? 😅
+
+[01:04:33.0874] <eemeli>
+I'm not sure what you mean by "measurement systems", but on unit overrides this seems relevant: https://github.com/sffc/proposal-intl-unit-protocol/issues/3
+
+[01:06:42.0339] <eemeli>
+Yes.
+
+[01:10:52.0084] <Jesse>
+I understood Richard's coment to be about parsing locale strings that specify things like measurement systems and unit overrides
+
+[01:11:12.0453] <Jesse>
+(initially; and then, how that handle such things in the spec)
+
+[01:15:11.0206] <Jesse>
+I'd like to discuss this in the call tonight, if possible, so we can reach a state that's not _too_ handwavy
+
+[01:16:13.0355] <Jesse>
+thinking backwards from the deadline, it would be nice to make a decision about whether this should prevent us from trying to go to stage 2
+
+[01:18:21.0480] <Jesse>
+one possible decision would be to say that we want to discuss this in TG2 first
+
+[01:23:37.0315] <eemeli>
+Ah, I presume you mean [this comment](https://github.com/tc39/proposal-amount/pull/84#discussion_r2854546506) on the Amount PR, and not the comment on the keep-trailling-zeros PR I linked to earlier.
+
+[01:23:55.0227] <Jesse>
+yeah that one
+
+[01:24:17.0598] <Jesse>
+sorry for the confusion; channels got crossed
+
+[01:25:41.0758] <Jesse>
+I'd be OK with just punting on this issue; just use whatever the resolved locale specifies, and ignore any request for alternative measurement systems
+
+[01:25:56.0926] <Jesse>
+iow deferring to stage 2
+
+[01:26:22.0759] <Jesse>
+after discussing in TG2
+
+[01:26:48.0541] <Jesse>
+but again, I might be misunderstanding Richard's suggestion
+
+[01:29:09.0645] <eemeli>
+We should discuss that on the call. I think for Stage 2 it's enough to consider "just" as a part of locale handling. `-u-mu` is pretty straightforward; `-u-ms` is more interesting as we don't have a corresponding Intl.NumberFormat option for it.
+
+[03:17:57.0059] <eemeli>
+A quick review of https://github.com/tc39/proposal-intl-keep-trailing-zeros/pull/14 would be appreciated; it only updates the baseline spec for the proposal's diff as e.g. https://github.com/tc39/ecma402/pull/1026 covered many of the changes also made in this proposal to PluralRules.
+
