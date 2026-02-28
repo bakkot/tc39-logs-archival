@@ -304,3 +304,248 @@ yes, with no special treatment other than "_Unit identifiers consisting of three
 [18:11:54.0334] <sffc>
 I added my two proposals to the agenda, pending the spec availability for Intl Unit Protocol: https://github.com/tc39/agendas/commit/f6f0435b4ceda82c31f997b02473ffb15027dbd7
 
+[06:32:47.0863] <eemeli>
+Draft slides for Amount: https://docs.google.com/presentation/d/1SAD0bgB_SOWrtz1YZuySC4YHdMxBs0vTnS7buQa311c/edit?usp=sharing
+
+Please request permissions as necessary; for now I added ecma402-delegates@chromium.org as editor.
+
+[07:30:06.0731] <Jesse>
+I've opened a (somewhat) simplified PR to align with the README changes: https://github.com/tc39/proposal-amount/pull/85
+
+[07:48:43.0677] <Jesse>
+would someone like to file an issue about using exponential notation?
+
+[07:49:22.0149] <Jesse>
+(that idea isn't in the spec text PR)
+
+[07:52:48.0396] <Jesse>
+it wasn't quite clear to me, upon reflection, what the scope of the idea was:
+
+[07:54:34.0548] <Jesse>
+when we say we want to use exponential notation for string-y Amounts, do we also convert things like `"123.456"` into `"1.23456e2"`?
+
+[07:54:51.0359] <Jesse>
+like, `new Amount("123.456").value === "1.23456e2"`?
+
+[07:56:36.0024] <Jesse>
+or do we convert to exponential notation only when some kind of calculation (rounding, reducing, or expanding fraction or significant digits)?
+
+[07:58:59.0492] <nicolo-ribaudo>
+This would change the precision, right?
+
+[08:00:25.0881] <Richard Gibson>
+I think I'm fine with this
+
+[08:01:47.0924] <nicolo-ribaudo>
+Nevermind, ignore this 😅
+
+[08:02:03.0604] <Jesse>
+<del>I think</del> oh ok
+
+[08:08:56.0258] <Richard Gibson>
+...but I guess that's to be sorted out in the issue. Preserving an input string as-is entails lots of potential variation—leading zeros, casing of "e" in the exponential part, optionality of "+" for a positive exponent, and arguably even non-decimal representations like "0x0" or "0o7". Although that last one seems best handled by converting to Number, such that `new Amount("0xFF").value === 255`.
+
+[08:26:03.0105] <Richard Gibson>
+eemeli: would you like to discuss https://github.com/tc39/proposal-intl-keep-trailing-zeros/pull/10#discussion_r2863142664 here, or in that PR, or in the test262 PR? The assertion that seems wrong to me is `assert.sameValue(nf.format('1.2345e-1000'), '0.0000')`—the significant digits of 1.2345e-1000 are all below the representable threshold, and preserving their _count_ while moving their _position_ is unjustified. That output should be "0.00000000000000000000", just like how `nf.format('1.2345e-20')` would be "0.00000000000000000001".
+
+[08:35:57.0163] <eemeli>
+I gave it a review; it's still got a whole bunch of text that's not needed if we instead refer to Number.p.toExponential and FormatNumericToString.
+
+[08:37:39.0705] <eemeli>
+I'd prefer for the string .value to always be normalised as using exponential notation. I'll submit an issue, also covering the treatment of non-finite values.
+
+[08:42:14.0921] <eemeli>
+Here might be easiest. To me, the situation is analogous with
+```
+assert.sameValue(nf3.format('1.99999'), '2.000');
+```
+which does the same sort of rounding, just to a different integer.
+
+Overall, I don't think the line you're pointing at would be the place where I'd apply the change, as while it would change the treatment of `'1.2345e-1000'`, it would keep the formatting of `'1.2345e-200'` as `'0.0000'`, and I don't see why those ought to be different.
+
+[08:42:33.0006] <Jesse>
+the normalization I have in mind might be: string argument `s` comes in, but we store `Number(s).toExponential()`
+
+[08:43:03.0470] <eemeli>
+Yeah, except we don't actually force the string value to fit in Number limits.
+
+[08:43:17.0168] <eemeli>
+And we don't cap the precision at 100.
+
+[08:44:08.0366] <eemeli>
+... and we'll need to retain the trailing zeros.
+
+[08:45:53.0285] <Jesse>
+do you mean in the `.convertTo` text?
+
+[08:47:16.0724] <eemeli>
+See my line comments, also in the constructor.
+
+[08:47:26.0171] <Jesse>
+oh ok, thanks -- will do
+
+[08:50:11.0640] <eemeli>
+Richard Gibson: I think the issue you're raising is really rather close to https://github.com/tc39/proposal-intl-keep-trailing-zeros/issues/11, which we resolved at the November pleanry.
+
+[08:51:25.0877] <Richard Gibson>
+>  To me, the situation is analogous with `assert.sameValue(nf3.format('1.99999'), '2.000')` which does the same sort of rounding, just to a different integer.
+
+I see that `nf3` has { minimumSignificantDigits: 2, maximumSignificantDigits: 4 }, so I agree. Rounding up to 2.000 as part of clamping significant digits is analogous to rounding down to 0.00000000000000000000 as part of clamping fractional digits.
+
+> Overall, I don't think the line you're pointing at would be the place where I'd apply the change, as while it would change the treatment of '1.2345e-1000', it would keep the formatting of '1.2345e-200' as '0.0000', and I don't see why those ought to be different.
+
+that seems plausible to me; I was unclear on the overall changes when I posted that comment and the proposed spec text since then anyway. I agree that "1.2345e-1000" and "1.2345e-200" should be subject to the same treatment, and should produce the same output when 1e-200 is below a digits threshold.
+
+[08:53:38.0163] <Richard Gibson>
+that looks like a separate issue to me
+
+[08:56:40.0810] <eemeli>
+Richard Gibson: My takeaway from that discussion (at least what I see as relevant here) is that we should retain the significant-digits precision when the input does not contain trailing zeros, but the formatted output does, because of rounding. And so to me, `1.23e-1000` is an input value from which we count a _stringDigitCount_ of 3, which we ought to retain when formatting it as `0.00`.
+
+[09:00:23.0300] <Richard Gibson>
+that is not my takeaway at all, and I'm strongly opposed to retaining the count while moving the position. 1.23e-1000 wants to format like "0.0…0…0123", which maximumFractionDigits rounds to "0.0…0". In the absence of trailing zero preservation that would be further transformed to "0", but with such preservation we want it right at the maximum.
+
+[09:02:29.0688] <eemeli>
+Would you want `1.23e-100` to format the same way?
+
+[09:03:26.0677] <Richard Gibson>
+yes
+
+[09:04:00.0590] <eemeli>
+Richard Gibson: Regarding "retaining the count while moving the position", does that mean that you think we should drop trailing zeros when formatting with `style: 'percent'`?
+
+[09:04:00.0882] <Richard Gibson>
+* yes, for exactly the same reason
+
+[09:04:30.0474] <eemeli>
+* Richard Gibson: Regarding "strongly opposed to retaining the count while moving the position", does that mean that you think we should drop trailing zeros when formatting with `style: 'percent'`?
+
+[09:05:38.0177] <eemeli>
+And similarly, when using a different notattion than what's used in an input string?
+
+[09:05:44.0561] <Richard Gibson>
+do you have a concrete example?
+
+[09:06:24.0052] <eemeli>
+From the test suite:
+```
+const pf = new Intl.NumberFormat('en-US', {
+  style: 'percent',
+  maximumFractionDigits: 10,
+});
+
+assert.sameValue(pf.format('0.5000'), '50.00%');
+```
+
+[09:06:36.0150] <Ben Allen>
+Yay, thank you! I'll go over them and flesh them out (update the "recent changes" slide, etc). it'll be a good chance to catch up on everything that's happened while I've been focused on era monthcode
+
+[09:07:24.0641] <eemeli>
+Also:
+```
+const sf = new Intl.NumberFormat('en-US', { notation: 'scientific' });
+assert.sameValue(sf.format('0.01200'), '1.200E-2');
+```
+
+[09:07:29.0909] <Richard Gibson>
+that looks reasonable to me; `style: 'percent'` explicitly scales the input while `maximumFractionDigits` affects the _output_
+
+[09:08:22.0532] <Richard Gibson>
+also exactly right because it's preserving significant digits and not affecting fractional digits at all
+
+[09:09:16.0770] <eemeli>
+Richard Gibson: Ok, so the only problematic case is when we have a very small number like `1.23e-200` that we're formatting as some representation of zero, then?
+
+[09:09:40.0833] <Richard Gibson>
+that what it seems like to me
+
+[09:09:46.0335] <Richard Gibson>
+* that's what it seems like to me
+
+[09:10:25.0120] <eemeli>
+And you would prefer that we format that using whatever's the max precision.
+
+[09:15:44.0761] <eemeli>
+Richard Gibson: If the PR is otherwise acceptable, could I file an issue and work on a separate PR specifically about addressing that?
+
+[09:16:52.0748] <Richard Gibson>
+yes, I think that works. I'll re-review the current PR with an appropriate scope of changes.
+
+[09:18:32.0149] <eemeli>
+Thanks, that would be helpful. PR #10 is changing so much of the implementation that it might be easier for @sffc to review the whole of the proosal with it included, once the rendered spec text is available.
+
+[09:18:55.0135] <eemeli>
+* Thanks, that would be helpful. PR #10 is changing so much of the implementation that it might be easier for @sffc to review the whole of the proposal with it included, once the rendered spec text is available.
+
+[09:29:43.0926] <eemeli>
+Richard Gibson: https://github.com/tc39/proposal-intl-keep-trailing-zeros/issues/15
+
+[09:30:18.0960] <eemeli>
+* Thanks, that would be helpful. PR #10 is changing so much of the implementation that it might be easier for sffc to review the whole of the proposal with it included, once the rendered spec text is available.
+
+[10:07:47.0746] <eemeli>
+I went with a readme PR instead: https://github.com/tc39/proposal-amount/pull/86
+
+[10:10:51.0671] <Jesse>
+I've taken care of the review comments -- thanks eemeli !
+
+[10:10:57.0792] <Jesse>
+I was able to trim quite a lot
+
+[10:27:09.0285] <sffc>
+> <@eemeli:mozilla.org> Draft slides for Amount: https://docs.google.com/presentation/d/1SAD0bgB_SOWrtz1YZuySC4YHdMxBs0vTnS7buQa311c/edit?usp=sharing
+> 
+> Please request permissions as necessary; for now I added ecma402-delegates@chromium.org as editor.
+
+Cool. Worthwhile reiterating the motivation, with an emphasis now on this meeting a requirement for smart units
+
+[10:27:30.0025] <eemeli>
+Jesse: Gave you another review, https://github.com/tc39/proposal-amount/pull/85#pullrequestreview-3868361030
+
+[10:29:24.0888] <sffc>
+> <@jesse:igalia.com> when we say we want to use exponential notation for string-y Amounts, do we also convert things like `"123.456"` into `"1.23456e2"`?
+
+I think I prefer string decimals to be always normalized to this form; "10.00E2" and "1.000E3" and "1000" should be equal.
+
+[10:32:11.0968] <sffc>
+> <@eemeli:mozilla.org> Thanks, that would be helpful. PR #10 is changing so much of the implementation that it might be easier for sffc to review the whole of the proposal with it included, once the rendered spec text is available.
+
+Yes it seemed that way when I last looked. I would prefer to read the whole proposal in rendered form once you merge with Richard's approval
+
+[11:08:46.0542] <eemeli>
+A rendered view of the keep-trailing-zeros spec including PR #10's changes is currently available at https://eemeli.org/tc39-proposal-intl-keep-trailing-zeros/
+
+[11:38:32.0006] <Jesse>
+done!
+
+[11:57:51.0556] <eemeli>
+One more thing, then I think it's good. Note that I've not really looked at the Intl changes almost at all, as I trust that Shane will go through those when moving them to his proposal.
+
+I think I'm done for the day; will check in sometime tomorrow. I've submitted agenda items for keep-trailing-zeros and import-text; I trust that someone else will put one in for amount.
+
+[13:42:42.0956] <Jesse>
+took care of it!
+
+[13:42:51.0792] <Jesse>
+I'm also stepping away for today
+
+
+2026-02-28
+[23:03:59.0865] <eemeli>
+The agenda now includes a "Stage 2 Decimal update", and nothing on Amount. That seems... incorrect?
+
+[00:08:26.0328] <Jesse>
+on it -- that should say amount; nothing is planned for decimal
+
+[00:11:16.0528] <Jesse>
+ah there was both decimal _and_ amount. Should be just amount
+
+[00:12:03.0959] <Jesse>
+fixed
+
+[00:47:30.0048] <eemeli>
+Jesse: I approved https://github.com/tc39/proposal-amount/pull/85, after piling on some more changes to it.
+
+[00:52:24.0364] <eemeli>
+Oh, I'd not noticed the Amount one as I got stuck on the Decimal. I'm kinda dubious that 30 mins is enough; I think we should ask for an hour.
+
