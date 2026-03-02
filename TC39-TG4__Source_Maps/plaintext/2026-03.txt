@@ -1,0 +1,52 @@
+2026-03-01
+[11:18:05.0330] <Justin Ridgewell>
+[asumu](https://matrix.to/#/@atakikawa:igalia.com) can you link to those remapping slides you did a few weeks ago? I can only find the ones from Dec.
+
+[11:19:27.0744] <Nic>
+https://docs.google.com/presentation/d/1xMlkgiE-4PoFyqqJYw5XgZVmb6gMc8gSGqe7JWEC71k/edit?usp=sharing
+
+[11:20:27.0484] <Justin Ridgewell>
+Ty
+
+
+2026-03-02
+[23:30:43.0046] <Justin Ridgewell>
+Trying to implement the consumer side tests now. What does a `generatedPositionFor()` return when the regular mapping was a range?
+```
+const tracer = new TraceMap({
+  version: 3,
+  sources: ['input.js'],
+  sourceRoot: 'https://astexplorer.net/',
+  names: ['foo'],
+  mappings: 'AAAA', // (0, 0) -> (0, 0)
+  rangeMappings: 'B', // first mapping is range
+});
+
+const pos = generatedPositionFor(traceMap, {
+  source: 'input.js',
+  line: 2,
+  column: 2,
+});
+// ^?
+```
+
+[23:31:16.0855] <Justin Ridgewell>
+Do ranges cover original source code until the next mapping position in the original file?
+
+[23:59:07.0715] <Justin Ridgewell>
+The ranges could be differently sized. Eg, `AAAA,BAee` only covers 0 lines/1 column in generated code, but 15 lines/15 columns in original code.
+
+[00:47:32.0707] <Justin Ridgewell>
+This is even worse:
+```
+mappings: 'AAAA,BAee'
+rangeMappings: 'B'
+```
+
+
+[00:48:52.0580] <Justin Ridgewell>
+Doing `generatedPositionFor({ line: 1, column: 10 })` would return `{ line: 1, column: 10 }` offset from the range mapping, which is beyond the start of the `BAee` segement.
+
+[00:49:23.0188] <Justin Ridgewell>
+We have to cap these so that only 1 column (in this case) of source code is reverse mapped.
+
