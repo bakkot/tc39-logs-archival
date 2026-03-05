@@ -73,3 +73,144 @@ ideally champions only need maintain, but admin's fine on a proposal repo if nee
 [08:26:18.0122] <ljharb>
 (and nobody should have explicit read access, usually)
 
+
+2026-03-04
+[12:15:07.0885] <bakkot>
+instead of `function.sent`, what if `GeneratorPrototype.bindFirstNextToFirstArgument`:
+
+```
+const GeneratorProto = Object.getPrototypeOf(function*(){});
+
+GeneratorProto.bindFirstNextToFirstArgument = function () {
+  const genFn = this;
+  return function (...args) {
+    let realGen = null;
+
+    return {
+      next(value) {
+        if (realGen === null) {
+          realGen = genFn(value, ...args);
+          return realGen.next();
+        }
+        return realGen.next(value);
+      },
+      return(value) {
+        return (realGen ??= genFn(undefined, ...args)).return(value);
+      },
+      throw(err) {
+        return (realGen ??= genFn(undefined, ...args)).throw(err);
+      },
+      [Symbol.iterator]() {
+        return this;
+      },
+    };
+  };
+};
+
+// usage
+let wrapped = (function* (sent, x, y) {
+  console.log(x, y, sent);
+  yield 0;
+}).bindFirstNextToFirstArgument();
+
+let gen = wrapped(1, 2);
+let rv = gen.next('first'); // prints 'first', 1, 2
+console.log(rv.value); // prints 0
+```
+
+[12:16:57.0838] <Michael Ficarra>
+it wouldn't print `1, 2, 'first'`?
+
+[12:18:56.0230] <bakkot>
+sorry, yes, was messing with it and forgot to fix that
+
+[12:19:06.0576] <bakkot>
+* instead of `function.sent`, what if `GeneratorPrototype.bindFirstNextToFirstArgument`:
+
+```
+const GeneratorProto = Object.getPrototypeOf(function*(){});
+
+GeneratorProto.bindFirstNextToFirstArgument = function () {
+  const genFn = this;
+  return function (...args) {
+    let realGen = null;
+
+    return {
+      next(value) {
+        if (realGen === null) {
+          realGen = genFn(value, ...args);
+          return realGen.next();
+        }
+        return realGen.next(value);
+      },
+      return(value) {
+        return (realGen ??= genFn(undefined, ...args)).return(value);
+      },
+      throw(err) {
+        return (realGen ??= genFn(undefined, ...args)).throw(err);
+      },
+      [Symbol.iterator]() {
+        return this;
+      },
+    };
+  };
+};
+
+// usage
+let wrapped = (function* (sent, x, y) {
+  console.log(x, y, sent);
+  yield 0;
+}).bindFirstNextToFirstArgument();
+
+let gen = wrapped(1, 2);
+let rv = gen.next('first'); // prints 1, 2, 'first'
+console.log(rv.value); // prints 0
+```
+
+[12:19:07.0990] <bakkot>
+updated
+
+[15:24:58.0631] <rbuckton>
+I'm thinking of adding Regex Buffer Boundaries for Stage 2.7 as a late addition to the agenda. It's been sitting for 4 years waiting for reviewers for what is a *very* small proposal. Richard Gibson and waldemar signed up as reviewers in the December 2021 plenary, so if either of you have time to review by Friday, Michael Ficarra has already indicated to me that he should be able to review it. 
+
+[15:26:04.0207] <rbuckton>
+Aside from the minor addition to the syntactic grammar, the spec text is quite literally just this:
+
+
+2026-03-05
+[16:07:45.0513] <rbuckton>
+If we had [Parameter Decorators](https://github.com/tc39/proposal-class-method-parameter-decorators), we might be able to do something like this:
+
+```js
+function* gen(@Function.Sent sent, a, b) {
+  console.log(sent, a, b);
+}
+const g = gen(1, 2);
+g.next("z"); // prints "z 1 2"
+```
+
+[18:03:27.0714] <Chris de Almeida>
+Thank you all for contributing agenda items. We are now a bit over capacity. We have 17+ hours of content compared to 15.5 hours of capacity. Our goal is to not exceed the stated start and end times so folks can plan their day.
+
+Often we get through things a bit more quickly than planned, but some of the naturally lower priority items are likely to overflow.
+
+*Requests*
+
+If you think you may have over-sized your items, please consider decreasing their time boxes by sending PRs to the agenda.
+
+Equally, if you believe your item could skip this meeting and you are happy to defer it, you are welcome to mark it as Low Priority on the agenda to push it down the priority queue. This is all voluntary.
+
+[18:03:32.0564] <Chris de Almeida>
+* Thank you all for contributing agenda items. We are now a bit over capacity. We have 17+ hours of content compared to 15.5 hours of capacity. Our goal is to not exceed the stated start and end times so folks can plan their day.
+
+Often we get through things a bit more quickly than planned, but some of the naturally lower priority items are likely to overflow.
+
+__Requests__
+
+If you think you may have over-sized your items, please consider decreasing their time boxes by sending PRs to the agenda.
+
+Equally, if you believe your item could skip this meeting and you are happy to defer it, you are welcome to mark it as Low Priority on the agenda to push it down the priority queue. This is all voluntary.
+
+[19:18:55.0557] <James M Snell>
+If necessary we can possibly shave some time off the abort protocol discussion
+
