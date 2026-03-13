@@ -1691,3 +1691,768 @@ wait, are we finding out the objectively correct pronunciation *after* stage 4? 
 
 Poor Tom
 
+
+2026-03-12
+[04:20:29.0647] <James M Snell>
+For today's continuation discussion on TypedArray `concat` ... I've been able to update the problem statement in a way that addresses dminor's concerns but there's still enough of an open question around iterable support that I'm going to defer asking for Stage 2 and instead just see if we can settle some of the questions around iterable support as documented in this comment: https://github.com/tc39/proposal-typedarray-concat/issues/8#issuecomment-4045546879 ... mentioning here now so folks interested in the discussion might have some time to gather thoughts
+
+[04:24:47.0862] <James M Snell>
+Chris de Almeida or Rob Palmer ... if there's time on the agenda for another continuation, I *believe* that https://github.com/tc39/proposal-typedarray-findwithin/pull/9 should sufficiently address the discussion around TypedArray findWithin to move forward with the ask for Stage 2. Can I ask for a 15 minute continuation on it?
+
+[06:47:05.0940] <Michael Ficarra>
+@jasnell:matrix.org I'm really worried about `lastIndexOfSequence`. That sounds like it gives you the index at the end of the sequence. I think it should be `indexOfLastSequence` or something.
+
+[06:55:55.0931] <James M Snell>
+Fair
+
+[06:57:36.0619] <bakkot>
+I do not have the same intuition about those names fwiw
+
+[06:57:48.0674] <James M Snell>
+I'm terrible at naming so I'm happy to go with whatever suggestion seems the best to y'all so that's a change I can make :-)
+
+[06:57:57.0561] <bakkot>
+"last index of sequence" sounds like it gives the last index where the sequence is
+
+[06:58:00.0860] <bakkot>
+which... is what it does
+
+[06:59:27.0345] <Rob Palmer>
+The meeting is starting in 30 seconds!!!
+
+[06:59:46.0085] <peetk>
+seems ambiguous at best
+
+[06:59:52.0729] <Michael Ficarra>
+yeah the last index where the first occurrence of the sequence is
+
+[07:01:37.0920] <bakkot>
+if we didn't already have `lastIndexOf` I could maybe imagine having that intuition, but we do
+
+[07:06:11.0779] <James M Snell>
+alternative idea: drop the second operation entirely and allow a native (search from the end) position argument on...
+
+```
+haystack.indexOfSequence(needle, -10);  // search forward from 10 elements from the end, etc
+```
+
+[07:07:12.0198] <bakkot>
+`indexOf` already supports a negative index and it's very useful
+
+[07:07:37.0893] <bakkot>
+this is not a substitute for `lastIndexOf`
+
+[07:08:02.0069] <James M Snell>
+also fair.... hmm
+
+[07:09:49.0263] <James M Snell>
+from prior art, it's worth noting that in Node.js `Buffer`, they overload `indexOf`/`lastIndexOf` for this.. e.g. `Buffer.from('hellohello').lastIndexOf('hello') === 5`
+
+[07:10:16.0285] <James M Snell>
+not suggesting we do the same but `lastIndexOfSequence` would follow that existing pattern
+
+[07:15:25.0673] <nicolo-ribaudo>
+We just need some parentheses -- `haystack["last(IndexOfSequence)"](needle)`
+
+[07:16:30.0552] <James M Snell>
+haystack.findTheLastOccurrenceOfThisSequence(needle) ;-)
+
+[07:25:21.0705] <Michael Ficarra>
+@sffc:mozilla.org Correct, the entirety of the proposal aside from syntax can be implemented in a polyfill.
+
+[07:33:22.0370] <Justin Ridgewell>
+What happened to the room?
+
+[07:33:39.0735] <Justin Ridgewell>
+No audio no video
+
+[07:35:14.0323] <Rob Palmer>
+really
+
+[07:35:24.0967] <Elliot Goodrich>
+All good
+
+[07:35:40.0660] <Justin Ridgewell>
+It came back
+
+[07:38:44.0109] <Michael Ficarra>
+this seems like a good topic for TG5
+
+[07:41:29.0079] <Michael Ficarra>
+don't tempt me with a good time
+
+[07:41:41.0507] <Michael Ficarra>
+I looooove long descriptive method names and variable names
+
+[07:51:22.0263] <Michael Ficarra>
+* don't tempt me
+
+[07:53:20.0033] <James M Snell>
+heh.. ok, it does seem we have disagreement on this tho that we may need to get broader opinion on... the options it seems are either one of (a) lastIndexOfSequence or (b) indexOfLastSequence. Curious what others beyond Michael Ficarra and bakkot feel is the better / less ambiguous / less confusion choice
+
+[07:56:46.0572] <James M Snell>
+while folks are considering that... for TypedArray concat naming... I'm thinking of going with `%TypeArray%.fromList([...])`, `ArrayBuffer.fromList([...])`, and `SharedArrayBuffer.fromList([...])` since `concat` appears to not be workable
+
+[07:57:31.0984] <ptomato>
+yeah that's the same reasoning I've heard for why people don't like spies, and I came to a similar conclusion 😄
+
+[07:58:19.0864] <peetk>
+objectively (a) is ambiguous and (b) is not, although the degree to which the average developer is vulnerable to the ambiguity in (a) is an empirical question
+
+[07:59:00.0266] <peetk>
+maybe `locateSequence` and `locateLastSequence` avoids the issue?
+
+[08:01:29.0172] <nicolo-ribaudo>
+subsequentceIndex / subsequenceLastIndex?
+
+[08:01:44.0257] <nicolo-ribaudo>
+Ok no it's ambiguous 
+
+[08:01:54.0690] <nicolo-ribaudo>
+lastSubsequenceIndex
+
+[08:02:44.0514] <James M Snell>
+I do think it's likely better to keep a name that is closely similar to indexOf
+
+[08:04:04.0946] <peetk>
+then i would vote `indexOfLastSequence`
+
+[08:09:51.0983] <bakkot>
+please no. we have `lastIndexOf` already!
+
+[08:10:13.0935] <bakkot>
+`indexOf` / `lastIndexOf` // `indexOfSequence` / `indexOfLastSequence`? no! no!!!!
+
+[08:11:10.0675] <Olivier Flückiger>
+It's common that for performance critical operations we'll have different implementations and fast-paths in builtins depending e.g. on input types and so on.
+
+[08:11:39.0789] <Olivier Flückiger>
+That's before we would hit any kind of optimizing compiler, which is yet another story...
+
+[08:11:42.0918] <peetk>
+thousands would die!!
+
+[08:12:07.0272] <bakkot>
+thousands would correctly be mad at us anyway
+
+[08:12:49.0473] <peetk>
+consistency is good but avoiding ambiguity seems more important
+
+[08:12:54.0187] <Michael Ficarra>
+@gibson042:matrix.org The thing I was going to say is that this seems like a good research project. If we could teach esmeta how to set up initial conditions sufficient for reaching all paths taken through each AO, I think it could be made to auto-generate tests that are "exhaustive" in this way. We should talk to the esmeta people about it. Do you want to come to a TG5 meeting? /cc @mikbar-uib:matrix.org @jihyeok:matrix.org
+
+[08:13:20.0282] <bakkot>
+given the consistency there is no ambiguity
+
+[08:13:25.0690] <Richard Gibson>
+yes, that sounds great!
+
+[08:13:36.0597] <bakkot>
+also, no, consistency can be more important even then
+
+[08:13:42.0267] <Olivier Flückiger>
+⬆️ Richard Gibson 
+
+[08:15:07.0917] <peetk>
+well certainly no ambiguity for ecma-262 editors
+
+[08:15:54.0496] <peetk>
+can you elaborate on this
+
+[08:18:18.0462] <bakkot>
+> can you elaborate on this
+
+(sorry, moving out of thread because threads have a painful UI)
+
+ambiguity bites the first time you read it, but it's relatively easy to internalize. whereas inconsistency bites every single time because it is much harder to learn/remember an inconsistency
+
+[08:18:30.0254] <Ashley Claymore>
+fwiw I am +1 for checking in generated test cases. Instead of the fully runtime based harness.
+
+[08:24:26.0287] <peetk>
+i guess what i have in mind is a developer who uses this method extremely infrequently, and thus does not remember how the ambiguity resolved last time, but does have autocomplete in vscode. maybe if we're optimizing for power users the calculation is different
+
+[08:24:49.0078] <bakkot>
+I'm imaging readers, not writers
+
+[08:25:03.0962] <bakkot>
+for a reader, seeing `indexOfLastSequence` looks like a bug every time
+
+[08:25:23.0232] <Jihyeok Park>
+That sounds like a great direction! I'd be happy to join the TG5 meeting to discuss how we can bridge this research into a practical contribution for Test262.
+
+[08:26:16.0604] <James M Snell>
+I'm kind of leaning that way also. the more I look at it, the asymmetry between `indexOf/indexOfSequence` then `lastIndexOf/indexOfLastSequence` just feels very awkward
+
+[08:27:10.0086] <peetk>
+i do not share this intuition
+
+[08:33:06.0599] <bakkot>
+also
+
+[08:33:13.0523] <bakkot>
+we already have `String.prototype.lastIndexOf`
+
+[08:33:18.0049] <bakkot>
+which takes _a string_
+
+[08:33:25.0213] <bakkot>
+and returns the first index of the last occurence
+
+[08:33:32.0615] <bakkot>
+it is _exactly_ this method
+
+[08:34:34.0711] <rbuckton>
+If I am reading these in english, I think `indexOfSequence` is "Give me the index of this sequence", and `lastIndexOfSequence` means "Give me the last index of this sequence". `indexOfLastSequence` reads as "Give me the index of the last sequence"
+
+[08:35:04.0790] <Richard Gibson>
+if the name alignment is going to drift a bit anyway, that opens up room for things like `indexOfChunk`/`indexOfChunkFromEnd`
+
+[08:36:22.0068] <Richard Gibson>
+s/Chunk/Sequence/ to taste
+
+[08:36:27.0560] <Michael Ficarra>
+please don't use the word "chunk", I don't want to compromise the iterator helper methods
+
+[08:38:41.0235] <bakkot>
+go has `lastIndex` taking a sequence https://pkg.go.dev/bytes#LastIndex
+
+[08:38:57.0948] <bakkot>
+java has `lastIndexOfSubList` taking a list https://docs.oracle.com/javase/8/docs/api/java/util/Collections.html#lastIndexOfSubList-java.util.List-java.util.List-
+
+[08:39:01.0433] <Dmitry Makhnev>
+Regarding the question about the distance between Amsterdam and TU Delft: Google Maps says it takes approximately 1 hour 18–21 minutes: https://maps.app.goo.gl/rGzzqN5edC4AbfHB6
+We’re going to organize direct bus transfers from the JetBrains office to TU Delft and back. However, I’m planning to invite anyone interested to join a walk around Delft after TG5, to explore the city a bit more. Delft is really beautiful.
+
+[08:40:54.0584] <bakkot>
+C# also has lastIndexOf https://learn.microsoft.com/en-us/dotnet/api/system.memoryextensions.lastindexof?view=net-10.0#system-memoryextensions-lastindexof-1(system-readonlyspan((-0))-system-readonlyspan((-0)))
+
+[08:43:33.0111] <peetk>
+then i guess i prefer `indexOf`/`lastIndexOf` but i guess we've been over that already
+
+[08:44:09.0505] <James M Snell>
+So many possible colors for the bikeshed and all slightly the wrong hue
+
+[08:45:38.0295] <James M Snell>
+Actually... Michael Ficarra just pointed out that if we follow the precedent we just established with TypedArray concat with dropping Iterables from consideration... we probably *could* just go ahead and update `indexOf`/`lastIndexOf` to support sequences also and we don't have to worry about the naming of a new function... 
+
+[08:45:43.0705] <bakkot>
+scala has lastIndexOfSlice https://www.scala-lang.org/api/2.13.1/scala/collection/IndexedSeqView$$Slice.html#lastIndexOfSlice[B%3E:A](that:scala.collection.Seq[B]):Int
+
+[08:46:09.0414] <bakkot>
+what other languages even are there
+
+[08:46:15.0409] <bakkot>
+smalltalk has indexOfSubCollection
+
+[08:46:22.0873] <bakkot>
+but not last, I guess
+
+[08:48:14.0251] <Richard Gibson>
+I don't think so, this naming concern is based upon shape more generally—accepting a sequence of potentially multiple elements (however specified) rather than just a single element
+
+[08:49:06.0921] <rbuckton>
+I'd like to avoid using `Slice` as I still have hopes of us at some point having a form of `Slice` literal notation (`x:y`) to go with the array slice proposal `a[x:y]`
+
+[08:49:37.0708] <peetk>
+I think it was just intended as support for `lastIndexOfX` generally
+
+[08:49:44.0694] <Michael Ficarra>
+Can you clarify? I don't get this.
+
+[08:49:46.0246] <bakkot>
+even if we don't drop iterables? I don't think dropping iterables actually affects anything here, since TA `indexOf` uses strict comparison and does not coerce (and we agreed never to treat primitives as iterables)
+
+[08:50:24.0549] <bakkot>
+* even if we don't drop iterables, I think? I don't think dropping iterables actually affects anything here, since TA `indexOf` uses strict comparison and does not coerce (and we agreed never to treat primitives as iterables)
+
+[08:50:30.0453] <Michael Ficarra>
+no, only if we drop iterables/array-likes
+
+[08:50:34.0103] <rbuckton>
+IMO, `lastIndexOfSequence` is fine in a world where we have editors with autocomplete.
+
+[08:50:43.0310] <bakkot>
+why?
+
+[08:50:48.0540] <Richard Gibson>
+even with argument restriction to match the type of receiver, I'd still want a name that is not `indexOf`
+
+[08:51:31.0905] <bakkot>
+I'm imagining the branch being, argument is primitive -> current algorithm, is TA-> TA algorithm, is other object -> iterable algorithm
+
+[08:52:06.0836] <rbuckton>
+`indexOfX` implies getting the index of whatever `X` is. I don't see why we wouldn't want to use that.
+
+[08:53:04.0873] <bakkot>
+I can't tell if this is an argument for overloading `indexOf(sequence)` or having a separate `indexOfSequence(sequence)`
+
+[08:53:40.0897] <rbuckton>
+It's neither? It's an argument against choosing "a name that is not `indexOf`"
+
+[08:54:33.0425] <Aki>
+This has been a pet issue of mine for 20 years and I'm just delighted that someone is presenting on it
+
+[08:54:36.0780] <rbuckton>
+Unless that argument was specifically about not overloading `indexOf`, in which case I apologize for the misunderstanding
+
+[08:55:34.0854] <Michael Ficarra>
+is this because you don't like the overload between a number and a TA?
+
+[08:55:58.0976] <Richard Gibson>
+`indexOf` 👎️ `indexOf$Noun` 👍️ `lastIndexOf$Noun` 🆗
+
+[08:56:37.0686] <Michael Ficarra>
+@gibson042:matrix.org I want to understand your 👎️
+
+[08:56:41.0269] <Richard Gibson>
+yes, but not just that... I don't like the overload between "single element" and "sequence of elements"
+
+[08:56:47.0983] <rbuckton>
+I don't have a strong preference for or against overloading `indexOf`, given that `String` sort of sets a precedent, even if it's very narrow. 
+
+[08:57:34.0912] <Richard Gibson>
+`String.prototype.indexOf` accepts only a sequence, while `Array.prototype.indexOf` accepts only a single element
+
+[08:58:00.0783] <Michael Ficarra>
+no it doesn't, Strings are self-recursive structures
+
+[08:58:24.0262] <rbuckton>
+That's why I said "very narrow". You have to squint a bit. 
+
+[08:58:25.0204] <Richard Gibson>
+we're saying the same thing?
+
+[08:59:26.0282] <rbuckton>
+C#'s precedent for `String` is that it supports `string` or `char`: https://learn.microsoft.com/en-us/dotnet/api/system.string.indexof?view=net-10.0, so it's not unheard of in other languages.
+
+[09:00:48.0050] <bakkot>
+also for its generic span type
+
+[09:00:52.0141] <Richard Gibson>
+sure, but JS doesn't have the latter so 🤷
+
+[09:01:12.0340] <Michael Ficarra>
+oddly, this is more compelling precedent to me than JS's own `String.prototype.indexOf`
+
+[09:01:25.0500] <bakkot>
+C# has both `LastIndexOf<T>(Span<T>, ReadOnlySpan<T>)` and `LastIndexOf<T>(Span<T>, T)`
+
+[09:01:26.0892] <rbuckton>
+My point is that I don't believe users would be confused by the overload.
+
+[09:01:29.0710] <Michael Ficarra>
+it means users will get it, even when working with a good type system
+
+[09:02:09.0529] <bakkot>
+(to be clear I am ~neutral between overloading `indexOf` vs having a separate `indexOfSequence`, I think they're both totally fine)
+
+[09:02:24.0020] <rbuckton>
+Java's `String` also overloads `indexOf` for `string` and `char`
+
+[09:02:45.0458] <Richard Gibson>
+overloading makes *more* sense with a good type system, not less
+
+[09:03:05.0302] <rbuckton>
+* Java's `String` also overloads `indexOf` for `string` and `char` (well, `int`, but same purpose)
+
+[09:04:40.0030] <rbuckton>
+Go does not, but Go also doesn't really support overloads (aside from generics)
+
+[09:05:29.0300] <Michael Ficarra>
+I think we need to remind people that "clarifying question" is not "new topic that can be phrased as a question"
+
+[09:05:37.0164] <Michael Ficarra>
+it's been misused a couple times this meeting
+
+[09:06:21.0102] <Ashley Claymore>
+maybe "clarification required"
+
+[09:08:02.0383] <Michael Ficarra>
+the "I promise I am going to ask the speaker to clarify something that they've already said because I didn't understand it" button
+
+[09:09:31.0212] <Michael Ficarra>
+btw I don't buy the claim that they were able to measure post-interaction dead code synthetically
+
+[09:10:37.0382] <Michael Ficarra>
+"I clicked on everything" is just not sufficient methodology
+
+[09:10:54.0600] <Michael Ficarra>
+* "I had a bot click on everything" is just not sufficient methodology
+
+[09:11:34.0612] <bakkot>
+I wish we tried harder to make good minifiers, it's not actually hard to do better than we're doing
+
+[09:12:46.0403] <Michael Ficarra>
+still probably better for people to just write their code for DCE
+
+[09:12:49.0378] <Ashley Claymore>
+The issue I've had with minifiers is that the goal is "smallest" rather than "correct"
+
+[09:12:55.0836] <Ashley Claymore>
+* The issue I've had with minifiers is that the primary goal is "smallest" rather than "correct"
+
+[09:13:25.0769] <Ashley Claymore>
+minifier bugs that change logic be scary
+
+[09:13:27.0858] <Chengzhong Wu>
+As a library author, I think a question is also "how can I deterministically verify my code can be minifed?"
+
+[09:13:35.0517] <Michael Ficarra>
+Spill the tea. Name some names.
+
+[09:13:54.0367] <Ashley Claymore>
+can spill over tea
+
+[09:14:03.0791] <James M Snell>
+Node.js has precedence for this overload as well, which I think is fairly more significant here
+
+[09:14:20.0697] <James M Snell>
+`buffer.indexOf(otherBuffer)` and `buffer.lastIndexOf(otherBuffer)` already Just Works there
+
+[09:14:39.0721] <Jeff Posnick>
+FYI for folks who've never seen this before: the Web Almanac is an annual project that dives into data from the HTTP Archive. They have a section dedicated to Page Weight that's very relevant to this dicussion: https://almanac.httparchive.org/en/2025/page-weight
+
+[09:14:45.0135] <Michael Ficarra>
+that's *hugely* compelling @jasnell:matrix.org
+
+[09:16:06.0739] <bakkot>
+if people were willing to write their code in a different way in order to allow dead method removal, bundlers could implement a convention that a method prefixed with `__` is pinky-promised to only be invoked literally, so that `__foo` can safely be removed if `__foo()` never appears
+
+[09:16:38.0937] <bakkot>
+that this has not happened makes me somewhat skeptical of proposals of the form "let's give people a new way to write methods so they get DCE'd"
+
+[09:17:48.0142] <Ashley Claymore>
+bundler convention = vendor lock in
+
+[09:17:56.0293] <Ashley Claymore>
+standard = maybe better
+
+[09:18:17.0602] <bakkot>
+still would like an answer to this
+
+[09:19:09.0272] <bakkot>
+fair, though I think bundlers would probably be willing to collaborate on these things
+
+[09:19:12.0878] <bakkot>
+and/or copy each other
+
+[09:19:28.0138] <Michael Ficarra>
+it's a lot easier to explain that overload IMO
+
+[09:19:57.0570] <bakkot>
+... how so?
+
+[09:20:09.0832] <bakkot>
+value vs sequence is the natural way of thinking of it
+
+[09:20:14.0276] <bakkot>
+and that's the overload proposed
+
+[09:22:37.0028] <ljharb>
+rollup broke airbnb for IE 11 users in 2018 for like 3 months because one of its heuristics is "if it throws it can be deleted", which is false
+
+[09:23:05.0450] <bakkot>
+I'm sure both of them were very sad
+
+[09:23:09.0477] <ljharb>
+lol
+
+[09:23:36.0566] <bakkot>
+(this is a joke, I agree that's bad)
+
+[09:23:42.0712] <Michael Ficarra>
+if it was broken for 3 months, both IE11 users probably weren't using airbnb
+
+[09:23:56.0030] <bakkot>
+not by the end of those months I'm sure!
+
+[09:24:26.0646] <Michael Ficarra>
+easy solution for raising min browser support: drive away all your users who use old browsers
+
+[09:28:11.0701] <ljharb>
+we did the math and it was a meaningful revenue loss ¯\_(ツ)_/¯ rollup fixed it by accounting for the es5-shim and es6-shim patterns specifically, rather than just removing the heuristic
+
+[09:28:28.0213] <ljharb>
+* we did the math and it was a meaningful revenue loss ¯\\\_(ツ)\_/¯ rollup fixed it by accounting for the es5-shim and es6-shim patterns specifically, rather than just removing the heuristic
+
+[09:28:53.0350] <Ashley Claymore>
+Actual _"private symbols"_: https://github.com/tc39/proposal-private-declarations
+
+[09:30:18.0427] <bakkot>
+I want to bring that proposal back
+
+[09:30:19.0940] <bakkot>
+think it will be my next thing after async iterator helpers
+
+[09:30:21.0967] <bakkot>
+if no one else does it
+
+[09:30:43.0314] <bakkot>
+I do wish we'd required `private #x` in classes so we could have a clean way of referring to names declared outside a class, but alas
+
+[09:31:15.0110] <bakkot>
+(as it is, we're stuck with like `class { [#x] = foo }` or `class { outer #x = foo }` or something)
+
+[09:34:26.0392] <nicolo-ribaudo>
+Those proposals should probably start taking into account optional chaining too
+
+[09:34:35.0362] <nicolo-ribaudo>
+Since that's a nice benefit we currently get from property access
+
+[09:40:25.0441] <Ashley Claymore>
+I do want 'optional pipeline chain'
+
+[09:40:33.0272] <Ashley Claymore>
+(assuming we had pipeline)
+
+[09:41:18.0459] <nicolo-ribaudo>
+I like classes though, they are the most ergonomic way for private state
+
+[09:41:36.0495] <nicolo-ribaudo>
+I wouldn't want to consider them "deprecated"/"bad" as an official position 
+
+[09:42:33.0657] <ljharb>
+closed-over variables are pretty ergonomic, but private symbols would be nicer
+
+[09:42:54.0733] <bakkot>
+I assume the goal is private per-object state but shared methods
+
+[09:43:16.0806] <Michael Ficarra>
+who is speaking?
+
+[09:43:28.0434] <peetk>
+steve from cloudflare
+
+[09:43:38.0716] <Michael Ficarra>
+is that Steve's last name?
+
+[09:43:47.0799] <ljharb>
+only my father calls me Mr. From Cloudflare
+
+[09:43:56.0563] <peetk>
+faulkner
+
+[09:44:10.0818] <Michael Ficarra>
+Steve Faulkner (SFR)?
+
+[09:44:12.0843] <Michael Ficarra>
+okay thank you
+
+[09:45:09.0758] <Rob Palmer>
+We had bundle folk attend the November 2025 meeting in Tokyo.  Saphi-Red and Chris Nazakawa from VoidZero.
+
+[09:45:19.0747] <jschoi>
+The pipe operator proposal, for what it’s worth, already has a section devoted to `?|>` or `|?>` as a follow-up proposal.
+
+[09:45:20.0330] <Rob Palmer>
+* We had bundler folk attend the November 2025 meeting in Tokyo.  Saphi-Red and Chris Nazakawa from VoidZero.
+
+[09:45:41.0337] <jschoi>
+* The pipe operator proposal, for what it’s worth, already has a section devoted to `?|>` or `|?>` as a follow-up proposal. (Which could be extended to arbitrary functors, monads, etc., but let’s notn go there……)
+
+[09:45:44.0386] <jschoi>
+* The pipe operator proposal, for what it’s worth, already has a section devoted to `?|>` or `|?>` as a follow-up proposal. (Which could be extended to arbitrary functors, monads, etc., but let’s not go there……)
+
+[09:54:28.0228] <nicolo-ribaudo>
+bakkot Do you think Uint8Array is rare too?
+
+[09:54:38.0736] <nicolo-ribaudo>
+There are multiple common web APIs that produce it
+
+[09:54:43.0530] <bakkot>
+relatively speaking, yes, though getting less so
+
+[09:54:44.0033] <nicolo-ribaudo>
+I agree that all others are very rare
+
+[09:54:59.0547] <bakkot>
+I think TextEncoder is the only really common one
+
+[09:55:47.0612] <Michael Ficarra>
+can people online hear Rob?
+
+[09:56:43.0019] <bakkot>
+yes
+
+[09:57:37.0399] <Michael Ficarra>
+I am sure @saminahusain:matrix.org would prefer they just become a member though
+
+[09:57:55.0203] <Michael Ficarra>
+I hear Ecma's pretty desperate for new members
+
+[09:59:11.0826] <saminahusain>
+Desperate is a strong word...but would be happy to have new Ecma members. 👍️
+
+[10:43:34.0452] <bakkot>
+chairs: could we get 3 minutes for a continuation for iterator includes? we can take it out of my time slot
+
+[10:44:11.0840] <bakkot>
+re https://github.com/tc39/proposal-iterator-includes/pull/8 if anyone's curious
+
+[11:05:24.0646] <Rob Palmer>
+sure - we'll schedule it after your iterator includes, so it will be your responsibility to end it early enough.  4pm is a hard cut-off.
+
+[11:06:23.0977] <Rob Palmer>
+I assume you will not be asking for stage advancement in 3 mins
+
+[11:07:31.0081] <bakkot>
+it already got stage advancement, this is a bugfix for the spec text we just approved
+
+[11:29:21.0467] <bakkot>
+I still think we should make Object.prototype exotically reject `"then"`
+
+[11:44:21.0414] <dminor>
+Fwiw, I've been uncomfortable with these rapid advancements to Stage 2.7 for a while, and I think this is evidence that we should take things more slowly. Not that this was a big deal to fix, but I don't see what we're gaining by going as quickly as possible.
+
+[11:44:54.0081] <bakkot>
+a fair concern but fwiw I don't think waiting would have helped at all with this
+
+[11:45:02.0154] <bakkot>
+we've made the same mistake with slower ones
+
+[11:45:13.0478] <ljharb>
+ftr i didn't even catch it when implementing it
+
+[12:10:14.0295] <Michael Ficarra>
+yeah I really don't think pace had anything to do with it
+
+[12:10:41.0698] <Michael Ficarra>
+if we wanted to make it less likely to happen, we could insist on more eyes on reviews, but I think 2 reviewers strikes a good balance
+
+[12:19:40.0311] <Michael Ficarra>
+what about that callback keeps everything in the function alive?
+
+[12:20:12.0314] <Michael Ficarra>
+there's no direct eval
+
+[12:20:21.0370] <Chengzhong Wu>
+ecma262 does not keep everything in the function alive
+
+[12:20:37.0686] <Chengzhong Wu>
+* ecma262 callback does not keep everything in the function alive
+
+[12:20:43.0349] <Chengzhong Wu>
+* ecma262 callback does not keep everything in the function alive, technically
+
+[12:21:19.0677] <ljharb>
+it should only be keeping `promise` alive, i'd expect
+
+[12:22:49.0425] <Michael Ficarra>
+yeah same
+
+[12:23:25.0666] <Chengzhong Wu>
+* ecma262 callback does not require keeping everything in the function alive, technically
+
+[12:26:15.0433] <Lea Verou>
+Or preventExtensions altogether: https://es.discourse.group/t/automatic-preventextensions-on-object-prototype/2516
+
+[12:27:15.0080] <rbuckton>
+Could leverage AsyncContext.Variable for this. I just threw together a rough implementation using AsyncContext and AbortController that looks something like this:
+
+```js
+declare class Scope {
+    [Symbol.asyncDispose](): Promise<void>;
+    fork<R>(cb: () => R): Promise<R>;
+    static get hasExited(): boolean;
+
+    // DOM extension?
+    // static get signal(): AbortSignal;
+}
+
+async function f() {
+    await using scope = new Scope();
+    const a = scope.fork(async () => { ... if (Scope.hasExited) return; ... });
+    const b = scope.fork(async () => {});
+    const c = scope.fork(async () => {});
+    const [aa, bb, cc] = await Promise.all([a, b, c]);
+}
+```
+
+[12:32:24.0197] <rbuckton>
+That said, I'm not a huge fan of a general purpose "ambient AbortSignal" approach
+
+[12:33:55.0374] <Chengzhong Wu>
+would you count this Scope as "ambient AbortSignal" if it has the "DOM extension" as in the snippet above?
+
+[12:34:29.0485] <Chengzhong Wu>
+or are you referring to `AbortSignal.current`?
+
+[12:34:42.0716] <Chengzhong Wu>
+* or are you referring to sth like `AbortSignal.current`?
+
+[12:36:39.0836] <rbuckton>
+This is less bad than an ambient cancellation approach that just magically cancels things, so its slightly more palatable
+
+[12:37:55.0816] <Ashley Claymore>
+https://www.youtube.com/watch?v=h1GvSPaRQ-U&
+
+[12:49:39.0506] <rbuckton>
+A class that affords for explicit passing of a `signal` *and* collecting the waiting promises to await `Promise.allSettled` during cleanup might be interesting. 
+
+[12:58:27.0706] <rbuckton>
+No AsyncContext, just `Promise` enlistment tracking and a cleanup callback:
+```js
+const controller = new AbortController();
+const { signal } = controller;
+
+await using scope = new Scope(() => controller.abort());
+const [a, b, c] = await Promise.all([
+  scope.enlist(fetchUser(userId, { signal })),
+  scope.enlist(fetchOrders(userId, { signal })),
+  scope.enlist(fetchRecommendations(userId, { signal }))
+]);
+```
+
+[12:58:33.0200] <Evan Winslow>
+Yea, this is very fair. Best I can really say is "I have not yet been able to figure out how to execute this code" or rather than "we have definitively confirmed this code is unreachable by any sequence of interactions".
+
+[12:58:45.0385] <Evan Winslow>
+* Yea, this is very fair. Best I can really say is "I have not yet been able to figure out how to execute this code" rather than "we have definitively confirmed this code is unreachable by any sequence of interactions".
+
+[13:34:47.0816] <bakkot>
+it doesn't have to, it's just that it does in practice; engines capture at granularity of whole scopes, not individual variables
+
+[13:39:45.0808] <bakkot>
+I had something like this originally but I ended up thinking it was nicer for the functions to register themselves on the signal instead of the caller needing to wrap every function call
+
+[13:41:21.0959] <bakkot>
+could go either way though
+
+[14:21:41.0713] <bakkot>
+transcription service cost $1.88
+
+[14:22:07.0668] <ljharb>
+> <@bakkot:matrix.org> it doesn't have to, it's just that it does in practice; engines capture at granularity of whole scopes, not individual variables
+
+that is very surprising - it seems like in the “no direct eval, no with” cases you could just only hold on to every mentioned identifier in the closure. Why is that difficult to do? (genuine question since i don’t have engine impl experience)
+
+[14:22:25.0877] <bakkot>
+I'm not going to invoice ecma for that although if they want to give me the money which was going to pay for other people to do the transcript, I wouldn't be opposed
+
+[14:26:42.0807] <rbuckton>
+> <@bakkot:matrix.org> I had something like this originally but I ended up thinking it was nicer for the functions to register themselves on the signal instead of the caller needing to wrap every function call
+
+Unfortunately, registering on the signal doesn't help with awaiting all of the cleanup from those tasks
+
+[14:33:58.0615] <iain>
+re engines capturing scopes: I don't know what the original example was, but in practice the way it works is that you hold onto the entire closure if anything is using it, even if individual variables in the closure are no longer reachable. So if you have `function foo() { let a = {}; let b = {}; return [() => a, () => b]}` then the arrow functions will each keep both `a` and `b` alive, despite only technically needing one of them. The technical term here is "safe for space". All three engines have long-standing bugs open to fix this ([sm](https://bugzilla.mozilla.org/show_bug.cgi?id=894971), [v8](https://issues.chromium.org/issues/41070945), [jsc](https://bugs.webkit.org/show_bug.cgi?id=224077)), but it's hard to get right. It would effectively require us to track that a closure is only partially alive, which is not how the GC normally works, and there's lots of fiddly little cases.
+
+[14:35:29.0027] <iain>
+Note that variables are only captured in the closure if they're used in an inner function, so if you had a separate `let c = {}` in my example without a corresponding arrow function, it would not be kept alive.
+
+[14:47:46.0684] <Ashley Claymore>
+> <@bakkot:matrix.org> transcription service cost $1.88
+
+Wow! That's much less than I was expecting.
+the quality was great IMO
+
+[14:55:49.0881] <mgaudet>
+It was definitely 1.88$ worth of money 
+
+[14:58:11.0894] <mgaudet>
+(If anyone has opinions on how to opt into the 'deferred/safe' resolve semantics, I did find something which means we'd probably need to be tight on coercion for the second argument to the resolve function: https://github.com/tc39/proposal-thenable-curtailment/issues/9 
+
+[14:58:25.0197] <mgaudet>
+but with that I run away for EOD, enjoy y'alls evening in NY 
+

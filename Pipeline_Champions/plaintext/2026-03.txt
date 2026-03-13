@@ -1,0 +1,163 @@
+2026-03-12
+[09:58:10.0185] <jschoi>
+We had a brief conversation at plenary during Evan Winslow’s timely presentation about prioritizing bad dead code / good tree shakeability as a language-level design problem. 
+
+[09:58:17.0872] <jschoi>
+
+
+Chengzhong Wu brought up extension syntax for `this`-based standalone functions.
+
+
+[09:58:31.0406] <jschoi>
+I also brought up pipe operator vs. tree-shakeable methods.
+
+
+[09:58:46.0552] <jschoi>
+
+Evan Winslow said that he would like to talk with me more about how he sees pipe, etc. fitting in with his vision of improving dead code at the system level, so I’m inviting him to do so here.
+
+
+[09:59:02.0053] <jschoi>
+(hax (HE Shi-Jun) also responded at this time that F#-style pipe operator wouldn’t help with fluent chaining, which I didn’t quite understand—he might be referring to how F# pipes aren’t tacit. But, even if not tacit, at least F# improves the linearity by creating linear chains, which is probably the most important part of fluent chaining?)
+
+
+[09:59:35.0496] <jschoi>
+
+Steve Hicks also suggested that the pipe operator just overcome its bikeshedding and just pick an option to help the dead-code problem. And I am all for just ending the bikeshedding, picking something, and presenting it. (I think maybe `##` has the most support?)
+
+
+[09:59:45.0763] <rbuckton>
+F# pipes aren't tacit? Or do you mean hack pipes? 
+
+[09:59:48.0402] <jschoi>
+In addition to the bikeshedding, maybe the biggest barriers of for pipe operator was the idea that simple convenience syntax proposals didn’t carry their implementation weight  (e.g., “pipe should belong in the future JSSugar layer”). But, if we’re making dead-code elimination a language priority, maybe this proposal could overcome that barrier.
+
+[09:59:53.0165] <jschoi>
+Whoops, yes.
+
+[10:00:01.0109] <jschoi>
+* (hax (HE Shi-Jun) also responded at this time that Hack-style pipe operator wouldn’t help with fluent chaining, which I didn’t quite understand—he might be referring to how Hack pipes aren’t tacit. But, even if not tacit, at least F# improves the linearity by creating linear chains, which is probably the most important part of fluent chaining?)
+
+[10:00:03.0406] <jschoi>
+It’s been a while…
+
+[10:00:09.0983] <jschoi>
+* It’s been a while…I fixed it.
+
+[10:56:27.0200] <Evan Winslow>
+I interpreted hax' comment as "pipes aren't close enough to methods to move the needle. They are more attractive to existing function users, not existing class users". I would share that concern.
+
+[10:56:44.0128] <Evan Winslow>
+* I interpreted hax' comment as "pipes aren't close enough to methods to move the needle. They are more attractive to existing function users, not existing class users". I would share that concern...
+
+[11:10:48.0227] <Ashley Claymore>
+fwiw I'm not sure we have the concept of "language priorities". The committee is diverse and represent different stakeholders.
+
+[11:11:10.0337] <Ashley Claymore>
+i.e. I don't think this is any different to agreeing in Stage 1 that the problem is something we want to address
+
+[11:25:47.0132] <Evan Winslow>
+Ashley Claymore: sounds like cross-cutting concerns that might affect many proposals are just up to individual members to advocate for? Is there a canonical list of goals/considerations that delegates typically bring up? 
+
+[11:26:16.0363] <Ashley Claymore>
+that is not a list I have seen. Though one does live rent free in my head :D
+
+[11:29:02.0452] <Ashley Claymore>
+> "cross-cutting concerns that might affect many proposals are just up to individual members to advocate for?"
+
+That matches my feeling. A champion group advocates for something and the committee agrees and doesn't object
+
+[11:29:17.0540] <Ashley Claymore>
+and that goes into the notes for that meeting
+
+[11:45:41.0047] <jschoi>
+* (hax (HE Shi-Jun) also responded at this time that Hack-style pipe operator wouldn’t help with fluent chaining, which I didn’t quite understand—he might be referring to how Hack pipes aren’t tacit. But, even if not tacit, Hack pipes still improve the linearity by creating linear chains, which is probably the most important part of fluent chaining?)
+
+[11:47:02.0052] <jschoi>
+> <@ewinslow:matrix.org> Ashley Claymore: sounds like cross-cutting concerns that might affect many proposals are just up to individual members to advocate for? Is there a canonical list of goals/considerations that delegates typically bring up? 
+
+There was https://github.com/codehag/documenting-invariants, but that’s been dormant for a long time. 
+
+[12:03:28.0350] <Ashley Claymore>
+yep. though invariants are only the strictest form of 'priority'
+
+[12:03:36.0224] <Ashley Claymore>
+these are the things that won't change
+
+[12:03:41.0822] <Ashley Claymore>
+not what proposals we want to see
+
+[12:04:07.0155] <Ashley Claymore>
+* not what problems we want to see solutions for
+
+[12:04:12.0531] <Ashley Claymore>
+* not which problems we want to see solutions for
+
+[12:05:13.0682] <jschoi>
+She also was going for “Design Principles” too—there’s a section in the explainer for those—but, yeah.
+
+[12:07:36.0579] <jschoi>
+* She also was going for “Design Principles” too—there’s a section in the explainer for those—but, yeah, you’re right.
+
+[12:23:00.0816] <jschoi>
+Regarding how pipes "are more attractive to existing function users, not existing class users", it's true that pipes address a different style of dataflow. This is something that’s come up a lot:
+
+TC39 has been considering three* styles of “dataflow” and procedural programming.
+We have many JS APIs that use classes or prototype methods.
+And we have many JS APIs that use “static”/standalone functions. 
+(And there are also standalone `this`-using functions, which are currently relatively rare but which the call-this or extensions proposal would encourage. Jordan H. is passionate about this style.)
+
+JavaScript has long let that three-way style divergence out of the bag. So a perennial question we have is to what extent we should add syntax that encourages one style over others (There’s Only One [encouraged] Way to Do It, or TOOWTTI)—or add syntaxes that improve two or all three styles, perhaps with some overlap (There Is More Than One Way to Do It).
+
+If we want to improve tree-shaking with syntax, but we have a limited budget of new syntaxes, then we still face this choice between TOOWTTI and TIMTOWDI (and, if the latter, *which* ways?). But the fact remains that all approaches are already used in the wild.
+
+With that said, we’ve already seen at least one big API (Firebase) that switched from prototype methods to standalone functions—explicitly due to tree shakability. So there may already be an ongoing trend there migrating from one approach to another.
+
+[12:23:25.0155] <jschoi>
+* Actually, there is even a fourth style, tacit/point-free functional programming, which I happen to be a fan of. Tacit FP is what F# pipes, partial function application syntax, and Function.pipe would have encouraged. But several engine implementors have pushed strongly back on it due to concerns about hot-path function allocation, GC, and optimization complexity. This is an example of TC39 (or at least several very important members of it) actually *discouraging* one of the styles. We still have three styles left to consider. And the pipe operator works with higher-order functions, if you’re willing to attach an explicit call `(##)` to your HOF…
+
+[12:24:50.0424] <jschoi>
+Anyways, back in 2022, we had a series of articles about these different styles (list of links in <https://web.archive.org/web/20230602050536/https://jschoi.org/22/es-dataflow/>). No strong consensus was reached from these 2022 discussions other than:
+* “Some overlap is okay, but too much is bad; we have to decide this on a case-by-case basis.”
+* Mark Miller not wanting multiple new dataflow syntaxes.
+* Jordan H. reaffirming that he will block pipe if call-this does not also advance (not sure how he feels now).
+* And extensions and call-this being mutually exclusive. (I know that Hax continues to champion extensions, but I’m not sure if extensions have garnered further support since 2022. I’m also not sure what would happen to Jordan’s conditional blocking of pipelines if I try to present call-this but fail to advance it again.)
+
+[12:25:22.0139] <ljharb>
+oh noes, what happened to jschoi.org?
+
+[12:25:47.0577] <jschoi>
+Syntaxes for writing tree-shakeable methods would kind of fall in this overlap too, since it’s essentially an enhancement of the `.` member access syntax.
+
+
+[12:25:59.0869] <jschoi>
+I continue to hope that syntaxes enhancing all styles can be considered for implementation, in the name of encouraging tree-shakable code. For example, I think that syntaxes for writing tree-shakeable methods can easily coexist with a pipe operator; they address two of the three different styles.
+
+[12:26:39.0758] <jschoi>
+I used a nice Node-based host called Glitch.com, which got acquihired by Fastly and then killed. I’ve been too busy to update it due to research; I really should, though…
+
+[12:40:10.0672] <jschoi>
+Also Evan Winslow, I literally just saw your Discourse post from January on the "reshaping extensions" thread: https://es.discourse.group/t/reshaping-the-extensions-proposal/2439/24. Big foreshadowing to your talk today…
+
+[12:44:44.0581] <Evan Winslow>
+^_^ yup. I basically fleshed out that post and turned it into this talk
+
+[12:47:58.0392] <jschoi>
+Oh, dang, and there was even also relevant discussion on <https://github.com/tc39/proposal-call-this/issues/10#issuecomment-3765894544>. You’re pretty plugged into the related proposals. Sorry for not responding—research has been hectic.
+
+[12:48:06.0552] <jschoi>
+* Oh, dang, and there was even also relevant discussion on https://github.com/tc39/proposal-call-this/issues/10#issuecomment-3765894544. You’re pretty plugged into the related proposals. Sorry for not responding—work has been hectic.
+
+[12:51:11.0267] <Evan Winslow>
+No worries. We all have busy lives! I did want to respect all the discussion history that has already happened so I tried hard to read up on everything I possibly could.
+
+[12:54:12.0006] <jschoi>
+https://github.com/tc39/proposal-call-this/issues/12#issuecomment-3765070082
+
+> For my use case here, I don't see pipelines helping due to the loose precedence and plethora of sigils. I hope folks can be open to the idea that @js-choi has advanced that they can complement each other, rather than ruling each other out, even if there is some overlap for some use cases.
+
+Looks like you said much the same thing as this back in January. I agree it would be nice to have them all. It’s a matter of pushback from engines due to limited implementation budget and Waldemar’s and Mark Miller’s (reasonable) concerns about stewarding the unified language and pushing against complexity creep.
+
+[13:29:26.0230] <ljharb>
+ah yes, rip glitch
+
