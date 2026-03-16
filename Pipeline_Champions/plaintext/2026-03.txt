@@ -161,3 +161,333 @@ Looks like you said much the same thing as this back in January. I agree it woul
 [13:29:26.0230] <ljharb>
 ah yes, rip glitch
 
+
+2026-03-15
+[08:32:07.0608] <Evan Winslow>
+Two other proposals (protocols and structs) currently provide for a new way to define methods. We could simplify both of these considerably I think by just dropping the methods from them and deferring to call-this.
+
+[08:33:07.0735] <Evan Winslow>
+Regarding the conflict between call-this and extensions, I believe this can be resolved by removing one of the syntactic options from call this:
+
+[08:34:34.0218] <Evan Winslow>
+* Regarding the conflict between call-this and extensions, I believe this can be resolved by removing one of the syntactic options from call this: `o..ns.m()`. If we instead require this to be `o..(ns.m)()`, then there is no conflict.
+
+[08:36:41.0638] <Evan Winslow>
+I mean I was wondering if we could even get away with only allowing `o..m()` and not having a place for arbitrary expressions there at all. 
+
+[08:45:07.0050] <Evan Winslow>
+Then there's also the apparently steady stream of proposals for adding methods to built-in types. Having "extension methods" (via call-this) provides a compelling way to try things out without standard monkey-patching risks.
+
+[08:47:04.0889] <Evan Winslow>
+* I was wondering if we could get away with only allowing `o..m()` and not having a place for arbitrary expressions there at all. "Just use a temp variable" and all that.
+
+[08:47:32.0792] <Evan Winslow>
+* I was wondering if we could get away with only allowing `o..m()` and not having a place for arbitrary expressions there at all. "Just use a temporary const" and all that.
+
+[10:37:44.0457] <rbuckton>
+> <@jschoi:matrix.org> * Actually, there is even a fourth style, tacit/point-free functional programming, which I happen to be a fan of. Tacit FP is what F# pipes, partial function application syntax, and Function.pipe would have encouraged. But several engine implementors have pushed strongly back on it due to concerns about hot-path function allocation, GC, and optimization complexity. This is an example of TC39 (or at least several very important members of it) actually *discouraging* one of the styles. We still have three styles left to consider. And the pipe operator works with higher-order functions, if you’re willing to attach an explicit call `(##)` to your HOF…
+
+IMO, the likeliest case for hot path function allocation would have been `ar |> f(?)`, which could be optimized away *in the spec* and not just in implementations. Even then, pipes like this are more commonly *outside* of loops. Instead, it's the `f` that would contain the loop (i.e., `map`/`filter`/etc.).
+
+[10:40:13.0424] <rbuckton>
+Optimizing it away in spec could have been detecting ``PipelineExpression : LeftHandSideExpression `|>` PartialApplicationExpression`` in an SDO and transforming it to an immediate evaluation rather than a function allocation. 
+
+[10:44:28.0819] <rbuckton>
+That would cause issues with existing libraries preferring a mechanism for gradual adoption of shared structs in their codebase, as well as Shu's oroginal hopes for structs to be *better* classes due to their fixed layout and initialization order guarantees. Call-this would be a major impediment to adoption, IMO. 
+
+[11:31:34.0960] <jschoi>
+> <@ewinslow:matrix.org> Regarding the conflict between call-this and extensions, I believe this can be resolved by removing one of the syntactic options from call this: `o..ns.m()`. If we instead require this to be `o..(ns.m)()`, then there is no conflict.
+
+I’m open to requiring parentheses around property access chains in call-this’s RHS, in the spirit of compatibility with the extensions proposal. And it can always be added back in extensions continues to fail to progress. 
+I would also be interested to know how Jordan feels about it for his use cases.
+
+[11:31:43.0035] <jschoi>
+> <@ewinslow:matrix.org> I was wondering if we could get away with only allowing `o..m()` and not having a place for arbitrary expressions there at all. "Just use a temporary const" and all that.
+
+Is there a particular reason not to allow parenthesized arbitrary expressions in the RHS?
+
+[11:33:57.0787] <Evan Winslow>
+More examples:
+
+* RxJS went from Methods to HOF.
+* Angular team tells me they write their API in a weird way in order to be tree-shakable, though they don't like that they have to do that.
+* Zod library is method-based, and Valibot was created as a tree-shakable alternative.
+* `_.chain` from Lodash is method-based, but they of course export a whole separate library of tree-shakable functions also for people who want that.
+* Colors (by Lea Verou) has an OO-methods-based API but it's huge so they export a separate set of functions that are more tree-shakable. 
+
+So yes, I see a strong and consistent trend of people having method-based APIs then needing to back out and switch to function-based APIs for tree-shaking / performance.
+
+[11:35:36.0486] <Evan Winslow>
+And they all, to a fault, do it sacrificing ergonomics and going to functions, which are much more reliably tree-shakable, not by giving "hints" to bundlers to be more aggressive.
+
+[11:35:53.0705] <Evan Winslow>
+* And they all, to a fault, do it by sacrificing ergonomics and going to functions, which are much more reliably tree-shakable, not by giving "hints" to bundlers to be more aggressive.
+
+[11:38:31.0057] <Evan Winslow>
+And given all the articles online about "barrel files considered harmful" it is apparent to me that many, many folks are quite willing to change their code in order to get **reliable** tree-shaking. 
+
+[11:38:43.0046] <Evan Winslow>
+* And given all the articles online about "barrel files considered harmful" it is apparent to me that many, many folks are quite willing to change their code in order to get **more reliable** tree-shaking.
+
+[11:39:56.0647] <Evan Winslow>
+A commitment to aggressively simplifying the proposal in every conceivable way :)  
+
+[11:43:28.0163] <Evan Winslow>
+The way Jordan explained his use-case to me, it was all about defensiveness against mutated prototypes. So something like `myArr..Array.prototype.slice(...)` doesn't accomplish that anyways. Nor does `myArr..(Array.prototype.slice)(...)`. You need a top-level `const {slice} = Array.prototype;` and then later on invoke with `myArr..slice(...)`.
+
+[11:45:19.0577] <Evan Winslow>
+So maybe that is another reason to not have the `(expr)` option at all. But yes, would be great to hear from him directly.
+
+[11:50:13.0531] <Evan Winslow>
+Hmm, that would of course be disappointing. I guess I was hoping it would be the inverse -- `structs` lacking prototype methods would be one more motivation to switch existing libraries to tree-shakable methods. So you are just all around getting really really big performance benefits out of making the switch to better tree-shaking.
+
+[11:52:14.0619] <Evan Winslow>
+* Hmm, that would of course be disappointing. I guess I was hoping it would be the inverse -- `structs` lacking prototype methods would be one more motivation to switch existing libraries to tree-shakable methods. So you are just all around unlocking really really big performance benefits out of making the switch to better tree-shaking.
+
+[12:03:12.0756] <Evan Winslow>
+* So maybe that is another reason to not have the parenthesized `obj..(ns.m)()` option at all. But yes, would be great to hear from him directly.
+
+[12:03:30.0489] <Evan Winslow>
+* So maybe that is another reason to not have the parenthesized `o..(ns.m)()` option at all. But yes, would be great to hear from him directly.
+
+[12:09:13.0724] <Evan Winslow>
+One reason in favor of leaving the parenthesized RHS syntax is actually bundlers: To faithfully represent ESM semantics, they tend to do property access on the module object. So you end up seeing a lot of `(0, ns.fn)(...args)` in the bundled code to simulate calling a named import without accidentally setting `this` to the module object `ns`
+
+[12:09:55.0969] <Evan Winslow>
+* One reason in favor of leaving the parenthesized RHS syntax is actually bundlers: To faithfully represent ESM semantics, they tend to lazily do property access on the module object. So you end up seeing a lot of `(0, ns.fn)(...args)` in the bundled code to simulate calling a named import without accidentally setting `this` to the module object `ns`
+
+[12:22:05.0361] <rbuckton>
+One of the requirements we have for structs is the ability to maintain private state, which can only be accessed by methods and functions declared on the `struct` itself, just as on classes. 
+Struct methods currently have some unique differences to class methods which are intended to be improvements over normal class methods, however. For one, struct instance methods are intended to have a fixed `this` type that is enforced at runtime so as to reduce polymorphism. In addition, shared structs are currently specified to only be legal at the top level of a module, so no `shared struct` expressions or `shared struct` declarations inside functions or blocks. This means that `shared struct` methods are guaranteed to be placed on a declaration at the top level, which will help improve static analysis of these methods as a knock-on effect.
+
+[12:30:01.0715] <rbuckton>
+Awhile back I suggested we consider introducing a `Symbol.geti`/`Symbol.seti` protocol in conjunction with slice/index-from-end notation, which could be defined on an object intended to be used as a key. I wonder if something like that could be leveraged to allow you to just use a function as a key: `myArr[Array.prototype.slice](...)`
+
+[12:36:49.0997] <Evan Winslow>
+Ah, interesting. Can you say more? Which object would have the `Symbol.geti` and what would be the implementation?
+
+[12:37:10.0348] <Evan Winslow>
+* Ah, interesting. Can you say more? Which object would have the `Symbol.geti`? `myArr` or `slice`? and what would be the implementation?
+
+[12:37:21.0902] <rbuckton>
+The idea was that you could have a `Slice` class and an `Index` class that supported these symbols, and that you could use `x:y` literal syntax to produce a `Slice` and `^x` syntax to produce an `Index` computed from the end of an array, such that the following are equivalent:
+```js
+myArr[0:1];
+myArr[new Slice(0, 1)];
+new Slice(0, 1)[Symbol.geti](myArr);
+
+myArr[^1];
+myArr[new Index(1, true /*fromEnd*/)];
+new Index(1, true)[Symbol.geti](myArr);
+```
+
+A `Symbol.geti` for a function could just be a call to `bind`:
+
+```js
+myArr[Array.prototype.slice](1, 2);
+Array.prototype.slice[Symbol.geti](myArr)(1, 2);
+Array.prototype.slice.bind(myArr)(1, 2);
+```
+
+Or a possible `Symbol.calli` could intercept invocation:
+```js
+myArr[Array.prototype.slice](1, 2);
+Array.prototype.slice[Symbol.calli](myArr, 1, 2);
+```
+
+
+[12:38:20.0507] <rbuckton>
+`slice` would, or rather, any function would. The symbol just avoids depending on `bind` or `call` directly to avoid the issue with `then` we see with `Promise`.
+
+[12:39:42.0292] <rbuckton>
+The downside is that putting it on all functions would possibly change existing behavior, in which case some other token would be necessary to opt in. i.e., `myArr[::Array.prototype.slice](1, 2)`, or similar.
+
+[12:40:43.0438] <rbuckton>
+either way, you need to use something like `()` or `[]` to bracket the expression. This just sticks to using `[]` since that's familiar to JS users.
+
+[12:40:43.0863] <Evan Winslow>
+Urf, right, because `myArr[sliceFn]` already means `myArr[String(sliceFn)]`?
+
+[12:40:50.0679] <rbuckton>
+Yeah.
+
+[12:42:54.0164] <rbuckton>
+But this could be as simple as a wrapper function. i.e., if we had `Symbol.geti` already, someone could just write:
+```js
+const wrap = f => ({ [Symbol.geti]: obj => f.bind(obj) });
+
+myArr[wrap(Array.prototype.slice)](1, 2);
+```
+
+[12:44:54.0650] <rbuckton>
+The intermediate object and the call to `.bind` are obvious downsides, however.
+
+[12:46:02.0593] <rbuckton>
+I wonder how often people actually try to use a function as a key in an object.
+
+[12:49:18.0064] <Evan Winslow>
+I had not seen or considered this idea of making `o[fn]()` work before. Although it technically has an existing meaning, maybe there's a chance no one uses it like that... I will write it down as an alternative to consider.
+
+[12:50:55.0380] <Evan Winslow>
+Oh I guess another potential concern here is "this would slow down all existing `[]` access, since they would all have to first check for `Symbol.calli/geti/seti` now.
+
+[12:51:08.0176] <Evan Winslow>
+* Oh I guess another potential concern here is "this would slow down all existing `[]` access," since they would all have to first check for `Symbol.calli/geti/seti` now.
+
+[13:06:17.0466] <Evan Winslow>
+Ah interesting! I was just musing with Ashley Claymore plenary about a potential new syntax for declaring extension methods that would grant access to private state, but in a tree-shakable way. And I also imagined enforcing the `this` type. I wasn't sure if that would be too much of a performance penalty (runtime checks being expensive) or a performance win (megamorphic functions trigger their own special kind of slow). Let me find it...
+
+[13:06:40.0239] <jschoi>
+I recall that they were concerned about observably different stack traces making optimizations like that complex or not possible. You might remember what happened there better than me.
+
+[13:08:54.0758] <rbuckton>
+I don't think it would, actually. We would only resolve `geti` on objects, so it wouldn't effect string, symbol, and number, which are the lion's share of uses. Anything else already requires a user-code carve out for `toString`
+
+[13:09:07.0480] <Evan Winslow>
+```
+
+[13:09:41.0879] <Evan Winslow>
+* class C {
+  #x = Math.random();
+  #y = Math.random();
+}
+
+extends C {
+  length() {
+    return Math.sqrt(this.#x**2 + this.#y**2);
+  }
+}
+
+console.log(new C()..length())
+
+[13:10:01.0927] <Evan Winslow>
+* ```
+class C {
+  #x = Math.random();
+  #y = Math.random();
+}
+
+extends C {
+  length() {
+    return Math.sqrt(this.#x**2 + this.#y**2);
+  }
+}
+
+console.log(new C()..length())
+```
+
+[13:10:08.0364] <Evan Winslow>
+* ```ts
+class C {
+  #x = Math.random();
+  #y = Math.random();
+}
+
+extends C {
+  length() {
+    return Math.sqrt(this.#x**2 + this.#y**2);
+  }
+}
+
+console.log(new C()..length())
+```
+
+[13:12:10.0876] <rbuckton>
+You don't want just anyone to be able to reopen your class and access your private state. It defeats the purpose of strong privacy. 
+
+[13:12:34.0158] <Evan Winslow>
+Correct. So this would be scope-limited
+
+[13:12:59.0783] <rbuckton>
+I considered `WeakMap` with `geti`/`seti`, but that wouldn't work for structs. 
+
+[13:13:10.0655] <Evan Winslow>
+E.g.
+
+```ts
+import {C} from '...';
+
+extends C {
+  length() { this.#x } // lol no, syntax error, go away
+}
+```
+
+[13:16:03.0057] <Evan Winslow>
+I'm curious how you envisioned enforcing the `this` type at runtime without too much performance penalty?
+
+[13:16:39.0001] <Evan Winslow>
+Is it just a basic `instanceof` check or something fancier?
+
+[13:16:59.0358] <rbuckton>
+If you're in the same scope, you don't need those if we already have `static {}`:
+
+
+```
+let getX;
+class C {
+  x = ...;
+  static { getX = c => c.#x; }
+}
+
+C.prototype.length = function () { return getX(this); };
+```
+
+
+[13:17:34.0763] <rbuckton>
+Shared structs have a fixed shape. If the `this` does have the same fixed shape it throws. 
+
+[13:20:07.0859] <Evan Winslow>
+Interesting. So the browser has maybe some cache of the shape for the struct, which cannot be changed. Technically, two structs with the same shape could share each other's methods, but then why would you do that because your struct already has the needed method?
+
+[13:20:14.0571] <Evan Winslow>
+* So the browser has maybe some cache of the shape for the struct, which cannot be changed. Technically, two structs with the same shape could share each other's methods, but then why would you do that because your struct already has the needed method?
+
+[13:22:53.0219] <Evan Winslow>
+Yea I do see how it's already possible but this seems like exactly the kind of case where people will go, "nah, I'll just do the convenient non-tree-shakable thing instead"
+
+[13:23:01.0550] <Evan Winslow>
+* Yea I do see how it's already possible but this seems like exactly the kind of case where people will go, "nah, I'll just do the much more convenient non-tree-shakable thing instead"
+
+[13:25:05.0580] <rbuckton>
+> <@ewinslow:matrix.org> So the browser has maybe some cache of the shape for the struct, which cannot be changed. Technically, two structs with the same shape could share each other's methods, but then why would you do that because your struct already has the needed method?
+
+There is a type identity tied to the shape, which is used to handle prototypes across threads. You also don't want a third party to emulate your shape to access your private state. 
+
+[13:27:05.0650] <rbuckton>
+The way it is set up, the only way to access shared state across threads in a shared struct is using a function/method of the struct loaded from the same file in two agents
+
+[14:25:42.0051] <Ashley Claymore>
+> <@rbuckton:matrix.org> If you're in the same scope, you don't need those if we already have `static {}`:
+> 
+> 
+> ```
+> let getX;
+> class C {
+>   x = ...;
+>   static { getX = c => c.#x; }
+> }
+> 
+> C.prototype.length = function () { return getX(this); };
+> ```
+> 
+
+The idea is to be able to move "methods" out of the declaration so they are exported and imported separately making tree shaking almost trivial.
+https://gist.github.com/acutmore/e08fad716e0369dfa0341bde8b8e17d9
+
+
+2026-03-16
+[17:46:52.0723] <Evan Winslow>
+Did "pipe should belong in the future jssugar layer" block advancement to stage 3?
+
+[17:49:04.0473] <Evan Winslow>
+For me, if people are willing to write tools to transpile it, that is a huge win. E.g.  if TS supports it by default. Because that means people can start learning about it and writing code to take advantage of it. 
+
+[17:51:00.0181] <Evan Winslow>
+For call-this, native browser support would probably bring some marginal performance benefit. For pipeline, I can't imagine there'd be any difference.
+
+[02:00:46.0073] <Ashley Claymore>
+One small issue with `obj[fn]' is that sites polyfilling the feature would need to transform almost all dynamic index syntax as they won't know which arguments use the new feature.
+
+[02:01:36.0015] <Ashley Claymore>
+Personally I feel like it would be better to have new syntax rather than overload the existing space.
+
