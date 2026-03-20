@@ -590,3 +590,805 @@ structs seem completely orthogonal to me
 
 I'm blanking. What's the potential bug with the open paren?
 
+[07:35:03.0782] <jschoi>
+> <@ewinslow:matrix.org> Another bit of feedback that was mentioned during plenary was "will new syntax actually be attractive enough to induce people to switch"? Given that it's a key premise I think it is entirely fair question and I want to do some due diligence to validate that assumption. I'm planning to reach out to a couple of the libraries I mentioned in my talk and get a pulse from their maintainers and engaged community members on call this and hack pipeline.
+
+
+I agree that community outreach here would be useful.
+
+The pipe operator README already has a lot of examples of turning deeply nested expressions into linear ones, so that might be helpful for outreach. The big argument is that making an expression a little longer with an explicit `##`is worth it if it means you no longer have to read back and forth from left to right or keep track of matching parentheses. In other words, for dataflow fluency, linearity matters more than tacitness.
+
+Call-this and this-based standalone functions are also a tree-shakeable alternative in a lot of cases, and they preserve that tacit style. But they’re less flexible, since they do not help linearize ordinary functions like Array.from (very common), array or object literals (very common), spread syntax, await, arithmetic, and so on. Still, some API designers and developers may prefer call-this to pipe operator, in worlds where we must choose one between them. I’d be interested to hear what they think. 
+
+[07:36:54.0340] <jschoi>
+> <@aclaymore:matrix.org> example of the "current" (3yrs ago) push back from consumers when a library (Firebase) moved to functions:
+> https://www.reddit.com/r/Firebase/s/j9rJJa0YsB
+> 
+> 
+> > Things just take longer to program. They are backwards.
+> 
+> firestore.collection('users').doc(userId)
+> 
+> is a million times better and more logical than
+> 
+> doc(collection(getFirestore(), 'users'), userId)
+> 
+> This is not even mentioning that you need to KNOW the names of these functions in order to import them.
+> 
+> I don't know what the Firebase team was thinking here. Surely there must have been some better solution that attempting to turn the entire mindset of programming upside down.
+> 
+> 
+> 
+> 
+> 
+
+Maybe we should add some Firebase examples to the pipe readme…
+
+I do think the “you need to KNOW the names of these functions in order to import them” remark kind of funny. Is that not also true for ordinary methods?
+
+[08:00:35.0188] <jschoi>
+I do know that at least one prominent API designer, Ben Lesh of RxJS, went in that direction too: he redesigned RxJS around standalone ordinary functions. Back then, he was very enthusiastic about F# pipes for tacit functional programming and reacted very negatively to Hack pipes trading tacitness for explicitness. When engine implementers pushed back on F# pipes, he became broadly disillusioned with TC39, with strong language. He has even said he would prefer that nothing be added to the language rather than Hack pipes. 
+
+Even though I like tacit FP, I still do not fully understand why he feels that strongly about needing tacitness, rather than reading linearity. Anyways, you might also encounter his opinions or similar opinions from other people in the community. It would still be good input. 
+
+[09:05:21.0973] <Evan Winslow>
+Autocomplete helps with method names a lot. You can get a list of methods without knowing any names at all. Just `.` and you're on your way. The dot is powerful...
+
+[09:10:12.0172] <Evan Winslow>
+I should also say that "Works with lots of existing expressions and functions" is not a motivation for me, because those are already tree shakable. The impact of our effort here on tree shaking depends specifically on convincing would be method users to do something more tree shakable instead.
+
+[09:21:46.0351] <jschoi>
+* I do know that at least one prominent API designer, Ben Lesh of RxJS, went in that direction too: he redesigned RxJS around standalone ordinary functions. Back then, he was very enthusiastic about F# pipes for tacit functional programming and reacted very negatively to Hack pipes trading tacitness for explicitness. When engine implementers pushed back on F# pipes, he became broadly disillusioned with TC39, with strong language. He has even said he would prefer that nothing be added to the language rather than Hack pipes.
+
+Even though I like Ben Lesh’s work, and I like tacit FP, I still do not fully understand why he feels that strongly about needing tacitness, rather than reading linearity. Anyways, you might also encounter his opinions or similar opinions from other people in the community. It would still be good input.
+
+[09:29:02.0578] <jschoi>
+Ordinary functions are already tree-shakeable, but they are not ergonomic because ordinary function calls are not linear. They are prefix forms, so they often lead to deeply nested expressions, lots of parenthesis tracking, and a back-and-forth reading pattern.
+
+And from what you found, the main complaint about Firebase’s move to ordinary functions for tree-shakeability was that they were harder to read, right? A perceived loss of fluency in reading dataflow expressions—probably due to loss of linearity, and perhaps loss of tacitness.
+
+[09:32:32.0386] <Evan Winslow>
+Ok so we should connect those dots more explicitly:
+
+[09:33:56.0832] <Evan Winslow>
+* Ok so we should connect those dots more explicitly: "makes the existing corpus of standalone functions more attractive to method users" or something like that.
+
+[09:34:56.0793] <jschoi>
+Yes, that’s right.
+
+The link between the pipe operator and tree-shakeability is that pipes could make tree-shakeable code more appealing by making ordinary-function APIs easier to read and use. The idea is to answer complaints that `doc(collection(getFirestore(), 'users'), userId)` feels “a million times [worse] and [less] logical” than `firestore.collection('users').doc(userId)` by making the former writable as `getFirestore() |> collection(##, 'users') |> doc(##, userId)`.
+
+So the real question is whether gaining linearity, even without tacitness, improves fluency enough that developers would be more willing to adopt tree-shakeable ordinary-function APIs.
+
+
+[09:35:48.0902] <jschoi>
+…While at the same time also pursuing call-this in parallel, and trying to figure out how much “overlap” the engine implementors are willing to accommodate. There’s already more than one way to do it in JavaScript…
+
+[09:36:24.0145] <jschoi>
+* …While at the same time also pursuing call-this in parallel, and trying to figure out how much “overlap” the engine implementors (and stewardship-minded folk like Mark Miller) are willing to accommodate. There’s already more than one way to do it in JavaScript…
+
+[09:42:06.0821] <jschoi>
+I’d like to give call-this another good shot, too, in the name of “this is a common pattern” and “it might encourage people to write more tree-shakeable code and decrease web dead code”. And because Jordan is very concerned that pipe operator would kill call-this.But, even though I am a co-champion of both pipe operator and call-this, if I had to choose one, I would personally rather live in a world with pipe operator than with call-this.
+
+[09:42:20.0673] <jschoi>
+* I’d like to give call-this another good shot, too, in the name of “this is a common pattern” and “it might encourage people to write more tree-shakeable code and decrease web dead code”. And also because Jordan is concerned that pipe operator would kill call-this.
+But, even though I am a co-champion of both pipe operator and call-this, if I had to choose one, I would personally rather live in a world with pipe operator than with call-this.
+
+[09:42:31.0624] <jschoi>
+* I’d like to give call-this another good shot, first, in the name of “this is a common pattern” and “it might encourage people to write more tree-shakeable code and decrease web dead code”. And also because Jordan is concerned that pipe operator would kill call-this.
+But, even though I am a co-champion of both pipe operator and call-this, if I had to choose one, I would personally rather live in a world with pipe operator than with call-this.
+
+[09:42:44.0063] <jschoi>
+* I’d like to first give call-this another good shot, in the name of “this is a common pattern” and “it might encourage people to write more tree-shakeable code and decrease web dead code”. And also because Jordan is concerned that pipe operator would kill call-this.
+But, even though I am a co-champion of both pipe operator and call-this, if I had to choose one, I would personally rather live in a world with pipe operator than with call-this.
+
+[10:03:12.0123] <jschoi>
+* I’d like to first give call-this another good shot, in the name of “this is a common pattern” and “it might encourage people to write more tree-shakeable code and decrease web dead code”. And also because Jordan is concerned that pipe operator would kill call-this. 
+But, if I had to choose one, I would personally rather live in a world with pipe operator than with call-this.
+
+[10:27:00.0216] <Evan Winslow>
+> theres not much benefit to calling a custom method on a number literal 
+
+1 ..seconds() // Temporal duration, woot!
+
+[10:27:09.0505] <Evan Winslow>
+* > theres not much benefit to calling a custom method on a number literal
+
+```js
+1 ..seconds() // Temporal duration, woot!
+```
+
+[10:29:04.0279] <Evan Winslow>
+* > theres not much benefit to calling a custom method on a number literal
+
+```js
+10 ..seconds() // Temporal duration, woot!
+```
+
+[10:38:08.0698] <Evan Winslow>
+* > theres not much benefit to calling a custom method on a number literal
+
+I use number-literal extension methods in Kotlin most often for creating durations.
+
+```js
+10 ..seconds() // Temporal duration, woot!
+```
+
+So... I suspect this could definitely become a thing in JS too, although it requires a new helper method. If the autocomplete gets as good as I hope it can, that won't be very much hindrance at all.
+
+[10:57:16.0914] <Evan Winslow>
+So far this pattern does seem to be exceedingly rare in practice. I can only found low-thousands of potential matches on GitHub and many of them appear to be people just figuring out what that even does (e.g. `console.log(1..toFixed(0))`) or built code rather than source code. Compare to high 10s of millions for `this` and arrow functions, each. I probably would want my auto-formatter to wrap it in parens or something instead: e.g `(1).toFixed()` but I just so rarely ever see methods called on number literals in the first place.
+
+[11:46:47.0000] <Ashley Claymore>
+> <@ewinslow:matrix.org> > theres not much benefit to calling a custom method on a number literal
+> 
+> I use number-literal extension methods in Kotlin most often for creating durations.
+> 
+> ```js
+> 10 ..seconds() // Temporal duration, woot!
+> ```
+> 
+> So... I suspect this could definitely become a thing in JS too, although it requires a new helper method. If the autocomplete gets as good as I hope it can, that won't be very much hindrance at all.
+
+Sure. Though `seconds(10)` is not that bad.
+chaining is great as it avoids deeply nesting. But a number literal can only be at the start.
+
+[11:46:55.0423] <Evan Winslow>
+My assumption is currently that pipeline will be attractive to X% and call-this will be attractive to X+Y%. I would like to get a better feel for the magnitudes of X and Y. 
+
+X is small + Y is small = do neither. Neither will make a meaningful difference.
+X is large + Y is small = Just do pipeline. It's more generally applicable and call-this provides only marginal benefit to end users.
+X is small + Y is large = do call-this. Pipeline won't move the needle but call-this will.
+X is large + Y is large = do call-this, then maybe pipeline if it somehow interests a different set of method-users.
+
+[11:47:38.0139] <Evan Winslow>
+* My assumption is currently that pipeline will be attractive to X% and call-this will be attractive to X+Y%. I would like to get a better feel for the magnitudes of X and Y. 
+
+X is small + Y is small = do neither. Neither will make a meaningful difference.
+X is large + Y is small = Just do pipeline. It's more generally applicable and call-this provides only marginal additional benefit to end users.
+X is small + Y is large = do call-this. Pipeline won't move the needle but call-this will.
+X is large + Y is large = do call-this, then maybe pipeline if it interests a different set of method-users.
+
+[11:48:41.0679] <Evan Winslow>
+Probably % of users is not quite right either, since not all JS authors affect web traffic equally...
+
+[11:48:57.0468] <Evan Winslow>
+* Probably % of users is not quite right either, since not all JS authors affect web traffic equally... I dunno this is hard hahaha
+
+[11:48:57.0832] <Ashley Claymore>
+RxJs is also an example of the exact code engines we're worried about. Every RxJs operator allocates the functor with the bound arguments for the pipe to then  pass in the observable 
+
+[11:51:18.0705] <Ashley Claymore>
+Pipe can't be proposed for stage 3 (or 2.7). The design is still in draft.
+
+[11:52:03.0439] <Ashley Claymore>
+We need to have a theoretically finished spec with no expected changes sans test/implementation feedback
+
+[13:01:16.0908] <Evan Winslow>
+* So far this pattern does seem to be exceedingly rare in practice. I can only find low-thousands of potential matches on GitHub and many of them appear to be people just figuring out what that even does (e.g. `console.log(1..toFixed(0))`) or built code rather than source code. Compare to high 10s of millions for `this` and arrow functions, each. I probably would want my auto-formatter to wrap it in parens or something instead: e.g `(1).toFixed()` but I just so rarely ever see methods called on number literals in the first place.
+
+[14:16:53.0274] <Justin Ridgewell>
+If structs are like classes and define methods, then they're the same
+
+[14:17:14.0720] <Justin Ridgewell>
+Dynamic lookup of methods defeats static DCE, which is what we're hoping to target
+
+[14:37:30.0464] <Justin Ridgewell>
+Note that this approach doesn't solve the "have to know the name to import it" argument. Having a known position (either first arg, or `this` binding) would.
+
+[14:39:12.0944] <Justin Ridgewell>
+F# also doesn't solve this, because you have to complete the closure call to know what function is being invoked by the pipeline
+
+[14:40:24.0805] <Justin Ridgewell>
+I'd really like to pursue Elixir style (to support known arg position, auto imports, tacitness, and fluency), with PFA layered on (to support any arg position)
+
+[15:25:28.0699] <Evan Winslow>
+Okay thank you for saying so. So far every time I brought up elixir I just get baffled looks so I hadn't been planning on pursuing it further. But I'm open to it if you think it's worth making the case. It certainly a side steps the this-hesitancy issue nicely
+
+
+2026-03-20
+[19:03:08.0518] <jschoi>
+> <@ewinslow:matrix.org> My assumption is currently that pipeline will be attractive to X% and call-this will be attractive to X+Y%. I would like to get a better feel for the magnitudes of X and Y. 
+> 
+> X is small + Y is small = do neither. Neither will make a meaningful difference.
+> X is large + Y is small = Just do pipeline. It's more generally applicable and call-this provides only marginal additional benefit to end users.
+> X is small + Y is large = do call-this. Pipeline won't move the needle but call-this will.
+> X is large + Y is large = do call-this, then maybe pipeline if it interests a different set of method-users.
+
+It‘s probably more like a Venn diagram with some overlap: X%+Y%+Z%, where Y% is the overlap between pipe operator and call-this. A lot of people have expressed interest in the pipe operator but not call-this over the years, even disregarding code-shaking as a motivation. I don’t quite think pipe-attracted people are a subset of call-this-attracted people. With that said, it’s true that we have not, to my knowledge, pitted them head-to-head in front of the community. 
+
+Well, actually, I *think* prior State of JS surveys have maybe asked developers about both proposals when assessing their interest in various TC39 proposals.
+I’d need to double-check the prior years’ results…but I’m not really looking forward to doing so. It’s a good resource, but I find the State of JS websites difficult to navigate…
+
+[19:16:54.0863] <jschoi>
+> <@jridgewell:matrix.org> I'd really like to pursue Elixir style (to support known arg position, auto imports, tacitness, and fluency), with PFA layered on (to support any arg position)
+
+The point that Elixir pipes (but not F# pipes or Hack pipes) would support autocompletion on the first argument is intriguing. I wonder if autocompletion would have changed Daniel Ehrenberg’s decision to use F# pipes instead of Elixir pipes, back in 2017 (nearly a decade ago…).
+
+Though I don’t know if I really want to wade through that whole pipe-style bikeshedding ordeal again. Weren’t quite a few people against promoting the zeroth argument to be special, even with PFA syntax?
+And then there were the engine concerns with PFA syntax and optimizability of observable stack traces, etc.
+
+[19:17:15.0366] <jschoi>
+Well, I suppose call-this could also serve that role of providing tree-shakeability, fluency, *and* autocompletion. And that Reddit comment about Firebase’s change makes it clear that at least some developers feel strongly about autocompletion too. This makes me more torn about that statement I made earlier about rather having Hack pipes than call-this.
+
+I suppose that, even in a world where call-this makes `this`-based standalone functions more common, the pipe operation could still be useful…because non-`this`-based standalone functions like Array.from are not ever going away. But the engine implementers are likely not to agree.
+
+[19:20:50.0679] <jschoi>
+* Well, I suppose call-this could also serve that role of providing tree-shakeability, fluency, and autocompletion. And that Reddit comment about Firebase’s change makes it clear that at least some developers feel strongly about autocompletion too. This makes me more torn about that statement I made earlier about rather having Hack pipes than call-this.
+I suppose that, even in a world where call-this makes this-based standalone functions more common, the pipe operation could still be useful…because non-this-based standalone functions like Array.from, Object.keys, etc. are not ever going away. But the engine implementers are likely not to agree.
+
+[19:22:51.0906] <Justin Ridgewell>
+I think we dismissed Elixir without really discussing its merits originally. There are definitely delegates that dislike the special first arg behavior, but there are also those that dislike `this` binding behavior too.
+
+Re PFA and optimizing, I don't think this will be a concern the way it is with F#. Using PFA directly within a pipeline is optimizable, but we've only talked about PFA with F# and F# promotes any type of closure-returning function call.
+
+[19:23:27.0035] <Justin Ridgewell>
+You could abuse Elixir to generate F# closure pipelines, but it actively resists it.
+
+[19:25:25.0465] <Justin Ridgewell>
+* You could abuse Elixir to generate F# closure pipelines, but it actively resists it. (You would have to put trailing `foo(arg)()` to generate an F# single param style call)
+
+[19:26:26.0861] <jschoi>
+From NPM:
+```
+// Status quo:
+const json = await npmFetch.json(npa(pkgs[0]).escapedName, opts);
+// With Hack pipes:
+const json = pkgs[0] |> npa(##).escapedName |> await npmFetch.json(##, opts);
+// With Elixir pipes, assuming it allows a `|> await memberExpression()` form:
+const json = (pkgs[0] |> npa()).escapedName |> await npmFetch.json(opts);
+// With call-this:
+// Can’t change it.
+
+[19:26:53.0440] <jschoi>
+* Using the pipe readme’s example from `node/deps/npm/lib/unpublish.js`:
+// Status quo:const json = await npmFetch.json(npa(pkgs[0]).escapedName, opts);// With Hack pipes:const json = pkgs[0] |> npa(##).escapedName |> await npmFetch.json(##, opts);// With Elixir pipes, assuming it allows a `|> await memberExpression()` form:const json = (pkgs[0] |> npa()).escapedName |> await npmFetch.json(opts);// With call-this:// Can’t change it.
+
+[19:26:54.0500] <Justin Ridgewell>
+But, I'd settle for any of Hack/Elixir/Call pipelines. I would like multiple, but I don't know if we'll get that.
+
+[19:27:06.0702] <jschoi>
+* Using the pipe readme’s example from `node/deps/npm/lib/unpublish.js`:
+```js // Status quo: const json = await npmFetch.json(npa(pkgs[0]).escapedName, opts); // With Hack pipes: const json = pkgs[0] |> npa(##).escapedName |> await npmFetch.json(##, opts); // With Elixir pipes, assuming it allows a |> await memberExpression() form: const json = (pkgs[0] |> npa()).escapedName |> await npmFetch.json(opts); // With call-this: // Can’t change it.
+```
+
+[19:29:57.0680] <jschoi>
+…I’m trying this again; Element’s message editing is so unreliable. From inside NPM’s code:
+```js
+// Status quo:
+const json = await npmFetch.json(npa(pkgs[0]).escapedName, opts);
+// With Hack pipes
+const json = pkgs[0] |> npa(##).escapedName |> await npmFetch.json(##, opts);
+// With Elixir pipes, assuming that it supports a `|> await memberExpression(arg0)` form:
+const json = (pkgs[0] |> npa()).escapedName |> await npmFetch.json(opts);
+```
+
+[19:31:41.0357] <jschoi>
+* …I’m trying this again; Element’s message editing is so unreliable. From inside NPM’s code:
+
+```js
+// Status quo:
+const json = await npmFetch.json(
+  npa(pkgs[0]).escapedName,
+  opts,
+);
+// With Hack pipes
+const json = pkgs[0]
+|> npa(##).escapedName
+|> await npmFetch.json(##, opts);
+// With Elixir pipes,
+// assuming that it supports a `|> await memberExpression(arg0)` form:
+const json = (pkgs[0] |> npa()).escapedName
+|> await npmFetch.json(opts);
+```
+
+[19:37:11.0253] <Justin Ridgewell>
+Nit: we could support tacit `pkgs[0] |> npa`.
+
+But yes, running arbitrary expressions is a little more difficult, and likely pushes some to do `getEsapedName` helpers or similar.
+
+And `await`/`yield` could be handled as either special behavior inline, or a postfix `|> await |>` so we don't redefine the expression inline.
+
+[19:37:22.0163] <Justin Ridgewell>
+* Nit: we could support tacit `pkgs[0] |> npa`.
+
+But yes, running arbitrary expressions is a little more difficult, and likely pushes some to do `getEsapedName` helpers or similar.
+
+And `await`/`yield` could be handled as either special behavior inline, or a postfix `|> await |> …` so we don't redefine the expression inline.
+
+[19:39:18.0516] <jschoi>
+Double checking [HISTORY.md](https://github.com/tc39/proposal-pipeline-operator/blob/main/HISTORY.md#20172018), it looks like Dan ran into automatic semicolon insertion problems with `|> await`, which is why he tried to defer it to a future proposal.
+
+[19:40:02.0875] <jschoi>
+…Times like this is why I’m glad I wrote this document back then…
+
+[19:40:24.0950] <Justin Ridgewell>
+Very good job! This is sooo long ago I can barely remember.
+
+[19:40:45.0753] <Justin Ridgewell>
+Of course ASI is biting us 🙄
+
+[19:42:51.0079] <rbuckton>
+> <@jridgewell:matrix.org> F# also doesn't solve this, because you have to complete the closure call to know what function is being invoked by the pipeline
+
+What do you mean by "complete the closure call" in this case? I'd venture to guess that with F#-style and PFA, the majority of use cases would have been `|> f(?, a, b)` anyways since *most* functional libraries for JS are first-arg (aside from Ramda). 
+
+[19:45:49.0260] <Justin Ridgewell>
+That was from me trying Rx pipelines. You'd do `x |> foo(a, b)`, which means you wrote a ton of code before we could figure out what you're doing.
+
+Even with `x |> foo(?)`, you still need to write `foo(` before we can figure out where you're placing the arg and how filter the possible set of functions.
+
+[19:46:17.0042] <Justin Ridgewell>
+With Elixir style, `x |> f` is enough to start filtering for functions starting with `f` that receive `x` type
+
+[19:46:24.0147] <rbuckton>
+From an autocomplete perspective, a language like TS could prioritize completions for F#-style based the topic type first by tacit functions, then by functions that could accept the topic in any position (and possibly complete with `f(_, ?)` for non-first-arg cases with the cursor at the `_`) 
+
+[19:53:00.0957] <rbuckton>
+Brian Terlson and I were discussing pipelines the day before a plenary back in 2017/2018, I think? One of our concerns at the time was that either Elixir style pipes primarily favored first-arg based libraries like lodash/underscore at the expense of last-arg based libraries like Ramda, which would essentially "choose a winner" in that space, which would likely result in significant community backlash. My solution to the issue was F#-style pipes with PFA as it applied equally to both camps.
+
+[19:53:12.0232] <rbuckton>
+* Brian Terlson and I were discussing pipelines the day before a plenary back in 2017/2018, I think? One of our concerns at the time was that Elixir style pipes primarily favored first-arg based libraries like lodash/underscore at the expense of last-arg based libraries like Ramda, which would essentially "choose a winner" in that space, which would likely result in significant community backlash. My solution to the issue was F#-style pipes with PFA as it applied equally to both camps.
+
+[19:54:49.0235] <rbuckton>
+There's also the potential for confusion by not supplying a first-arg when pipeline is involved, i.e.: 
+
+```js
+map(ar, x => x + 1)
+// vs
+ar |> map(x => x +1)
+```
+as these two calls to the same function could potentially live side-by-side in the same file.
+
+[19:56:35.0997] <rbuckton>
+The upside of PFA is that it kept that intuition as to argument placement. The argument didn't just disappear because I'm using `|>`:
+
+```js
+const mapped = map(ar, x => x + 1);
+// vs
+const mapper = map(?, x => x + 1);
+const mapped = mapper(ar);
+// vs
+const mapped = ar |> map(?, x => x + 1);
+```
+All three styles could be used interchangeably in the same file without confusing users as to argument order.
+
+
+
+[19:58:24.0537] <rbuckton>
+Ramda essentially avoids this because Ramda functions curry, so they set the expectation that partial application results in a bound function:
+
+```js
+add(1, 2); // 3
+add(1)(2); // 3
+add()(1)(2); // 3
+```
+Each of these produces the same result, so it builds an intuition for the developer as to how arguments are applied.
+
+[19:59:10.0613] <rbuckton>
+Elixir style pipes don't provide any such intuition. There's nothing special about the function your calling (i.e., no currying), only the `|>` syntax, so it doesn't carry over to any other aspect of the language.
+
+[19:59:33.0355] <rbuckton>
+It's just one corner-case of the language that does this unique thing, so its far less intuitive.
+
+[19:59:43.0745] <Justin Ridgewell>
+In my experience, first arg is the most common, and the way I personally write my libraries. But with PFA, Elixir handles every case as well as Hack or F#.
+
+[20:00:38.0651] <jschoi>
+This is good context for HISTORY.md. I should add it to the file.
+
+[20:00:43.0946] <Justin Ridgewell>
+Half of the battle with Hack is the topic token. Why didn't we just ban PFA inside pipeline and use the same `?` token?
+
+[20:00:53.0293] <rbuckton>
+Yes, all the pipe styles can (mostly) accomplish the same things. My point is that Elixir pipes are unintuitive.
+
+[20:01:50.0100] <Justin Ridgewell>
+I mean, I would call F#'s auto call style unintuitive, too. It's just which one you get used to using.
+
+[20:01:52.0027] <rbuckton>
+I've never really been a fan of Hack style. IMO, while I think PFA has some value on its own, its case is severely weakened by lack of support in pipelines.
+
+[20:02:00.0410] <rbuckton>
+Auto-call?
+
+[20:02:10.0978] <rbuckton>
+you mean `x |> F` is `F(x)`?
+
+[20:02:21.0459] <Justin Ridgewell>
+`x |> foo(a, b)` does `foo(a, b)(x)`
+
+[20:02:22.0923] <rbuckton>
+That's what the `|>` *means* in F#
+
+[20:02:40.0467] <rbuckton>
+It's the same intuition behind `@` in decorators
+
+[20:02:51.0598] <Justin Ridgewell>
+And this is what it means in Elixir. Both of them are foreign to JS, neither is intuitive.
+
+[20:03:55.0964] <Justin Ridgewell>
+You just learn the syntax and then it becomes intuitive after using it enough. I think we can get the community to adopt either style.
+
+[20:04:19.0809] <rbuckton>
+I still believe F#-style has a very low learning curve. F#-style could be explained without magical argument placement, even without PFA, and PFA could be explained without F#, but they work best together.
+
+[20:04:34.0193] <Justin Ridgewell>
+The benefit to Elixir is that it won't suffer from the performance regressions promoted by closure allocs.
+
+[20:04:56.0320] <rbuckton>
+In F#-style `|>` is just function application. Call the thing on the right with the argument on the left. F# even has multiple-argument styles for `|>`
+
+[20:05:39.0341] <rbuckton>
+F#-style doesn't need closure allocs when used with PFA. Those can be statically replaced with an immediate call, and could even be specified as such.
+
+[20:06:10.0035] <rbuckton>
+`x |> f(?)` is easily evaluated without a closure
+
+[20:06:28.0841] <jschoi>
+Yes, in the end, that was the part that was important. The engines just did not want to encourage more hot function allocation. They want people to name their functions or to use callbacks that are very simple to optimize. With Elixir or Hack pipes, you cannot do `x |> f(y)` to mean `f(y)(x)`, and, for the engines, this is an advantage. They might have been fine with it if F# pipes restricted the RHS side to a member expression?
+
+[20:06:39.0782] <rbuckton>
+And so is `x |> f`
+
+[20:07:15.0705] <jschoi>
+* Yes, in the end, that was the part that was important. The engines just did not want to encourage more hot function allocation. They want people to name their functions or to use callbacks that are very simple to optimize. With Elixir or Hack pipes, you cannot do `x |> f(y)` to mean `f(y)(x)`, and, for the engines, this is an advantage. They might have been fine with it if F# pipes restricted the RHS side to a member expression like ` |> f` or `|> NS.f`?
+
+[20:07:17.0544] <rbuckton>
+You only really need to produce a closure for `f(?)` on its own
+
+[20:08:05.0019] <jschoi>
+It’s true that autocompletion engines could use a zeroth-argument-is-probably-the-principle-type heuristic on F# pipes, switching to the next argument’s type. With F# pipes and PFA syntax, as soon as I type `x |>`, my editor’s autocompletion engine could assume that I’m going to type `x |> f(?` or something similar, and it could show completions for standalone functions that expect `x`’s type in its zeroth place. And, if I then type `x |> f(0,` instead, then it can switch to the next argument’s type. Just as a heuristic.
+
+…And this would be true even for Hack pipes, too, wouldn’t it? If I type `x |>`, and we were using Hack pipes, the engine could *also* use the same heuristic. It could show functions that expect `x`’s in their zeroth place. So, actually, Justin, I might have changed my mind again thanks to Ron, haha. I think Hack pipes probably are fine for autocompletion.
+
+In any case…it’s this part that’s important. The engines just did not want to encourage more hot function allocation. They want named functions. With Elixir or Hack pipes, you cannot do `x |> f(y)` to mean `f(y)(x)`, and this is an advantage for the engines.
+
+
+[20:08:26.0547] <jschoi>
+* It’s true that autocompletion engines could use a zeroth-argument-is-probably-the-principle-type heuristic on F# pipes, switching to the next argument’s type. With F# pipes and PFA syntax, as soon as I type `x |>`, my editor’s autocompletion engine could assume that I’m going to type `x |> f(?` or something similar, and it could show completions for standalone functions that expect `x`’s type in its zeroth place. And, if I then type `x |> f(0,` instead, then it can switch to the next argument’s type. Just as a heuristic.
+
+…And this would be true even for Hack pipes, too, wouldn’t it? If I type `x |>`, and we were using Hack pipes, the engine could _also_ use the same heuristic. It could show functions that expect `x`’s in their zeroth place. So, actually, Justin, I might have changed my mind again thanks to Ron, haha. I think Hack pipes probably are fine for autocompletion.
+
+[20:09:18.0283] <Justin Ridgewell>
+I don't think this is the style that F#'s syntax promotes, though. You _can_ do this, but there's the subtle push towards `f` without explicitly placing the arg.
+
+[20:09:49.0147] <jschoi>
+* It’s true that autocompletion engines could use a zeroth-argument-is-probably-the-principle-type heuristic on F# pipes, switching to the next argument’s type. With F# pipes and PFA syntax, as soon as I type `x |>`, my editor’s autocompletion engine could assume that I’m going to type `x |> f(?` or something similar, and it could show completions for standalone functions that expect `x`’s type at its zeroth parameter. And, if I then type `x |> f(0,` instead, then it can switch to the next argument’s type. Just as a heuristic.
+
+…And this would be true even for Hack pipes, too, wouldn’t it? If I type `x |>`, and we were using Hack pipes, the engine could _also_ use the same heuristic. It could show functions that expect `x`’s type at their zeroth parameters. So, actually, Justin, I might have changed my mind again thanks to Ron, haha. I think Hack pipes probably are fine for autocompletion.
+
+[20:10:42.0771] <rbuckton>
+I think the engines concerns about `f(?)` may have been a bit over cautious. You're less likely to see `x |> f(?)` in a tight loop, as it's usually the `f` in this scenario that has the loop (i.e., `map`, `filter`, `reduce`, etc.). You'd be producing no more closures than you normally would with the arrow in `map(x, a => ...)`
+
+[20:12:11.0358] <Justin Ridgewell>
+It's definitely RX.js that scared them. I agree that PFA inline a pipeline wouldn't be an issue.
+
+[20:12:16.0752] <rbuckton>
+F#+PFA definitely promotes `x |> f(?)` as the majority case. `x |> f` is far less frequent, and introduces no closure on its own. The other cases for PFA on its own are no worse than `=>` today.
+
+[20:13:47.0919] <rbuckton>
+If Rx.js had PFA, it would arguably be no worse than `=>` since Rx.js consumers were going to use `=>` anyways. All PFA does is reduce the second-guessing about closed over variables. In a way, it *reduces* closures since it evaluates the arguments immediately and only holds the values (like `.bind`).
+
+[20:14:34.0983] <Justin Ridgewell>
+I don't agree. If I'm writing `x |> foo(?, a, b, c)`, do I really want to place the arg? If I just wrote `x |> foo(a, b, c)` and returned a closure, it shaves the chars… I think that's the subtle push that doesn't happen with other styles.
+
+[20:19:38.0268] <jschoi>
+* It’s true that autocompletion engines could use a zeroth-argument-is-probably-the-principle-type heuristic on F# pipes, switching to the next argument’s type. With F# pipes and PFA syntax, as soon as I type `x |>`, my editor’s autocompletion engine could assume that I’m going to type `x |> f(?` or something similar, and it could show completions for standalone functions that expect `x`’s type at their zeroth parameters (followed by functions that expected `x`’s type at their first parameters, then second parameters, etc.). Just as a heuristic.
+
+…And this would be true even for Hack pipes, too, wouldn’t it? If I type `x |>`, and we were using Hack pipes, the engine could _also_ use the same heuristic. It could show functions that expect `x`’s type at their zeroth parameters (and then first, second, etc.). So, actually, Justin, I might have changed my mind again thanks to Ron, haha. I think Hack pipes probably are fine for autocompletion.
+
+[20:27:08.0692] <rbuckton>
+Sure, if you are the author of `foo` and don't mind the overhead of returning a closure, then maybe `x |> foo(a, b, c)` seems like a win. Performance wise, it isn't.
+PFA gives you the *option* to produce a function and allows you to use *existing* functions that were not designed for currying. F#-style support for tacit functions promotes *reuse* rather than one-off closures:
+
+```js
+// F#+PFA
+const add = (x, y) => x + y;
+
+add(1, 2); // no closure
+
+ar |> add(?, 1); // no need for closure
+
+const addOne = add(?, 1);
+
+ar1 |> addOne;
+ar2 |> addOne; // reused
+
+// vs F#-style with only function-returning functions
+const add = x => y => x + y;
+
+add(1)(2); // produces short-lived closure
+
+ar |> add(1); // produces short-lived closure
+
+const addOne = add(1);
+ar1 |> addOne;
+ar2 |> addOne; // reused
+```
+PFA is good for all three cases. Function returning is only good for one case.
+
+
+[20:33:44.0641] <Justin Ridgewell>
+> don't mind the overhead of returning a closure, then maybe x |> foo(a, b, c) seems like a win. Performance wise, it isn't.
+
+We know this, but are library authors? I have done horribly inefficient things in the name of clean looking code when I was a novice.
+
+[20:35:05.0634] <Justin Ridgewell>
+But I agree with you about PFA. I want it in the language, and I hope it's enough to overcome the subtle push.
+
+[20:35:27.0721] <Justin Ridgewell>
+* > don't mind the overhead of returning a closure, then maybe x |> foo(a, b, c) seems like a win. Performance wise, it isn't.
+
+We know this, but will library authors? I have done horribly inefficient things in the name of clean looking code when I was a novice.
+
+[20:37:40.0817] <Justin Ridgewell>
+Like, look at Chai.js style syntax chaining 🙈
+
+[20:38:12.0579] <rbuckton>
+I'm personally not sold on Hack-style's premise that people want to use `|>` to operate purely on the topic, i.e. `x |> # + #`. Function pipeline allows you to perform higher-order operations. We can already do `x + x`, and you can emulate Hack-style pipes with `,`, so it doesn't really add anything to the language, IMO.
+
+[20:40:29.0805] <rbuckton>
+```js
+// Hack-style
+x = ar
+    |> f(#)
+    |> # + #;
+
+// Plain-old JS
+var _;
+x = _ = ar,
+    _ = f(_),
+    _ = _ + _;
+```
+
+[20:41:18.0233] <rbuckton>
+or if you want it to look all sigil-y:
+```js
+x = _= ar,
+    _= f(_),
+    _= _ + _;
+```
+
+[20:41:35.0978] <Ashley Claymore>
+TypeScript doesn't love this 
+
+[20:41:46.0664] <rbuckton>
+Hack-style pipes is the `,_=` operator.
+
+[20:41:48.0112] <Ashley Claymore>
+and it would be rejected in a PR
+
+[20:42:00.0754] <rbuckton>
+Perhaps, but that's the downleveling.
+
+[20:42:36.0013] <Ashley Claymore>
+Right, it's purely syntatic 
+
+[20:43:24.0885] <Ashley Claymore>
+an engine would likely need zero new bytecode for it
+
+[20:44:11.0432] <rbuckton>
+TypeScript handles this fine:
+
+
+[20:44:33.0293] <rbuckton>
+* TypeScript handles this fine
+
+[20:44:34.0759] <Ashley Claymore>
+It's always the same type there 
+
+[20:44:57.0614] <Ashley Claymore>
+what if it changes to different object types through the pipe 
+
+[20:46:27.0759] <rbuckton>
+Ok, TypeScript has a slight bug here, but works fine if you use parens:
+
+
+[20:47:18.0010] <rbuckton>
+well, not a bug. You need the parens to keep the precedence correct.
+
+[20:47:33.0349] <rbuckton>
+* ~~Ok, TypeScript has a slight bug here, but~~ works fine if you use parens:
+
+
+[20:47:41.0420] <rbuckton>
+* ~Ok, TypeScript has a slight bug here, but~ works fine if you use parens:
+
+
+[20:47:53.0723] <Justin Ridgewell>
+Mildly agree. I think it's convenient that Hack allows this, but I think our first priority should be solving method DCE. These kinds of expressions would be mostly simple to extract into helpers, or break apart into multiple pipes (we don't always need super long pipe flows)
+
+[20:47:54.0852] <rbuckton>
+hmm. strikethrough doesn't work in Element.
+
+[20:48:04.0876] <rbuckton>
+* works fine if you use parens:
+
+
+[20:48:13.0379] <rbuckton>
+* (You need the parens to keep the precedence correct).
+
+[20:51:01.0395] <rbuckton>
+IMO the only thing Hack-style pipes do better than F# is `await` and `yield`, though you can still address those with parens:
+
+```js
+// Hack-style
+a |> await f(#) |> yield g(#);
+
+// F#-style
+yield (await a |> f(?)) |> g(?);
+```
+Though there was a proposal to address `await` and `yield` as a special operation:
+
+```js
+a |> f(?) |> await |> g(?) |> yield;
+```
+
+
+
+[20:53:23.0160] <rbuckton>
+I don't know how often that would be an issue in practice, though. 
+
+[20:55:35.0940] <Justin Ridgewell>
+I just mentioned that above, apparently there are ASI issues: 
+
+[20:55:53.0832] <Justin Ridgewell>
+* > Though there was a proposal to address await and yield as a special operation:
+
+I just mentioned that above, apparently there are ASI issues: 
+
+[20:55:56.0208] <rbuckton>
+it's bad practice to `yield` deep within an expression, it makes it hard to reason over where you're function might suspend. `await` is the same. It's usually better to break up `await`s into multiple statements, otherwise you're back to parenthesizing like `(await f()).foo()`
+
+[20:59:01.0169] <rbuckton>
+I wouldn't call it an "ASI Issue", per se. Anyone who chooses to rely on ASI to avoid semicolons already needs to pepper them throughout their code. ASI is only really an issue if you're trying to introduce new syntax that could be interpreted as existing syntax due to ASI. That doesn't apply to `|>` because its mere existence in the language doesn't cause unrelated code to break.
+
+[21:05:12.0539] <rbuckton>
+And as far as Hack-styles benefit for `x |> # + #`, that can be achieved in F# using an arrow, and we could theoretically inline arrows statically within the spec as well:
+
+```js
+x |> (_ => _ + _)
+```
+The only thing that would care that it's not actually a function would be a stack trace, but I'm ok with that.
+
+[21:05:44.0726] <rbuckton>
+Still no `yield` or `await`, but I contend that's just not as critical here.
+
+[21:06:05.0999] <rbuckton>
+* And as far as Hack-style's benefit for `x |> # + #`, that can be achieved in F# using an arrow, and we could theoretically inline arrows statically within the spec as well:
+
+```js
+x |> (_ => _ + _)
+```
+
+The only thing that would care that it's not actually a function would be a stack trace, but I'm ok with that.
+
+[21:10:19.0733] <rbuckton>
+F#+PFA only really introduces two distinct concepts (`|>` and `?`/`...`) but gives us so many things. For Hack-style we've suggested multiple additional sigils like `|+>` to provide something like PFA, which is starting to feel like a sigil soup. Too many tokens to remember what does what. It's like trying to remember keybinds in Blender. There's 1000s of them.
+
+[21:12:31.0558] <Justin Ridgewell>
+I think the same could be said for Elixir. But the additional sigils are still likely going to be suggested regardless of which we choose, eg to support short-circuiting.
+
+[21:13:10.0223] <Justin Ridgewell>
+* I think the same could be said for Elixir. But the additional sigils are still likely going to be suggested regardless of which we choose, eg to support nullish short-circuiting.
+
+[21:13:18.0377] <rbuckton>
+short-circuiting?
+
+[21:14:23.0407] <rbuckton>
+Ah. I think that's less of an issue for `|>` than for function calls in general. Aside from `?` and `if` there's no good way to make a call conditional an an input argument being nullish
+
+[21:14:47.0526] <Justin Ridgewell>
+`x |> foo ?|> bar` could stop the pipeline if the return value from `foo` is nullish.
+
+[21:15:11.0661] <rbuckton>
+In F# style, you could just fall back on an arrow:
+
+```js
+x |> (_ => _ == null ? null : f(_) |> ...)
+```
+
+[21:15:33.0664] <Justin Ridgewell>
+One of Evan's arguments is that pipeline needs to be as ergonomic as method chaining. `x.foo()?.bar()` is very ergonomic to write.
+
+[21:16:14.0691] <Justin Ridgewell>
+If we want to encourage people to stop writing class methods, the alternative needs to feel at least as good.
+
+[21:16:50.0343] <rbuckton>
+I'm not sure `?|>` is the sigil though. It looks awkward.
+
+[21:17:06.0853] <rbuckton>
+Maybe just `?>`
+
+[21:17:38.0230] <Justin Ridgewell>
+Yah, it all starts to look like soup eventually. Evan was proposing `..` as the pipeline operator, so it'd be `x?..foo()`
+
+[21:17:59.0027] <Justin Ridgewell>
+That doesn't feel too bad.
+
+[21:18:11.0534] <Justin Ridgewell>
+* Yah, it all starts to look like soup eventually. Evan was pushing `..` as the pipeline operator, so it'd be `x?..foo()`
+
+[21:18:42.0319] <Justin Ridgewell>
+* Yah, it all starts to look like soup eventually. Evan was pushing `..` as the pipeline operator, so it'd be `x?..foo()` (specifically with call-this semantics)
+
+[21:18:50.0192] <rbuckton>
+`?.[` and `?.(` are already bad, if necessary. For pipelines, I'd rather have something recognizably pipe-like.
+
+[21:19:19.0994] <Justin Ridgewell>
+I could get behind `?>`
+
+[21:20:01.0299] <rbuckton>
+And, IMO, `?..` should just synonymous with `?.`, given that `?.[` is the nullish `[` and `?.(` is the nullish `(`, then `?..` *should* be the nullish `.` 
+
+[21:20:12.0595] <rbuckton>
+* And, IMO, `?..` should just be synonymous with `?.`, given that `?.[` is the nullish `[` and `?.(` is the nullish `(`, then `?..` _should_ be the nullish `.`
+
+[21:20:15.0631] <rbuckton>
+* IMO, `?..` should just be synonymous with `?.`, given that `?.[` is the nullish `[` and `?.(` is the nullish `(`, then `?..` _should_ be the nullish `.`
+
+[21:20:44.0611] <rbuckton>
+Not that I want that syntax in the language, just that it essentially holds that space logically.
+
+[21:22:18.0326] <rbuckton>
+We should stay away from `..`. We already have `.` and `...` meaning two wholly different things, we don't need `..` meaning something else, especially since some languages use `..` in the same way we use `...`
+
+[21:22:54.0252] <rbuckton>
+i.e., C# supports `..` in collection initializers:
+```cs
+int[] x = [1, 2, ..y];
+```
+
+[21:23:53.0865] <rbuckton>
+And other languages use `..` for ranges, i.e. `a..b`.
+
+[21:25:59.0197] <rbuckton>
+If we hadn't needed to use `?.[` and `?.(` for chaining, I would have suggested `x.(f)()` or `x.[f]()` for call-this. That said, I still think `::` is perhaps a good choice for that.
+
+[21:29:51.0862] <rbuckton>
+Though I had thought about using `::` for a syntactic event mechanism. It was used for events in a different way in early versions of IE/JScript:
+```js
+function window::onload(e) {
+}
+```
+
+[21:35:41.0787] <Justin Ridgewell>
+That reminds me too much of class syntax in C++
+
+[21:40:06.0006] <rbuckton>
+My thought was to use `event` to describe named events in a separate namespace (similar to `#`) and `::` to access them, e.g.:
+
+```js
+class Button {
+  event click;
+  event dblclick;
+
+  raiseClick(e) {
+    this::click(e); // can only invoke 'click' using :: when lexically inside class
+  }
+}
+
+const b = new Button();
+b::click += e => { };
+b::dblclick += e => { };
+```
+
+[21:41:21.0564] <rbuckton>
+and the whole syntax would leverage a symbol-based protocol that could be adapted to both NodeJS EventEmitter and DOM EventTarget (and any other event system in userland)
+
+[21:43:05.0758] <rbuckton>
+If that were to ever make it to an actual proposal, I'm sure there are other symbols that could be used. `::` here is mostly JScript nostalgia.
+
+[21:43:27.0802] <rbuckton>
+`::` for bind-this/call-this is also perfectly reasonable.
+
+[23:35:37.0224] <ljharb>
+> <@aclaymore:matrix.org> I'm blanking. What's the potential bug with the open paren?
+
+the bug is “i meant to type . and typed ..” or the reverse. Two syntaxes with quite different resolution semantics shouldn’t be that similar
+
+[01:00:04.0566] <Ashley Claymore>
+I like '::` for call-this.
+I don't think we need syntax for events in JS.
+
