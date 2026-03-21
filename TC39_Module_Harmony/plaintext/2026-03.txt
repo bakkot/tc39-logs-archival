@@ -84,3 +84,142 @@ Yes I think testing on the concrete subclasses makes sense
 [03:59:24.0568] <nicolo-ribaudo>
 We should also make sure to test this in test262 for JS module sources
 
+[04:33:03.0864] <guybedford>
+right, I'll include it in that test rather
+
+[04:47:24.0245] <Richard Gibson>
+not only does that not invalidate the ability to test the original prototype, it defines a *new* scenario to be covered by testing
+
+[04:51:39.0511] <nicolo-ribaudo>
+But there is no requirement to test
+
+[04:54:16.0163] <Richard Gibson>
+maybe I'm misunderstanding the proposal... why would it not be a requirement?
+
+[04:55:16.0203] <nicolo-ribaudo>
+The proposal cannot require that those host-provided objects have a specific prototype chain when they go through that AO, because user code might have already manipulated it
+
+[04:55:28.0071] <Richard Gibson>
+to allow for a deeper class hierarchy?
+
+[04:56:05.0518] <Richard Gibson>
+it can define initial state, though
+
+[04:56:17.0972] <nicolo-ribaudo>
+They can for example have WebAssembly.Module as their prototype rather than %AbstractModuleSource%
+
+[04:57:30.0630] <Richard Gibson>
+does WebAssembly.Module have that in *its* prototype chain, or is it fully independent?
+
+[04:57:39.0402] <nicolo-ribaudo>
+Yes it does
+
+[04:58:11.0950] <Richard Gibson>
+but there's no requirement of such? If not, why not?
+
+[04:58:46.0860] <nicolo-ribaudo>
+But consider example:
+```js
+Object.setPrototypeOf(WebAssembly.Module.prototype, {});
+Object.setPrototypeOf(WebAssembly.Module, {});
+
+// later, somewhere else
+import source s from "foo.wasm"
+```
+`s` will be born directly without AbstractModuleSource on its prototype
+
+[04:59:27.0675] <nicolo-ribaudo>
+So even if the wasm spec defines that WebAssembly.Module inherits from AbstractModuleSource, we cannot require that when instances of it are created they have the correct prototype chain
+
+[05:00:13.0020] <nicolo-ribaudo>
+(not sure if that example is correct, assume it does whatever isneeded to detach a parent class)
+
+[05:00:20.0221] <nicolo-ribaudo>
+* (not sure if that example is correct, assume it does whatever is needed to detach a parent class)
+
+[05:00:48.0436] <Richard Gibson>
+so what? That's user code that would only be in a test that's covering its effects. The chain isn't that every new instance has a particular prototype chain, but that every new instance *in an unmodified environment* does
+
+[05:01:04.0220] <Richard Gibson>
+* so what? That's user code that would only be in a test that's covering its effects. The claim isn't that every new instance has a particular prototype chain, but that every new instance *in an unmodified environment* does
+
+[05:01:17.0960] <nicolo-ribaudo>
+Before being able to test something we need to define what normative requirement we are testing
+
+[05:01:37.0715] <nicolo-ribaudo>
+Which is what I claim we cannot define here
+
+[05:02:44.0150] <Richard Gibson>
+I see no reason why it cannot be defined. If the current text fails to define this, that seems like a problem
+
+[05:10:46.0882] <nicolo-ribaudo>
+Even if we define a property about its initial conditions, given that this is a host-defined object the host could create respecting the initial conditions and then process it before giving it to ECMA-262
+
+[05:11:23.0063] <nicolo-ribaudo>
+e.g. Node.js loaders
+
+[05:12:07.0399] <nicolo-ribaudo>
+* Even if we define a property about its initial conditions, given that this is a host-defined object the host could create it respecting the initial conditions and then process it before giving it to ECMA-262
+
+[05:12:13.0456] <Richard Gibson>
+those are also user code that come after "initial conditions"
+
+[05:13:33.0136] <Richard Gibson>
+https://tc39.es/proposal-source-phase-imports/#sec-abstract-module-records
+> When set, it [ [[ModuleSource]] ] must have a [[Prototype]] internal slot containing an object whose initial [[Prototype]] is %AbstractModuleSource%.
+
+this is testable
+
+[05:14:05.0743] <nicolo-ribaudo>
+Ok I was going through the defnition of Module Source Object, in https://tc39.es/proposal-source-phase-imports/#sec-module-source-objects
+
+[05:14:22.0838] <nicolo-ribaudo>
+This is indeed testable but it's too strict and the Wasm integration violates it
+
+[05:14:39.0936] <Richard Gibson>
+but apparently too strict if the actual requirement is "in the prototype chain" rather than direct prototype
+
+[05:14:57.0402] <Richard Gibson>
+the relaxation is still testable, though
+
+[05:15:35.0158] <nicolo-ribaudo>
+Unless "when set" means "at the time this field was first set this condition was true, but even if the field stays set the condition might not hold anymore"
+
+[05:16:20.0252] <nicolo-ribaudo>
+I think it's fine to require that it's the direct parent, as we don't know of more relaxed use cases
+
+[05:17:28.0292] <Richard Gibson>
+I would rephrase "When set" to "When not \~empty~"
+
+[05:18:00.0892] <nicolo-ribaudo>
+I am also reading "when set" as "when not ~empty~", but that's exactly the case where it's too strict
+
+[05:18:21.0236] <Richard Gibson>
+it's not too strict
+
+[05:18:21.0369] <nicolo-ribaudo>
+Because if user code modifies that object, than the field is not empty but it stays set to an object that does not respect that description
+
+[05:19:44.0743] <nicolo-ribaudo>
+It could be "when not ~empty~, [[ModuleSource]] must have a [[Prototype]] slot that **initially contained** an object whose initial [[Prototype]] is %AbstractModuleSource%" (bold the addition)
+
+[05:20:08.0940] <Richard Gibson>
+the description is "an object whose **initial** [[Prototype]] is %AbstractModuleSource%". By definition, user code is incapable of violating it (because user code runs after anything specified as "initial"
+
+[05:20:49.0149] <nicolo-ribaudo>
+There is a chain of three objects here:
+1. The module source
+2. its prototype
+3. the prototype's prototype
+
+Right now the "initial" requirement is only about 2->3 and not 1->2
+
+[05:21:29.0707] <nicolo-ribaudo>
+Ok I think we are coming to an agreement
+
+[05:21:41.0121] <Richard Gibson>
+I think so too
+
+[05:22:14.0295] <nicolo-ribaudo>
+That requirement should be relaxed to describe the _initial_ state of both links, and then it's actually possible for hosts to respect it and we can test it
+
