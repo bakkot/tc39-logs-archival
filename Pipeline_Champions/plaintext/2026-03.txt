@@ -1933,3 +1933,157 @@ your use of "solve" implies identification of problem statements which I think h
 [09:05:23.0879] <Richard Gibson>
 how would you phrase them?
 
+
+2026-03-24
+[11:56:29.0837] <jschoi>
+Ah, yeah, one of Ben Lesh’s threads. I mentioned him earlier as someone who was so vehemently against Hack pipes that he seemed to become disillusioned with TC39 more broadly.
+
+He’s…somewhat of an outlier in the intensity of that reaction. I still don’t really understand why he places so much weight on tacitness of the primary argument, relative to linearization, to the point of wanting to shut the whole thing down. And I still haven’t seen a persuasive articulation from him of why tacitness matters that much more than linearization for fluency. I’m a fan of his work, but he genuinely seems not to see much value in linearization on its own, and I still don’t think I’ve seen a clear explanation from him as to why.
+
+That said, it’s certainly possible that others will also feel emotionally ambivalent or opposed to Hack pipes’ explicitness. And that is a reason for some nervousness. 
+But it’s not as though we don’t also have reasons to be nervous about encouraging developers to switch to call-this and its heretofore-rare `this`-based standalone functions en masse, either…
+No slam dunks here from the whole community’s point of view.
+
+[12:02:06.0755] <jschoi>
+Your question is addressed to ljharb, but, for what it’s worth, when I put call-this’s proposal together, I relied on statistical uses of `.call`, `.bind`, and `.apply` from Gzemnid (see [issue #12](https://github.com/tc39/proposal-call-this/issues/12)). 
+I hadn’t seen anyone make the connection between call-this and Reflect.apply until you have, but I would love to hear more about this. It might be worth looking into.
+
+[12:02:29.0496] <jschoi>
+(And, yes, pivoting call-this into “`this`-sensitive functions attached to prototypes are poorly tree shakeable, so we should encourage standalone `this`-sensitive functions” is possible…as long as we accept that that might kill pipe operator in the Committee, due to their overlap in the dataflow use case.)
+
+[12:28:49.0770] <jschoi>
+* Your “how would you phrase [their problem statements]” question is addressed to ljharb, but, for what it’s worth, when I put call-this’s proposal together, I relied on statistical uses of `.call`, `.bind`, and `.apply` from Gzemnid (see [issue #12](https://github.com/tc39/proposal-call-this/issues/12)).
+I hadn’t seen anyone make the connection between call-this and Reflect.apply until you did. I would love to hear more about how call-this would help Reflect.apply. Maybe it would be worth adding to the explainer.
+
+[13:02:21.0497] <jschoi>
+Pipes would incentive plain functions at least a little, if not a lot. The magnitude is uncertain, but I think it certainly would be a positive effect (a little or a lot…for me, personally, a lot).
+People like writing and reading `x.f0(a).f1(b).f2(c)`, and they don’t like writing or reading `f2(f1(f0(x, a), b), c)`. So they choose to make `f0`, `f1`, and `f2` prototype methods and not standalone functions. 
+The same people might like reading `x |> f0(##, a) |> f1(##, b)` more than `f2(f1(f0(x, a), b), c)`.
+Those people might even like reading it enough to choose to make `f0`, `f1`, and `f2` plain functions instead of prototype methods, where they wouldn’t have done it had it remained a choice between only `x.f0(a).f1(b).f2(c)`, and they don’t like writing or reading `f2(f1(f0(x, a), b), c)`.
+But would the difference be *enough* to cause a significant increase in plain function usage? Nobody can claim to be confident about the whole community; we can only make our best judgements. I certainly think it would make plain function usage nicer. 
+Of course, like you said, pipe operators have benefits other than incentivizing DCE-friendly plain functions. But Hack pipes *do* “nudging the ecosystem towards compatible functions”; the debate shouldn’t be about whether they nudge at all but about how *much* they would.
+
+[13:03:26.0512] <Richard Gibson>
+> I hadn’t seen anyone make the connection between call-this and Reflect.apply until you have, but I would love to hear more about this
+
+Basically, all of https://github.com/tc39/proposal-call-this/blob/main/README.md#:~:text=There%20are%20a%20variety%20of%20reasons%20why%20developers%20use%20.call and half of https://github.com/tc39/proposal-call-this/blob/main/README.md#call-is-clunky are already addressed by `Reflect.apply`:
+```
+-rec.method(arg0)
++const { apply } = Reflect
++apply(method, rec, [arg0])
+```
+It specifically remedies the subject–verb separation of `.call`, and actually does a better job of protecting against monkey-patching and prototype pollution by being immune from subsequent modification of `Function.prototype.call` itself... the only complaint it doesn't address is subject–verb–object ordering, which is also already possible to handle with [helpers](https://github.com/tc39/proposal-function-helpers) like
+```
+-apply(method, rec, [arg0])
++const callThis = (rec, fn, ...args) => apply(fn, rec, args)
++callThis(rec, method, arg0)
+```
+that's much better than `method.call(rec, arg0)` but empirically not by enough for widespread replacement of `.call`, and neither have been good enough to meaningfully encourage exporting collections of receiver-sensitive functions outside of a containing class, which I think is where a reframed call-this proposal has some room to work.
+
+And regardless, I'm pretty much of the opinion that a data-flow perspective on call-this doesn't even make sense. Even the above `callThis` helper is intersects with pipeline on the same footing as any other function, and is less like to participate in a pipeline than e.g. `Object.fromEntries`. And while I don't consider it likely that pipeline would significantly encourage libraries to export functions rather than classes (because, as noted above, calling a method on a class instance gets the same pipeline DX benefits as calling a bare function), I _do_ consider it likely that ergonomic call-this syntax would encourage libraries to export methods _in addition to_ their containing classes for the improved tree-shaking
+
+[13:04:51.0532] <jschoi>
+I’m a little confused by this. `expr |> ##.method()` is almost always worse than `expr.method()`, except in the rare case you would need to parenthesize `expr` in `(expr).method()`.
+
+[13:06:02.0730] <jschoi>
+* Pipes would incentive plain functions at least a little, if not a lot. The magnitude is uncertain, but I think it certainly would be a positive effect (a little or a lot…for me, personally, a lot).
+People like writing and reading `x.f0(a).f1(b).f2(c)`, and they don’t like writing or reading `f2(f1(f0(x, a), b), c)`. So they choose to make `f0`, `f1`, and `f2` prototype methods and not standalone functions.
+The same people might like reading `x |> f0(##, a) |> f1(##, b)` more than `f2(f1(f0(x, a), b), c)`.
+Those people might even like reading it enough to choose to make `f0`, `f1`, and `f2` plain functions instead of prototype methods, where they wouldn’t have done it had it remained a choice between only `x.f0(a).f1(b).f2(c)`, and they don’t like writing or reading `f2(f1(f0(x, a), b), c)`.
+But would the difference be _enough_ to cause a significant increase in plain function usage? Nobody can claim to be confident about the whole community; we can only make our best judgements. I certainly think it would make plain function usage nicer.
+Of course, like you said, pipe operators have benefits other than incentivizing DCE-friendly plain functions. But Hack pipes _do_ “nudging the ecosystem towards compatible functions”; the debate shouldn’t be about whether they nudge developers toward plain functions at all, but rather about how _much_ they would.
+
+[13:21:18.0829] <jschoi>
+Thanks, this is helpful.
+
+[13:23:05.0526] <jschoi>
+Yes, Reflect.apply does have several advantages over Function.prototype.call, including improving subject–verb separation. 
+I don’t think that really negates the “.call this is common and clunky” reasoning in call-this’s explainer, especially if it requires “`callThis`” userland helper functions in order to get SVO word order. It’s not like Reflector.call isn’t also clunky. 
+
+The real debate would probably be over if their use cases are compellingly common enough to warrant syntax—as I have tried to argue to the Committee on behalf of Jordan, with not much success.
+
+[13:23:35.0004] <jschoi>
+That SVO word order has empirically not been compelling enough to cause widespread use of Reflect.apply-using `callThis` helper functions—this point is well taken, although I’m sure other factors are involved in that too.
+
+[13:25:06.0607] <jschoi>
+Your point on the dataflow overlap between call-this and pipe operator being maybe overblown is also well taken. This was certainly the conclusion drawn in the first place [when pipes reached Stage 1 in 2021](https://github.com/tc39/proposal-pipeline-operator/blob/main/HISTORY.md#2021-08): Jordan raised concerns that advancing pipe would kill any future bind operator because of overlap, and others responded that pipes are now orthogonal to any bind operator and would not kill it. This was the overlap-minimizing approach I’ve tried to take with both pipe and call-this. 
+(I haven’t made it a secret that, if I had to choose one, I would rather have pipe than call-this, but I have tried to make the Committee fairly consider call-this, on its own non-dataflow merits, without considering any overlap with pipe operator.)
+
+[13:25:28.0289] <jschoi>
+I *am* confused about your notion that “calling a method on a class instance gets the same pipeline DX benefits as calling a bare function”, but I’d rather discuss that in another thread in which I’ve already asked about this (https://matrix.to/#/!mjlgwjKxWUpgSgeCQU:matrix.org/$uoU7N_56TqMXsv8rCwzYtUnf25u64_8LKbr-z-Zvg9w?via=matrix.org&via=igalia.com&via=mozilla.org).
+
+[13:26:08.0736] <jschoi>
+* I _am_ confused about the notion that “calling a method on a class instance gets the same pipeline DX benefits as calling a bare function”, but I’d rather discuss that in another thread in which I’ve already asked about this (https://matrix.to/#/!mjlgwjKxWUpgSgeCQU:matrix.org/$uoU7N\_56TqMXsv8rCwzYtUnf25u64\_8LKbr-z-Zvg9w?via=matrix.org&via=igalia.com&via=mozilla.org).
+
+[13:59:04.0060] <Evan Winslow>
+I can't tell exactly what you have in mind here but I want to clarify that `export const {method} = C.prototype` is not enough to get tree shaking. Such a method is still attached to the class and therefore still subject to polymorphic/reflective use cases which are what make tree shaking unsafe.
+
+[14:07:08.0216] <Evan Winslow>
+Also the data flow aspect of call-this comes from being chainable, which is true of syntax but not of your `callThis` helper. To support arbitrary functions with call this, it doesn't take long to come up with a helper like `function to(fn, ...) { return fn(this, ...args); }`. Which then let's you do `obj..to(Object.entries).map(...).filter(...)..to(Object.fromEntries);
+
+[14:07:40.0733] <Evan Winslow>
+* Also the data flow aspect of call-this comes from being chainable, which is true of syntax but not of your `callThis` helper. To support arbitrary functions with call this, it doesn't take long to come up with a helper like `function to(fn) { return fn(this); }`. Which then let's you do \`obj..to(Object.entries).map(...).filter(...)..to(Object.fromEntries);
+
+[14:08:13.0620] <Evan Winslow>
+* Also the data flow aspect of call-this comes from being chainable, which is true of syntax but not of your `callThis` helper. To support arbitrary functions with call this, it doesn't take long to come up with a helper like `function to(fn) { return fn(this); }`. Which then let's you do `obj..to(Object.entries).map(...).filter(...)..to(Object.fromEntries);`
+
+[14:09:15.0114] <Evan Winslow>
+* Also the data flow aspect of call-this comes from being chainable, which is true of syntax but not of your `callThis` helper. To support arbitrary functions with call this, it doesn't take long to come up with a helper like `function to(fn) { return fn(this); }`. Which then let's you do `obj..to(Object.entries).map(fn1).filter(fn2)..to(Object.fromEntries);`
+
+[14:13:01.0774] <Evan Winslow>
+* Also the data flow aspect of call-this comes from being chainable, which is true of syntax but not of your `callThis` helper. To support arbitrary functions with call this, it doesn't take long to come up with a helper like `function to(fn) { return fn(this); }`. Which then let's you do `obj..to(Object.entries).filter(fn1).map(fn2)..to(Object.fromEntries);`
+
+[14:29:57.0391] <Richard Gibson>
+> `export const {method} = C.prototype` is not enough to get tree shaking... [`method`] is still subject to polymorphic/reflective use cases which are what make tree shaking unsafe.
+
+Even if `method` is imported but `C` is not? I can believe that tree-shaking does not _currently_ result in omitting unused parts of `C` in such cases, but updating to do so seems not just tractable, but exactly the kind of ecosystem change that would be expected as a second-order consequence of call-this.
+
+[14:41:31.0288] <Richard Gibson>
+> `obj..to(Object.entries).filter(fn1).map(fn2)..to(Object.fromEntries);`
+
+this is definitely true, but seems irrelevant. It's also already possible to get poor-mans-pipelines using helpers with names like `flow` or `chainable`, and I don't think introducing yet another approach via call-this further raises the bar for pipeline to justify its proposed syntax (that need exists regardless, although I guess one could make an argument that `..to(fn)` is so much better that it _does_ cover the pipeline use cases)
+
+[14:42:11.0821] <Richard Gibson>
+* > `obj..to(Object.entries).filter(fn1).map(fn2)..to(Object.fromEntries);`
+
+this is definitely true, but seems irrelevant. It's also already possible to get poor-mans-pipelines using helpers with names like `flow` or `chainable`, and I don't think introducing yet another approach via call-this further raises the bar for pipeline to justify its proposed syntax (that need exists regardless, although I guess one could make an argument that `..to(fn)` is so much better that it _does_ cover the pipeline use cases 🤷)
+
+[14:56:00.0838] <Evan Winslow>
+My point was that the spelling of the operator is a non-factor here
+
+[14:57:45.0876] <Evan Winslow>
+* My point was that the spelling of the operator (appears to me) is a non-factor here. So I moved on to secondary considerations.
+
+[15:01:05.0952] <Richard Gibson>
+I think ljharb is saying that the spelling _is_ a factor—and if he's not saying that, I'm certainly willing to, specifically because a misspelling of `..` as `.` is still valid syntax with plausibly undetected behavioral differences, as opposed to alternatives. But regardless, moving on to other considerations seems fine.
+
+[15:04:15.0863] <Evan Winslow>
+How does one avoid importing `C`? At some point your program has to instantiate the thing in order to call any methods on it, right?
+
+
+2026-03-25
+[17:13:52.0085] <jschoi>
+* I’m confused. Everything I just said was trying to explain how the pipe operator would incentivize using more plain functions and less prototype methods, by at least some amount.
+
+[17:21:02.0192] <jschoi>
+…Whoops, I just had to delete a confused comment. Matrix Element just displayed a message from Sunday to me right below my previous response, which made me think that we were going in circles. Turns out a Matrix or Element bug was just displaying the messages in this thread out of order temporarily…
+
+[17:24:21.0191] <jschoi>
+* …Whoops, I just had to delete a confused comment I had made a minute ago. Matrix Element just displayed a message from Sunday to me right below my previous response, which made me think that we were going in circles. Turns out a Matrix or Element bug was just displaying the messages in this thread out of order temporarily…
+
+[17:56:38.0956] <Richard Gibson>
+to be honest, I was only thinking about a consumption-oriented bundle, but you're right. I think this detail will hinder export-side adoption, because it's basically asking library authors to abandon lots of ergonomic conveniences (`extends`, private elements, etc.)
+
+[19:50:34.0643] <Ashley Claymore>
+Something like https://github.com/tc39/proposal-private-declarations will likely be needed to help on the producer side 
+
+[19:51:53.0226] <Ashley Claymore>
+extends is maybe less of an issue as pipeline already means the consumer is bypassing any dynamic dispatch 
+
+[20:15:00.0706] <Richard Gibson>
+but it still means manually propagating methods associated with the parent
+
+[21:16:23.0132] <Ashley Claymore>
+to achieve reliable DCE the connection between declaration and usage needs to be static.
+is there an alternative?
+
