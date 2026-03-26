@@ -2087,3 +2087,94 @@ but it still means manually propagating methods associated with the parent
 to achieve reliable DCE the connection between declaration and usage needs to be static.
 is there an alternative?
 
+[07:22:12.0967] <Richard Gibson>
+`extends` doesn't disrupt such connections, nor even the ability to observe them. This is in part about the gap between code that static analysis _can_ classify as unused vs. code that current static analysis _does_ classify as unused, and also about interplay between authors, tools, and the language itself. As a demonstration, consider expanding the example from above:
+```
+export class C {
+  /* constructor and "core" members */
+  #counter = 0n;
+  constructor(initial = 0n) { this.#counter = validateBigInt(initial); }
+  adjustBy(n) { this.#counter += validateBigInt(n); }
+  get counter() { return this.#counter; }
+};
+const { prototype: CShakable } = class extends C {
+  /* tree-shakable methods */
+  increment() { this.adjustBy(1n); return this.counter; }
+  decrement() { this.adjustBy(-1n); return this.counter; }
+};
+export const { increment, decrement } = CShakable;
+```
+```
+import { C, increment } from "c.js";
+console.log(increment.call(new C(99n))); // 100n
+```
+
+[08:03:00.0975] <Richard Gibson>
+* `extends` doesn't disrupt such connections, nor even the ability to observe them. This is in part about the gap between code that static analysis _can_ classify as unused vs. code that current static analysis _does_ classify as unused, and also about interplay between authors, tools, and the language itself. As a demonstration, consider expanding the example from above:
+
+```
+export class C {
+  /* constructor and "core" members */
+  #counter = 0n;
+  constructor(initial = 0n) { this.#counter = BigInt(initial); }
+  adjustBy(n) { this.#counter += BigInt(n); }
+  get counter() { return this.#counter; }
+};
+const { prototype: CShakable } = class extends C {
+  /* tree-shakable methods */
+  increment() { this.adjustBy(1n); return this.counter; }
+  decrement() { this.adjustBy(-1n); return this.counter; }
+};
+export const { increment, decrement } = CShakable;
+```
+
+```
+import { C, increment } from "c.js";
+console.log(increment.call(new C(99n))); // 100n
+```
+
+[09:14:24.0783] <Ashley Claymore>
+This is similar to CJS. Some CJS patterns were statically analysable - and in some tools more than others.
+ESM syntax was great for giving tools a standard to follow.
+
+[09:16:48.0247] <Ashley Claymore>
+the above could be re-written in so many different ways
+
+[09:17:10.0390] <Ashley Claymore>
+```
+export const { prototype: { increment, decrement } } = class ...
+```
+
+[09:18:32.0733] <Ashley Claymore>
+or
+
+```
+class Methods extends C { ... }
+export const { increment, decrement } = C.prototype;
+```
+
+[09:18:41.0242] <Ashley Claymore>
+* or
+
+```
+class Methods extends C { ... }
+export const { increment, decrement } = Methods.prototype;
+```
+
+[09:59:35.0652] <Evan Winslow>
+My first outreach attempt (Three.js): https://discourse.threejs.org/t/im-on-tc39-would-three-js-be-interested-in-tree-shakable-methods-syntax/90519
+
+My takeaways:
+
+1. Don't reply more than once per week
+2. Ignore replies that consist of off-topic ratholes and **feelings**
+3. Tweak OP to address common questions/misunderstandings
+
+Feel free to judge my attempt mercilessly so I can do better next time. Thx :)
+
+[10:06:37.0062] <Ashley Claymore>
+this is really good
+
+[10:07:36.0086] <Ashley Claymore>
+definitely some mis-information from others in there. But that's always the way on the internet.
+
