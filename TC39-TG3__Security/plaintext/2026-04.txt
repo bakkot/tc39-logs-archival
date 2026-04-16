@@ -24,3 +24,122 @@ https://github.com/tc39/proposal-oom-fails-fast
 [07:54:15.0170] <Richard Gibson>
 yes, and explicitly mentioned in the 2019 slides
 
+
+2026-04-15
+[07:14:33.0760] <Chris de Almeida>
+we have another topic (continuation from last week) first. I don't expect that topic to exhaust the hour, but heads up
+
+[07:19:26.0739] <mgaudet>
+Ok. Given this is weekly perhaps I jump to next week — unfortunately I have a conflict today with the last half of the slot.
+
+[07:27:52.0178] <Chris de Almeida>
+sounds good. your topic is now the first item in `future agenda`
+
+[07:28:07.0499] <mgaudet>
+Thank you very much :) 
+
+[07:28:30.0424] <mgaudet>
+(Also if anyone just wants to weigh in async on the issue that would be totally fine too) 
+
+[07:30:01.0830] <Chris de Almeida>
+the issue: https://github.com/tc39/proposal-thenable-curtailment/issues/11
+
+[09:40:55.0922] <Nikita Skovoroda>
+```
+const print = globalThis?.console?.log ?? globalThis.print
+if (!Object.is(NaN, -NaN)) print('Wrong')
+const toBytes = (n) => {
+  const res = new Float64Array(1)
+  res[0] = n
+  const out = new Uint8Array(res.buffer)
+  return out.toHex ? out.toHex() : [...out].map(x => x.toString(16).padStart(2, '0')).join('')
+}
+print(toBytes(NaN))
+print(toBytes(-NaN))
+```
+```
+chalker@macbook-air nans % ~/.jsvu/bin/spidermonkey nancheck.js
+000000000000f87f
+000000000000f8ff
+chalker@macbook-air nans % ~/.jsvu/bin/v8 nancheck.js
+000000000000f87f
+000000000000f8ff
+chalker@macbook-air nans % ~/.jsvu/bin/jsc nancheck.js
+000000000000f87f
+000000000000f8ff
+chalker@macbook-air nans % ~/.jsvu/bin/quickjs nancheck.js
+000000000000f87f
+000000000000f8ff
+chalker@macbook-air nans % ~/.jsvu/bin/hermes nancheck.js
+000000000000f87f
+000000000000f87f
+chalker@macbook-air nans % ~/.jsvu/bin/graaljs nancheck.js
+000000000000f87f
+000000000000f8ff
+```
+only in hermes NaN and -NaN are non-distinguishable of all those
+
+[09:41:45.0837] <Nikita Skovoroda>
+In Spidermonkey the difference is observable
+
+[09:42:27.0443] <Nikita Skovoroda>
+They normalize _something_ but not the sign
+
+[09:42:31.0692] <Nikita Skovoroda>
+* They normalize _something_, but not the sign
+
+[09:42:54.0265] <Nikita Skovoroda>
+* ```
+const print = globalThis.console?.log ?? globalThis.print
+if (!Object.is(NaN, -NaN)) print('Wrong')
+const toBytes = (n) => {
+  const res = new Float64Array(1)
+  res[0] = n
+  const out = new Uint8Array(res.buffer)
+  return out.toHex ? out.toHex() : [...out].map(x => x.toString(16).padStart(2, '0')).join('')
+}
+print(toBytes(NaN))
+print(toBytes(-NaN))
+```
+
+```
+chalker@macbook-air nans % ~/.jsvu/bin/spidermonkey nancheck.js
+000000000000f87f
+000000000000f8ff
+chalker@macbook-air nans % ~/.jsvu/bin/v8 nancheck.js
+000000000000f87f
+000000000000f8ff
+chalker@macbook-air nans % ~/.jsvu/bin/jsc nancheck.js
+000000000000f87f
+000000000000f8ff
+chalker@macbook-air nans % ~/.jsvu/bin/quickjs nancheck.js
+000000000000f87f
+000000000000f8ff
+chalker@macbook-air nans % ~/.jsvu/bin/hermes nancheck.js
+000000000000f87f
+000000000000f87f
+chalker@macbook-air nans % ~/.jsvu/bin/graaljs nancheck.js
+000000000000f87f
+000000000000f8ff
+```
+
+only in hermes NaN and -NaN are non-distinguishable of all those
+
+[10:11:47.0835] <Nikita Skovoroda>
+```
+chalker@macbook-air nans % ~/.jsvu/bin/xs nancheck.js
+000000000000f87f
+000000000000f87f
+```
+
+Ah, also XS normalizes!
+
+[10:26:27.0232] <Michael Ficarra>
+here's the proposal from last time, discussed July 2024: https://github.com/tc39/Reflector/issues/535#issue-2392971422
+
+[10:27:29.0868] <Michael Ficarra>
+@mgaudet:mozilla.org ^
+
+[10:30:05.0606] <mgaudet>
+Thanks! I'll take a look 
+
