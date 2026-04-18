@@ -29,3 +29,129 @@ directly into the test suite; staging is primarily for tests imported from other
 [08:48:12.0051] <Shark>
 I read the staging section in the CONTRIBUTING.md but it didn't fully answer my question. Thanks for your clarification!
 
+
+2026-04-17
+[06:53:53.0822] <snek>
+building a little display to replace the paper calendar in my kitchen and it is truly incredible how easy temporal has made this
+
+[06:53:55.0999] <snek>
+what a beautiful api
+
+[07:00:30.0628] <Caio Lima>
+Do you mind sharing a bit more what makes you feel that it's easier? How would the alternative be without Temporal?
+
+[07:01:31.0746] <snek>
+well i start with this code
+```
+  const now = Temporal.Now.zonedDateTimeISO();
+  const startOfWeek = now.subtract({ days: now.dayOfWeek - 1 }).startOfDay();
+  const endOfWeek = startOfWeek.add({ days: 7 });
+```
+
+[07:01:58.0309] <snek>
+i have no idea what the alternative would be, i'd have to search for a library i guess
+
+[07:02:33.0796] <snek>
+also being able to calculate a duration from a calendar event and format it in a human readable way
+
+[07:03:29.0907] <snek>
+actually i can just send this i guess https://gist.github.com/devsnek/f8d7c3afb1e76973c4e61628131787c9
+
+[07:04:32.0572] <Caio Lima>
+Oh nice!
+
+[09:56:46.0951] <Mathieu Hofman>
+bakkot: Thanks so much [tackling promise leaks in v8](https://chromium-review.googlesource.com/c/v8/v8/+/7646250). This has been plaguing the community (really in all engines I've tested) for so long without them realizing.
+
+[09:57:49.0241] <Mathieu Hofman>
+FWIW, here is a gist for a crude test I wrote 4 years ago to check the behavior of various engines in different scenarios: https://gist.github.com/mhofman/e4031aa4cd2375d0f151f62691724475
+
+[10:04:15.0804] <bakkot>
+I would expect SM not to leak just based on looking at the code
+
+[10:04:24.0172] <bakkot>
+Would be interested to know if it actually does
+
+[10:04:57.0727] <Mathieu Hofman>
+When I thought about it last time, I was actually thinking there may be one legitimate case where retaining the promise might be worth it, but it's arguable: when the resolver is held but the promise hasn't been settled yet, and the promise had reactions registered before being dropped. Keeping the promise alive indicates work can still be trigger through what the promise once represented.
+
+[10:05:14.0124] <Mathieu Hofman>
+This was 4 years ago, maybe things have changed
+
+[10:58:01.0806] <Mathieu Hofman>
+Looking back at this I think there are possibly 2 other cases compared to what you're trying to solve in your change:
+- the resolvers should never be held by the promise itself
+- dropping an unsettled promise while keeping its resolver doesn't need to hold the promise. One could argue that if the promise has reactions, it could be held in that case.
+
+[10:58:42.0600] <Mathieu Hofman>
+But you're right, SM does drop settled promises, and did already 4 years ago
+
+[11:00:28.0471] <Mathieu Hofman>
+JSC and XS, at least 4 years ago had the same behavior as V8 
+
+[11:07:56.0519] <bakkot>
+> - dropping an unsettled promise while keeping its resolver doesn't need to hold the promise. One could argue that if the promise has reactions, it could be held in that case.
+
+certainly if it has reactions it needs to be held, but also it needs to be held for the unhandled rejection event, so I think that one is unavoidable
+
+[11:08:37.0029] <bakkot>
+I mean you could do a bunch of complex wiring to avoid actually holding the reified object but it would be complex/slow, so I'm not surprised no one does
+
+[11:12:23.0290] <bakkot>
+* I mean you could do a bunch of complex wiring to avoid actually holding the reified object but it would be complex/slow, so I'm not surprised no one does
+
+(oh, no, not even that, because the PromiseRejectionEvent holds the Promise)
+
+[14:11:51.0081] <Mathieu Hofman>
+> if it has reactions it needs to be held, but also it needs to be held for the unhandled rejection event, so I think that one is unavoidable
+
+Good call! Forgot about that one. Confirms my intuition it should be held on that case
+
+[14:54:11.0981] <snek>
+does it need it for unhandled rejection?
+
+[14:54:57.0593] <snek>
+i think you could just synthesize a new one in that case
+
+[14:55:04.0625] <Mathieu Hofman>
+Depends on the host really. But the web does expose the promise that was rejected
+
+[14:55:46.0494] <snek>
+if the only reference was the resolve fns though, you can just make up a new promise object in that case i think
+
+[14:55:53.0876] <Mathieu Hofman>
+A new one might be surprising. I could imagine some system tracking the identity of created promises
+
+[14:56:42.0950] <snek>
+mmm
+
+[14:57:33.0819] <snek>
+```let map = new WeakMap();
+onunhandledrejection = (e) => console.log(map.get(e.promise));
+map.set(new Promise((_, r) => r()), 1); 
+
+[14:57:44.0534] <snek>
+* ```js
+let map = new WeakMap();
+onunhandledrejection = (e) => console.log(map.get(e.promise));
+map.set(new Promise((_, r) => r()), 1); 
+```
+
+[14:58:13.0168] <snek>
+i guess the question is what this does
+
+[14:58:44.0460] <snek>
+* ```js
+let map = new WeakMap();
+onunhandledrejection = (e) => console.log(map.get(e.promise));
+map.set(new Promise((_, r) => queueMicrotask(r)), 1); 
+```
+
+[15:00:18.0254] <Mathieu Hofman>
+Replace that with an error object created at the same time as the promise and you can get diagnostics on where the rejected promise was manually created
+
+
+2026-04-18
+[03:21:23.0979] <snek>
+in this code is there a particularly correct way to introduce a week "offset"? like to look at the previous week or the next week or 12 weeks from now. can i just append `add({ weeks: n })` to the startOfWeek expression and all the rest of the math will still work?
+
