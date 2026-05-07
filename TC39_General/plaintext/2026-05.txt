@@ -83,3 +83,329 @@ I would love for us to adopt esvu as well!
 [13:41:59.0815] <linus>
 first PR is up, repo needs actions enabled I think
 
+
+2026-05-06
+[07:03:11.0288] <bakkot>
+neat https://github.com/v8/agents/tree/main/extensions/ecma262_state_machine
+
+[10:03:45.0209] <snek>
+this is what engine262 does heh
+
+[10:24:52.0777] <Daniel Dyryl>
+Hi. I am a community member, working on Stage 0 proposals JSON.parseBinary and ArrayBuffer.prototype.detach.
+
+Matteo Collina at Fastify has given positive feedback, Daniel Minor at V8 suggested I bring them here to find a potential champion, readme on GitHub of TC39 mentions this specific Matrix channel. 
+Happy to answer questions and end one month streak of stage 0.
+
+Use-cases: receiving payload by servers (not only http), receiving payload by clients, jsonwebtokens, filesystem manipulations, memory-constrained environments, high-throughput network communication. Most of the applications out there.
+
+Links to the repositories with Open-Source benchmarks and examples: 
+https://github.com/Guthib-of-Dan/proposal-json-parse-binary 
+https://github.com/Guthib-of-Dan/proposal-arraybuffer-detach
+
+[10:30:00.0914] <eemeli>
+On json-parse-binary, I find it surprising that the explainer does not appear to make any reference to the `{type: 'json'}` import attribute, or Fetch's `Response.json()` method. Is that intentional?
+
+[10:30:37.0081] <bakkot>
+I have a hard time understanding what problem json-parse-binary is solving. The only times I ever have a byte array containing JSON are when reading from the network or disk. From the network there's already `.json()`, and from disk there's `type: 'json'` imports. So... what's the remaining use case?
+
+[10:33:06.0103] <bakkot>
+for `.detach`, I think if you are in a situation where you are allocating and detaching a bunch of arraybuffers, something has already gone wrong. You'd generally be doing `encodeInto` or `setFromBase64` or similar, to avoid allocating the arraybuffers in the first place. So it is difficult for me to imagine a situation where the overhead of `.transfer(0)` is relevant
+
+[10:59:20.0242] <Daniel Dyryl>
+There is nothing to imagine, but see the benchmarks. Literally speed boost.
+
+I didn’t mention imports or Response.json, because that might look as rude that I want to change something, before I even found a delegate. But yes, asking WhatWG to use JSON.parseBinary in Fetch and also making use of it in json imports were one of my subsequent ideas, just not listed. So yeah, intentionally.
+
+[11:00:32.0891] <bakkot>
+Microbenchmarks are almost never convincing without a story for why a real application might do something anything like as frequently as a microbenchmark
+
+[11:01:24.0272] <bakkot>
+Browsers could already implement `.json` and `type: "json"` imports as parsing over binary; I don't think they've done so but there's nothing stopping them
+
+[11:01:25.0895] <Daniel Dyryl>
+Saying that “it saves cpu time and memory” doesn’t convince you?
+
+[11:01:34.0910] <bakkot>
+Not on its own, no.
+
+[11:03:00.0364] <bakkot>
+Basically any possible standard library functions would save nonzero cpu and memory for nonzero programs. There needs to be more than that, such as an argument that it would save significant cpu and memory for many programs.
+
+[11:05:37.0047] <Daniel Dyryl>
+Parsing over binary json saves us from constant reallocations + UTF16 upgrade of a string.
+By avoiding Error we potentially hide stack trace from unintentional leakages.
+If browser had implemented this, it would be even easier to expose such JSON parser, so nothing stops them, and nothing stops us.
+
+
+[11:06:00.0605] <Daniel Dyryl>
+* Parsing over binary json saves us from constant reallocations + UTF16 upgrade of a string because of a single emoji.
+By avoiding Error we potentially hide stack trace from unintentional leakages.
+If browser had implemented this, it would be even easier to expose such JSON parser, so nothing stops them, and nothing stops us.
+
+
+[11:06:49.0722] <bakkot>
+What I mean is: if your argument is "reading json from the network is slow because it goes through a string", then the solution is to convince browsers to implement a faster `.json()`, not to add a feature to the language
+
+[11:08:12.0056] <Daniel Dyryl>
+.json() belongs to Response, but in the case of node:http, we receive payload as chunks and not as a Response object
+
+[11:10:17.0132] <bakkot>
+For things to be worth adding to the language, they need to at minimum be useful in browsers, not just in node. but fwiw node already vendors simdjson so they might be open to exposing it to userland if you ask.
+
+[11:10:55.0809] <Daniel Dyryl>
+Concerning the “detach” and avoiding allocating ArrayBuffer, in the same node:http these chunks are allocated by the framework, not us. By using “detach” we would  optimise our handlers. If not everyone, then libraries we use every dat can adopt it.
+
+[11:12:17.0135] <bakkot>
+I would think an additional ArrayBuffer allocation is ~never going to be a relevant amount of CPU time when the network is involved, but I could be wrong about that.
+
+[11:12:30.0235] <bakkot>
+* I would think an additional zero-length ArrayBuffer allocation is ~never going to be a relevant amount of CPU time when the network is involved, but I could be wrong about that.
+
+[11:12:31.0634] <Daniel Dyryl>
+Not only node, but Bun, Deno as well. I am proposing this to a language because there is a wide choice of instruments.
+
+[11:12:42.0747] <Daniel Dyryl>
+* Not only Node, but Bun, Deno as well. I am proposing this to a language because there is a wide choice of instruments.
+
+[11:12:59.0229] <bakkot>
+WinterTC is the appropriate venue for server-runtime-only features
+
+[11:13:30.0774] <bakkot>
+Although IIRC bun and deno do expose `Response`-based HTTP servers, so they could just use `.json` already
+
+[11:14:36.0303] <Daniel Dyryl>
+By using Response.json we restrain ourselves from handling either network error, or parsing error. One method throws for both cases
+
+[11:15:05.0635] <bakkot>
+also wait node's request does have `.json`
+
+[11:15:18.0698] <bakkot>
+so they could all do this
+
+[11:15:38.0672] <bakkot>
+* ~also wait node's request does have `.json`~ nope, thinking of something else
+
+[11:15:44.0586] <bakkot>
+* ~~also wait node's request does have `.json`~~ nope, thinking of something else
+
+[11:15:54.0511] <bakkot>
+* <del>also wait node's request does have `.json`</del> nope, thinking of something else
+
+[11:16:05.0060] <Daniel Dyryl>
+So it can adopt these language features. Or I should spend much more time asking each of them, while there is a centralised place like ECMAScript specification?
+
+[11:16:52.0426] <bakkot>
+`.json` already exists. If what you want is for it to be more performant, that needs to be done by the implementors of it.
+
+[11:17:47.0910] <bakkot>
+If what you want is a different thing, TC39, WhatWG, or WinterTC might each be reasonable, depending on the thing you want. If you have a use case for parsing binary json that isn't just "I want `.json` to be faster" then it might be reasonable to do it in TC39
+
+[11:18:01.0847] <Daniel Dyryl>
+But still thanks for this discussion. I literally spent previous week in solitude.
+Making changes to existing APIs is much more likely to be avoided, as the changes are not backwards-compatible. 
+
+[11:19:00.0612] <bakkot>
+`.json` could operate on raw bytes, without an intermediate string, with no user-visible changes
+
+[11:19:14.0564] <Daniel Dyryl>
+So yes, for me it is reasonable to propose my ideas to TC39, because they are new, clearly express developers’ intentions, can be used in browser and on the backend, improve performance 
+
+[11:20:37.0535] <Daniel Dyryl>
+For some framework like uWebSockets.js, where data comes only in chunks, using Response.json() would be possible if we could create Response from binary chunks. Can we?
+
+[11:21:40.0647] <Daniel Dyryl>
+Oh, wait. We actually can
+
+[11:21:42.0898] <bakkot>
+The Response constructor can take a Uint8Array, yes
+
+[11:21:47.0062] <Daniel Dyryl>
+Just a minute 
+
+[11:22:12.0180] <bakkot>
+or a Blob if you have multiple Uint8Arrays
+
+[11:22:48.0276] <bakkot>
+(sidebar: it _is_ a little weird that Blob doesn't have `.json`, but whatever)
+
+[11:30:18.0780] <Daniel Dyryl>
+Made a quick microbenchmark (I believe that they tell a story) where 1 mil times in for loop of “await new Response(nodeBuffer).json()” takes 6 seconds, and 1 mil of “JSON.parse(nodeBuffer.toString())” takes 300ms
+
+[11:30:41.0959] <Daniel Dyryl>
+So async parser - not really worth modifying 
+
+[11:31:33.0689] <Daniel Dyryl>
+Json is small - {“key”: “value”, “key2”: 123123 }
+
+[11:32:00.0375] <Daniel Dyryl>
+* Json nodeBuffer (Buffer.from() result) is small - {“key”: “value”, “key2”: 123123 }
+
+[11:33:22.0313] <Daniel Dyryl>
+But since Blob was mentioned, probably JSON.parseBinary would also benefit from accept it. An additional extension, thanks
+
+[11:33:34.0800] <Daniel Dyryl>
+* But since Blob was mentioned, probably JSON.parseBinary would also benefit from accepting it. An additional extension, thanks
+
+[11:36:07.0503] <Daniel Dyryl>
+In Bun results are 230ms for JSON.parseBinary and 550ms for Response.json
+
+[11:36:18.0560] <Daniel Dyryl>
+Still a gap
+
+[11:36:28.0296] <Daniel Dyryl>
+* In Bun results are 230ms for JSON.parse and 550ms for Response.json
+
+[11:42:40.0322] <bakkot>
+That does suggest there is substantial room for engines to optimize .json, yup
+
+[11:43:22.0460] <bakkot>
+Adding a parseBinary to the language wouldn't cause them to do that work, though.
+
+[11:44:01.0716] <Daniel Dyryl>
+Yes. And again, I propose not only eliminating intermediate js string, but also stop throwing SyntaxError
+
+[11:44:08.0316] <Daniel Dyryl>
+So return-type is different
+
+[11:45:09.0081] <eemeli>
+What's the use case where the performance of the error handling of JSON parsing is actually relevant?
+
+[11:46:04.0218] <Daniel Dyryl>
+Literally every DDoS attack. I don’t think that attackers try to generously obey the rules of JSON syntax
+
+[11:46:39.0647] <Daniel Dyryl>
+Finding a weak spot here means using the worst case for the server
+
+[11:46:57.0385] <Daniel Dyryl>
+By using JSON.parseBinary we prevent these incidents
+
+[11:47:47.0891] <Daniel Dyryl>
+All SyntaxError does is it generates a stack trace. We need that for debugging. But we can’t debug payload that came from who-knows-where
+
+[11:48:02.0482] <eemeli>
+I don't see that represented in the explainer at all.
+
+[11:48:25.0215] <Daniel Dyryl>
+Because imagine me writing everyone “you can DDoS every backend out there”
+
+[11:49:02.0016] <Daniel Dyryl>
+That was a precaution. Now in this environment I can share it with you
+
+[11:49:18.0075] <Daniel Dyryl>
+* Because imagine me writing everyone “you can DDoS every js backend out there”
+
+[11:54:26.0062] <eemeli>
+I don't really buy the argument that a savings of about 3µs (according to the benchmark results in the explainer) while dealing with a single network request is worth the cost of not throwing a SyntaxError.
+
+[11:55:31.0956] <bakkot>
+Stack traces are generally created lazily already 
+
+[11:55:55.0698] <bakkot>
+So if you don't read .stack they're almost free
+
+[11:55:56.0194] <Daniel Dyryl>
+errors.mjs shows 2-3 seconds of difference
+
+[11:56:33.0990] <Daniel Dyryl>
+“throw” also has its drawbacks in performance
+
+[11:56:37.0655] <eemeli>
+Yeah, for 1 000 000 iterations.
+
+[11:56:40.0694] <Daniel Dyryl>
+500ms
+
+[11:56:59.0401] <Daniel Dyryl>
+DDoS is about 3 requests?
+
+[11:58:23.0603] <eemeli>
+My point is that you're showing that there is a potential for saving 3µs per network request by not throwing an error. That's such a minuscule fraction of the total time spent on that request that it's not worth the cost of having e.g. `JSON.parse` and `JSON.parseBinary` have different APIs.
+
+[11:59:17.0624] <Daniel Dyryl>
+Is 3us from only errors, or from string as well?
+
+[11:59:35.0648] <eemeli>
+I don't know, i'm quoting your own data.
+
+[11:59:38.0455] <Daniel Dyryl>
+* Is 3us from only errors, or from strings as well?
+
+[12:01:16.0453] <eemeli>
+Hang on, what does "DDoS is about 3 requests" mean?
+
+[12:02:09.0725] <Daniel Dyryl>
+I mean that those attacks imply dozens of requests, not 3 (exemplify low quality)
+
+[12:02:22.0581] <Daniel Dyryl>
+* I mean that those attacks imply dozens of requests, not 3 (exemplify low quantity)
+
+[12:05:14.0750] <Daniel Dyryl>
+I looked again into the closest benchmark to real scenarios a https://github.com/Guthib-of-Dan/proposal-json-parse-binary#parsing-benchmark
+Not 3us, but 3us -> 2ms.
+
+
+[12:05:24.0445] <Daniel Dyryl>
+* I looked again into the closest benchmark to real scenarios a https://github.com/Guthib-of-Dan/proposal-json-parse-binary#parsing-benchmark
+Not 3us, but 3us - 2ms.
+
+
+[12:05:44.0418] <Daniel Dyryl>
+* I looked again into the closest benchmark to real scenarios a https://github.com/Guthib-of-Dan/proposal-json-parse-binary#parsing-benchmark
+Not 3us, but 3us - 2ms per call.
+
+[12:05:53.0081] <Daniel Dyryl>
+* I looked again into the closest benchmark to real scenarios a https://github.com/Guthib-of-Dan/proposal-json-parse-binary#parsing-benchmark
+Not 3us, but 3us - 2ms per parsing.
+
+[12:09:15.0202] <Daniel Dyryl>
+I have mentioned in the repo “secure-json-parse” package which uses Error.stackTraceLimit = 0 trick before parsing. Their benchmarks show 7900avg / 3500avg latency
+
+[12:09:44.0461] <Daniel Dyryl>
+* I have mentioned in the repo “secure-json-parse” package which uses Error.stackTraceLimit = 0 trick before parsing. Their benchmarks show 7900avg for JSON.parse / 3500avg latency
+
+[12:11:02.0370] <eemeli>
+How long would you consider it to take for the server to deal with a single request? Not just the JSON parsing, but all the work involved before that?
+
+[12:14:23.0027] <Daniel Dyryl>
+Is there any special benchmark (not a microbenchmark) I can make which would convince you? With all work invlolved
+
+[12:14:35.0714] <Daniel Dyryl>
+* Is there any special benchmark (not a microbenchmark) I can make which would convince you? With all work involved
+
+[12:20:20.0818] <eemeli>
+Probably not, tbh. As far as I see, you're making an argument that the JS language itself needs to be changed for performance reasons, primarily to deal with hypothetical DDoS attacks, by avoiding throwing a SyntaxError from JSON parsing. This seems like an extraordinary claim, for which I'm not seeing the commensurate extraordinary evidence. Or an indication for why this problem really needs to be solved at the JS spec level.
+
+[12:23:56.0126] <Daniel Dyryl>
+To conclude, you see my ideas as ones optimising for rare edge-cases, which save roughly several milliseconds?
+
+[12:26:46.0297] <eemeli>
+To amend that: ... which might in certain cases (according to your benchmarks) save some _microseconds_ in the context of operations that are liable to consume in total at least multiple _milliseconds_.
+
+[12:28:48.0235] <Daniel Dyryl>
+Still, I am grateful for this discussion, I learned a ton of internal functionality and don’t regret at least trying. 
+I consider these ideas closed from now on. Well, I tried.
+
+[12:33:59.0549] <Daniel Dyryl>
+Wait. What about ArrayBuffer.prototype.detach?
+
+[12:35:01.0938] <Daniel Dyryl>
+* Wait. What about ArrayBuffer.prototype.detach? By now we have dealt only with JSON.parseBinary
+
+
+2026-05-07
+[22:36:25.0541] <snek>
+Daniel Dyryl: just fyi your proposal has not been rejected by the committee. there are many delegates and you spoke to only two of them here so far. and as your proposal was not officially discussed at a meeting it was not officially decided on one way or another. 
+
+[22:40:57.0555] <snek>
+there's also been a lot of discussion about the TextEncoder api in the past, about where it belongs and whether it would be faster if it were implemented directly in js engines. might be good context to look into.
+
+[22:41:32.0542] <snek>
+* @mitrax-of-dan:matrix.org: just fyi your proposal has not been rejected by the committee. there are many delegates and you spoke to only two of them here so far. and as your proposal was not championed and considered for advancement at a meeting yet it was not officially decided on one way or another.
+
+[23:03:57.0221] <Daniel Dyryl>
+Phew. Just kind of emotional, my apologies. These are my first ever proposals, I am not used to the rules of “several rejections != stop promoting ideas”.
+
+[23:25:45.0219] <kriskowal>
+Reminds me that when I was in a brass quintet and we were off to our first conference, our directors made sure we understood that the adjudicators don’t waste feedback if they don’t think you have potential. The more the better. A dearth of criticism is not what it seems.
+
