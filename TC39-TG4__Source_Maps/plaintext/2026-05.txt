@@ -91,3 +91,42 @@ https://evanw.github.io/source-map-visualization/#MTM1MwBmdW5jdGlvbiBmaXJzdCgpIH
 [03:55:07.0300] <Nic>
 Hey, I didn't notice that the TG4 meeting is today. Let's cancel it, given that we are having it next week too?
 
+[05:45:10.0571] <Caio Lima>
+I have one question regarding this test case here: https://gist.github.com/caiolima/6043cdbfd4e57a39f079fd007675ff9d. There I have a situation where I have an expression `add(2, 3) + multiply(4, 5)` where we both inline and constant fold calls, resulting in a single constant `25` on generated code. The thing is that the expected GeneratedRange I crafted doesn't look correct, because I'm getting one sibling `start` (line: 0, col: 12)` beginning before its other sibling `end` (line: 0, col: 12). Using ChromeDev tools encoder, I'm getting the following error: `Attempting to encode range item that precedes the last encoded range item (0, 12)`.Have you faced a similar limitation? 
+
+[05:45:27.0293] <Caio Lima>
+* I have one question regarding this test case here: https://gist.github.com/caiolima/6043cdbfd4e57a39f079fd007675ff9d. There I have a situation where I have an expression `add(2, 3) + multiply(4, 5)` where we both inline and constant fold calls, resulting in a single constant `25` on generated code. The thing is that the expected GeneratedRange I crafted doesn't look correct, because I'm getting one sibling `start` (line: 0, col: 12)`beginning before its other sibling`end`(line: 0, col: 12). Using ChromeDev tools encoder, I'm getting the following error:`Attempting to encode range item that precedes the last encoded range item (0, 12)\`.
+
+Have you faced a similar limitation? If so, what did you do to solve that?
+
+[05:46:47.0527] <Caio Lima>
+My intuition is that we should be able to represent that a given constant can be the result of multiple inlined calls constant folded.
+
+[05:57:29.0921] <Caio Lima>
+* I have one question regarding this test case here: https://gist.github.com/caiolima/6043cdbfd4e57a39f079fd007675ff9d. There I have a situation where I have an expression `add(2, 3) + multiply(4, 5)` where we both inline and constant fold calls, resulting in a single constant `25` on generated code. The thing is that the expected GeneratedRange I crafted doesn't look correct, because I'm getting one sibling `start` (line: 0, col: 12) beginning before its other sibling `end`(line: 0, col: 12). Using ChromeDev tools encoder, I'm getting the following error:`Attempting to encode range item that precedes the last encoded range item (0, 12)\`.
+
+Have you faced a similar limitation? If so, what did you do to solve that?
+
+[05:57:42.0068] <Caio Lima>
+* I have one question regarding this test case here: https://gist.github.com/caiolima/6043cdbfd4e57a39f079fd007675ff9d. There I have a situation where I have an expression `add(2, 3) + multiply(4, 5)` where we both inline and constant fold calls, resulting in a single constant `25` on generated code. The thing is that the expected GeneratedRange I crafted doesn't look correct, because I'm getting one sibling `start` (line: 0, col: 12) beginning before its other sibling `end`(line: 0, col: 12). Using ChromeDev tools encoder, I'm getting the following error:`Attempting to encode range item that precedes the last encoded range item (0, 12)`.
+
+Have you faced a similar limitation? If so, what did you do to solve that?
+
+[05:59:39.0114] <Caio Lima>
+The alternative I'm thinking so far is to actually either not emit the inline, or probably tweak the range to be a zero-range. However both of them I feel that we are missing interesting information here.
+
+[06:00:09.0012] <Caio Lima>
+* The alternative I'm thinking so far is to actually either don't emit the inline, or probably tweak the range for children to be a zero-range. However both of them I feel that we are missing interesting information here.
+
+[06:02:40.0743] <Caio Lima>
+I'm also curious to know what debuggers would do if they face such condition, because having the same range for 2 different "GeneratedRange" and different callsites is something I'm having a hard time to think how a debugger could show that.
+
+[06:27:30.0754] <Holger Benl>
+That's an interesting example. I'd omit the inlining information here because I wouldn't even know what the debugger should do with that information: if you paused at `25` in the generated code, what would you expect the debugger to show?
+
+[06:28:38.0016] <Holger Benl>
+Generally I'd always start with the question: what should the debugger show if I'm paused here and then think about what the scope map has to look like to achieve that.
+
+[06:29:06.0439] <Holger Benl>
+We don't pretend we can support every possible scenario with scope maps and that's OK.
+
