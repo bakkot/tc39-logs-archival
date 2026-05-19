@@ -480,3 +480,122 @@ Benny Powers: the test work is much appreciated 😄 I continue to be pressed fo
 [21:48:08.0979] <Benny Powers>
 it did seem there were one or two ambiguities in the spec. the test suite largely follows v8's implementation. 
 
+
+2026-05-18
+[09:59:12.0066] <Olivier Flückiger>
+Hi Benny, would you mind flagging these ambiguities. Background is that I was reviewing parts of the CL you are referring to and I would not put my hands into the fire that the CL is following the spec.
+
+[10:00:10.0270] <Olivier Flückiger>
+So I think it would be pretty unfortunate if we would base the tests upon our implementation and not the spec, when the purpose of the test should be to validate our implementation...
+
+[10:06:47.0858] <Olivier Flückiger>
+* Hi Benny, would you mind flagging these ambiguities. Background is that I was reviewing parts of the CL you are referring to and I would not put my hands into the fire that the CL is following the spec (given how complicated the spec is).
+
+[10:13:37.0106] <Benny Powers>
+Thanks Olivier
+
+Begging your forgiveness that I'm not deep in the code at the moment, but IIRC the two major areas of ambiguitry related to:
+
+x
+
+[10:14:34.0962] <Benny Powers>
+* Thanks Olivier
+
+Begging your forgiveness that I'm not deep in the code at the moment, but IIRC the two areas of ambiguitry related to:
+
+1. the correct order of operations when applying initializers
+2. ... (one moment)
+
+[10:22:32.0740] <Olivier Flückiger>
+ok, there are already a couple of open issues at https://github.com/tc39/proposal-decorators/issues . would be good to check if it's one of these or something new
+
+[10:23:55.0307] <Benny Powers>
+yes i think they're all identified
+
+1. initializer ordering
+2. IsCallable vs IsConstructor
+3. access.set on private methods
+
+I'm not here to introduce new problems. My motivation is _as a web developer_ with a special interest in web components and decorators.
+
+[10:26:12.0964] <Olivier Flückiger>
+that is appreciated :) but it's good to find the problems here before we try to ship something. so surfacing problems is good. we don't want to end up landing tests which are not actually testing what is written in the spec. 
+
+[10:27:20.0731] <Benny Powers>
+there may be further intent-vs-text gaps that i was unable to identify
+
+[10:27:28.0041] <Olivier Flückiger>
+so if you think the spec says something which contradicts the v8 implementation, then we need to resolve that, by either changing the implementation or the spec.
+
+[10:28:32.0332] <Olivier Flückiger>
+right, the spec basically has to have the textual authority. it must be unambiguous and match the intent.
+
+[10:28:50.0247] <Olivier Flückiger>
+the tests are an artifact of the spec text, not a spec itself.
+
+[10:29:01.0663] <Olivier Flückiger>
+* the tests are an artifact of the spec text, not a spec themselves.
+
+[10:29:03.0332] <Benny Powers>
+ye
+
+[10:29:05.0253] <Benny Powers>
+* yes
+
+[10:31:19.0781] <Benny Powers>
+in my day job, we ship (transpiled) decorators for our design system web components. at the moment, we're unable to decorate private methods (the stage 3 downlevel is too onerous to foist on end users), so we opt for this typescript
+
+```ts
+@decorated(whatever)
+private shouldBeEcmaPrivateMethod() { foo; }
+```
+
+rather than targetting stage 3
+
+[10:46:36.0255] <Olivier Flückiger>
+not 100% sure I follow, but are you saying you are hitting issues with the babel transpilation of decorators in combo with private methods?
+
+[10:47:47.0459] <Benny Powers>
+yes. the current typescript desugarring for stage 3 decorators would bloat our bundle sizes, so we intentionally opt for 
+
+[10:48:08.0137] <Benny Powers>
+* yes. the current typescript desugarring for stage 3 decorators would bloat our bundle sizes, so we intentionally opt for `experimentalDecorators: true` which implements an older version of the spec
+
+[10:48:23.0577] <Benny Powers>
+this prevents us from decorating `#privateMethod`
+
+[10:49:05.0568] <Benny Powers>
+NB: we're happy to continue doing this until "real" decorators land baseline - we don't have strong opinions on spec internals
+
+[10:49:41.0731] <Benny Powers>
+our primary goal is to continue to write decorators, while using something like bloomberg's whitespace types processor to emulate "types as comments"
+
+[10:49:54.0839] <Benny Powers>
+i hope that's clear
+
+[10:50:42.0904] <Olivier Flückiger>
+I see. thanks for the explanation. so I guess the problem is not decorating private methods per se, but just in general that the babel output is too large.
+
+[10:51:16.0180] <Olivier Flückiger>
+but decorating private methods would be your usecase for which you would like to switch to the spec decorators
+
+[10:54:54.0357] <Benny Powers>
+yes. we don't use babel, but typescript
+
+our cases for decorators:
+- annotating custom element classes - this one has a tag name , this one is themable, this one has a specific set of theme attributes applied
+- annotating class fields as custom element attributes (lit properties)
+- metaprogramming on methods - this lifecycle method runs when a given property changes
+- run this method when a custom element upgrades
+- time this async method and log results
+- when debug mode is configured, log the params and return of this method
+- run this method when the custom element receives a given event name
+
+[10:55:29.0913] <Benny Powers>
+https://github.com/patternfly/patternfly-elements/tree/main/core/pfe-core/decorators
+
+in addition to the library decorators which ship with lit
+
+[10:55:36.0240] <Benny Powers>
+thank you kindly for your attention
+
