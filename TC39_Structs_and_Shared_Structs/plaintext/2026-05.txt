@@ -1,0 +1,489 @@
+2026-05-20
+[07:48:23.0431] <rbuckton>
+Source URL doesn't necessarily need to be the source of identity, but Source Text only has its own problems, especially if a site isn't properly secured and can load arbitrary javascript. they could theoretically import a module with identical source text but its imports point to different locations.
+
+[07:49:55.0618] <rbuckton>
+If you have two files that both only contain `export const x = 1;`, would those compare identically?
+
+[07:50:33.0141] <guybedford>
+right, so provided whitespace and comments match, under the current spec yes
+
+[07:50:50.0360] <guybedford>
+so the equality survives serialization
+
+[07:51:14.0741] <guybedford>
+it does also do an equivalence of the URL in addition
+
+[07:51:15.0444] <rbuckton>
+Do imports not matter in that case?
+
+[07:51:30.0560] <guybedford>
+import maps would not be part of that identity model
+
+[07:52:50.0102] <rbuckton>
+I need to refresh my memory on the module source proposal
+
+[07:53:55.0420] <guybedford>
+this was the longer March presentation - https://docs.google.com/presentation/d/1inTcnb4hugyAvKrjFX_XHTnxYaPW0rodWwn0VFmlq24/edit?usp=sharing
+
+[07:56:04.0304] <rbuckton>
+I'm actually very surprised that the example in the explainer doesn't maintain source url. If you have
+
+```js
+// main.js
+import source myModule from "./foo/bar/my-module.js";
+const worker = new Worker(myModule);
+
+// foo/bar/my-module.js
+import { x } from "../shared.js";
+
+// foo/shared.js
+export const x = 1;
+```
+
+The module loaded by the worker would throw because the import can't be resolved?
+
+[07:56:22.0788] <rbuckton>
+* I'm actually very surprised that the example in the explainer doesn't maintain source url. If you have
+
+```js
+// main.js
+import source myModule from "./foo/bar/my-module.js";
+const worker = new Worker(myModule);
+
+// foo/bar/my-module.js
+import { x } from "../shared.js";
+
+// foo/shared.js
+export const x = 1;
+```
+
+would the module loaded by the worker would throw because the import can't be resolved?
+
+[07:57:07.0114] <rbuckton>
+* I'm actually very surprised that the example in the explainer doesn't maintain source url. If you have
+
+```js
+// main.js
+import source myModule from "./foo/bar/my-module.js";
+const worker = new Worker(myModule);
+
+// foo/bar/my-module.js
+import { x } from "../shared.js";
+
+// foo/shared.js
+export const x = 1;
+```
+
+would the module loaded by the worker throw because the import can't be resolved?
+
+[07:58:16.0545] <guybedford>
+No, the worker would separately import `/foo/shared.js`. Only `foo/bar/my-module.js` is serialized. Only with module declarations can the whole graph can be serialized. This avoids trying to serialize "instance state" / "linkage state".
+
+[07:58:30.0129] <guybedford>
+Instead `new Worker(myModule)` sets up the worker with the same import map
+
+[07:58:39.0694] <guybedford>
+one outstanding problem for WebAssembly is how to pass the shared memory here though
+
+[07:59:27.0069] <guybedford>
+(likely requires something like Node.js's data argument)
+
+[07:59:28.0014] <rbuckton>
+You're saying this resolution occurs during link time? What about dynamic import? It can't statically link `import(somestring)`
+
+[08:00:57.0102] <rbuckton>
+I'm also not sure what you mean by "separately import `/foo/shared.js`" or "same import map". How are all of these things wired together?
+
+[08:02:38.0578] <guybedford>
+`myModule` is serialized something like `{ sourceText, url }`
+
+[08:02:44.0597] <guybedford>
+then it is loaded into the worker
+
+[08:02:54.0688] <guybedford>
+and imported, and imports are then loaded on the other side
+
+[08:03:51.0059] <guybedford>
+in addition `new Worker(myModule)` when setting up the worker itself provides the import map from the parent into the worker's initialization
+
+[08:04:29.0383] <rbuckton>
+Doesn't that mean the `url` is tied to the module source?
+
+[08:04:46.0388] <guybedford>
+Yes, the module source is associated with its URL
+
+[08:06:08.0608] <rbuckton>
+Then I'm confused, as it seemed you were saying that the url isn't tied to the source. Or is it just that the url isn't used for comparison?
+
+[08:06:57.0818] <guybedford>
+the URL is not a unique key - this was an early design decision to ensure that `import(source)` always gives the instance for that source, and not _another source_
+
+[08:07:12.0937] <guybedford>
+the source has its own unique key
+
+[08:07:51.0418] <rbuckton>
+If so, that seems potentially dangerous as comparing on source text alone but with a different source location could allow an attacker to forge a module that might compare identically with another module, but loads relative imports from its URL that contain their own code.
+
+[08:08:07.0555] <guybedford>
+we compare on BOTH source and URL (host defined) currently
+
+[08:08:30.0409] <guybedford>
+See https://tc39.es/proposal-esm-phase-imports/#sec-modulesourcesequal
+
+[08:09:27.0440] <rbuckton>
+But then what was the normative change that was proposed? If the identity of a module is based both on source text and source url, I think that would be acceptable for shared structs as well, preferred even.
+
+[08:10:01.0005] <guybedford>
+because we cannot define a source identity based on zero motivation
+
+[08:10:08.0322] <guybedford>
+and there was zero motivation from shared structs for seeing this
+
+[08:10:29.0386] <rbuckton>
+Is this not appropriate motivation?
+
+[08:10:51.0281] <guybedford>
+the proposed identity change is module source _object identity_
+
+[08:11:03.0866] <guybedford>
+which cannot be forged, as it is then an object capability model
+
+[08:12:04.0371] <guybedford>
+The current spec status quo is URL + source text, which is unforgeable as source text URLs are internal and not possible to provide.
+
+[08:12:10.0957] <guybedford>
+so I don't see the concern either way though
+
+[08:12:13.0853] <rbuckton>
+
+```js
+import source m1 from "module.js";
+import source m2 from "module.js";
+m1 === m2; // ?
+```
+
+[08:12:30.0805] <guybedford>
+correct, `[[ModuleSource]]` sits on `module.js`'s internal slots
+
+[08:13:26.0261] <rbuckton>
+But `module.js` itself uses a registry to correlate the two modules, correct?
+
+[08:14:14.0045] <rbuckton>
+* But `module.js` itself uses a registry to correlate the two imports, correct?
+
+[08:14:28.0481] <rbuckton>
+* But importing `module.js` itself uses a registry to correlate the two imports, correct?
+
+[08:14:52.0143] <guybedford>
+yes, there is a second weak map that maps source objects to instances
+
+[08:15:13.0972] <rbuckton>
+Sorry, that's not what I'm geting at.
+
+[08:16:38.0280] <rbuckton>
+`[[ModuleSource]]` sits on the module record for `"module.js"`? during resolution you must still be able to correlate two imports to the same url as the same module record for that to work
+
+[08:17:30.0454] <guybedford>
+right, yes that is assumed
+
+[08:18:46.0173] <rbuckton>
+I would also expect that this would work?
+```js
+// a.js
+import source m1 from "module.js";
+import m2 from "b.js";
+m1 == m2; // true
+
+// b.js
+import source m2 from "module.js";
+export default m2;
+```
+
+[08:19:53.0774] <guybedford>
+yes exactly, that works, source is unique like namespaces
+
+[08:20:36.0079] <rbuckton>
+In a way, the `[[ModuleSource]]` *is* the key. For shared struct correlation to work, it would need to correlate between the instances in `[[ModuleSource]]` objects between workers.
+
+[08:22:01.0606] <guybedford>
+yes this was why we defined ModuleSourcesEqual so that import(serializedSource) could return an existing element for source if ModuleSourcesEqual(serializedSource, source)
+
+[08:22:44.0439] <guybedford>
+but I think the equality can still be drawn even if import(source) !== import(structuredClone(source))
+
+[08:22:52.0785] <guybedford>
+they're almost separate questions
+
+[08:23:22.0671] <rbuckton>
+It's the `structuredClone(source)` that worries me
+
+[08:23:53.0231] <rbuckton>
+Why would you need or want to clone the source as a new identity? 
+
+[08:24:45.0366] <guybedford>
+I think the argument comes from the other direction - source text identity is the more complex identity model
+
+[08:24:50.0009] <guybedford>
+that takes more work and care to define
+
+[08:25:25.0306] <rbuckton>
+Apologies, I have to wrap up soon as I have to be somewhere shortly. My point to the above question is that if strucutredClone is only relevant for `postMessage` passing, then a module source object should just be shared and transferrable
+
+[08:25:58.0029] <guybedford>
+structuredClone is just an example of postMessage behaviour without workers in play
+
+[08:26:23.0365] <guybedford>
+may as well talk about postMessage round trips
+
+[08:26:33.0193] <guybedford>
+when is a good time to resume?
+
+[08:27:31.0876] <rbuckton>
+I'll follow up when I am back. I'm not sure, exactly. I have to leave in a few minutes and won't be back until at least 2:30pm ET, so about 3 hours from now.
+
+[08:28:18.0061] <guybedford>
+Ok I'm on Pacific time to will be around, happy to answer further questions when suits
+
+[08:28:32.0294] <rbuckton>
+Sounds good.
+
+[11:37:48.0865] <rbuckton>
+I'm back. 
+
+[11:42:04.0912] <guybedford>
+welcome back
+
+[11:42:37.0013] <rbuckton>
+What was the expectation around `postMessage`?
+
+[11:43:53.0797] <guybedford>
+I think the identity arguments come from a place of cross-agent identity of sources not being seen as a crucial requirement - that is, even though possible to specify, it is work
+
+[11:44:39.0542] <guybedford>
+for example - module declarations require de broglie indexing to uniquify them, evaluated modules require a new separate indexing to identify them as distinct (e.g. `eval('module foo {}; foo')`)
+
+[11:44:55.0148] <guybedford>
+this is all a lot of work that is hard to specify as it exists between specs
+
+[11:45:05.0666] <guybedford>
+therefore if this work is to be fully undertaken it must be fully justified and motivated
+
+[11:45:07.0801] <guybedford>
+not just assumed
+
+[11:47:19.0347] <guybedford>
+the easiest round-trippable identity module remains an internal UUID as I mentioned, but the issue we have is the lack of existence in the spec today of any concept of a unique serializable generated ID being used for identity
+
+[11:47:35.0814] <rbuckton>
+The design for shared structs mandates some way to correlate the same declaration in two threads. If it's not something built-in to module source now, its something we will have to solve to make progress
+
+[11:47:59.0483] <guybedford>
+so this was the premise of the normative change - that structs was not interested in this identity model
+
+[11:48:17.0992] <guybedford>
+if we have a genuine argument being made that structs is indeed wanting this identity model, then that does change the assumptions
+
+[11:52:58.0718] <rbuckton>
+Yes. In some form, shared structs need a way to correlate a `shared struct` declaration in the same file loaded in two separate agents. Otherwise there exists the potential for a malicious third party to forge a declaration that exposes private state. The mechanism we've discussed for this has been to leverage the source url within the module resolution cache, though we would likely also need to verify that the sources are unchanged. This reduces the attack surface for a third party to maliciously intercept, and ensures there is no new registry with which one could introduce a side channel between two isolated scripts.
+
+[11:54:07.0260] <rbuckton>
+By having this guarantee, we can ensure that a method defined on a shared struct in one thread is an equivalent method in another thread, and allow methods in either thread to interact with the private state of a shared struct.
+
+[11:55:38.0520] <rbuckton>
+this allows us to have shared private state that can be guarded using thread coordination primitives at the public boundary, which was something that was necessary for Mark Miller's buy-in to the proposal.
+
+[11:55:42.0049] <rbuckton>
+* This allows us to have shared private state that can be guarded using thread coordination primitives at the public boundary, which was something that was necessary for Mark Miller's buy-in to the proposal.
+
+[11:58:35.0427] <rbuckton>
+A shared struct instance has no behavior itself, as methods cannot be shared. It also doesn't precisely have a `[[Prototype]]` slot. Instead, a prototype walk of a shared struct looks up the associated prototype object within the current realm, similar to how we look up the prototype for a string or number. This allows each agent/realm to maintain an agent-local version of the prototype so that functions remain local and only the data is in shared memory.
+
+[11:59:47.0820] <guybedford>
+Here's a question - would you consider the same shared struct in different compartments to fulfill shared struct identity?
+
+[12:00:15.0782] <guybedford>
+so the same underlying module sources defining the `struct` declaration
+
+[12:00:21.0905] <guybedford>
+but in different evaluation compartments
+
+[12:00:38.0309] <rbuckton>
+We might need clearer terminology. Do you mean "same shared struct declaration" or "same shared struct instance"?
+
+[12:01:14.0945] <guybedford>
+is declaration source equality not the same as shared struct instance equality? I guess that was my premise for source equality dependence?
+
+[12:04:34.0615] <rbuckton>
+If you mean reevaluating the module source in two different compartments, then you would have two independent evaluations of the declaration that are correlated between agents/compartments based on their source location. If you create a new instance of the shared struct in the first compartment it will have an associated identity tied to the declaration/source location from whence it was born. If you hand that struct to another compartment and evaluate within the context of that compartment, then any prototype walk would look for the declaration tied to the struct's type identity within that compartment.
+
+[12:05:25.0480] <rbuckton>
+At least, that's the case between agents and I believe we had discussions about the compartment model that aligned with this thinking.
+
+[12:07:04.0176] <guybedford>
+I guess identity would need to be the combination of identities of the struct declaration and its parent declarations as well?
+
+[12:07:11.0034] <guybedford>
+so that cross-module inheritance works out correctly
+
+[12:07:19.0508] <rbuckton>
+Parent declarations?
+
+[12:07:28.0097] <guybedford>
+for `struct Foo extends Bar`
+
+[12:07:32.0903] <guybedford>
+where `Bar` is imported from another module
+
+[12:07:45.0991] <rbuckton>
+Ah, that doesn't actually matter.
+
+[12:08:28.0937] <rbuckton>
+If you have `shared struct Foo extends Bar` we only care about the declaration itself. the first step on the prototype walk will look up `Foo` and a regular prototype walk will find `Bar`.
+
+[12:09:58.0598] <rbuckton>
+Since we only correlate declarations based on location (and content, I suppose), we can be reasonably certain the walk is the same since we have other requirements around subclassing.
+
+[12:10:02.0699] <guybedford>
+right so it can in theory work just fine from a shared memory perspective due to prototypal inheritance even if the contract of `Bar` is broken
+
+[12:11:01.0312] <guybedford>
+or rather `Bar`'s identity checks would fail explicitly?
+
+[12:12:23.0643] <guybedford>
+have you considered plain structural identity on field count and field names? Has that been ruled out for optimization purposes?
+
+[12:12:31.0023] <rbuckton>
+How would the contract for `Bar` be broken? IIRC, in `shared struct Foo extends Bar`, `Bar` must also be a shared struct declaration. Shared structs can only be declared at the top level of a module, so that severely limits how they could be broken. Perhaps not entirely, but reliably enough.
+
+[12:13:15.0755] <rbuckton>
+Structural identity cannot be used with private state. 
+
+[12:13:27.0628] <guybedford>
+if you have `import { Bar } from './bar.js'` and the server serves a different source for `Bar` to the worker versus the main thread
+
+[12:14:14.0821] <rbuckton>
+I suppose that's a fair point. Since `Bar` must be a shared struct, we would likely need to verify at least that the superclasses are the same.
+
+[12:14:50.0903] <guybedford>
+> Structural identity cannot be used with private state.
+
+Why not?
+
+[12:15:33.0976] <guybedford>
+Right this was my point and I think that could work.
+
+[12:16:03.0440] <rbuckton>
+By structural identity, do you mean two structs with the same field names and field count are the same?
+
+[12:16:11.0598] <guybedford>
+Yes exactly. Just getting lunch, will be back shortly
+
+[12:16:41.0962] <rbuckton>
+If so, then you wouldnt' be able to have `shared struct A { method1() {} }` and `shared struct B { method2() {} }` in the same compartment. you wouldn't know how to look up the correct prototype.
+
+[12:16:52.0573] <rbuckton>
+the methods aren't part of the identity. Only fields
+
+[12:17:18.0490] <rbuckton>
+* If so, then you wouldn't be able to have `shared struct A { method1() {} }` and `shared struct B { method2() {} }` in the same compartment. you wouldn't know how to look up the correct prototype.
+
+[12:17:34.0032] <rbuckton>
+* If so, then you wouldn't be able to have `shared struct A { x; method1() {} }` and `shared struct B { x; method2() {} }` in the same compartment. you wouldn't know how to look up the correct prototype.
+
+[12:17:52.0607] <rbuckton>
+* the methods aren't part of the instance. Only fields
+
+[12:19:06.0033] <rbuckton>
+You also don't want to have a `shared struct Safe { #secret; doSomethingWithSecret() { ... } }` and an attacker could write `shared struct Unsafe { #secret; getSecret() { return this.#secret; } }` and break encapsulation
+
+[12:52:14.0452] <guybedford>
+So for objects of the same compartment, could it be possible to allow nominal typing, while structurally typing foreign objects (objects that weren't executed in that compartment originally). This is effectively what WasmGC does.
+
+[12:54:21.0273] <rbuckton>
+That's the opposite of the behavior we want. 
+
+[12:55:07.0545] <rbuckton>
+If I create a `Point` or a `Mesh` struct in the main thread and hand it to a background thread, I want to be able to use it as a `Point` or a `Mesh` in the background thread as well.
+
+[12:56:39.0572] <rbuckton>
+That was a specific request from a number of projects that experimented with the V8 dev trial, it's virtually unusable in existing projects without this capability as there's no easy way to port existing code.
+
+[12:58:43.0744] <rbuckton>
+WasmGC is also essentially a compilation target, the limitations of WasmGC are generally hidden by the compiler
+
+[12:59:10.0017] <rbuckton>
+* WasmGC is also essentially a compilation target, the limitations of Wasm are generally hidden by the compiler
+
+[13:10:18.0512] <Richard Gibson>
+at the risk of rehashing [old arguments](https://matrixlogs.bakkot.com/TC39_Delegates/2024-04-11#L89), I am **highly** skeptical of that entire pattern, among other reasons because workers are created rather than springing into existence unbidden—it's like you want a way to keep secrets from yourself. But to bring something new to the table, I think I would now say that I am strongly opposed to any kind of automatic identity correlation that could possibly depend upon independent requests which cross an agent cluster boundary (_e.g., if the struct definitions to be correlated are in the contents of a file that is independently imported by the involved agents and could potentially be non-identical within them_). To get what you're describing here, I would consider it necessary for either the respective imports to be guaranteed to transitively resolve and link identically, or for one agent to directly communicate a reference to the other. The above link is an example of such communication used for explicit correlation, but I could also imagine extending APIs to support something like `new Worker(url, { type: "module", endowments: { Safe } })`
+
+[13:14:12.0901] <rbuckton>
+That was an approach that we already considered (see https://gist.github.com/rbuckton/08d020fc80da308ad3a1991384d4ff62). I'll need time to page back in all the prior discussion on that, however as many of my notes were left behind when I left MS.
+
+[13:14:30.0514] <guybedford>
+> If I create a Point or a Mesh struct in the main thread and hand it to a background thread, I want to be able to use it as a Point or a Mesh in the background thread as well.
+
+Right, I guess you need to know at the point of transfer the type, you don't want multiple `Point` types being made "equivalent"
+
+[13:14:48.0035] <rbuckton>
+And that likely won't be soon as I need to get some sleep very soon.
+
+[13:15:24.0462] <guybedford>
+what I'm hearing is that there may be genuine interest in using the module registry source equivalence relation we defined, as we were suggesting structs might want to use
+
+[13:15:55.0431] <guybedford>
+and if that is the case, then we can defer the norminal change until this matter is resolved - but that does mean leaning a Stage 2.7 specification normative semantic on a lower stage one, which is always unfortunate
+
+[13:17:39.0200] <rbuckton>
+IIRC, having identity be transparently correlated between agents provided better security guarantees and a better DX than any other design we'd considered. Having it "just work" made it far easier to avoid mistakes if you're leveraging a third party library with a lot of shared structs, such as a future version of Three.js. Manual handshake means having to pick over *and have access to* every shared declaration, even if the package in question prefers to keep its implementation details internal. 
+
+[13:19:00.0425] <guybedford>
+are there structs meetings being held that I can attend to discuss this further in terms of follow-on here?
+
+[13:19:10.0342] <guybedford>
+or is it worth moving to an issue?
+
+[13:19:50.0292] <guybedford>
+it's just important we define clear next steps if we are going to make this dependence explicit at this point
+
+[13:21:40.0904] <rbuckton>
+There need to be. Our meeting cadence fell apart when I was laid off from Microsoft and Shu left Google. I've been working on wrestling some time back for myself to return to this, which is why I'm trying to clear my plate of some of my other proposals.
+
+[13:29:16.0967] <rbuckton>
+What is the impact if we take the nominal change now, but essentially revert it when it becomes relevant?
+
+[13:41:11.0972] <guybedford>
+These are fairly fundamental semantics that apply across specifications.The identity model needs to be maintained on the HostDefined data on a module and expanded out in the HTML and WebAssembly specification aspects to ensure coherence of the host invariants. In particular this identity behaviour which applies across `eval('module foo {}; foo')`, `new WebAssembly.Module(bytes)` and `structuredClone(mod)` are all major aspects of the proposal (equality under `import()` of all input source objects there, invariant of their instancing). Since object identity is a "simpler model" than defining serializable source identity, if we do really want source identity defined, then I would rather keep source identity in-tact than change it now to change it back. But then it would be important to have the design discussions for structs to ensure this direction to avoid unnecessary churn in the proposal as well. If those discussions reached their conclusion away from source identity models then bringing back the object identity simplification is straightforward though. So I would rather go that direction of deferral, if we think it is justified.
+
+[13:55:26.0812] <rbuckton>
+Is `eval("module foo {}; foo") === eval("module foo {}; foo") ` equal to `true`? If so, I have concerns I'm a bit too tired to articulate at the moment. I'm also concerned about source modules lacking origin info and how that affects SOP if you ship them around and instantiate them cross-origin. 
+
+[13:55:51.0080] <rbuckton>
+* Is 
+eval("module foo {}; foo") === eval("module foo {}; foo")  equal to true? If so, I have concerns I'm a bit too tired to articulate at the moment. I'm also concerned about module sources lacking origin info and how that affects SOP if you ship them around and instantiate them cross-origin.
+
+[13:56:13.0868] <rbuckton>
+* Is `eval("module foo {}; foo") === eval("module foo {}; foo")` equal to true? If so, I have concerns I'm a bit too tired to articulate at the moment. I'm also concerned about module sources lacking origin info and how that affects SOP if you ship them around and instantiate them cross-origin.
+
+[13:57:04.0831] <guybedford>
+This is up to the HTML integration to decide - we previously talked about an "eval ID" being associated in the HTML spec to associate each unique evaluation with its own unique identity, as distinct from structuredClone
+
+[13:57:15.0938] <rbuckton>
+In any event, I need to sleep at some point before day 3
+
+[13:57:17.0694] <guybedford>
+or rather, the module declarations spec sorry
+
+[13:57:26.0923] <guybedford>
+WebAssembly for the Wasm spec same case though
+
+[13:58:31.0654] <guybedford>
+sure, I'm happy to defer the normative change for now on further discussion to revisit later, just let's make sure to do the follow-ups to avoid a stall
+
+[14:00:47.0864] <rbuckton>
+We still need to discuss structuredClone and postMessage as well. With shared structs, I'd love for that to be shared so it's easier to ship across threads w/o needing postMessage
+
+[14:01:23.0866] <guybedford>
+sure let's arrange to discuss further soon after the current meeting
+
