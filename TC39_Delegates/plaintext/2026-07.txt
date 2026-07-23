@@ -2506,3 +2506,1855 @@ stray thought: we've long said that the ratio of readers to writers of code is h
 
 this is to say, I am increasingly convinced that `if (let x = ...) { } else { x }` should be an early error, so that this code cannot be written, and thus the only cases that any reader of code will ever encounter are completely unambiguous.
 
+[04:30:59.0369] <rkirsling>
+even as somebody vehemently opposed to LLMs I agree with your conclusion :)
+
+[08:13:30.0244] <Michael Ficarra>
+the original sin was allowing people to write `0.1` instead of its real value `0.1000000000000000055511151231257827021181583404541015625` and pretend like it's 0.1
+
+[08:14:04.0453] <nicolo-ribaudo>
+Why don't we start writing a lint rule for that
+
+[08:14:07.0496] <Justin Ridgewell>
+Doesn't this mean the AI's naive assumption is the most natural? I see this and assume the X is available within both.
+
+I think what's increasingly confusing is only `using`'s scope. Just ban it. If you want to auto dispose, do it within the `if` body. `if (let x  = …) { using _ = x; … } else { x }`.
+
+[08:14:11.0164] <nicolo-ribaudo>
+With autofix
+
+[08:14:22.0307] <Justin Ridgewell>
+* Doesn't this mean the AI's naive assumption is the most natural? I see this and assume the `x` is available within both.
+
+I think what's increasingly confusing is only `using`'s scope. Just ban it. If you want to auto dispose, do it within the `if` body. `if (let x  = …) { using _ = x; … } else { x }`.
+
+[08:14:23.0628] <Michael Ficarra>
+I literally wrote one for eslint like 10 years ago
+
+[08:14:27.0322] <Michael Ficarra>
+it was rejected
+
+[08:14:35.0156] <nicolo-ribaudo>
+:/
+
+[08:15:04.0629] <peetk>
+but what if you want to condition on something on the disposable
+
+[08:15:13.0602] <Michael Ficarra>
+@nicolo-ribaudo:matrix.org https://github.com/eslint/eslint/issues/8447
+
+[08:15:51.0064] <Justin Ridgewell>
+The disposable is `x`. `if (let x = …; x.isOpen()) {}`
+
+[08:16:15.0696] <bakkot>
+... no? Nothing I wrote had anything to do with _the AI's_ assumption. Also I think you missed my point: some people think it will mean one thing, some people another. We can argue about which is "most natural", but if you simply don't ever encounter an `x` in the `else` then it doesn't matter which assumption you'd make.
+
+[08:16:45.0727] <Michael Ficarra>
+it was my last attempt to contribute to eslint lol https://github.com/eslint/eslint/issues?q=sort%3Aupdated-desc%20is%3Aissue%20state%3Aclosed%20author%3Amichaelficarra
+
+[08:17:29.0148] <peetk>
+oh i see. i think that's (a lot) worse than having to do `{ let x = ...; if ... else ... }` in the cases where you want `x` in the `else`
+
+[08:18:31.0201] <Justin Ridgewell>
+The AI wrote `x` because it assumes it's available, which I share when reading it.
+
+[08:18:53.0215] <Justin Ridgewell>
+Isn't that the whole point of this proposal?
+
+[08:20:22.0943] <peetk>
+@bakkot has several times made the argument that without the `using`, this proposal is maybe not even worth it given how easy it is to desugar. no `else` + `using` gives this proposal a very strong use case where it's not so easy to desugar yourself.
+
+[08:20:50.0857] <peetk>
+* bakkot has several times made the argument that without the `using`, this proposal is maybe not even worth it given how easy it is to desugar. no `else` + `using` gives this proposal a very strong use case where it's not so easy to desugar yourself.
+
+[08:22:23.0049] <Justin Ridgewell>
+I think `using` is the source of it's worse semantics.
+
+[08:22:26.0165] <Michael Ficarra>
+The AI may have written `x` to intentionally read from an outer `x` because it knows how the feature works.
+
+[08:22:29.0147] <Justin Ridgewell>
+* I think `using` is the source of its worse semantics.
+
+[08:22:41.0624] <bakkot>
+Maybe it was trying to refer to the `x` from the outer scope; you can't tell just from that snippet. But who cares? It will immediately discover that this doesn't work and write something else. (Or, much more likely, _if_ we ban it then it will already be aware that it is not legal and will not write it in the first place.) And so by the time a human actually reads it the human will not see the problematic construct and so will not encounter a situation where their intuition may differ from the AI's intent.
+
+[08:23:15.0183] <peetk>
+can you elaborate on this
+
+[08:23:50.0464] <bakkot>
+My point is, reasoning from "what is more natural" doesn't work all that well, because clearly people have different intuitions, but by simply banning it _people never need to be exposed to the fact that their intuitions differ in the first place_ (except in the increasingly-rare case that they're attempting to write the code, not just read it, and are not fully aware of how it works)
+
+[08:24:27.0193] <bakkot>
+I feel like you are not engaging with this argument at all
+
+[08:24:30.0337] <Justin Ridgewell>
+^ this entire discussion. `x` should be available within the `else {}`. The only justification for it not, is that we want the `using` scope to end with the `if`'s .
+
+[08:24:58.0419] <Justin Ridgewell>
+If there is no disposal, there's no need to remove its binding from the scope.
+
+[08:25:03.0439] <bakkot>
+No! there is another _excellent_ justification for it to be an error, which is that some people assume it wouldn't be available, and that makes it inevitably confusing for a lot of people to read
+
+[08:25:25.0388] <bakkot>
+* No! there is another _excellent_ justification for it to be an error, which is that some people assume it wouldn't be available (i.e., would read through to the outer scope), and that makes it inevitably confusing for a lot of people to read
+
+[08:25:45.0651] <peetk>
+can you explain why you want this proposal? is saving 5 keystrokes worth it?
+
+[08:26:19.0559] <Justin Ridgewell>
+Based on the need for `using` to dispose? This isn't an issue with without it, who would care if the `x` is available or not?
+
+[08:26:33.0055] <Justin Ridgewell>
+It's increasingly not worth it.
+
+[08:27:06.0965] <ljharb>
+i mean, if it were available in the else, i'd use it to determine what kind of falsy value it was, no `using` involved
+
+[08:27:39.0675] <peetk>
+but you could do that without this proposal very easily
+
+[08:27:49.0937] <ljharb>
+sure, by defining it outside the if
+
+[08:28:02.0828] <Justin Ridgewell>
+That's exactly my reasoning. `if (let x = …; x.isFile()) { } else if (x.isDir()) {} else {}`.
+
+[08:28:26.0530] <James M Snell>
+at this point, I'm rather leaning towards *not* adding this because of the complexities and issues raised that seem to outweigh the syntactic benefit
+
+[08:28:33.0452] <peetk>
+yea but again why not just pop that let x outside the `if`
+
+[08:28:35.0025] <Michael Ficarra>
+@jridgewell:matrix.org there's no use in defining that in the if conditional though
+
+[08:28:39.0171] <bakkot>
+no, not based on the need for `using` to dispose, just based on literally looking at it and/or familiarity with languages like Rust and Swift
+
+[08:29:03.0106] <bakkot>
+did you see Lea's polls? there lots of people with this intuition https://github.com/LeaVerou/blog/discussions/139
+
+[08:29:43.0751] <bakkot>
+you can say their intuition is wrong, which, fine, whatever, they are wrong and bad. but we can still avoid making their lives harder, at _very_ low cost, simply by making it an error
+
+[08:29:47.0087] <Justin Ridgewell>
+I am looking at it? It should be available within `else`.
+
+[08:29:53.0094] <bakkot>
+yes
+
+[08:29:59.0737] <bakkot>
+I recognize that this is your intuition
+
+[08:30:06.0675] <bakkot>
+I would like you to acknowledge that other people have a different intuition
+
+[08:30:14.0810] <bakkot>
+not based on reasoning from `using`
+
+[08:31:23.0128] <Justin Ridgewell>
+I agree. This proposal only opens a confusing core case, with the goal of making `using` nicer in an `if`. I don't think that's worth it.
+
+[08:32:09.0127] <Justin Ridgewell>
+I do. But if they don't want to use the `x`, why would the write it in the `else`? Why would it ever refer to an outer scope when there's a inner scope that defines it?
+
+[08:33:55.0868] <bakkot>
+I am concerned primarily about people _reading_ code, not people writing code
+
+[08:34:26.0002] <bakkot>
+so they probably wouldn't! but if other people or AIs do, because they share your intuition or have learned that it works that way, they will encounter that, and be confused
+
+[08:34:34.0147] <Justin Ridgewell>
+> Why would it ever refer to an outer scope when there's a inner scope that defines it?
+
+I think that applies whether you're reading or writing.
+
+[08:34:59.0697] <bakkot>
+if it is not legal to write, then no, it does not apply
+
+[08:35:20.0100] <Michael Ficarra>
+isn't it a catch-22? won't more devs use it as a primitive?
+
+[08:35:30.0496] <rkirsling>
+if a new binding were meant to apply in an `else` then it would be presumably defined next to the else, just like catch
+
+[08:35:50.0878] <ljharb>
+also bigint was never going to be used by double digits of devs, it was designed intentionally not to be. if it was "Integer", however, it would have been
+
+[08:35:52.0376] <nicolo-ribaudo>
+Yeah I think if it was a primitive devs would start defaulting to decimals
+
+[08:36:00.0816] <nicolo-ribaudo>
+Like they default to let instead of var, even if var is faster
+
+[08:36:11.0491] <Michael Ficarra>
+I agree with ACE, I would love a primitive, but an API is good enough as long as our path to an eventual primitive is clear.
+
+[08:37:29.0073] <Richard Gibson>
+is this a claim that the *spelling* of built-in function `BigInt` made the difference? Which isn't even encountered with `n`-suffix syntax?
+
+[08:37:44.0615] <ljharb>
+no, the spelling reflects the semantics, which is what made the difference
+
+[08:37:52.0727] <Caio Lima>
+In almost all languages I mentioned, Decimal is exposed through an Object-like way.
+
+[08:37:55.0791] <eemeli>
+[@aclaymore:matrix.org](https://matrix.to/#/@aclaymore:matrix.org) My question from the end of the queue: What benefit would you get from a spec-defined object Decimal?
+
+[08:38:14.0335] <ljharb>
+* no, the spelling reflects the semantics, which is what made the difference. the lack of free coercion between integer numbers and BigInt is related.
+
+[08:38:37.0761] <Ashley Claymore>
+Because having a standard is very useful. Is that not why we are here :D
+
+[08:38:41.0801] <nicolo-ribaudo>
+That libraries you depend on know how to deal with it rather than having to convert my decimal type to something that those libraries understand
+
+[08:39:12.0603] <Richard Gibson>
+each bigint literally is an arbitrary-precision integer number
+
+[08:39:30.0619] <Michael Ficarra>
+people always forget about the value of data interchange!
+
+[08:39:45.0473] <Richard Gibson>
+oh, you mean integer Number... n/m
+
+[08:39:54.0767] <Richard Gibson>
+* oh, you mean integral Number... n/m
+
+[08:40:01.0023] <eemeli>
+Isn't that problem solved by Amount?
+
+[08:40:04.0526] <ljharb>
+yes. and, you can't use bigints interchangeably in places that expect integer numbers.
+
+[08:40:15.0696] <Caio Lima>
+keith_miller: I think your question on queue were related to this, right?
+
+[08:40:39.0476] <ljharb>
+if bigint was designed differently, Number would be only used for non-integers today.
+
+[08:40:58.0995] <ljharb>
+* if bigint was designed differently, Number would be ~only~ primarily used for non-integers today in new code.
+
+[08:42:27.0444] <keith_miller>
+Would it? I'm not convinced. It'd probably be much slower unless BigInt were actually int32_t
+
+[08:42:47.0489] <ljharb>
+most people don't care about performance in that way ime.
+
+[08:43:24.0458] <Richard Gibson>
+I would expect int64 fast-paths
+
+[08:43:56.0456] <keith_miller>
+You'll never see int64 fast-paths because there's not enough bits in registers
+
+[08:44:05.0645] <keith_miller>
+Until we have 128 bit registers
+
+[08:44:10.0897] <ljharb>
+int32 fast paths then
+
+[08:44:17.0490] <Olivier Flückiger>
+that is exactly the problem.... that there will be this expectation...
+
+[08:44:32.0362] <Olivier Flückiger>
+without a guarantee
+
+[08:44:37.0402] <Richard Gibson>
+isn't this contradicted by the other languages that went that way?
+
+[08:44:38.0599] <keith_miller>
+Still not going to be any faster than a double unless it wraps around on overflow
+
+[08:44:52.0642] <ljharb>
+it doesn't have to be faster
+
+[08:45:00.0131] <Caio Lima>
+Well, one of the motivations of adding Decimal to the language is that it's being designed in a way that it can be potentially more performant than user-space Decimals. One point regarding data transportation here is that if there's a Decimal into the language, you can think in applications written in WASM where the transportation is essentially a pointer exchange.
+
+[08:45:03.0534] <keith_miller>
+They have types so they don't have to do boxing
+
+[08:45:25.0571] <ljharb>
+sure, that also applies to arbitrary integers/bigint tho
+
+[08:45:40.0109] <keith_miller>
+* They have static types so they don't have to do boxing
+
+[08:47:04.0779] <keith_miller>
+That's probably not going to happen. At the wasm layer it's going to be an externref. Wasm doesn't and probably will not in the foreseeable future have BigInts.
+
+[08:47:38.0092] <ljharb>
+does that mean it wouldn't happen with decimal either?
+
+[08:47:39.0027] <Richard Gibson>
+Python types are not static
+
+[08:50:37.0900] <keith_miller>
+AFAIK, Python does not inline arbitrary 64-bit integers even on 64-bit platforms
+
+[08:51:06.0052] <keith_miller>
+By pigeon hole principle it's just not possible
+
+[08:55:49.0724] <bakkot>
+this would be a reason not to do it; adding something which people actually use a lot but which is slower than the thing they'd otherwise do is _worse_ for the world than adding one that people don't use a lot
+
+[08:56:39.0378] <ljharb>
+although i think way more people would use a decimal primitive, i think enough would use a decimal object that your statement applies to both
+
+[08:57:05.0651] <bakkot>
+if people start using decimal for things that don't need it, that would be bad, yes
+
+[08:57:23.0858] <bakkot>
+however I am more optimistic; languages like Java have decimal and people only use it in places that actually warrant one, IME
+
+[08:58:02.0377] <bakkot>
+(well, most people only use it in places that warrant. there's always someone.)
+
+[08:58:38.0796] <eemeli>
+Queue is stuck?
+
+[08:59:20.0267] <Michael Ficarra>
+chairs are sleeping 🛌
+
+[08:59:42.0972] <peetk>
+ljharb can you elaborate on this: "I don't think that the object-based API solves it and I think it needs to be a primitive in order to solve it" (pulled from the notes so may not be word perfect) what aspect of the problem statement isn't solved by the object-based API?
+
+[09:00:42.0443] <ljharb>
+oh i'm sure the problem statement is currently carefully worded so the object ones technically solves it, but i see the problem statement as broad enough that it doesn't
+
+[09:00:48.0791] <Caio Lima>
+Regarding this question, module reasons we already talked, why do other languages provide a Decimal into their language? From Python's PEP (https://peps.python.org/pep-0327/) the motivation started to be a building block to implement Money, but they also find that it would be beneficial to have that type for other use-cases as well. I see that interactions with DB records having a Decimal type is quite valuable for applications where JS is being widely used (mostly server-side JS here). Would Amount be capable of interacting with this DB data interaction case, for example?
+
+[09:01:05.0496] <ljharb>
+math and numbers is too important and too basic to be objects.
+
+[09:01:33.0109] <Michael Ficarra>
+"math is basic" -- Jordan Harband, Fields medalist
+
+[09:01:50.0508] <ljharb>
+basic !== easy :-p
+
+[09:01:53.0458] <peetk>
+what do you see as the problem statement?
+
+[09:02:04.0451] <Ashley Claymore>
+Objects if anything can be more powerful than primitives
+
+[09:02:31.0250] <ljharb>
+i want to do normal math. with operators. by typing mostly numbers.
+
+[09:02:51.0020] <Ashley Claymore>
+Numbers are not being removed
+
+[09:03:01.0382] <ljharb>
+`Number` isn't normal math
+
+[09:03:15.0197] <Ashley Claymore>
+base10 is no more normal than base2 in maths
+
+[09:03:19.0124] <peetk>
+isn't that just a distinct problem?
+
+[09:03:58.0430] <ljharb>
+tell that to my fingers :-)
+
+[09:04:01.0551] <bakkot>
+if you are thinking of this as "I want to use it in in everyday life for normal things that I currently use Numbers for", we should not add it because it would be very bad if people start doing that
+
+[09:04:12.0320] <ljharb>
+why?
+
+[09:04:21.0554] <bakkot>
+because it will be much slower
+
+[09:04:22.0169] <ljharb>
+that is absolutely the long term goal i want
+
+[09:04:28.0905] <bakkot>
+then we should absolutely not do this
+
+[09:04:31.0453] <Ashley Claymore>
+Some of us care about performance
+
+[09:04:38.0727] <Ashley Claymore>
+* Some of us care about performance :D
+
+[09:04:57.0999] <Michael Ficarra>
+lots of machines have decimal128 instructions!
+
+[09:05:17.0716] <ljharb>
+i fail to understand why, for current common Number usages, it'd be meaningfully slower
+
+[09:05:28.0371] <Ashley Claymore>
+because we have to box in JS
+
+[09:05:28.0654] <Caio Lima>
+But this is mostly about expressivity and syntax ergonomics than the problem being solved 
+
+[09:05:29.0285] <peetk>
+Bloomberg has a clear need we've articulated and we are content that the Object API would solve it. you're objecting because you have a different problem that this doesn't solve? is that correct?
+
+[09:05:33.0043] <ljharb>
+if it's something i can run a trivial transpilation over and make fast, then browsers can just do that
+
+[09:05:52.0106] <shu>
+oh yeah like what
+
+[09:06:03.0970] <ljharb>
+i also think they're aspects of the same problem. the performance motivation was just contradicted above, so what more remains to prefer "not a library"?
+
+[09:06:08.0110] <Caio Lima>
+There's lack of hardware to use decimals instead of Numbers.
+
+[09:06:09.0748] <Michael Ficarra>
+some!
+
+[09:06:15.0914] <ljharb>
+yes, and those are important concerns
+
+[09:06:17.0718] <shu>
+uh huh
+
+[09:06:36.0007] <ljharb>
+sounds like that's the problem that needs solving then
+
+[09:06:45.0820] <peetk>
+there is value is standardizing on a format
+
+[09:06:55.0207] <peetk>
+* there is value in standardizing on a format
+
+[09:06:58.0856] <bakkot>
+no, to be clear, native can be more performant than a library, just not as performant as a Number
+
+[09:07:10.0587] <ljharb>
+sure. but we generally don't add something to the language merely to have a coherence point
+
+[09:07:13.0040] <bakkot>
+performance is a totally valid reason to do this if, and only if, it is replacing libraries and not Numbers
+
+[09:07:42.0169] <ljharb>
+since a library can be written in wasm, you're saying native would still be faster than that?
+
+[09:07:49.0986] <ljharb>
+* since a library can be written in wasm, you're saying native would still be faster than that? (like, guaranteed)
+
+[09:08:25.0313] <peetk>
+i would argue that this is a good enough reason on its own. this is a standards body!
+
+[09:08:49.0038] <peetk>
+if it were in the language you could trust that every library will handle them
+
+[09:08:50.0208] <ljharb>
+standards bodies don't exist just to churn out standards for standardization's sake tho
+
+[09:09:07.0973] <ljharb>
+* standards bodies don't exist just to churn out standards for standardization's sake tho (ideally)
+
+[09:09:14.0554] <peetk>
+do you think we're doing this for fun
+
+[09:09:16.0808] <bakkot>
+depends on the hardware and whether wasm ever gets native decimal operators and how smart the JIT is, so no I can't guarantee it, but typically yes.
+
+[09:11:11.0463] <keith_miller>
+Devs can do it and send it to browsers :)
+
+[09:11:41.0820] <Caio Lima>
+But still I have the question, why is it not common that Decimals aren't primitives on most of the languages that provides them in their STL? There should be a reason for that common design choice.
+
+[09:12:21.0655] <ljharb>
+why would that be better, to push the cost to servers that won't all do it rather than making the entire web faster by doing it in-browser?
+
+[09:13:01.0110] <ljharb>
+i can't speak to other languages, but JS is unique in many ways, and we have a lot of idioms that are "weird" when attempted in other languages.
+
+[09:13:29.0671] <shu>
+you think it's faster for the entire web to do something every page instead of once ahead of time?
+
+[09:13:38.0207] <keith_miller>
+It would be faster on the server
+
+[09:13:44.0656] <ljharb>
+touché
+
+[09:13:45.0967] <Caio Lima>
+From my studies, the reason is rooted on the case that Decimal should have their specific usage, while Nubmer (float64) is preferred for everything else.
+
+[09:15:09.0025] <ljharb>
+"should" is pretty load-bearing there
+
+[09:15:28.0066] <ljharb>
+certainly the performance/hardware argument holds, for the current time
+
+[09:15:43.0995] <ljharb>
+but in the fullness of time we'll have hardware where it no longer does. at that point why "should"?
+
+[09:15:46.0684] <Caio Lima>
+That's why I asked if "does the use cases we have are compelling enough?" If we think the usage is too niche, I'd like to hear a block concern on that. 
+
+[09:15:49.0640] <bakkot>
+is "bushel" an actual unit or just an example of a thing you could have an Amount of but that is probably not a real unit
+
+[09:16:19.0610] <ljharb>
+that's what i've been saying the entire life of this proposal - that if it's not going to be able to replace Number, its use case is imo too niche to add to the language
+
+[09:16:33.0202] <dminor>
+There's four pecks in a bushel
+
+[09:16:36.0987] <ljharb>
+> In the U.S., it is legally defined as 2,150.42 cubic inches or roughly 1.25 cubic feet (about 35.24 liters)
+
+[09:16:47.0875] <bakkot>
+:|
+
+[09:16:54.0337] <peetk>
+so asking again: Bloomberg has a clear need we've articulated and we are content that the object API solves it. are you a) objecting because you have a different problem that this doesn't solve? or b) you believe we are wrong that it would solve our problem? or c) something else?
+
+[09:16:58.0190] <ljharb>
+* > In the U.S., it is legally defined as 2,150.42 cubic inches or roughly 1.25 cubic feet (about 35.24 liters)
+> the U.K. bushel is slightly larger, defined as 2,219.36 cubic inches (about 36.38 liters)
+
+[09:17:48.0985] <ljharb>
+i believe it would solve bloomberg's problem. i don't think "bloomberg's problem" is broad enough to warrant addition to the language on its own, and i guess i have a different problem this both doesn't solve and makes less likely to be solveable.
+
+[09:18:45.0249] <ljharb>
+either way i think it's clear we shouldn't have done BigInt
+
+[09:18:57.0262] <peetk>
+ok so you object to stage 1 even.
+
+[09:19:00.0860] <ljharb>
+* either way i think it's clear we shouldn't have done BigInt (which was also posited as solving a bloomberg problem)
+
+[09:19:10.0063] <Richard Gibson>
+it's an actual unit, and included in https://github.com/unicode-org/cldr/blob/main/common/supplemental/units.xml . "peck" is a related unit (four per bushel) that is not.
+
+[09:19:15.0396] <keith_miller>
+That doesn't seem like a stage 1 objection
+
+[09:19:27.0299] <ljharb>
+it was not my understanding that the stage 1 problem statement was so constrained so as to preclude the problem i wanted to solve
+
+[09:19:55.0007] <Richard Gibson>
+* "bushel" an actual unit, and included in https://github.com/unicode-org/cldr/blob/main/common/supplemental/units.xml . "peck" is a related unit (four per bushel) that is not.
+
+[09:19:55.0883] <keith_miller>
+* ~That doesn't seem like a stage 1 objection~
+
+[09:19:58.0907] <ljharb>
+also yeah i think it's still very much a stage 2 objection; it's fine to explore something narrow
+
+[09:20:01.0399] <Richard Gibson>
+* "bushel" is an actual unit, and included in https://github.com/unicode-org/cldr/blob/main/common/supplemental/units.xml . "peck" is a related unit (four per bushel) that is not.
+
+[09:20:04.0064] <ljharb>
+* also yeah i think it's still very much a stage 2 objection; it's fine to explore something narrow (which is stage 1)
+
+[09:20:12.0859] <keith_miller>
+Oh Matrix doesn't do markdown
+
+[09:20:42.0052] <Michael Ficarra>
+~it doesn't?~
+
+[09:20:46.0178] <Michael Ficarra>
+hmm
+
+[09:21:58.0478] <ptomato>
+<del>you can do it with `<del>`</del>
+
+[09:22:14.0826] <ljharb>
+also what got stage 1 was "BigDecimal" in 2020, and i think the proposal has evolved a lot over the years without reestablishing consensus (because it's not super important to do that within stage 1)
+
+[09:22:19.0438] <ptomato>
+<del>use `<del>`</del>
+
+[09:24:14.0730] <peetk>
+so if we re-brought a new proposal with the problem statement "we want a native means for doing precise decimal math so we can have a standard interchange format + perf benefits" you would block stage 1?
+
+[09:24:17.0761] <ljharb>
+but yeah i'm just not interested in the language having a non-primitive way to do math, and i've made that quite clear every time this has come up
+
+[09:25:36.0585] <peetk>
+* ljharb: so if we re-brought a new proposal with the problem statement "we want a native means for doing precise decimal math so we can have a standard interchange format + perf benefits" you would block stage 1?
+
+[09:25:43.0093] <ljharb>
+* but yeah i'm just not interested in the language having a non-primitive way to do generic math, and i've made that quite clear every time this has come up
+
+[09:25:44.0109] <bakkot>
+other people clearly do want that
+
+[09:25:52.0370] <ljharb>
+clearly
+
+[09:26:18.0100] <ljharb>
+there's a ton of things people clearly want, that aren't in the language because other delegates anti-want it
+
+[09:26:28.0003] <eemeli>
+Performance is explicitly not a use case or motivation for Decimal, right?
+
+[09:26:46.0747] <ljharb>
+* there's a ton of things people clearly want, that aren't in the language because other delegates anti-want it (including decimal primitives)
+
+[09:26:58.0941] <mgaudet>
+(Sorry, just a dumb side question: What does this interchange format actually end up looking like in practice? e.g. what does a JSON string with a Decimal value look like in practice)
+
+[09:27:20.0064] <ljharb>
+without JSON changing, i assume a string or some kind of custom object
+
+[09:27:24.0344] <eemeli>
+A JSON number, I presume?
+
+[09:27:38.0011] <ljharb>
+ah, yeah that'd work too, with the raw json stuff
+
+[09:27:57.0039] <dminor>
+That was my understanding, but it seems to keep coming up
+
+[09:28:22.0848] <peetk>
+when i say "interchange" i mean between JS libraries (although there would presumably be a choice made about how to serialize to JSON)
+
+[09:28:57.0533] <ljharb>
+why would such interchange be meaningfully better than "as a numeric string"?
+
+[09:28:59.0768] <eemeli>
+Number not being able to represent all JSON numbers is a motivation for Amount.
+
+[09:31:04.0711] <eemeli>
+That makes me think that if we end up with a JSON.parse options bag for the reviver, that should maybe include an option for how JSON numbers are represented.
+
+[09:32:56.0094] <bakkot>
+someone suggested that IIRC
+
+[09:34:27.0446] <Chengzhong Wu>
+strings can represent many things but it doesn't mean it is meaningfully optimal. This is why we need structured, semantic classes and objects
+
+[09:35:04.0955] <Clément Pit-Claudel>
+
+
+[Representative sample](https://blakeembrey.com/posts/2024-09-web-redos/) of the issue: Express.js/[path-to-regex](https://github.com/pillarjs/path-to-regexp) (8.6k stars on github) removing regex support entirely, due to ReDoS:
+
+> For version 8, I've removed regex features. I know this is a huge pain for users of the library and apologize in advance.
+
+[09:36:44.0980] <Ashley Claymore>
+It is not the primary motivation.
+But it is a motivation.
+
+[09:36:45.0597] <mgaudet>
+(to be clear, I'm not against the problem statement or anything here but one aspect that continues to confuse me is what interchange will actually look like, _especially_ across systems)
+
+[09:37:21.0727] <peetk>
+ljharb: i really hate to be a bother but do you mind answering my question at the top of this thread? genuinely i'm really trying to understand your objection
+
+[09:37:52.0282] <ljharb>
+i did answer it - https://matrix.to/#/!WgJwmjBNZEXhJnXHXw:matrix.org/$WZd9anGsMD1fcVnfxU9nLxWF47250NKbLa65aPfXHyY?via=matrix.org&via=mozilla.org&via=igalia.com
+
+[09:38:24.0984] <peetk>
+so that's a "yes" to "would you block my restatement of the problem for stage 1 if we brought it as a new proposal"?
+
+[09:38:35.0693] <ljharb>
+yes. "perf benefits" has been repeatedly debunked by browsers, and re "standard interchange format" i haven't been convinced that it'd be meaningfully better than "numeric strings" as an interchange format
+
+[09:38:49.0076] <ljharb>
+and i'm very disinterested in having a number system in the language that doesn't use primitives
+
+[09:40:45.0277] <peetk>
+is one delegate not being interested in something sufficient reason to block? (as opposed to, one delegate believing the proposal is harmful e.g.)
+
+[09:40:58.0233] <Ashley Claymore>
+In as much as, it's always a nice addition when there is the potential to not download a library and also to implement something natively.
+
+[09:41:07.0814] <ljharb>
+by saying "disinterested" and "antiwant" i'm saying that i think it would be harmful to have an object-based number system in the language
+
+[09:41:23.0852] <Ashley Claymore>
+One thing I'd really love to do is compare pure JS,Wasm,native implementations of Decimal128
+
+[09:41:31.0789] <peetk>
+thanks, i think it really helps to avoid euphemism in these contexts
+
+[09:41:42.0822] <Ashley Claymore>
+just to see what the relative overheads are
+
+[09:42:04.0721] <Ashley Claymore>
+* One thing I'd really love to do is compare pure JS/Wasm/Native implementations of Decimal128
+
+[09:43:10.0545] <bakkot>
+I can't think of way that subquadratic-superlinear matching comes up with regexes fwiw
+
+[09:43:39.0327] <nicolo-ribaudo>
+Good that the size of the regexp is usually constant and not dynamic
+
+[09:43:59.0894] <peetk>
+can you elaborate on what you think the harm would be?
+
+[09:44:05.0295] <Richard Gibson>
+counted quantifiers, plausibly
+
+[09:44:06.0913] <nicolo-ribaudo>
+* Good that the size of the regexp is usually constant for a given program and not dynamic depending on outside factors like user input or fs
+
+[09:44:57.0623] <Richard Gibson>
+* bounded-repetition quantifiers, plausibly
+
+[09:46:22.0417] <nicolo-ribaudo>
+Can we always run the two algorithms in parallel on two threads, and race them?
+
+[09:59:59.0240] <bakkot>
+oo generator is a fun idea
+
+[10:05:18.0255] <bakkot>
+I agree with Mark that timing channels are bad but strongly disagree that this means we must not add any new ones, they just need an adequate justification that I think there we have here 
+
+[10:08:12.0049] <Aurèle Barrière>
+Thank you for the exciting discussion! Have a good lunch
+
+[10:09:33.0452] <Olivier Flückiger>
+Btw. I do like the proposal, but am just not sure about the feasibility (or rather complexity vs. problem tradeoff).
+
+[10:09:54.0783] <Olivier Flückiger>
+It might be one of the proposals where early prototyping in actual engines would be really valuable for the discussion
+
+[10:14:02.0476] <Richard Gibson>
+I don't think it is justified here, especially since the resource budget *could* be deterministic
+
+[10:14:45.0158] <Michael Ficarra>
+TC53 would like to have a word
+
+[10:16:39.0723] <Steve Hicks>
+What about a way to interrupt a regex eval? That would push things like timing considerations outside but still allow libraries to provide a "safe eval with timeout" or whatever
+
+[10:17:29.0551] <Richard Gibson>
+yeah, that's space that would be opened up by a generator
+
+[10:17:57.0962] <keith_miller>
+Are the problematic regexes for these CVEs know to be risk sites before the CVE arrives?
+
+[10:18:18.0036] <keith_miller>
+* Are the problematic regexes for these CVEs known to be risk sites before the CVE arrives?
+
+[10:18:28.0912] <bakkot>
+often the CVE takes the form of "I was looking at your regex and noticed it could blow up"
+
+[10:18:37.0958] <bakkot>
+they are not usually known to the author to be risk sites
+
+[10:18:47.0071] <bakkot>
+but also they are not usually found by active exploitation
+
+[10:19:02.0978] <keith_miller>
+So, it sounds like any solution effectively has to be the default to be useful here?
+
+[10:19:33.0004] <Steve Hicks>
+generators can be awkward to use - a cancel token might be more ergonomic
+
+[10:19:36.0505] <bakkot>
+I think the existence of this feature would make people think about it more when writing, in a way they currently do not
+
+[10:19:37.0110] <keith_miller>
+* So, it sounds like any solution effectively has to be the default to be to solve the CVE problem here?
+
+[10:19:57.0017] <bakkot>
+cancel token only works if it's async which is impractical for many uses
+
+[10:31:08.0756] <Caio Lima>
+On summary, should we include discussions that happened after the timeslot, or just what got discussed on plenary?
+
+[10:35:40.0176] <eemeli>
+I would presume that referring to discussions on this channel in the summary would be fine.
+
+[10:38:59.0052] <Lea Verou>
+How would that look like?
+
+[10:39:20.0417] <waldemar>
+Rust's regex implementation is not linear in the size of the regex. Things like quantifiers and Unicode character classes cause problems. To prevent denial of service attacks via user-specified regular expressions, the engine includes an analogue of a timeout or resource limit that aborts on some regular expressions.
+
+[10:43:59.0023] <bakkot>
+looks like they document this as being linear in the size of the regex "where the size of the regex includes the expansion of all counted repetitions". there are finitely many character classes so those are definitionally at most constant size although the factor can of course be large
+
+
+[10:44:26.0681] <Lea Verou>
+The generator version would also let authors turn it into async, or use `scheduler.yield()` to yield to the event loop etc. It's not just a decision about allowing vs aborting. It could also be UX mitigation, i.e. "I still want the answer, but this is taking too long so I need to plan accordingly and communicate this to the user"
+
+[10:45:06.0630] <Lea Verou>
+* The generator version would also let authors turn it into async, or use `scheduler.yield()` to yield to the event loop etc. It's not just about allowing vs aborting, it's also about _handling_. It could also be UX mitigation, i.e. "I still want the answer, but this is taking too long so I need to plan accordingly and communicate this to the user"
+
+[10:45:24.0166] <Lea Verou>
+* The generator version would also let authors turn it into async, or use `scheduler.yield()` to yield to the event loop etc. It's not just about allowing vs aborting, it's also about _handling_. It could also be used for UX mitigation, i.e. "I still want the answer, but this is taking too long so I need to plan accordingly and communicate this to the user"
+
+[10:46:47.0438] <Lea Verou>
+It's not just about vulnerabilities either, there are well-intentioned inputs (for either a user-generated regex or the matched string) that be slow to match 
+
+[10:46:52.0694] <Lea Verou>
+* It's not just about vulnerabilities either, there are well-intentioned inputs (for either a user-generated regex or the matched string) that can be slow to match 
+
+[10:47:41.0049] <Lea Verou>
+I agree that generators are awkward to use, but that's something we should solve separately :)
+
+[10:59:02.0467] <waldemar>
+Yes, "a{9}{9}{9}{9}{9}{9}{9}" counts as a 4782969-character regular expression in Rust.
+
+[11:25:44.0588] <Michael Ficarra>
+it's almost like we should have done private symbols in the first place...
+
+[11:26:58.0255] <peetk>
+`export for` in general would be interesting
+
+[11:27:33.0300] <ptomato>
+side note, there's a slightly easier way to export module-scoped access to private fields than what was in the slide (but still I'd prefer private declarations)
+```js
+let myField;
+class MyClass {
+  #myField;
+  // ...
+  static #exportedMyField(instance) {
+    return instance.#myField;
+  }
+  static {
+    myField = MyClass.#exportedMyField;
+  }
+}
+```
+
+[11:33:22.0799] <ptomato>
+(well, I guess my way is more verbose, so easier is subjective, but it doesn't require the classes to be nested)
+
+[11:33:34.0710] <Justin Ridgewell>
+This is a mistake we made when adding class fields. It would have been much cleaner if we required `class { private #x = 1 }` to declare in the private field. Then `class { #x = 2 }` could just refer to the outer.
+
+[11:34:11.0152] <ljharb>
+literally anything could work eg `{ gimme #x: 3 }`
+
+[11:34:29.0097] <ljharb>
+i would have objected to the spelling "private" but i would have preferred some keyword, yes
+
+[11:36:09.0391] <eemeli>
+Csv we extend the timebox given that we're ahead of schedule?
+
+[11:36:19.0054] <eemeli>
+* Can we extend the timebox given that we're ahead of schedule?
+
+[11:36:38.0049] <Michael Ficarra>
+I think Kevin might prefer to spend the time on unblocking async iterator helpers
+
+[11:37:16.0017] <James M Snell>
+V8 (I don't know about other runtimes) have had the private symbol registry for a while.. e.g. `Symbol::ForAPI(...)` in the embedder API. Would much prefer an approach like that with the ability to restrict private symbols from being iterated using getOwnPropertySymbols ... So... something like `const x = Symbol.private('foo');` ... and private symbols don't enumerate but otherwise act just like other symbols
+
+[11:37:35.0652] <Chris de Almeida>
+we still have consensus items to get to, so it would be better to instead do a continuation later if possible
+
+[11:37:53.0573] <James M Snell>
+Basically think we can address the use case without any new syntax
+
+[11:38:07.0111] <Chris de Almeida>
+if the queue was not so large, sure
+
+[11:38:43.0684] <ljharb>
+we can, but the ergonomics would be worse - so why?
+
+[11:38:53.0267] <ljharb>
+(we can do both in either order, also)
+
+[11:38:59.0645] <Michael Ficarra>
+This being a global registry defeats the visibility restriction, right?
+
+[11:39:04.0708] <ljharb>
+although the "no new way to add a private symbol to an object" makes it trickier
+
+[11:39:26.0976] <James M Snell>
+No, `ForAPI(...)` is a global registry that is not exposed to user code
+
+[11:39:36.0922] <James M Snell>
+it's distinct from `Symbol.for(...)`
+
+[11:39:50.0626] <Michael Ficarra>
+guess it was the other way around
+
+[11:40:00.0050] <ljharb>
+i don't think it'd be better to have it be string-based tho
+
+[11:40:14.0351] <ljharb>
+two totally different files could make a private symbol "foo" and shouldn't be able to access each other's data
+
+[11:40:22.0674] <ljharb>
+and without syntax, it couldn't be lexical
+
+[11:40:29.0136] <ljharb>
+* and without syntax, it couldn't be lexical (which is why private fields are syntax0
+
+[11:40:30.0808] <ljharb>
+* and without syntax, it couldn't be lexical (which is why private fields are syntax)
+
+[11:40:36.0710] <James M Snell>
+`Symbol.private('...')` would not be able to give you from a registry... just keying off the same basic idea as ForAPI in that it's not accessible to users unless specifically handed to them
+
+[11:41:18.0716] <James M Snell>
+In any case, I'm +1 on Stage 1 but I think the approach should be fundamentally different than what is being proposed
+
+[11:41:32.0657] <ljharb>
+what's wrong with using syntax tho?
+
+[11:41:33.0814] <Chengzhong Wu>
+there are two methods to get a private symbol in V8 https://github.com/v8/v8/blob/3105a7cb526e310f2cf996769ba430a99619258a/include/v8-object.h#L53-L68 . Basically the equivalent to `Symbol(...)` and `Symbol.for(...)`
+
+[11:41:34.0211] <Michael Ficarra>
+it's already stage one 😅
+
+[11:41:40.0201] <ljharb>
+it could still become private symbols later
+
+[11:42:14.0824] <James M Snell>
+Typical issues with introducing new syntax, etc,etc... can be solved with API rather than syntax
+
+[11:42:28.0635] <ljharb>
+"confining it to lexical scope" requires syntax tho
+
+[11:42:59.0040] <ljharb>
+* "confining it to lexical scope" requires syntax tho. and that's a feature of this proposal imo, that you *can't* hand it out
+
+[11:43:30.0179] <Michael Ficarra>
+"a thing that is exactly like private fields but reified" 😍😍😍😍😍
+
+[11:43:40.0694] <keith_miller>
+Olivier Flückiger: "what does private #hello get you couldn't get from const hello = Symbol("hello")" It's sugar around that with defining everything non-enumerable
+
+[11:43:45.0319] <ljharb>
+eemeli: yes
+
+[11:44:29.0078] <Olivier Flückiger>
+I think it's more. private also does not show up getOwnProperty
+
+[11:44:55.0553] <ljharb>
+all symbols are public
+
+[11:45:15.0485] <keith_miller>
+That's because there's not an identifier? If you don't have the symbol then you can't `getOwnProperty`
+
+[11:45:33.0433] <keith_miller>
+Maybe there's some thing I'm missing from private fields
+
+[11:45:51.0479] <ljharb>
+`Object.getOwnPropertySymbols` exists
+
+[11:45:59.0922] <ljharb>
+so all symbols on an object are always reachable
+
+[11:46:04.0455] <ljharb>
+(also Reflect.ownKeys0
+
+[11:46:05.0405] <keith_miller>
+Does that give you non-enumerable?
+
+[11:46:07.0270] <ljharb>
+* (also Reflect.ownKeys)
+
+[11:46:07.0862] <keith_miller>
+Oh ok
+
+[11:46:08.0350] <ljharb>
+yes
+
+[11:46:19.0588] <ljharb>
+enumerability of symbols only impacts object spread/Object.assign
+
+[11:46:30.0045] <Steve Hicks>
+FWIW, not having "final" (classes and methods) also makes invariants impossible in nearly any case where you're dealing with classes.
+
+[11:46:37.0155] <ljharb>
+James M Snell: no, it does not ignore enumerable false
+
+[11:46:46.0351] <Caio Lima>
+Can't Proxies leak symbols on access? Or do proxies skips non-enumerable?
+
+[11:46:54.0576] <ljharb>
+not as of the introduction of private fields.
+
+[11:47:00.0196] <ljharb>
+proxies leak them also, yes.
+
+[11:47:05.0225] <ljharb>
+all symbols are fully public in every case full stop
+
+[11:47:24.0741] <ljharb>
+* James M Snell: no, gOPS does not ignore enumerable false
+
+[11:47:25.0066] <keith_miller>
+Well with export it it's not since a module can't decide who can import it
+
+[11:47:39.0555] <keith_miller>
+* Well with export it it's not very private since a module can't decide who can import it
+
+[11:47:55.0067] <ljharb>
+exporting it is nonviable, i have a later topic about that
+
+[11:49:02.0685] <keith_miller>
+It also seems like it's conflating two goals for private to export it
+
+[11:49:03.0817] <James M Snell>
+```
+> s = Symbol()
+Symbol()
+> m = {}
+{}
+> Object.defineProperty(m, s, { value: 1, enumerable: false })
+{}
+> Object.getOwnPropertySymbols(m)
+[ Symbol() ]
+> Object.getOwnPropertyDescriptor(m, s)
+{ value: 1, writable: false, enumerable: false, configurable: false }
+> m[Object.getOwnPropertySymbols(m)[0]]
+1
+```
+
+[11:49:28.0199] <ljharb>
+line 8 shows that it's there, yes
+
+[11:49:36.0975] <ljharb>
+(also Reflect.ownKeys includes non-enumerable symbols also)
+
+[11:49:45.0114] <James M Snell>
+That's what I'm referring to
+
+[11:50:03.0507] <ljharb>
+that snippet demonstrates that Object.getOwnPropertySymbols includes nonenumerable symbols
+
+[11:50:18.0768] <James M Snell>
+Yes, that's what I'm saying
+
+[11:50:21.0964] <ljharb>
+ah ok
+
+[11:50:26.0908] <ljharb>
+your queue item implied the opposite?
+
+[11:50:36.0689] <ljharb>
+* your queue item implied the opposite? maybe i misread
+
+[11:51:12.0023] <James M Snell>
+maybe I misworded... the point being, we need private symbols that do NOT show up in enumeration so they can actually be private
+
+[11:51:34.0024] <ljharb>
+ok agreed :-)
+
+[11:52:36.0694] <ptomato>
+I think private declarations as Kevin is proposing would be better than symbol property descriptors with `enumerableNoReallyIMeanItThisTime: true`
+
+[11:52:52.0953] <James M Snell>
+If we eventually have syntax for making symbols easier, then cool, but we can address this with API ... `Symbol.private(...)` return a regular Symbol that is truly not enumerated
+
+[11:53:16.0946] <ljharb>
+then you'd be able to add it to arbitrary existing objects. and that's an anti-goal
+
+[11:53:32.0708] <Olivier Flückiger>
+I think there are arguments for both. a private symbol is a more primitive concept that you could use to build this and also many other things with it
+
+[11:53:46.0050] <James M Snell>
+would require an additional slot on `Symbol` and a tweak to getOwnPropertySymbols/R.ownKeys
+
+[11:53:58.0451] <ptomato>
+why would we add that additional primitive concept when we already have the concept of private fields
+
+[11:54:06.0017] <Caio Lima>
+How would it work on scope? Every call of Symol.private("foo") return a different Symbol?
+
+[11:54:08.0881] <James M Snell>
+I don't see this as a problem. We do this in node.js cases and it works just fine
+
+[11:54:11.0265] <bakkot>
+eemeli: `private #x;` introduces a `#x` into the nested scope, such that you can refer to it in that scope. So does `class { #x }`. that's already how it works. 
+
+[11:54:15.0115] <Michael Ficarra>
+FYI: whenever we end an agenda items with a non-empty queue, the queue is captured in the `Log` tab (press 3 in TCQ)
+
+[11:54:18.0365] <ljharb>
+that's the point. without being syntax, it can't work
+
+[11:54:30.0903] <James M Snell>
+Yes, just like `Symbol(...)`
+
+[11:54:32.0512] <bakkot>
+the `private #x` syntax is new, but the "introduce a `#x` you can refer to in that scope" is just how private fields work
+
+[11:54:45.0933] <ljharb>
+"works just fine" is subjective, and doesn't mean it'd work when everyone has access to the feature
+
+[11:54:50.0581] <James M Snell>
+only difference is it doesn't show up in enumerations at all
+
+[11:54:56.0652] <Olivier Flückiger>
+huh, `#private hello` is literally `const hello = Symbol.private()`
+
+[11:55:02.0791] <Olivier Flückiger>
+nothing else
+
+[11:55:10.0440] <ljharb>
+it'd still leak with proxies though
+
+[11:55:21.0533] <Chengzhong Wu>
+it can not do `obj.foo = #hello`
+
+[11:55:37.0080] <ljharb>
+* it'd still leak with proxies though, including with `privateSymbol in arbitraryObject`
+
+[11:55:41.0134] <Olivier Flückiger>
+ok, so it's a untouchable object?
+
+[11:55:52.0675] <ljharb>
+it's not an object, it's an unreified PropertyKey
+
+[11:55:52.0950] <Chengzhong Wu>
+like, not a first class value
+
+[11:56:00.0562] <ljharb>
+* it's not an object, it's an unreified PropertyKey - a PrivateName, which is already in the spec
+
+[11:56:02.0415] <Chengzhong Wu>
+* like, not a first class value, is it?
+
+[11:56:05.0196] <ljharb>
+no
+
+[11:56:16.0890] <ljharb>
+* it'd still leak with proxies though, including with `privateSymbol in arbitraryObject`, which imo makes it a bit of a nonstarter
+
+[11:56:38.0194] <Olivier Flückiger>
+that is the def. of a non-firstclass. it's a unique value but you can only refer to it in some places
+
+[11:56:47.0436] <James M Snell>
+I guess I'm less concerned with proxies and less concerned with making it fool proof... would prefer we just pave existing path rather than invent new syntax. Just me tho
+
+[11:57:08.0178] <ljharb>
+i get that. but "making it foolproof" is the reason private fields are already so valuable
+
+[11:57:09.0636] <bakkot>
+if you read the slide it had `export { #foo } for 'importer.js'` so you would be deciding who can import it for exactly that reason
+
+[11:57:24.0953] <ljharb>
+(and why we're better than every other language because we actually have private state that can't be runtime-introspected)
+
+[11:57:45.0770] <Olivier Flückiger>
+meta comment: I think our timeboxes feel way to small this time.
+
+[11:57:55.0582] <ljharb>
+* (and why we're better than every other language because we actually have private state that can't be runtime-introspected, whereas every other language has "_DO_NOT_USE_THIS_OR_BE_FIRED")
+
+[11:58:05.0915] <Michael Ficarra>
+I think it was only KG's timeboxes that were way too small
+
+[11:58:07.0563] <Caio Lima>
+There's also the early error of used but not defined that private fields brings. With Symbols it needs to become a runtime error.
+
+[11:58:26.0757] <bakkot>
+I did not expect this one to be controversial
+
+[11:58:34.0951] <Chris de Almeida>
+yeah, but we still always want to capture it because chairs often drain the queue before moving on.  (cognitive momentum to TCQ Legendary Edition (LE))
+
+[11:58:40.0855] <bakkot>
+I should have started with a recap of "what are private fields and why do we have them"
+
+[11:58:46.0319] <bakkot>
+because it seems like there is a lot of confusion about those questions
+
+[11:58:46.0678] <Chris de Almeida>
+* yeah, but we still always want to capture it because chairs often drain the queue before moving on.  (cognitive momentum from TCQ Legendary Edition (LE))
+
+[11:59:12.0707] <Michael Ficarra>
+hopefully you're at least using the copy queue button
+
+[11:59:24.0706] <Chris de Almeida>
+I mean..  _I_ am
+
+[11:59:52.0111] <Chengzhong Wu>
+is there a copy queue button?
+
+[11:59:52.0527] <ljharb>
+for one, i think it would make it much more likely we'll never have proper numerical math primitives, and that would be an incalculable harm
+
+[12:00:08.0912] <Michael Ficarra>
+chairs have all sorts of features, which includes a copy queue button, yes
+
+[12:00:13.0690] <Lea Verou>
+What I was going to say, in case it triggers any useful ideas:
+
+Similar concerns as eemeli . Without this being first-class there are too many open questions about how these behave. E.g. `Object.assign()`, `Object.defineProperty()`, exports etc. 
+
+But the motivation seems clear, many authors already use symbols that way and the fact that they are exposed via getOwnPropertySymbols() is a surprise to some. But like eemeli , I do wonder if we need a whole new primitive for this however.
+
+First, is lexical scope actually part of the requirements? Or just the ability to assign properties that are not visible to the outside unless explicitly shared, essentially like a more ergonomic version of the weakmap pattern?
+
+Seeing the slides my mental model was that this looks a lot like symbols with
+(a) more ergonomic syntax, that 
+(b) cannot be accessed via the usual ways of accessing symbols
+
+I wonder if it would be expressed in those terms, then it becomes predictable and the semantics fall directly out of that. Exports work, etc.
+With a new descriptor, it could be completely decoupled from syntax and even be applied to string properties too. Then `#foo` is only syntactic sugar to create and register such symbols that automatically have the right descriptor (just like symbols are automatically `enumerable: false`)
+
+[12:00:22.0157] <bakkot>
+the point is, we already have those. that is already what private fields are
+
+[12:00:29.0523] <bakkot>
+this proposal does not change that, at all, in any way
+
+[12:00:56.0497] <Olivier Flückiger>
+really? how would we catch
+```
+private #foo
+class NotFoo {}
+f = new NotFoo()
+f.#foo
+```
+
+[12:01:14.0293] <ljharb>
+obv that'd be a runtime error
+
+[12:01:31.0589] <eemeli>
+My problem with this is that it forces me to think of `#x` as a thing, while in the current code I can think of just the `#` as syntax for "private", and `x` as the field name.
+
+[12:02:04.0654] <ljharb>
+why as a thing? it's just like a variable
+
+[12:02:12.0463] <ljharb>
+does `var x;` make you think of `x` as a thing?
+
+[12:02:18.0062] <ljharb>
+* does `let x;` make you think of `x` as a thing?
+
+[12:02:43.0576] <Caio Lima>
+You declared `#foo` there. you can't just have `this.#foo` without a declaration.
+
+[12:03:08.0877] <Olivier Flückiger>
+same with `const foo = Symbol()`
+
+[12:03:14.0784] <eemeli>
+Yeah, `x` there is something that is a first class thing, and that's completely fine.
+
+[12:03:24.0155] <bakkot>
+did `#x in foo` not already do that?
+
+[12:03:35.0360] <ljharb>
+no it's not. `x` is a second-class thing that refers to a first-class value
+
+[12:03:36.0444] <Justin Ridgewell>
+^ Yah, that'll runtime error when because `NotFoo` doesn't declare the field.
+
+[12:03:59.0917] <ljharb>
+* no it's not. `x` is a second-class thing that refers to a first-class value. you can't pass around the binding such that `x = somethingElse` automatically exposes `somethingElse`
+
+[12:04:11.0281] <Justin Ridgewell>
+* ^ Yah, that'll runtime error when you access `f.#foo` because `NotFoo` doesn't declare the field.
+
+[12:04:38.0866] <ljharb>
+* no it's not. `x` is a second-class thing that refers to a first-class value. you can't pass around the binding such that `x = somethingElse` automatically exposes `somethingElse` to the holder of `x`
+
+[12:04:44.0851] <Olivier Flückiger>
+exactly, and that is why this is not fully syntactic and not fully first-class either
+
+[12:04:55.0479] <ljharb>
+it's not fully syntactic in class fields already
+
+[12:05:08.0101] <ljharb>
+`static is(x) { return #foo in x; }` is a runtime error, already
+
+[12:05:20.0697] <Caio Lima>
+Not even with let declarations, given TDZ
+
+[12:05:26.0838] <ljharb>
+* `static get(x) { return x.#foo; }` is a runtime error, already
+
+[12:05:31.0294] <ljharb>
+* `static get(x) { return x.#foo; }` is a runtime error when it doesn't have the field, already
+
+[12:05:38.0929] <bakkot>
+I should really write up the spec text; I think it may help clarify the extent to which this is not adding any new kinds of thing at all on top of how private fields already work
+
+[12:05:40.0708] <ljharb>
+(and const and super)
+
+[12:06:26.0164] <Michael Ficarra>
+I don't think anyone reads the proposal spec text. Even this meeting, I feel like I was the only one who actually read the spec text for numerous agenda items.
+
+[12:07:05.0081] <eemeli>
+Here too the `#` parses as syntax in my head. This is of course a rather subjective opinion.
+
+[12:07:16.0980] <bakkot>
+it... is syntax?
+
+[12:07:33.0469] <ljharb>
+the presence of the `#` should indicate it's syntax yes. same in all of kevin's slides examples
+
+[12:07:40.0151] <Michael Ficarra>
+lol wait what would a `#` be other than syntax?
+
+[12:08:34.0169] <James M Snell>
+fwiw, I 100% agree with things like `{ [#foo]: 1 }` to declare a private in a non-class object... I'm only having a problem with the approach `private #foo; class Foo { [#foo] = 1 }; let f= f = new Foo(); console.lof(f.#foo)` ... I think that should use a `Symbol.private(...)` type approach instead... treat them differently, not as regular private fields. But again, just one opinion. I can be swayed and shouldn't be considered blocking.
+
+[12:08:49.0968] <James M Snell>
+* fwiw, I 100% agree with things like `{ [#foo]: 1 }` to declare a private in a non-class object... I'm only having a problem with the approach `private #foo; class Foo { [#foo] = 1 }; let f= f = new Foo(); console.log(f.#foo)` ... I think that should use a `Symbol.private(...)` type approach instead... treat them differently, not as regular private fields. But again, just one opinion. I can be swayed and shouldn't be considered blocking.
+
+[12:09:11.0215] <bakkot>
+I am very strongly opposed to having a different kind of private field on top of ones we already have
+
+[12:09:23.0256] <Justin Ridgewell>
+I think if we need to involve Symbols, this proposal will die
+
+[12:09:32.0313] <Justin Ridgewell>
+Any reification into values will kill it
+
+[12:10:22.0957] <eemeli>
+The place where it smells to me like too much of a new thing is specifically `private #x`, which reads like the declaration of `#x` as something novel.
+
+[12:12:08.0051] <Olivier Flückiger>
+btw. I am also not blocking here. I think the main thing I trip over is that it's kind of a novel way of doing it, so I would like to see a bit of a discussion why it can't be done some "traditional" way, e.g. friend classes or private symbols, etc.. I understand there are probably technical problems with all of them. but it should be discussed.
+
+[12:12:38.0459] <Justin Ridgewell>
+This is the mistake. It should have always been `private #x` to declare within a scope, even for class fields.
+
+[12:13:10.0340] <Justin Ridgewell>
+Then it wouldn't be different that I've declared in my function scope vs my class scope.
+
+[12:13:12.0778] <bakkot>
+I did try to push for that at the last minute
+
+[12:13:16.0972] <bakkot>
+but it didn't go through, alas
+
+[12:14:05.0707] <Justin Ridgewell>
+We could try it again. Redefine `private #x; class { #x = 1 }` to refer to the outer field. You need `class { private #x = 1 }` to get a different inner field.
+
+[12:14:26.0769] <Justin Ridgewell>
+There is a change in semantics for nested classes that use the same, but honestly who is doing that?
+
+[12:14:45.0647] <bakkot>
+problem is that `class { #x = 1; static { class { #x = 2 } }` already shadows rather than being a reference to the outer
+
+[12:15:01.0563] <bakkot>
+fair, it is possible we could get away with changing it
+
+[12:15:25.0991] <bakkot>
+that said it does feel weird that `#x = 1` would sometimes be a declaration and sometimes just a reference, so I don't love it
+
+[12:15:42.0115] <ljharb>
+i think there should be a way to declare it
+
+[12:15:51.0484] <ljharb>
+and even if we can't change classes, i think we should make that new way work in class bodies too
+
+[12:16:01.0364] <ljharb>
+* and even if we can't change classes, i think we should make that new way work in class bodies too (and i still don't like the spelling "private")
+
+[12:16:17.0564] <Lea Verou>
+Why?
+
+[12:17:08.0988] <bakkot>
+for one thing, that would expand the scope dramatically
+
+[12:17:17.0602] <bakkot>
+and I don't think it warrants such a large change
+
+[12:17:22.0044] <Justin Ridgewell>
+Because reification breaks hard private requirement. We required only syntax to ensure it works correctly.
+
+[12:17:26.0510] <eemeli>
+Would it work to allow for `class { protected #x }`, so that `class { #y }` would effectively become sugar for `class { private #y }`?
+
+[12:17:58.0015] <bakkot>
+it doesn't _necessarily_ but it opens up a bunch of annoying questions like "can proxies intercept it"
+
+[12:18:17.0681] <bakkot>
+and some possible answers to those questions would break privacy
+
+[12:18:21.0386] <eemeli>
+Where "protected" here would mean that the field is available in the lexical context or whatever.
+
+[12:18:22.0164] <Justin Ridgewell>
+`protected` here wouldn't work like every other language, though. You can't late declare a class to refer to the `#x`, it would have to be lexical.
+
+[12:18:24.0594] <Lea Verou>
+How so?
+
+[12:18:44.0045] <eemeli>
+Some other word then.
+
+[12:18:55.0081] <ljharb>
+no, "protected" is wholly inappropriate for javascript
+
+[12:19:06.0647] <Justin Ridgewell>
+This is what I dealt with when I tried for Private Symbols. It's a very difficult question to address.
+
+[12:19:09.0680] <ljharb>
+"protected" (and "private") implies "access levels" which isn't how JS classes work
+
+[12:19:35.0827] <bakkot>
+I'm not totally sure what the suggestion is. `class { #y }` is pretty much already sugar for `class { private #y }` in the proposal as it stands
+
+[12:20:17.0591] <Lea Verou>
+Ah, right. Darn. 
+
+[12:20:22.0788] <Olivier Flückiger>
+I guess if we wanted symmetry we could also use `#foo` as the declaration in any script
+
+[12:20:31.0937] <Olivier Flückiger>
+* I guess if we wanted symmetry we could also use `#foo` as the declaration in any scope
+
+[12:20:59.0639] <eemeli>
+Suggestion is for the visibility declaration to be a part of the field declaration, not wholly separate from it.
+
+[12:21:41.0188] <Lea Verou>
+I suppose making these invisible to proxy traps would be a no-go?
+
+[12:22:14.0317] <Justin Ridgewell>
+It breaks membrane transparency when the value is intentionally passed between graphs.
+
+[12:22:24.0630] <ljharb>
+(the only intended use case for proxies, iow)
+
+[12:22:54.0748] <bakkot>
+sorry, I still don't understand; can you spell it out a little more?
+
+[12:23:16.0610] <Justin Ridgewell>
+I had like a 100 slide presentation trying to cover all the cases for how to do it. It becomes incredibly complex.
+
+[12:23:52.0933] <bakkot>
+also _we settled the question already_
+
+[12:23:55.0146] <Michael Ficarra>
+@sffc:mozilla.org me an JHD
+
+[12:24:10.0463] <Lea Verou>
+In the sprit of "code only sees these if it has a reference to them" what if you could supply a list of private symbols you have references to when creating the proxy, and any others are invisible to it and just automatically reflect?
+
+[12:24:24.0579] <Justin Ridgewell>
+https://docs.google.com/presentation/d/1HWM_pREmpz7QN9VrNeFt5T-x6CfKBL06pXhiQcxgfgU/edit?slide=id.g487eecbd48_0_123#slide=id.g487eecbd48_0_123 is the slidedeck _after_ I pared it back.
+
+[12:24:54.0217] <Michael Ficarra>
+@ljharb:matrix.org ooh good reminder, I almost forgot
+
+[12:25:24.0331] <Justin Ridgewell>
+* https://docs.google.com/presentation/d/1HWM_pREmpz7QN9VrNeFt5T-x6CfKBL06pXhiQcxgfgU/edit?slide=id.gc6f73a04f_0_0#slide=id.gc6f73a04f_0_0 is the slidedeck _after_ I pared it back.
+
+[12:29:38.0916] <Justin Ridgewell>
+* There is a change in semantics for nested classes that redeclares the same private, but honestly who is doing that?
+
+[12:30:09.0449] <eemeli>
+I think it'd be weird to have this: 
+```
+private #x
+class A { static #x }
+class B { static #x }
+```
+Where the visibility of `A.#x` and `B.#x` are both affected by the `private` declaration. It would be much clearer if the visibility of `A.#x` and `B.#x` were defined separately, with syntax immediately adjacent to their definitions as class fields.
+
+[12:32:28.0746] <bakkot>
+ah. I agree that we should not have the visibility of `A.#x` or `B.#x` affected by the `private` declaration and am not proposing it that it would
+
+[12:32:30.0421] <eemeli>
+So maybe this? 
+```
+class A { static outer #x }
+class B { static outer #x }
+```
+
+[12:33:59.0299] <bakkot>
+yeah, you'd need something like that to refer to the outer field
+
+[12:34:22.0420] <bakkot>
+I had it as `class A { static [#x] }` but this seems to have been confusing so probably some sort of keyword
+
+[12:34:26.0139] <bakkot>
+`outer` or `with` or something
+
+[12:34:54.0524] <rbuckton>
+One of these days I should propose `Symbol.geti`/`seti` for property get/set inversion. Originally considered for reified Slice/Index-from-end, it could also be used to allow `WeakMap` as a key using element access/computed property names. 
+
+[12:38:14.0398] <Steve Hicks>
+If this is an error
+```
+private #x;
+class A { #x; [#x]; }
+```
+then it's not a big stretch to my mind for
+```
+private #x;
+class A { #x; }
+```
+to also be an error.  In which case, why do we need another keyword, just use `#x` as-is to refer to the outer scope.  (admittedly, this is a bit of a straw man, since I don't think the first block should be an error, and I'd rather get more clarity on what exactly the scoping and shadowing rules are)
+
+[12:39:19.0032] <Justin Ridgewell>
+mgaudet: You're causing an echo
+
+[12:39:51.0359] <Steve Hicks>
+In particular
+```
+private #x;
+{ private #x; }
+```
+Is this allowed?  It seems equivalent to
+```
+class Outer {
+  #x;
+  static { class Inner { #x; } }
+}
+```
+which is definitely allowed currently.
+
+[12:41:08.0762] <bakkot>
+the error in the first case happens at _runtime_, when instantiating the class because it will try to install the inner field twice
+
+[12:41:19.0932] <bakkot>
+the `private #x` doesn't have anything to do with it in this case
+
+[12:41:42.0849] <bakkot>
+`class A { #x; [#x] }` is an error for the same reason
+
+[12:42:11.0401] <Steve Hicks>
+I guess what I'm saying is - why is that "the same" field?  One is #x and the other is [#x], aren't these completely different things?
+
+[12:42:37.0151] <bakkot>
+the same reason that `a.b` and `a['b']` are the same field?
+
+[12:43:34.0664] <Justin Ridgewell>
+You're redeclared an inner `#x`. The same way `let x; { let x; obj[x] }` refers to the inner x.
+
+[12:44:01.0685] <peetk>
+but there's no string `"#x"` in this case. one is a class-private-field-thing and one is a module-private-field-thing. they (plausibly) are different kinds of things
+
+[12:44:17.0629] <Steve Hicks>
+I think we have a different mental model for `private #x`.  What about `private #x; { private #x; }` are these the same thing?
+
+[12:44:44.0261] <bakkot>
+no
+
+[12:44:49.0452] <Justin Ridgewell>
+No
+
+[12:44:55.0442] <bakkot>
+same reason that `let x; { let x; }` are not the same thing
+
+[12:44:59.0014] <Steve Hicks>
+So why is it the same when the inner one is a class?
+
+[12:45:02.0724] <Justin Ridgewell>
+The same way `let x; { let x }` aren't the same var.
+
+[12:45:07.0949] <bakkot>
+or `class A { #x; static { class B { #x } }` for that matter
+
+[12:45:17.0621] <bakkot>
+* or `class A { #x; static { class B { #x } } }` for that matter
+
+[12:45:32.0505] <Steve Hicks>
+But you're saying that it _is_ the same in `private #x; class A { #x }`?
+
+[12:45:51.0949] <bakkot>
+no
+
+[12:45:55.0651] <bakkot>
+those are also different fields
+
+[12:45:59.0657] <bakkot>
+in literally exactly the same way
+
+[12:46:13.0294] <Steve Hicks>
+So why is `private #x; class A { #x; [#x]; }` an error?
+
+[12:46:41.0465] <Justin Ridgewell>
+Because the same private name can't be installed on the same object twice.
+
+[12:46:48.0784] <bakkot>
+for the same reason that `class A { #x; [#x] }` is an error
+
+[12:46:52.0650] <bakkot>
+the `private #x` has nothing to do with this
+
+[12:46:54.0910] <peetk>
+but they're not the same lmao
+
+[12:47:06.0735] <peetk>
+^
+
+[12:47:08.0560] <bakkot>
+it's just that `class A { #x; [#x] }` means "install #x on these instances twice"
+
+[12:47:12.0002] <bakkot>
+and that's an error
+
+[12:47:31.0780] <Steve Hicks>
+okay so we're interpreting the not-yet-defined `[#x]` syntax differently
+
+[12:47:32.0898] <bakkot>
+the `private #x` declaration does not come into play in any way
+
+[12:47:36.0047] <ljharb>
+(wouldn't be if one was x and one was y tho)
+
+[12:47:40.0556] <Steve Hicks>
+I think that's the disconnect
+
+[12:48:15.0432] <keith_miller>
+How much value do we get from shadowing? is it something we'd be willing to kill for `private #x`
+
+[12:48:46.0219] <bakkot>
+I get no value from shadowing and would be happy to kill it
+
+[12:48:54.0753] <bakkot>
+but we do already have it for classes
+
+[12:48:59.0699] <bakkot>
+so I don't see that much value in killing it either
+
+[12:49:02.0023] <keith_miller>
+As in `private #x class { #x = 1 }` refers to the outer
+
+[12:49:19.0305] <keith_miller>
+Yeah, idk maybe that's confusing
+
+[12:49:43.0906] <bakkot>
+oh, I don't love making `#x = 1` sometimes a declaration and sometimes a reference
+
+[12:49:49.0182] <bakkot>
+I'd be OK with making that line an error though
+
+[12:49:51.0073] <Steve Hicks>
+I guess I don't see `class { #x }` as defining a "thing" #x in the same way that `private #x` does precisely because the latter allows `[#x]` but the former doesn't.
+
+[12:49:53.0021] <Justin Ridgewell>
+The double initialization error already exists: 
+```
+class Base {
+    constructor(o) {
+        return o;
+    }
+}
+class Sub extends Base {
+    #x;
+    constructor(o, v) {
+        super(o);
+        this.#x = v;
+    }
+}
+const o = {};
+new Sub(o, 1);
+new Sub(o, 2);
+
+VM433:7 Uncaught TypeError: Cannot initialize #x twice on the same object
+    at <instance_members_initializer> (<anonymous>:7:5)
+    at new Sub (<anonymous>:9:9)
+    at <anonymous>:15:1
+<instance_members_initializer> @ VM433:7
+Sub @ VM433:9
+(anonymous) @ VM433:15
+```
+
+[12:50:06.0767] <Justin Ridgewell>
+This is using the super override trick.
+
+[12:51:29.0682] <bakkot>
+sorry, to be clear, they both would allow `[#x`
+
+[12:51:33.0561] <bakkot>
+* sorry, to be clear, they both would allow `[#x]`
+
+[12:51:37.0569] <bakkot>
+I didn't cover this and I guess I should have
+
+[12:51:40.0561] <Justin Ridgewell>
+You never need it in the former case, though? You only need it for classes so that you install the field at declaration.
+
+[12:51:52.0781] <bakkot>
+but the point is that `private #x` introduces a name in _exactly_ the same sense that `class { #x }` introduces a name
+
+[12:52:11.0559] <bakkot>
+and then we would have a syntax `{ [#x]: 1 }` for referring to _these existing kinds of names_ in object literals
+
+[12:52:14.0557] <Justin Ridgewell>
+You mean to allow `private [#x]` at block scope?
+
+[12:52:18.0828] <peetk>
+ahhhhh this is what i was missing
+
+[12:52:33.0691] <Justin Ridgewell>
+Why would you need to re-refer to the outer?
+
+[12:52:51.0509] <ljharb>
+a class could create an object with the private field?
+
+[12:53:10.0119] <bakkot>
+specifically I am proposing
+
+```
+class A {
+  #x = 1;
+  staticfactory() {
+    return { [#x]: 1 }; // makes objects which are not instances of A but have `#x` anyway
+ }
+}
+```
+
+[12:53:14.0361] <bakkot>
+* specifically I am proposing
+
+```
+class A {
+  #x = 1;
+  static factory() {
+    return { [#x]: 1 }; // makes objects which are not instances of A but have `#x` anyway
+ }
+}
+```
+
+[12:53:37.0326] <Justin Ridgewell>
+Oh, in object scope. Yes, that's allowed.
+
+[12:53:59.0431] <ljharb>
+`#x = { [#x]: true }` would also work
+
+[12:54:03.0144] <ljharb>
+* `#x = { [#x]: true };` would also work
+
+[12:54:23.0977] <bakkot>
+yes although, probably don't
+
+[12:54:43.0629] <ljharb>
+oh, definitely don't. it just follows.
+
+[12:55:13.0419] <peetk>
+thanks for clarifying.
+
+[12:55:22.0304] <Aki>
+I didn't catch a screenshot of the temp check
+
+[12:55:38.0131] <ljharb>
+log?
+
+[12:55:40.0966] <Justin Ridgewell>
+It's recorded in TCQ log
+
+[12:55:46.0485] <Aki>
+ah yes, the log
+
+[12:56:03.0110] <ljharb>
+it's better than bad, it's good!
+
+[13:00:28.0921] <Caio Lima>
+Thanks all for the participation on topics I presented
+
+[13:01:49.0879] <Aki>
+Well that was rather unceremonious so i'll just say REMEMBER TO FILL OUT YOUR SUMMARIES AND CONCLUSIONS seriously, not-doing it just makes more work for me and i _really_ deserve a little time off this summer, right?
+
+[13:02:05.0868] <ljharb>
+don't forget to transfer your proposal repos into tc39-transfer! waldemar sffc et al
+
+[13:05:28.0480] <Steve Hicks>
+So the cognitive dissonance I'm facing is that we'd like to be able to write `{#x:1}` and we can't because `class {#x=1}` is both a declaration and a use, so we need some other syntax to _only use_ the private name and not declare a new one.  So we compromise on `{[#x]:1}` instead, but the analogue between `[#x]` and `#x` doesn't work in my brain because it's different for strings - you need the extra quotes: `['x']` vs `x`.  I think that's why I find it surprising that they're the same.
+
+[13:06:15.0880] <bakkot>
+yes, very reasonable
+
+[13:06:47.0736] <Steve Hicks>
+I think I had the same issue in March with Lea Verou 's protocols proposal.
+
+[13:07:05.0542] <bakkot>
+next time I come back it will look like
+
+```
+private #x
+class A {
+  with #x = 1
+}
+```
+or something, instead of trying to re-use computed member access syntax
+
+[13:07:27.0447] <bakkot>
+`with` and `outer` I think are the only reasonable keywords there
+
+[13:07:38.0116] <bakkot>
+* `with` and `outer` I think are the only reasonable keywords there that I have thought of
+
+[13:07:52.0716] <Steve Hicks>
+I really dislove the use of `with` here... but I admit I'm not thinking of anything better either.
+
+[13:08:05.0338] <bakkot>
+and of course similarly for objects
+```
+private #x;
+function factory() {
+  return { with #x: 1 };
+}
+```
+
+
+
+[13:08:29.0135] <Steve Hicks>
+but at least the shadowing becomes a lot clearer
+
+[13:08:39.0695] <bakkot>
+(not _technically_ necessary for objects, but weird to omit IMO)
+
+[13:09:10.0754] <Steve Hicks>
+right, if we had a time machine we'd probably have been better off adding the syntax for the class declarations so that one syntax didn't do double duty
+
+[13:10:30.0533] <bakkot>
+I had that time machine and therefore did try, but was unable to convince the committee
+
+[13:18:11.0445] <peetk>
+you could take `nonlocal` from python which uses it in a way that i think is analogous
+
+[13:18:20.0590] <bakkot>
+oh god
+
+[13:18:22.0218] <bakkot>
+you're not wrong
+
+[14:31:43.0669] <Justin Ridgewell>
+I don't see why this isn't the same as `obj = { ['x']: 1 }` and `obj.x` being valid. You don't need to access with `obj['x']`.
+
+[14:42:50.0638] <James M Snell>
+With regards to the `Error` `code` property proposal `DOMException` discussion... I put together a rebuttal: https://github.com/tc39/proposal-error-code-property/issues/2#issuecomment-5051899121
+
+[14:42:52.0597] <Steve Hicks>
+That's a matter of perspective.  Under Closure Compiler rules, you absolutely do need to access it with `obj['x']` - so I think my brain is much more tuned to seeing `obj[` and `obj.` as two completely separate namespaces.  I get that in the engine they're the same thing, but I think my point stands that `.#x` and `[#x]` don't actually follow the same analogue as `.x` and `['x']` because even in this analogue you still need _both_ the brackets _and_ the quotes for them to be equivalent, and here we're just adding brackets, there's no analogue for the quotes.
+
+[14:46:20.0622] <Justin Ridgewell>
+But why would you need the quotes to refer to the key? Like, why would I need it for `const x = 'x'; obj = { [x]: 1 }; obj.x`? Or would this really be any better `private #x = '#x'; obj = { [#x]: 1 }; obj.#x`.
+
+[14:47:18.0113] <Justin Ridgewell>
+I see these as being exactly analogous to referring to a local key and accessing that with direct syntax.
+
+[15:06:04.0346] <hax (HE Shi-Jun)>
+Never seen this slide before! Why this failed ? 😭
+
+[15:23:05.0649] <bakkot>
+fwiw I think enough people found the `[#x]` syntax immediately confusing that I'm not going to pursue it any more anyway
+
+[15:23:20.0051] <bakkot>
+I do not love `with #x` but it hasn't lead people to this confusion in the same way
+
+[15:23:46.0712] <bakkot>
+even if that confusion would ultimately dissolve on sufficient reflection, which it might well, it's also important to be not initially misleading
+
+[16:00:00.0211] <hax (HE Shi-Jun)>
+So `class { #x = 1 }` could be seen as shorthand of `class { private #x; with #x = 1 }`?
+
+[16:11:18.0671] <bakkot>
+yup, exactly
+
+[16:11:30.0641] <bakkot>
+though in practice we probably won't have `private #x;` in class body scopes
+
+[16:13:42.0340] <bakkot>
+slightly longer writeup, mostly notes for myself for next time I present https://gist.github.com/bakkot/2272dbe261fb1c69844c723347ddb1a1
+
+
+2026-07-23
+[17:09:40.0762] <ptomato>
+FWIW, looking at the version with the `outer` keyword in your notes, I do indeed find it more intuitively readable than the `[#x]` version even though I didn't find that confusing either
+
+[01:05:51.0843] <nicolo-ribaudo>
+`using #x`
+
