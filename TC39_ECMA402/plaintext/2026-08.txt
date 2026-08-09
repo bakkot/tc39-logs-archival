@@ -1,0 +1,48 @@
+2026-08-08
+[12:41:45.0936] <justingrant>
+TIL (https://github.com/nodejs/node/issues/62676) that Temporal is intentionally disabled on MacOS installs via homebrew because Node cannot be built using "Shared ICU" build option. Homebrew apparently uses shared system libraries (not just for ICU) to reduce download size of Node installs.
+
+Looks like the ICU issue https://unicode-org.atlassian.net/browse/ICU-23400 (assigned to Markus Scherer) to enable using system ICU for Temporal hasn't seen any activity in 3 months.
+
+Do we know anyone in ICU and/or Node that could unblock this?  Seems bad to have many (most?) developers on MacOS not being able to use Temporal on the nodejs of their local dev machines.
+
+[12:43:15.0302] <justingrant>
+* TIL (https://github.com/nodejs/node/issues/62676) that Temporal is intentionally disabled on MacOS installs via homebrew because Node cannot be built using "Shared ICU" build option. Homebrew apparently uses shared system libraries (not just for ICU) to reduce download size of Node installs.
+
+Looks like the ICU issue https://unicode-org.atlassian.net/browse/ICU-23400 (assigned to Markus Scherer) to enable using system ICU for Temporal hasn't seen any activity in 3 months.
+
+Do we know anyone in ICU and/or Node that could unblock this?  Seems bad to have many developers on MacOS not being able to use Temporal on the nodejs of their local dev machines.
+
+[12:46:45.0471] <justingrant>
+* TIL (https://github.com/nodejs/node/issues/62676) that Temporal is intentionally disabled on MacOS installs via homebrew because Node cannot be built using "Shared ICU" build option. Homebrew apparently uses shared system libraries (not just for ICU) to reduce download size of Node installs.
+
+Looks like the ICU issue https://unicode-org.atlassian.net/browse/ICU-23400 (assigned to Markus Scherer) to enable using system ICU for Temporal hasn't seen any activity in 3 months.
+
+Do we know anyone in ICU and/or Node that could unblock this?  Seems bad to have many developers on MacOS not being able to use Temporal on the nodejs of their local dev machines.
+
+Node 26 is only a few months away from LTS, so it seems especially bad if this isn't resolved before then.
+
+[14:56:07.0726] <sffc>
+Hmm this is about loading the time zone data file. Temporal in V8 uses ICU4X, not ICU, except for the time zone data file
+
+[14:56:38.0624] <sffc>
+ICU is not needed at runtime at all. We only need a pointer to the zoneinfo64.res buffer 
+
+[14:57:18.0454] <sffc>
+And if Node wanted to use some other time zone data source, that is supported (might need a small patch)
+
+[14:59:43.0264] <sffc>
+So on other words, the discussion shouldn't be about how to access private ICU4C header files from a shared library. The real issue is how does Node want to source time zone data
+
+[15:05:36.0924] <sffc>
+And Node might want to source it differently than Chrome and that's fine
+
+[15:11:04.0426] <sffc>
+I don't entirely agree with the comments in the GitHub thread about public/private in this context, because the data file format itself is stable; calling the private APIs is akin to writing a custom .dat file parser.
+
+[15:12:29.0184] <sffc>
+So although it would be nice for ICU to export this function, I don't see that as being a prerequisite to V8 or Node reading the data file itself by bundling private ICU4C code
+
+[15:13:18.0449] <sffc>
+Does that help?
+
