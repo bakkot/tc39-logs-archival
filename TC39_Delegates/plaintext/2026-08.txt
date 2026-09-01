@@ -169,3 +169,54 @@ Any interest in reviewing this unrelated proposal?
 [01:21:59.0405] <rkirsling>
 hah! I'm not opposed, I've just got an awful lot to get done this week. I can make a note for myself to look at it soon
 
+[08:31:22.0778] <ljharb>
+the proposal is for the problem being solved, irrespective of the solution
+
+[09:02:54.0870] <bakkot>
+`DataView.prototype.byteLength` throws if the backing buffer is out of bounds; %TypedArray%.prototype.byteLength just returns 0. how do we feel about making DataView also return 0
+
+[09:03:14.0262] <bakkot>
+* `DataView.prototype.byteLength` throws if the backing buffer is out of bounds; `%TypedArray%.prototype.byteLength` just returns 0. how do we feel about making DataView also return 0
+
+[09:03:36.0205] <bakkot>
+`ArrayBuffer.prototype.byteLength` also returns 0 as of https://github.com/tc39/ecma262/pull/2164 (used to be spec'd to throw)
+
+[09:04:51.0979] <bakkot>
+generally I like louder errors but this inconsistency is quite surprising to me
+
+[09:04:58.0571] <bakkot>
+this came up in the context of https://github.com/whatwg/webidl/pull/1529
+
+[09:33:28.0358] <ljharb>
+if anyone's using it as a brand check, that would break them - i'd have to make changes to https://www.npmjs.com/package/data-view-byte-length for sure
+
+[09:49:29.0239] <bakkot>
+it would only break if using it as a brand check for a DataView backed by a detached or oob buffer, which seems unlikely?
+
+[09:50:58.0793] <bakkot>
+although actually even then it's somewhat hard to come up with a scenario where it breaks them using it as a brand check
+
+[09:56:33.0034] <ljharb>
+a predicate with a try/catch, so only an exception returns false
+
+[09:56:49.0399] <ljharb>
+but you're right that it's less likely since it's just detached or oob - just not zero
+
+[10:00:39.0346] <bakkot>
+currently you get an exception if it is not a DataView _or_ if it is a DataView backed by an oob buffer, and the proposed change would be to make it so you only get an exception if it not a DataView, and that seems probably more like what you want?
+
+[10:00:47.0927] <bakkot>
+if you're doing a brand check
+
+[10:15:40.0356] <ljharb>
+ah true. in my predicate i use the buffer accessor anyways, not byte length. so it indeed might not break anyone
+
+[15:51:02.0432] <James M Snell>
+On the `Error` code property proposal... I won't be in tokyo this time so won't be asking to advance it until the next plenary. However, the discussion around the claimed conflict with DOMException https://github.com/tc39/proposal-error-code-property/issues/2#issuecomment-5479041138 really has me for a bit of a loss and I want to get a sense of where folks here are at on the discussion.
+
+[16:45:30.0499] <Michael Ficarra>
+on a scale from Anne to James, I am James
+
+[16:46:42.0121] <Michael Ficarra>
+unless we can get a better articulated objection, I don't see how this feedback can be acted upon
+
