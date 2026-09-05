@@ -2,3 +2,55 @@
 [14:35:03.0258] <ljharb>
 exactly, same
 
+
+2026-09-05
+[17:49:04.0708] <James M Snell>
+Wanted to get some opinions on some far-too-common promise patterns to see if folks might consider them worth addressing. Both minor but exceedingly common.
+
+1. The evil terrible empty catch handler... `promise.catch(() => {})` ... done to suppress unhandled rejections when we don't actually care about rejections on those promises. Several web standard specs specifically indicate that rejections on certain promises should be marked as handled and V8 and other engines have native ways of marking these, but in JS all we have is adding the catch handler... which ends up creating another promise... 
+
+2. The never resolving promise... `await new Promise(() => {})` 
+
+For both, it might be nice to provide some syntactic sugar...
+
+```
+promise.markAsHandled();  // works on the current promise, no new promise created
+
+await Promise.never();  // or maybe even Promise.never as a singleton that never settles
+```
+
+Both quite simple but useful
+
+[18:53:53.0739] <bakkot>
+Seems a shame engines can't just optimize the specific `.catch` pattern but yeah something like that seems useful
+
+[18:54:20.0019] <bakkot>
+much less sure about the never-resolving promise thing, that has never come up in my experience though mine is not necessary representative
+
+[19:32:27.0206] <arai>
+I use the never resolving promise pattern quite often while debugging automated test cases, in order to pause the execution and investigate the state.  for this case, it might make more sense to provide the feature in the test harness tho
+
+[20:00:16.0374] <James M Snell>
+Yeah, comes up nearly exclusively in tests (the never resolving promise). That one probably isn't worth doing anything with because of that... 
+
+[20:00:36.0191] <James M Snell>
+but the empty `catch(() => {})` comes up WAY too often
+
+[22:33:12.0034] <ljharb>
+i mean, unhandled rejections are a normal part of the language, and it really sucks that both the web and node turn that into a failure mode
+
+[22:33:31.0951] <ljharb>
+imo that's the reason it comes up, because implementations introduced an artificial/unnecessary failure mode
+
+[23:25:02.0375] <eemeli>
+Why not allow for an argument-less `.catch()` instead of adding a new method?
+
+[23:48:51.0656] <Ashley Claymore>
+Because that would still create a new promise 
+
+[23:54:21.0186] <Zb Tenerowicz (ZTZ/naugtur)>
+Not if argument-less catch returned void. But it feels like a footgun 
+
+[23:58:19.0285] <Ashley Claymore>
+Yeah I don't think we'd want to overload the return type like that 
+
