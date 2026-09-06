@@ -54,3 +54,37 @@ Not if argument-less catch returned void. But it feels like a footgun
 [23:58:19.0285] <Ashley Claymore>
 Yeah I don't think we'd want to overload the return type like that 
 
+[06:10:41.0734] <James M Snell>
+Yeah, a polymorphic return would make me even more sad than an empty catch handler
+
+[11:45:48.0768] <Zb Tenerowicz (ZTZ/naugtur)>
+I like the Promise.never singleton
+promise.ignore() would be my naming choice instead of markAsHandled
+
+[11:54:22.0902] <bakkot>
+Ignore kind of implies no handlers will be invoked, to me
+
+[11:56:23.0701] <James M Snell>
+A nice quality of Promise.never is that the impl can be optimized to not retain any reactions. Promise.never.then(fn) can be a co-op that does not retain fn at all. 
+
+[11:56:38.0669] <James M Snell>
+* A nice quality of Promise.never is that the impl can be optimized to not retain any reactions. Promise.never.then(fn) can be a no-op that does not retain fn at all. 
+
+[12:30:09.0244] <rbuckton>
+I am reminded that some promise implementations that predated native promises had a `.done(onfulfilled, onrejected)` method that had no return value.
+
+[12:45:33.0553] <bakkot>
+from what I can tell spidermonkey at least is capable of not allocating a result when it is syntactically known not to be used, e.g. https://searchfox.org/firefox-main/source/js/src/builtin/Array.cpp#3440-3442
+
+[12:46:15.0220] <bakkot>
+I don't know if it does this for `.then`/`.catch` but I don't see any reason why it couldn't
+
+[12:46:45.0620] <bakkot>
+though I guess the unhandled rejection handler makes that tricky, hm
+
+[12:48:23.0781] <bakkot>
+actually it looks like they do: https://searchfox.org/firefox-main/rev/0271096efe3ea9e8c9a5479f26774f1842ef0585/js/src/builtin/Promise.cpp#7358
+
+[12:49:28.0743] <bakkot>
+oh and they just materialize a promise on the fly for the unhandled rejection handler if it was optimized out, very nice https://searchfox.org/firefox-main/rev/0271096efe3ea9e8c9a5479f26774f1842ef0585/js/src/builtin/Promise.cpp#4100-4107
+
