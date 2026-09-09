@@ -110,3 +110,66 @@ Just a friendly reminder to fill out the [In-Person Registration Form](https://f
 
 Looking forward to seeing everyone in Japan ♥️
 
+[07:53:06.0018] <peetk>
+how about `.suppress()`
+
+[10:15:33.0514] <James M Snell>
+suppress does not come across as meaningful to me. "unhandled" is common terminology for promise rejections, making "mark as handled" fairly intuitive
+
+[13:58:19.0009] <Zb Tenerowicz (ZTZ/naugtur)>
+How about p.handle() defined as a then with two optional args and  a void return value. Calls the eight callback if present to handle, disregards its return value and doesn't create a new promise 
+
+[13:58:51.0904] <Zb Tenerowicz (ZTZ/naugtur)>
+* How about p.handle() defined as a then with two optional args and a void return value. Calls the right callback if present to handle, disregards its return value and doesn't create a new promise 
+
+[14:38:41.0253] <James M Snell>
+I guess I'm just not sure why it's necessary to re-architect a simple approach that already exists 
+
+[14:40:05.0162] <James M Snell>
+it's really literally just putting a wrapper around an existing embedder function that is already called "MarkAsHandled" https://v8docs.nodesource.com/node-25.0/d3/d8f/classv8_1_1_promise.html#a797ac702cb8e94a7bf117e9d3eeb55bc
+
+[15:03:47.0174] <bakkot>
+Embedder functions are generally made for convenience of a particular engine with very little thought given to their design, and are also not exposed to 99.99%+ of users.
+
+[15:04:46.0146] <bakkot>
+It's certainly possible for an such a thing to have landed on a good design, but there's not much reason to take them as precedent except insofar that they establish a thing is possible
+
+[15:11:55.0935] <James M Snell>
+Yeah I know :-) I'm just not seeing any argument that convinces me that it's not a good design? If that make sense? Like I'm seeing bike shedding but no explanation why the current approach is not ideal. 
+
+[15:17:08.0337] <ljharb>
+i mean the current approach isn't ideal because the current reality isn't ideal. unhandled rejections are supposed to be fine.
+
+[15:19:49.0522] <James M Snell>
+Well, yeah.. ;-) ... accounting for that however
+
+[15:23:04.0872] <bakkot>
+whenever there's a proposal I think it makes sense to have a period of tossing out random related ideas before settling on a design even if there is nothing particularly wrong with the original proposal, because maybe there's something better
+
+[15:23:17.0855] <bakkot>
+but you have to actually spend a while playing with possibilities to know this
+
+[15:23:33.0126] <James M Snell>
+Fair
+
+[15:27:05.0012] <James M Snell>
+Let's not worry then what we call it or what the shape exactly is. Not discounting @ljharb's comments there about the situation being unfortunate, do we think there's enough of a motivation here for me to bring a Stage 1 proposal? 
+
+[15:28:09.0243] <James M Snell>
+* Let's not worry then what we call it or what the shape exactly is. Not discounting @ljharb's comments there about the situation being unfortunate, do we think there's enough of a motivation here for me to bring/ask for a Stage 1 proposal? 
+
+[15:28:39.0500] <ljharb>
+the only benefit over `.catch(() => {})` is that a noop isn't needed?
+
+[15:30:23.0600] <ljharb>
+* the only (concrete) benefit over `.catch(() => {})` is that a noop isn't needed?
+
+[15:31:10.0316] <James M Snell>
+No no-op function, no new returned promise. There's also the consideration that await p.catch(()=>{}) does not propagate the rejection to the await. But markAsHandled(p); await p; does propagate to the await still
+
+[15:31:56.0905] <James M Snell>
+Sure you could p.catch(...); await p; but the small footgun is still there
+
+[15:33:41.0218] <James M Snell>
+That's super minor but just illustrates that the whole motivation would be avoiding small footguns. They can be worked around already. This is why I'm just asking the question about whether there's enough motivation to even bring it
+
