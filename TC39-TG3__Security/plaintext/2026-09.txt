@@ -2,3 +2,100 @@
 [10:15:43.0838] <kriskowal>
 We did not convene today, lacking attendance.
 
+
+2026-09-24
+[05:53:51.0302] <Olivier Flückiger>
+Hi all, so I thought some more about the non-extensible applies to private and I actually plan to re-open the discussion a bit instead of blindly going with that PR of mine.
+
+[05:54:23.0094] <Olivier Flückiger>
+I have drafted some slides, happy to still incorporate advance feedback https://docs.google.com/presentation/d/1AZYPsiU0LEwI-Hh4zRrW23DvwCMUF5wHjPS4pFh4j6E/edit?usp=sharing
+
+[05:55:05.0783] <Olivier Flückiger>
+Mathieu Hofman erights kriskowal  who have engaged on the discussion before.
+
+[07:59:08.0925] <Richard Gibson>
+some thoughts: I don't care much about inefficiency in this edge case, but am opposed to introducing observability of partially installed private methods and accessors. However, I don't see the problem with PR 12... slide 8 claims that it invokes one trap "for every property", but it looks to me like it's just one [[PrivateMethods]]-conditional [[IsExtensible]] check inside InitializeInstanceElements, which runs once per _class_. So PR 12 remains my preference, but if that can't work for some reason I'm just missing, then given the tight constraints on proxies here (_[[IsExtensible]] applied to the Proxy object must return the same value as [[IsExtensible]] applied to the Proxy object's target object_), I would lean towards bypassing the trap by traversing [[ProxyTarget]] until finding the need for a revoked-proxy TypeError or a non-proxy object (_which would deny proxies the ability to **reactively** prevent extensions when asked if they are extensible, but whatever_). I would _not_ be happy with blind uniform treatment of proxies.
+
+[08:33:29.0983] <Olivier Flückiger>
+The problem is you can already observe properties mid-way and also freeze the object mid-way. but not methods. that is why we can easily hoist the check out of method installation (since they are currently pure), but not hoist it out of installing properties.
+
+[08:33:49.0604] <Olivier Flückiger>
+```
+class C {
+  #f1 = 1;
+  #f2 = Object.freeze(this); // Freezes `this` after #f1 is added, before #f2!
+}
+```
+
+[08:35:34.0217] <Olivier Flückiger>
+So on my matrix PR12 calls the trap before each property. TG3 (as I understood it) calls it once and then accepts that #f2 will be accidentally installed still. And the compromise would call the trap first (for shadow proxies) and then only check the underlying object thereafter for the rest (to avoid calling the trap multiple times) 
+
+[08:37:11.0384] <Olivier Flückiger>
+* So on my table PR12 calls the trap before each property. TG3 (as I understood it) calls it once and then accepts that #f2 will be accidentally installed still. And the compromise would call the trap first (for shadow proxies) and then only check the underlying object thereafter for the rest (to avoid calling the trap multiple times) 
+
+[08:39:16.0453] <Olivier Flückiger>
+But maybe I am dismissing PR12 too quickly. It does not introduce much more observability than what we already have...
+
+[08:47:42.0602] <Mathieu Hofman>
+I don't see how PR12 introduces much more observability. Yes it triggers the proxy trap but anyone could already observe the object with partially applied properties. And even interrupt the application.
+
+[08:49:31.0477] <Mathieu Hofman>
+For the blind uniform treatment of proxies, I would object to always consider them extensible (or only before revocation), at that would not satisfy our use case. 
+
+[08:50:49.0281] <Mathieu Hofman>
+I could accept always treating them non extensible for privates, as the only way this happens is with return override, which is an abomination 
+
+[08:51:11.0459] <Mathieu Hofman>
+But I suspect there may be web compat issues on that one
+
+[08:51:15.0693] <Olivier Flückiger>
+Mostly agree. What I meant is not only observable to code written in the class scope, but also observable to code attached to the proxy trap. There is one more object that does get to see the partial state.
+
+[08:51:39.0557] <Olivier Flückiger>
+(of course I am aware that you can always further leak it...)
+
+[08:52:58.0401] <Mathieu Hofman>
+Yes very true. It increases the scope, and until now the code in the class had to take explicit action to leak the object and / or observe it mid construction 
+
+[08:57:03.0873] <Mathieu Hofman>
+> <@mhofman:matrix.org> I could accept always treating them non extensible for privates, as the only way this happens is with return override, which is an abomination 
+
+However it would give a fairly reliable way of testing whether an object is a proxy, which isn't great 
+
+[09:06:47.0313] <Richard Gibson>
+my preference remains PR 12, which AFAICT allows proxies to observe an object before installation of any of a class's private elements but still does not allow them to observe an object with incomplete private methods/accessors for a single class. And my fallback preference remains trap-bypassing [[ProxyTarget]] traversal to a revoked proxy or non-proxy [[IsExtensible]] (whichever comes first). Treating [non-revoked] proxies as generally extensible or non-extensible w.r.t. private fields independent of their target's extensibility is worse than either of those IMO.
+
+[10:04:14.0931] <Olivier Flückiger>
+I am still ok with PR12 too.
+
+[10:04:30.0296] <Mathieu Hofman>
+We already have a precedent for ignoring proxy traps and checking the target directly, right?
+
+[10:23:20.0988] <Mathieu Hofman>
+Well it's a little different, [OrdinarySetPrototypeOf](https://tc39.es/ecma262/#sec-ordinarysetprototypeof) says: 
+> i. If cursor.[[GetPrototypeOf]] is not the ordinary object internal method defined in 10.1.1
+
+So this is more like skipping exotic behavior, instead of piercing. The only places where it pierces through are for function realm & isArray. We're also delaying exotic behavior in thenable curtailment. So we don't really have a precedent for piercing through to the target.
+FWIW, that's what the stabilize proposal tried to do.
+
+[11:56:15.0411] <Richard Gibson>
+what I'm describing is just like the IsArray piercing:
+If _obj_ is a Proxy exotic object, perform ? ValidateNonRevokedProxy(_obj_) and recurse on _obj_.[[ProxyTarget]]; otherwise return ? IsExtensible(_obj_)
+
+[12:19:07.0347] <Mathieu Hofman>
+except the array / realm lookup is not something a proxy can trap in the first place
+
+[12:27:10.0836] <Richard Gibson>
+that's true, but IMO irrelevant. Checking arrayness is not trappable, and if we took the above direction then checking private method/accessor compatibility would be likewise. In fact it's precisely that non-trappability that defines the approach.
+
+
+2026-09-25
+[01:21:49.0476] <ljharb>
+wait - i can put private fields on a proxy and not on its target?
+
+[01:22:16.0306] <ljharb>
+if i install a private method on a proxy, what is the receiver it sees?
+
+[01:37:40.0914] <Olivier Flückiger>
+apparently
+
