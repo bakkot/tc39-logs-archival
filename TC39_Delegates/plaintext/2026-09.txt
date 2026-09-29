@@ -359,3 +359,1104 @@ are you asking me about the ecma-404 topic? i was under the impression chipmorni
 [03:54:37.0204] <Chris de Almeida>
 Aki: 
 
+[04:40:36.0772] <Aki>
+😍😍😍
+
+
+2026-09-29
+[17:50:50.0608] <Rob Palmer>
+Good morning, all!
+
+[17:53:50.0243] <Rob Palmer>
+We're kicking off the meeting in 7 mins!
+
+[17:54:19.0063] <Rob Palmer>
+Could anyone dialling in one teams give us feedback on the AV?
+
+[18:01:00.0073] <Rob Palmer>
+We believe AV is all good
+
+[18:09:58.0221] <Justin Ridgewell>
+We really have to change my image in these slides.
+
+[18:21:58.0507] <ljharb>
+JS already has a logo, we should use it
+
+[18:24:04.0539] <Michael Ficarra>
+as a picture for Justin?
+
+[18:40:40.0067] <bakkot>
+why is iana un-deprecating timezones?
+
+[18:40:52.0712] <rkirsling>
+I too would like to know
+
+[18:41:49.0746] <rkirsling>
+does this make this the Hell Freezes Over meeting
+
+[18:41:53.0643] <Chris de Almeida>
+THE PEOPLE YEARN FOR AN UPDATED ECMA-404 SPEC
+
+[18:41:55.0048] <Richard Gibson>
+it's the question on everyone's mind
+
+[18:42:04.0191] <Andrew Paprocki>
+     The backward-compatibility names EST5EDT, CST6CDT, MST7MDT, and
+     PST8PDT now conform better to POSIX.  For example, EST5EDT now
+     always uses the abbreviation "EST" for standard time (now always 5
+     hours behind UT) and "EDT" for daylight saving time, whereas it
+     formerly had different UT offsets before standard time was
+     introduced and sometimes used abbreviations like "LMT", "EWT" and
+     "EPT", all contrary to POSIX.  Also, though not required by POSIX
+     these names now use US federal rules rather than rules of places
+     like New York, reverting to 2024a behavior.  This change affects
+     only timestamps before 1966-10-30 at 01:00 standard time.
+
+
+[18:42:19.0827] <Michael Ficarra>
+well we are discussing PTCs again, so definitely yes
+
+[18:42:22.0894] <ljharb>
+the intl enumeration is just strings?
+
+[18:42:26.0186] <Richard Gibson>
+now introducing Crystal JSON™️
+
+[18:43:06.0071] <Andrew Paprocki>
+They make these pedantic changes and cause untold hours of agony as issues spread through downstream packages
+
+[18:43:22.0873] <Andrew Paprocki>
+Can't tell you the number of hours wasted already on 2026d
+
+[18:48:14.0125] <Rob Palmer>
+Jarred Sumner is [experimenting](https://x.com/jarredsumner/status/2104739495895781679) with AOT JS citing performance, memory, user benefits at the expense of binary payload size.
+
+[18:49:12.0894] <Michael Ficarra>
+@robpalme:matrix.org my exasperation was that the microphones also take forever to turn on
+
+[18:50:33.0497] <Chris de Almeida>
+deferred power evaluation
+
+[18:52:13.0876] <rkirsling>
+just gotta take a quick beat
+
+[18:52:17.0730] <rkirsling>
+and ONE
+
+[18:52:28.0998] <rkirsling>
+* "and ONE"
+
+[18:55:51.0185] <Andrew Paprocki>
+amplification dead zone
+
+[19:11:16.0852] <Ashley Claymore>
++1 keith_miller could you say more about why transfer AB is considered deprecated? (Just curious)
+
+[19:13:24.0678] <keith_miller>
+When a page transfers ArrayBuffers it causes all(?) engines to perform worse because every access has to validate the buffer isn't detached
+
+[19:13:45.0705] <keith_miller>
+This is independent of which buffer is detached
+
+[19:14:23.0686] <Olivier Flückiger>
+We can now detach buffers without the protector.
+
+[19:14:40.0797] <Olivier Flückiger>
+If you only have a single typedarray on top of it.
+
+[19:14:46.0649] <Ashley Claymore>
+Would you suggest SharedArrayBuffers instead?
+
+[19:15:13.0936] <rkirsling>
+this bug involves a head-spinning combination of constructs for me 😂 (spoken as someone who's never used the Atomics API)
+
+[19:15:31.0195] <keith_miller>
+How do you know they don't alias the view somewhere?
+
+[19:15:39.0626] <keith_miller>
+Or do you mean ArrayBuffer with no attached views?
+
+[19:15:58.0403] <Olivier Flückiger>
+buffer with strictly less than 2 views attached
+
+[19:16:57.0765] <Olivier Flückiger>
+Basically we keep a back-ref to the views with is: `None | One(view) | Many`
+
+[19:17:31.0800] <Olivier Flückiger>
+If it's just one view we can mark just that one as detached without firing the global protector.
+
+[19:18:54.0156] <rkirsling>
+(sorry I read it more slowly and get it now)
+
+[19:23:52.0031] <Richard Gibson>
+thanks; it is so difficult to accurately describe the scenario in prose
+
+[19:25:54.0123] <keith_miller>
+I think you're running in our state that's when the protector fired.
+
+[19:27:34.0412] <keith_miller>
+We assume the length is constant (for non-growable buffers anyway), which is what the protector protects
+
+[19:27:50.0528] <keith_miller>
+* We assume the length is constant (for non-resizeable buffers anyway), which is what the protector protects
+
+[19:29:11.0223] <Olivier Flückiger>
+yes, same.
+
+[19:30:22.0761] <keith_miller>
+How do you do the increment without a length check?
+```js
+  for (let i = 0; i < view.length; ++i) {
+      if (i == 100)
+         view.transfer()
+      view[i]++;
+  }
+```
+
+[19:30:37.0309] <keith_miller>
+JSC emits no length check
+
+[19:30:39.0256] <Olivier Flückiger>
+the typed array itself changed to a special detached typed array map
+
+[19:30:52.0790] <Olivier Flückiger>
+so we deopt once you detach
+
+[19:30:55.0785] <rkirsling>
+wild getting to this right in the first morning
+
+[19:31:02.0612] <Olivier Flückiger>
+but by a type assumption, not by a global protector
+
+[19:33:15.0697] <Ashley Claymore>
+Only a 1 line change
+
+[19:35:47.0250] <Jesse (🇯🇵)>
+the best kind of change
+
+[19:38:18.0362] <bakkot>
+it is true that PTC being in the spec has caused some of the people writing new engines to add PTC, and I think that's good
+
+[19:38:32.0993] <rkirsling>
+it's hard to jump in with this but I feel like the argument can be made that even under the current process, this would be a case of "getting stuck upon implementer feedback"
+
+[19:39:27.0480] <rkirsling>
+it actually surprises me that none of the other engines in eshost have though 🤔
+
+[19:39:44.0306] <Justin Ridgewell>
+We hear Mark
+
+[19:40:00.0417] <Justin Ridgewell>
+* I hear Mark
+
+[19:40:01.0919] <ljharb>
+what would be the benefit of adding it if very little code is written to support it _because_ it's not usable on every browser?
+
+[19:44:00.0785] <Michael Ficarra>
+this is true, but to be fair I have also witnessed someone working on a compiler that targets JavaScript assuming that JS had PTCs, only to find out much too late that it wasn't actually the case, which is really unfortunate
+
+[19:44:54.0720] <bakkot>
+oh yeah that sucks
+
+[19:45:25.0345] <Michael Ficarra>
+(I still support keeping them in the spec)
+
+[19:49:36.0578] <Ashley Claymore>
+https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Execution_model#tail_calls does mention the browser compat
+
+[19:52:56.0459] <Ashley Claymore>
+I'd like to hear from more implementers in this discussion if possible :D
+
+[20:00:22.0800] <Michael Ficarra>
+those 2016 objections had very good responses from MLS, and it's a shame we did not get to hear them as well
+
+[20:01:49.0096] <Chris de Almeida>
+fair but I was only answering the query about why they didn't implement
+
+[21:05:47.0842] <rkirsling>
+runtime SyntaxError is so gross
+
+[21:07:20.0273] <ljharb>
+imo it's perfect when it's about invalid syntax :-) it's not "JavaScriptSyntaxError", so it can apply to anything
+
+[21:07:40.0130] <ljharb>
+* imo it's perfect when it's about invalid syntax :-)it's not "JavaScriptSyntaxError", so it can apply to anything
+
+[21:07:43.0450] <ljharb>
+* imo it's perfect when it's about invalid syntax :-)
+it's not "JavaScriptSyntaxError", so it can apply to anything
+
+[21:11:13.0681] <Chris de Almeida>
+really gotta admire the thoughtfulness on even little things from our Sony hosts  🙌
+
+[21:12:33.0658] <Richard Gibson>
+for reference, it shows up in places like `JSON.parse("x")` and `BigInt("x")`
+
+[21:13:49.0629] <Ashley Claymore>
+and `new Function` :D
+
+[21:14:29.0133] <rkirsling>
+yeah eval was the main case I was prepared to view as an exception
+
+[21:14:54.0369] <rkirsling>
+I guess JSON.parse makes sense too...at which point I guess you can make the case for any parse error
+
+[21:15:01.0880] <rkirsling>
+but I guess I wish we had a ParseError
+
+[21:15:03.0846] <bakkot>
+but not `decodeURIComponent("%")`! for some reason
+
+[21:15:34.0360] <ljharb>
+tbh there's a lot of subtypes it would be nice to have that would make way more sense than whatever error type an arbitrary step usually throws
+
+[21:15:37.0130] <Michael Ficarra>
+btw I do not share @ljharb:matrix.org's opinion that these things are "the right type", as JS is unityped, so no value is a wrong type
+
+[21:15:46.0306] <Jesse (🇯🇵)>
+did we forget RefernceError?
+
+[21:15:48.0672] <Michael Ficarra>
+I didn't think it was worth spending plenary time on though
+
+[21:15:58.0799] <ljharb>
+`typeof` exists, JS doesn't just have one type
+
+[21:16:03.0670] <ljharb>
+by any definition of "type"
+
+[21:16:16.0828] <Lea Verou>
+Also `RegExp()`
+
+[21:16:42.0232] <rkirsling>
+typeof is just "which branch of the variant / tagged union are we in" though
+
+[21:16:58.0349] <bakkot>
+... apparently HTML actually throws DOMExceptions whose `.name` is SyntaxError, but throws real TypeErrors, for some unimaginable reason
+
+[21:17:09.0704] <ljharb>
+JS values aren't a tagged union, so i'm confused by this
+
+[21:17:12.0424] <bakkot>
+`try { (new CustomElementRegistry() ).define(' ', function(){}) } catch (e) { e instanceof SyntaxError } // false`
+
+[21:18:16.0116] <rkirsling>
+I'll let Michael come up with a more satisfying phrasing then :p
+
+[21:18:49.0109] <bakkot>
+ok, from webIDL:
+
+> A simple exception is identified by one of the following types:
+> EvalError
+> RangeError
+> ReferenceError
+> TypeError
+> URIError
+> These correspond to all of the JavaScript error objects (apart from SyntaxError and Error, which are deliberately omitted as they are reserved for use by the JavaScript parser and by authors, respectively).
+
+[21:19:35.0305] <bakkot>
+(of course this is missing AggregateError and SuppressedError but those are kind of special)
+
+[21:20:27.0794] <peetk>
+from the perspective of implementations they are
+
+[21:20:45.0260] <Michael Ficarra>
+I can almost guarnatee you that implementations are using a uniform representation
+
+[21:20:46.0191] <ljharb>
+they certainly might be. but that's irrelevant to JS practitioners
+
+[21:20:55.0195] <ljharb>
+* they certainly might be. but that's irrelevant to JS practitioners, it's just an implementation detail
+
+[21:21:11.0262] <Lea Verou>
+`DOMException` is such an abomination, I wish we could kill it with 🔥 😕
+
+[21:21:19.0787] <Michael Ficarra>
+they only due that because the language doesn't treat those as distinct classes of values
+
+[21:22:13.0267] <rbuckton>
+A TypeError is for when the incoming value does not belong to the category of input types (category theory), like passing in a string when a number is expected, or a method for one class being called with another class instance. RangeError is usually reserved for something that is outside of a range of a set of unit values (strings, numbers, etc.)
+
+[21:22:37.0009] <rbuckton>
+* A TypeError is for when the incoming value does not belong to the category of input types (category theory), like passing in a string when a number is expected, or a method for one class being called with another class instance. RangeError is usually reserved for something that is outside of a range of a set of unit values (specific strings, numbers, etc.)
+
+[21:22:59.0452] <Christian Ulbrich>
+I never differentiate on built-in errors, but catch any error and throw custom ones, that I can differentiate on.
+
+[21:23:24.0426] <peetk>
+in this conception, is the critical distinguishing factor finiteness of the set? because "not a number" or "not a string" could also be said to be a case of the value not being in the set of allowable values
+
+[21:23:26.0464] <Michael Ficarra>
+`typeof` is not an argument for these being distinct "types", any more than `function numericType(n) { return n < 0 ? 'negative' : n > 0 ? 'positive' : 'zero'; }` defines three distinct "types"
+
+[21:23:34.0771] <Ashley Claymore>
+I have seen code switch on the Error message, which is even more scary
+
+[21:24:12.0400] <Christian Ulbrich>
+I would not expect the error message to be actually standardized, are they? :)
+
+[21:24:24.0047] <Ashley Claymore>
+They are not
+
+[21:25:14.0508] <ljharb>
+ha, i once broke every user of angular-cli and ember-cli by changing an error message in `resolve`
+
+[21:25:19.0641] <Ashley Claymore>
+https://grep.app/search?q=err.message.includes
+
+[21:25:25.0775] <Jesse (🇯🇵)>
+at runtime: "Jev, we are in an error state of a JavaScript program. The error message is: MESSAGE. Which category of error is this?"
+
+[21:25:34.0338] <rbuckton>
+Roughly, yes. 
+
+[21:25:54.0554] <rbuckton>
+except that string vs number are distinct categories of values.
+
+[21:29:32.0993] <peetk>
+then that seems like a very reasonable criterion even if it is not the one currently encoded by the spec
+
+[21:29:42.0809] <rbuckton>
+A RangeError generally means you are outside the range of a finite set of unit values.
+
+[21:32:01.0951] <Jesse (🇯🇵)>
+I might extend that a bit and use `RangeError` for being inside a finite range of disallowed values (e.g., empty string is bad, but all other strings are fine)
+
+[21:32:03.0046] <bakkot>
+`1n ** -2n` // RangeError
+
+[21:32:04.0544] <bakkot>
+so... no?
+
+[21:32:47.0579] <Andrew Paprocki>
+What about IANA time zone identifiers?
+
+[21:32:49.0784] <Jesse (🇯🇵)>
+or: 0 and -0 are bad, but all other Numbers are fine
+
+[21:33:25.0154] <Andrew Paprocki>
+"Asia/Tokyo" is in the set but "Asia/WTF" is not. Is that a "range"?
+
+[21:34:14.0577] <rkirsling>
+I guess that's sort of a question of whether a range implies an ordering
+
+[21:35:23.0613] <ljharb>
+Jesse: "NaN is fine"
+
+[21:35:29.0408] <bakkot>
+I do have a strong intuition that RangeError is correct for `1n ** -2n`
+
+[21:35:40.0547] <bakkot>
+couldn't tell you why though
+
+[21:36:24.0108] <Nikolaos Papaspyrou>
+I believe we wouldn't have all this discussion if `RangeError` was `ValueError`, like in Python... :-)
+
+[21:36:59.0179] <rkirsling>
+I mean it's basically saying that BigInts aren't closed under **, so that seems rephrasable as "you can end up out of range"
+
+[21:38:09.0009] <bakkot>
+mm, technically yes but _that_ one does not end up out of range
+
+[21:38:14.0883] <peetk>
+ig my intuition is RangeError is for when you're not in some set, where that set is not just "things of type X" for some X (for some folk definition of "type" that michael may disapprove of)
+
+[21:38:18.0586] <bakkot>
+so it's really that the input is not in range
+
+[21:39:41.0321] <bakkot>
+I don't really understand how people are using the word "type" in a way that is different from "set of values"
+
+[21:39:53.0594] <rkirsling>
+yeah like, my agreement that "JS is unityped" is kind of irrelevant to the actual discussion in my view. it's fine if TypeError just means "wrong wrt `typeof`"
+
+[21:40:01.0033] <peetk>
+the types are string, number, object, bigint, symbol. that's what everyone means
+
+[21:40:07.0044] <ljharb>
+"odd numbers" is not a type. "numbers" is a type. is it really that confusing?
+
+[21:40:42.0978] <bakkot>
+ljharb ... yes? I don't know how those things are different for you
+
+[21:40:55.0340] <bakkot>
+I'm not being obtuse, I genuinely do not understand what makes those different to you
+
+[21:41:07.0557] <peetk>
+those are the types. `typeof` names them
+
+[21:41:14.0129] <ljharb>
+`typeof` and TypeScript and common intuition all treat those as different
+
+[21:41:24.0206] <ljharb>
+"odd numbers" is a subset of the "numbers" type.
+
+[21:41:48.0757] <ljharb>
+so if something is not a number, it's a type error. but if it's a number that's not odd, it's a range error
+
+[21:42:14.0002] <bakkot>
+pretty sure I could make a "only odd numbers" typescript type, and to the extent I couldn't it would be because of mechanical limitations in the compiler, not, like, fundamental facts about ontology
+
+[21:42:18.0042] <Ashley Claymore>
+We also throw a TypeError when the value doesn't quack like the expected interface
+`new Set().union({})` // TypError
+
+[21:42:27.0738] <Ashley Claymore>
+* We also throw a TypeError when the value doesn't quack like the expected interface
+`new Set().union({})` // TypeError
+
+[21:42:37.0328] <peetk>
+it's just `typeof`
+
+[21:42:57.0757] <ljharb>
+(also no, you can't make an only odd numbers TS type)
+
+[21:43:13.0808] <ljharb>
+* (also no, you can't make an only odd numbers TS type, nor an "integers" TS type, but that's more fundamental limitations of TS than an argument one way or the other)
+
+[21:43:33.0786] <ljharb>
+* (also no, p sure you can't make an only "odd number" TS type, nor an "integer" TS type, but that's more fundamental limitations of TS than an argument one way or the other)
+
+[21:43:47.0431] <ljharb>
+* (also no, p sure you can't make an only "odd number" TS type, nor an "integer" TS type, but that's more fundamental limitations of TS than an argument one way or the other) (if you can, please tell me how, because i'd love to use that type)
+
+[21:44:06.0806] <Jesse (🇯🇵)>
+I thought you could do anything with TS types using branded types?
+
+[21:45:00.0056] <ljharb>
+there's tons of limitations. "a finite number" can't be represented, for example. nor can -0.
+
+[21:45:07.0240] <ljharb>
+* there's tons of limitations. "a finite number" can't be represented, for example. nor can -0 (or "not -0")
+
+[21:45:31.0429] <bakkot>
+that is a reasonably answer but doesn't seem to actually match how we've been using the terms? for example, `object.#foo` on an object that doesn't have a `#foo` field is a TypeError, and that feels correct to me; do you think that ought to be a RangeError?
+
+[21:45:53.0499] <rkirsling>
+okay so "wrt `typeof` or `instanceof`" maybe (... in a world where `instanceof` weren't stupid, that is)
+
+[21:45:56.0077] <ljharb>
+that's a case of "we don't have a better error class than TypeError"
+
+[21:46:03.0531] <ljharb>
+* that's a case of "we don't have a better error class than TypeError for this case"
+
+[21:46:52.0107] <bakkot>
+hm, ok. that one feels right, to me, because the error is "you tried to access this field on an object of the wrong type". but you do not think of it like this?
+
+[21:46:56.0917] <Ashley Claymore>
+TypeError -> "I can't do the operation I need to do with the value"
+RangeError -> "I _could_ do the operation but I won't like the result"
+
+[21:47:06.0997] <Ashley Claymore>
+* TypeError -> "I can't do the operation I need to do with this value"
+RangeError -> "I _could_ do the operation but I won't like the result"
+
+[21:47:34.0952] <ljharb>
+i do, because "a class instance" is a kind of type. but since we don't have a "WrongInstanceError", TypeError works
+
+[21:47:49.0465] <peetk>
+yea ok fair. let's say "`typeof` type or `instanceof` type"
+
+[21:48:18.0912] <ljharb>
+tbc, just because it's hard to verbalize a rule that works in every case does not mean there's not an intuitive distinction to be made.
+
+[21:49:54.0422] <bakkot>
+`union` expect as its argument something with `keys` and `has` and `Symbol.iterator`, not a Set specifically; it doesn't work off of `instanceof` (this was the outcome of _very_ extensive discussions)
+
+[21:50:12.0636] <bakkot>
+it's about an abstract interface, not a `typeof` or `instanceof` type
+
+[21:50:19.0839] <ljharb>
+true but in a world with first-class protocols, it'd be a "SetLike" protocol
+
+[21:50:21.0163] <rkirsling>
+whoops
+
+[21:50:24.0893] <rkirsling>
+yeah
+
+[21:50:47.0884] <Christian Ulbrich>
+obviously its more philosophical or structural vs. nominal typing. Disjunct types would be TypeErrors, but in structural type systems with bad types, things are not so easy a type error, _if_ you assume TypeScript types as a proper Type System for JavaScript (which it is not), there are many types, which are too broad, i.e. a `string` where it would be just a union of string literals.
+
+[21:52:26.0256] <peetk>
+we are slowly converging on the correct definition of "type"... or "schmype" or whatever we want to call it
+
+[21:52:34.0507] <ljharb>
+tÿpe
+
+[21:52:51.0009] <Jesse (🇯🇵)>
+do what the philosophers do: "kind"
+
+[21:53:43.0628] <peetk>
+i think philosophers will agree at lot less than us about what any given word means
+
+[21:53:59.0755] <Jesse (🇯🇵)>
+or in category theory and some PLs that borrow from that literature (e.g., Lean): "universe"
+
+[21:55:59.0927] <rkirsling>
+but kind has a fixed meaning in Haskell and "universe (of discourse)" is _too_ "it means whatever we need it to" 😅
+
+[21:56:10.0922] <rkirsling>
+(sorry I'm taking this more seriously than necessary lol)
+
+[21:56:50.0471] <peetk>
+"ilk"
+
+[21:56:55.0536] <Richard Gibson>
+"landrace"
+
+[22:01:56.0875] <bakkot>
+https://www.typescriptlang.org/play/?ssl=18&ssc=1&pln=19&pc=1#code/C4TwDgpgBA8gJnAIgSwObOFAvFA5ARlygB88BmI03AVkrwHY7cBOXAbgCgPRIoBJAM7w4AGQwQATgEMANgB4AclAgAPYBAB2cAVA0BXALYAjSQD5sHKFAAGAEgDeCgL7XlazdpsOBwCcg2oTg64AHRMELhB9j5+AS5QAPxQAGayAhCWUABcXo7xqupaOnbRvv6BDsIo6MDxSb56GVY5qTLpnNzg0MIAshDGkgKKboWe+gMS5liZSgUeOnoaANYaAPYA7hqJUAAUgsJi6tLyCuZzRVAN0ElKORoQAG6SAJTZuo+SHTzQggCCGiA5AAVKZQAAMI3mUHwUAAZFAgdsrm9Wu0uN9YAhhucxoYTBJsLo8WYLFY-gDFGd3BdkUl7k8JJkcgBtBQAXUhF2Z9MkHLpH0ZzSgrI5OJ0zN6-XxQ1OfKgCiZ7wZHWSiwAxsBkKstsApEsIEIsbNqbiJqYdhocsJKc8ckp7FAJBBgHoJFsNGwoE50XqDcIdmRnp6APTBqCrJbcX2GuA7AAsQagoeUEgkq0ZQA
+
+[22:02:34.0801] <bakkot>
+cannot recommend actually doing this, but it does work; typescript's type system is quite powerful
+
+[22:02:41.0466] <bakkot>
+(as you say, this is not an argument one way or another)
+
+[22:03:23.0425] <ljharb>
+interesting
+
+[22:06:23.0372] <Jesse (🇯🇵)>
+IIRC it was examples like this that were part of the proof that TS's type checker is Turing complete
+
+[22:06:44.0448] <Jesse (🇯🇵)>
+so while "odd number" probably has no _natural_ encoding in TS, it does have _an_ encoding
+
+[22:07:35.0573] <ljharb>
+can you do the same trick with integers? that's the type i want :-)
+
+[22:09:00.0567] <bakkot>
+yeah just remove the `${OddDigit}` from line 5
+
+[22:09:03.0934] <Christian Ulbrich>
+I think thats doable.
+
+[22:09:52.0492] <bakkot>
+https://www.typescriptlang.org/play/?#code/C4TwDgpgBAkgzjAdsCBzCAnAMgSxRgQwBsAeAOSggA8VEATOKRAVwFsAjTAPigF4AoKFAAGAEgDeZAL7DKNCPUZjxcYBhyJUUiQHIAdDqgAfKDog7tKtRq2yA-FABmxOBEFQAXCInTZ1WgzeVuqaMlAOasxuQl7ORK4A3Pz8oJCwyGiYALIQHJhw5HIBjCx5GDwCQhT+CoHMiADWiAD2AO6I4VAAFPBIKOjYeJjE5Dw1ilCR0A4UXogQAG6YAJSeTIuYSSng0PAAgoggJAAqFVAADEW1jACMUABkUMedU2txicmpuxkDheOBpU4GD4TDYQIq7n2h1GVwmrwc8yWGHcXgA2mQALqwwKoxGYLEIjbImJQdFY-6MVF9TIYHJlApkLgEqBkFHrJFbRz1ADGwBwzQ6wAIDQgCB+mD+8gmgO4XUQXmpv0Zyy8FHEUAwEGAzAwHUQCSgUk+wtFiswXQAzMsDQB6G1QZoNFImsX9c0AFmtUDtDqdQpFrppXXOegArF6fZgMM1kUA
+
+[22:09:59.0614] <bakkot>
+though again do not actually do this
+
+[22:10:52.0416] <peetk>
+can you make a type so big that even typescript can't lift it
+
+[22:11:08.0847] <bakkot>
+oh, also this version would need special handling for NaN and Infinity I guess
+
+[22:11:23.0525] <Ashley Claymore>
+I think there's an even easier way that is something like `${BigInt}`
+
+[22:12:07.0996] <ljharb>
+that's easy, i've done that a lot
+
+[22:12:19.0254] <ljharb>
+i mean i'm definitely going to actually do this
+
+[22:12:38.0327] <rbuckton>
+`type IsInt<N extends number> = N extends `${bigint}` ? true : false`
+
+[22:12:47.0180] <rbuckton>
+* ``type IsInt<N extends number> = N extends `${bigint}` ? true : false``
+
+[22:13:35.0482] <ljharb>
+hm, i don't see how that'd work
+
+[22:14:04.0390] <rbuckton>
+* `type IsInt<N extends number> = ``${N}`` extends `${bigint}` ? true : false`
+
+[22:14:12.0176] <Ashley Claymore>
+Need to apply that same trick to Kevins playground example
+
+[22:14:17.0336] <bakkot>
+doesn't work for large numbers
+
+[22:14:20.0352] <rbuckton>
+* ```
+type IsInt<N extends number> = `${N}` extends `${bigint}` ? true : false
+```
+
+[22:14:40.0063] <dminor>
+I have no problems with the delegates.txt name change for me, either Dan or Daniel is fine. 
+
+[22:15:00.0596] <bakkot>
+also, moving this conversation to TDZ, sorry
+
+[22:21:35.0549] <Chris de Almeida>
+appreciate the feedback
+
+[22:22:20.0642] <Chris de Almeida>
+I am overall very positive on the tc39 data efforts from MF and JHD.  all concerns I have are just about the details.  thank you for doing this!  🙏
+
+[22:29:05.0876] <bakkot>
+Michael Ficarra: just in case I am asleep when you do the "Active proposals missing champions" topic (which is not scheduled until day 3) I want to keep destructuring-private active; I can champion it if we need someone to sign up to champion for it to be considered active
+
+[22:29:24.0799] <bakkot>
+it's an easy/obvious one imo
+
+[22:38:08.0150] <bakkot>
+petition to rename Proxy's "target" to "witness"; I think it is easier to think about how they work if you think about the purpose of the underlying object as being to prove that the Proxy is obeying the essential invariants rather than actually being the thing the Proxy is emulating
+
+[22:38:13.0490] <bakkot>
+(witness in the sense of https://en.wikipedia.org/wiki/Witness_(mathematics) )
+
+[22:42:47.0475] <Aki>
+I can't join the call from my phone, it just says "we couldn't complete the call". cmd+f doesn't work in element so I can't see if anyone else was having this issue.
+
+[22:42:51.0241] <Jesse (🇯🇵)>
+I think of "witness" in a mathematical sense as an object that makes an existential claim true
+
+[22:43:04.0574] <bakkot>
+yes, that is the sense I mean it in
+
+[22:43:08.0344] <Michael Ficarra>
+just you AFAIK
+
+[22:43:30.0819] <bakkot>
+you are exhibiting an object that has the same behavior as the Proxy, so it proves that the Proxy obeys the invariants as long as that object does
+
+[22:43:33.0704] <Leo Kettmeir>
+Michael Ficarra could TCQ maybe have the capability that anyone can request a temp check with everything populated and chair can see that & "approve" it which then actually triggers it? would prevent some of the chaos like we have experiencing today
+
+[22:43:40.0448] <Chris de Almeida>
+try private/incognito browser
+
+[22:43:57.0723] <ljharb>
+lol i asked for that out loud like 30m ago. great idea
+
+[22:44:00.0832] <Aki>
+I'm trying from my phone, only the app is supported. I tried not signed in and signe din.
+
+[22:44:04.0922] <Jesse (🇯🇵)>
+twin?
+
+[22:44:09.0388] <Leo Kettmeir>
+whoops i missed that
+
+[22:44:24.0811] <Chris de Almeida>
+https://github.com/michaelficarra/michael-tcq/issues/new/choose
+
+[22:44:25.0645] <ljharb>
+wasn't on the mic, no worries
+
+[22:44:51.0536] <Leo Kettmeir>
+even better: ill open a PR directly
+
+[22:45:42.0122] <Michael Ficarra>
+and this is exactly why I wanted to rewrite TCQ
+
+[22:45:50.0008] <Chris de Almeida>
+hell yeah
+
+[22:45:51.0987] <Michael Ficarra>
+so any of us could contribute, as if it was a real OSS project
+
+[22:46:30.0487] <Chris de Almeida>
+you gonna transfer to TC39 org or are you committed to BDFL'ing it?
+
+[22:47:09.0814] <Michael Ficarra>
+🤔 I haven't thought about it
+
+[22:47:26.0498] <Michael Ficarra>
+are you volunteering to take over hosting it too?
+
+[22:47:54.0215] <Chris de Almeida>
+if you need
+
+[22:48:21.0193] <rkirsling>
+BMFL. benevolent michael ficarra for life
+
+[22:48:29.0841] <rkirsling>
+oops not TDZ
+
+[22:51:58.0444] <ljharb>
+absolutely ecma should cover hosting
+
+[22:52:50.0174] <Michael Ficarra>
+even Ecma can afford $1.50/year in hosting costs
+
+[22:53:57.0233] <Chris de Almeida>
+big, if true
+
+[22:58:23.0267] <bakkot>
+I would expect this to fit comfortably in the free tier of something like cloudflare's durable objects
+
+[22:59:19.0251] <Aki>
+The thing that keeps me from having Ecma take over this manner of infra is just that there isn’t a role at Ecma with the knowledge and job description to manage it
+
+[23:00:17.0084] <Michael Ficarra>
+that is understandable but also kind of unfortunate because supporting committees often requires technological infrastructure
+
+[23:00:18.0602] <Ashley Claymore>
++1 PR 12
+
+[23:00:21.0319] <Christian Ulbrich>
+I find it hard to follow discussion, but all I can say, I want to be Proxy to be transparent, i.e. not detectable if that means anything to anyone.
+
+[23:00:49.0854] <Olivier Flückiger>
+I think then we basically have to do PR12 (or maybe combo)
+
+[23:00:54.0634] <Michael Ficarra>
+like the Ecma members area (NAS under someone's desk in Switzerland)
+
+[23:01:15.0650] <Olivier Flückiger>
+given the conversation so far, that might be the best option.
+
+[23:01:32.0568] <Aki>
+It’s in an infomaniac DC
+
+[23:01:38.0222] <Justin Ridgewell>
+Mathieu Hofman: What was the weakmap virtualization response you wrote?
+
+[23:03:46.0414] <Ashley Claymore>
+Combo feels a tiny bit odd to me, as we are trying to say "non-extensible means you can't add private fields" but there is their period of time where we don't enforce it
+
+[23:04:00.0201] <Ashley Claymore>
+Wouldn't block it, but personally prefer PR12
+
+[23:07:34.0707] <ljharb>
+to my understanding, a proxy in the absence of a full membrane is only transparent if you're not trying to emulate a class whose instances have internal slots or the equivalent, whose methods you have direct access to
+
+[23:09:20.0697] <nicolo-ribaudo>
+Does Teams have something like Google Meet's companion mode?
+
+[23:09:59.0921] <nicolo-ribaudo>
+I thought it did but don't see a button for it
+
+[23:31:08.0236] <Mathieu Hofman>
+> <@jridgewell:matrix.org> Mathieu Hofman: What was the weakmap virtualization response you wrote?
+
+A proxy object on which you can always install private fields basically means we go back to the undeniable WeakMap for proxy objects. Unfortunately that's one of the type of objects we need to support, so it's a non starter for us.
+
+[23:32:12.0699] <Mathieu Hofman>
+Also any approach that unconditionally pierces through to the target also creates a partial predicate for proxy objects.
+
+[23:32:58.0000] <Olivier Flückiger>
+combo would enforce it. it would just limit the number of traps
+
+[23:33:26.0462] <Olivier Flückiger>
+first trap, so proxy can say no. if the proxy says yes, then we proceed and only check the underlying object from that point on
+
+[23:33:56.0210] <Mathieu Hofman>
+* Also any approach that unconditionally install or not install also creates a partial predicate for proxy objects.
+
+[23:34:17.0131] <Olivier Flückiger>
+but it is a bit odd, I agree. And given that it's complicated already...
+
+[23:35:01.0787] <Mathieu Hofman>
+For never install , it's the most egregious since most objects are extensible. And that's on top of the composition problem Mark tried to explain. 
+
+[23:35:32.0694] <Olivier Flückiger>
+and it would mean we install private properties even though the proxy would say no now. so it basically has the same issue like what I named TG3 on my slides.
+
+[23:35:48.0918] <Olivier Flückiger>
+(in the case of proxies)
+
+[23:40:33.0658] <waldemar>
+What should we do with spam issues on GitHub? Report them or just close as not planned?
+
+[23:45:07.0347] <Michael Ficarra>
+Is it your own proposal's repo? I think you can do whatever you prefer, but we typically replace the title/body with `[spam]` and then close as not planned in tc39/ecma262.
+
+[23:45:38.0757] <Leo Kettmeir>
+https://github.com/michaelficarra/michael-tcq/pull/63
+
+[23:45:57.0613] <Chris de Almeida>
+we just edit the title+ description as `[SPAM]` and close as not planned
+
+[23:47:54.0792] <Michael Ficarra>
+okay I *love* the name "poll requests"
+
+[23:48:49.0229] <ljharb>
+also add an "invalid" label; that helps github's own spam classifier
+
+[23:50:51.0665] <Michael Ficarra>
+THEY HAVE A SPAM CLASSIFIER?!
+
+[23:51:01.0230] <Michael Ficarra>
+why don't they turn it on?
+
+[23:51:26.0237] <ljharb>
+it is turned on. they're just very hesitant about false positives. the spam we see is the stuff they don't catch (they do catch a lot, i'm told)
+
+[23:52:33.0517] <ljharb>
+although it's pretty weird for a proxy to start saying no during the installation of private methods, which is supposed to be an atomic operation, so it's probably ok that it can't do that?
+
+[00:00:19.0351] <Michael Ficarra>
+@softwarechris:matrix.org I forgot @gibson042:matrix.org is here lol.
+
+[00:00:34.0613] <Michael Ficarra>
+you all looked at me like I was the only one in the room
+
+[00:04:24.0749] <Chris de Almeida>
+tbf, I was looking at Peter
+
+[00:04:42.0650] <Chris de Almeida>
+and you are Peter-adjacent
+
+[00:06:26.0723] <ljharb>
+maybe v8 can make null objects not be slower?
+
+[00:06:33.0301] <ljharb>
+i'd think they should be _faster_ since you don't need a prototype lookup
+
+[00:07:17.0488] <ljharb>
+oof, an object literal with `__proto__:null` is the only safe way to do it :-/
+
+[00:07:59.0385] <ljharb>
+* oof, an object literal with `__proto__:null` is the only safe way to make one in JS :-/
+
+[00:08:00.0534] <Richard Gibson>
+https://adventures.nodeland.dev/archive/optimizing-objects-with-null-prototypes/ suggests that null-prototype objects _can_ be fast
+
+[00:08:08.0734] <Richard Gibson>
+* https://adventures.nodeland.dev/archive/optimizing-objects-with-null-prototypes/ suggests that null-prototype objects _can_ be fast in V8
+
+[00:08:24.0222] <Richard Gibson>
+`Object.setPrototypeOf({ a, b, c }, null)`
+
+[00:08:35.0973] <Richard Gibson>
+* `Object.setPrototypeOf({ a, b, c }, null)` is not in dictionary mode
+
+[00:09:01.0323] <Olivier Flückiger>
+Yeah, I will look into if we can deprecate the {__proto__: null} heuristic
+
+[00:09:12.0861] <ljharb>
+yeah but that's not syntactic, it depends on Object.sPO
+
+[00:09:16.0586] <Olivier Flückiger>
+I don't like it either...
+
+[00:09:41.0376] <Olivier Flückiger>
+Unfortunately I think websites rely on it.
+
+[00:09:46.0761] <ljharb>
+the article tho does imply that `const o = { __proto__: null }; ({ __proto__: o });` might put it in fast mode?
+
+[00:09:55.0680] <ljharb>
+how could they rely on something being slow?
+
+[00:09:56.0181] <nicolo-ribaudo>
+`__proto__: null` -> dictionary mode ; `__proto__: null, __proto__: null` -> the other mode
+
+[00:10:05.0672] <ljharb>
+especially since it seems the other browsers don't have this problem
+
+[00:10:20.0319] <ljharb>
+ooh, so all my null object literals should double-mention dunder proto?
+
+[00:10:50.0935] <nicolo-ribaudo>
+Sorry I should have mentioned it in TDZ, it was a bad suggestion to allow people to opt out of dictionary mode without affecting those that wanted to opt in
+
+[00:11:08.0145] <ljharb>
+i mean if it works it's not a bad suggestion :-p it's just extra noop bytes
+
+[00:11:37.0355] <nicolo-ribaudo>
+And they'd get gziped away!
+
+[00:11:57.0694] <ljharb>
+like i'm literally going to make this change in all of my packages if it in fact works.
+
+[00:12:47.0280] <Olivier Flückiger>
+ah, because it can also be slower of course to not go to dictionary mode
+
+[00:13:19.0794] <Olivier Flückiger>
+if the site e.g., does use the object as dictionary
+
+[00:14:31.0154] <Olivier Flückiger>
+This is probably from before we had Maps...
+
+[00:14:55.0404] <Olivier Flückiger>
+But I seem to remember that there was also something about objects being used as modules.
+
+[00:15:26.0168] <Ruben>
+I would expect that in most situations, the dictionary mode is not the favored form
+
+[00:15:46.0994] <Olivier Flückiger>
+I would not say that at all.
+
+[00:16:40.0829] <Richard Gibson>
+if nothing else, `{ __proto__: null, … }` (i.e., with properties defined at initialization) seems less likely to be used as a dictionary than `{ __proto__: null }`
+
+[00:16:46.0313] <Olivier Flückiger>
+If you truly do use the object as open dictionary, then tracking, and optimizing for, the current properties adds a lot of overhead.  
+
+[00:17:16.0751] <ljharb>
+* like i'm literally going to make this change in all of my packages if it in fact works.
+
+update: ```SyntaxError: Duplicate __proto__ fields are not allowed in object literals``` in strict mode :-(
+
+[00:17:19.0566] <Olivier Flückiger>
+ah, that is actually a good suggestion
+
+[00:17:19.0764] <Ruben>
+> <@olivf.o1o.ch:immer.chat> I would not say that at all.
+
+I guess you have better data, it is more about code that I have seen using it
+
+[00:17:56.0720] <Richard Gibson>
+I have my moments
+
+[00:19:17.0722] <ljharb>
+i still don't understand how "an object can have any properties and you have to account for that" is made slower by "you don't have to look at a prototype chain"
+
+[00:22:44.0894] <Olivier Flückiger>
+`{__proto__: false?{}:null}`
+
+[00:23:01.0667] <Olivier Flückiger>
+(please don't :) )
+
+[00:23:28.0229] <ljharb>
+lol i just benchmarked it, it's slower than the `: null` one
+
+[00:23:29.0529] <Olivier Flückiger>
+the cost comes from the fact that any time you add a new property, then the internal type of that object changes
+
+[00:24:14.0862] <Olivier Flückiger>
+that has all kinds of ripple effects. code becomes invalid, pre-allocated object sizes being off, instances have to be migrated, etc...
+
+[00:24:24.0396] <Olivier Flückiger>
+* that has all kinds of possible ripple effects. code becomes invalid, pre-allocated object sizes being off, instances have to be migrated, etc...
+
+[00:24:37.0886] <ljharb>
+ok, but that's true with a normal object ilteral also
+
+[00:24:51.0742] <ljharb>
+* ok, but that's true with a normal object literal also
+
+[00:24:52.0042] <Olivier Flückiger>
+yes
+
+[00:25:11.0163] <Olivier Flückiger>
+it's a heuristic
+
+[00:25:33.0725] <ljharb>
+so in what scenario is "dictionary mode" ever faster?
+
+[00:25:58.0357] <Olivier Flückiger>
+sorry I don't understand. in the scenario I just said
+
+[00:26:06.0382] <Olivier Flückiger>
+you use an object as a dictionary
+
+[00:26:14.0676] <Olivier Flückiger>
+then dictionary mode from the start is better
+
+[00:26:45.0539] <Olivier Flückiger>
+and `{__proto__:null}` we currently treat as a signal that you are going to do that
+
+[00:27:20.0475] <ljharb>
+ah ok
+
+[00:27:34.0609] <ljharb>
+(btw i was measuring wrong; the ` false ? {} : null` is actually fastest!)
+
+[00:28:11.0201] <Olivier Flückiger>
+since this heuristic is probably older than the addition of actual dictionaries to the language, it might not be a good heuristic nowadays
+
+[00:28:55.0846] <Olivier Flückiger>
+otoh, you can also find articles online where people did benchmarks and found out that using a `Map` is slower than using a `{__proto__: null}` as a dictionary.
+
+[00:29:10.0176] <Olivier Flückiger>
+and thus argue to do the latter.
+
+[00:29:26.0442] <Olivier Flückiger>
+that is why it is kinda difficult to change such heuristics
+
+[00:30:00.0380] <Olivier Flückiger>
+* otoh, you can also find articles online where people did benchmarks and found out that using a `Map` is (at some point was) slower than using a `{__proto__: null}` as a dictionary.
+
+[00:30:08.0064] <Olivier Flückiger>
+* otoh, you can also find articles online where people did benchmarks and found out that using a `Map` is (or at some point was) slower than using a `{__proto__: null}` as a dictionary.
+
+[00:30:26.0356] <Aki>
+EVERYONE CAN USE THIS TIME TO WRITE THEIR SUMMARIES AND CONCLUSIONS
+
+[00:30:46.0369] <Aki>
+(thank you to everyone who already has❣️)
+
+[00:31:32.0129] <ljharb>
+fwiw the fastest one that DCE wouldn't mess up so far is `var NULL = null; var o = { __proto__: NULL };`
+
+[00:31:49.0475] <Chris de Almeida>
+😳
+
+[00:32:24.0358] <Aki>
+sorry i had to yell to get past the din of the roo
+
+[00:32:27.0312] <Aki>
+* sorry i had to yell to get past the din of the room
+
+[00:33:35.0025] <ljharb>
+* fwiw the fastest one that DCE wouldn't mess up so far is `var NULL = null; var o = { __proto__: NULL };` - sometimes, it changes
+
+[00:33:38.0865] <Olivier Flückiger>
+I guess it creates again an asymmetry where you could detect if the underlying object is a proxy itself or an object, depending on if it has this capability
+
+[00:34:21.0929] <Olivier Flückiger>
+I think as long as no implementer things that PR12 breaks their optimizations, it's better, since it's simpler.
+
+[00:38:36.0288] <Michael Ficarra>
+Unless that `var` is at the top level (creating a property of the global object), even a very dumb optimiser will inline that. `Math.random() < 1 ? null : {}` would be safer.
+
+[00:58:52.0287] <Mathieu Hofman>
+> <@olivf.o1o.ch:immer.chat> ah, that is actually a good suggestion
+
+I suggested that on twitter the other day too. But couldn't tag you as I don't know your handle (if you have any)
+
+[00:59:23.0383] <Olivier Flückiger>
+twitter, what is that?
+
+[00:59:50.0859] <Aki>
+Thanks for the shout-out at the community event last night ♥️
+
+[00:59:56.0930] <Aki>
+(btw who shouted me out?)
+
+[01:02:59.0869] <Chris de Almeida>
+one of the local (non-TC39) presenters
+
+[01:03:10.0243] <Chris de Almeida>
+it was the talk on TC39 agent
+
+[01:03:26.0437] <Mathieu Hofman>
+FYI same for object create. If it has properties descriptors it likely won't be used as a dictionary 
+
+[01:03:40.0482] <Michael Ficarra>
+@akirose:matrix.org https://github.com/tc39/notes/issues/423
+
+[01:05:21.0157] <Mathieu Hofman>
+But what surprises me the most is that for these these dictionary mode objects if the heuristic made a mistake, they never transition away from it (outside of the prototype tricks mentioned)
+
+[01:07:51.0557] <Aki>
+omg thank you linus i do not deserve that degree of credit 😱
+
+[01:08:33.0824] <ljharb>
+btw were the talks recorded last night?
+
+[01:08:48.0711] <Chris de Almeida>
+I know they were streamed, not sure if recording available
+
+[01:10:13.0575] <Mathieu Hofman>
+The combo is not as much a proxy predicate issue, but more of a membrane transparency issue, albeit a very weird one, so a lesser one that always piercing.
+
+[01:10:22.0175] <Aki>
+(i do work hard on the notes, but not THAT hard)
+
+[01:10:48.0660] <Mathieu Hofman>
+But the thing is that the target may be a proxy itself. So you really need to recourse until you bottom out in a regular object
+
+[01:11:06.0847] <Mathieu Hofman>
+* But the thing is that the target may be a proxy itself. So you really need to recurse until you bottom out in a regular object
+
+[01:12:01.0380] <Mathieu Hofman>
+That complexity is likely not worth the simpler alternative: opt out of any optimizations if you are in a return override case.
+
+[01:12:34.0830] <Mathieu Hofman>
+I have no sympathy for anyone doing return override and expecting performance 
+
+[01:13:27.0831] <Mathieu Hofman>
+* The combo is not as much a proxy predicate issue, but more of a membrane transparency issue, albeit a very weird one, so a lesser one than always piercing is.
+
