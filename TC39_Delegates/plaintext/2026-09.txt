@@ -1460,3 +1460,1113 @@ I have no sympathy for anyone doing return override and expecting performance
 [01:13:27.0831] <Mathieu Hofman>
 * The combo is not as much a proxy predicate issue, but more of a membrane transparency issue, albeit a very weird one, so a lesser one than always piercing is.
 
+[08:54:52.0934] <bakkot>
+incidentally I was just looking at this same issue for node's sqlite results. node gets to use V8's API directly so I thought it would be able to avoid this by summoning objects of the correct mode from the void, but it turns out there's some bugs which make the approach I was looking at not work
+
+https://issues.chromium.org/issues/557521320
+https://issues.chromium.org/issues/557938121
+
+[08:55:29.0702] <bakkot>
+(probably there is a better approach that would work but I gave up at this point)
+
+[14:06:08.0545] <Mathieu Hofman>
+I have a last minute scheduling constraint. Please let me know if it can or cannot be accommodated: https://github.com/tc39/agendas/pull/2167
+
+[14:06:24.0992] <Mathieu Hofman>
+And really sorry about that
+
+[16:03:45.0342] <Chris de Almeida>
+as per the above, the schedule has shifted around a bit
+
+
+2026-09-30
+[17:56:14.0022] <Chris de Almeida>
+WHO AMONGS'T'VE YOU IS WILLING TO STEP UP TO HELP WITH THE NOTES
+
+[17:56:18.0065] <Chris de Almeida>
+reveal yourselves 
+
+[18:25:45.0921] <bakkot>
+this timebox is not going to be close to sufficient, though the schedule currently does have 30 minutes of free space this session
+
+[18:28:37.0080] <Chris de Almeida>
+true, but that's sort a false indicator that we can extend when we should not.  we can do a continuation if we have time later
+
+[18:35:44.0893] <rkirsling>
+huh, didn't realize that was a way to remove an event listener
+
+[18:37:02.0040] <Chris de Almeida>
+which way specifically?
+
+[18:37:54.0918] <rkirsling>
+to pass an AbortSignal to addEventListener
+
+[18:39:27.0822] <rkirsling>
+I guess that would ease the burden of having to hold onto the reference to the handler so that you can remove it later?
+
+[18:41:37.0509] <Lea Verou>
+I'm kind of meta-excited about this proposal because of the precedent it establishes of pulling things in that should _really_ have been in TC39 to begin with. What's next? 😀 Maybe import maps? 😀 The sky is the limit! 😀😇
+
+[18:43:49.0098] <Lea Verou>
+(maybe this should have been posted in TDZ, not sure, still figuring out the split)
+
+[18:45:24.0348] <rkirsling>
+nah it's relevant to the current topic and not just a joke, so this is the right place
+
+[18:47:34.0390] <Olivier Flückiger>
+oh sure. the question is always, if the mere possibility of the uncommon case blocks optimizations, or if we can somehow speculate it out of the way. answer is not always clear, often it's a bit of both.
+
+[18:49:54.0658] <Justin Ridgewell>
+I literally wanted an abort signal in a `Promise.all()` earlier today.
+
+[18:50:37.0266] <Justin Ridgewell>
+And got around it by doing `race([all(…), cancelablePromise])`
+
+[18:56:48.0566] <Ashley Claymore>
+I think signal to `Promise.all` makes sense. I just hope people don't read it as the signal magically being passed into the work that the promises represent.
+
+[18:57:16.0599] <ljharb>
+(some examples: abortcontroller, import maps, observable, structured clone…)
+
+[18:57:32.0311] <peetk>
+it's too bad <EOM> comes at the end of the message because it's clearly hard for chairs to catch it extemporaneously
+
+[18:58:22.0534] <Ashley Claymore>
+`<NNTS>{msg}</NNTS>` (no need to speak)
+
+[18:58:23.0889] <Jesse (🇯🇵)>
+`<no-need-to-speak>+1</no-need-to-speak>`
+
+[18:58:35.0793] <Jesse (🇯🇵)>
+jinx!
+
+[18:58:39.0662] <Rob Palmer>
+feel like sending a TCQ PR to add this as a structured field?
+
+[18:58:42.0968] <Richard Gibson>
+🙊
+
+[18:59:30.0320] <Rob Palmer>
+(I should say, anyone could do this)
+
+[19:01:08.0859] <Ashley Claymore>
+(👏 in rooms)
+
+[19:01:14.0510] <Ashley Claymore>
+* (👏 in room)
+
+[19:01:45.0995] <Chris de Almeida>
+that would be a good feature!
+
+[19:03:29.0679] <rkirsling>
+interesting, `[(]` as a way to avoid using a backslash
+
+[19:03:41.0194] <bakkot>
+I glossed over it briefly, but I do really think we're missing a way to unregister a `.then` call, and passing a `{ signal }` argument does seem like the obvious way to do it if we have AbortSignal in the language
+
+[19:03:41.0531] <rkirsling>
+* interesting, `[(]` as a way to avoid using a backslash in a regex
+
+[19:04:21.0607] <bakkot>
+for example, if you're doing a `Promise.race`, that adds handlers to all the Promises, and then those (per spec) all stick around until all the Promises have settled even though none of them do anything after the first
+
+[19:04:34.0091] <rbuckton>
+@erights Mark Miller (Agoric) MM: One of the original reasons for sync callbacks was related to this quote from Dean Tribble that is reposted in the README for the cancellation proposal:
+
+> Cancellation is a race
+> In an async system, new activities may be getting continuously scheduled by asks that are themselves scheduled but not currently running. The act of cancelling needs to run in this environment. When cancel starts, you can think of it as a signal racing out to catch up with all the computations launched to achieve the now-cancelled objective. Some of those may choose to complete (see the caching example above). Some may potentially keep launching more work before that work itself gets signaled (yeah it's a bug but people write buggy code). In an async system, cancellation is not prompt. Thus, it's infeasible to ask "has cancellation finished?" because that's not a well defined state. Indeed, there can be code scheduled that should and does not get cancelled (e.g., the result processor for a pub/sub system), but that schedules work that will be cancelled (parse the publication of an update to the now-cancelled query).
+
+Another reason for sync notification is that it ensures an entire cancellation graph can be set to the canceled/aborted state all at once, rather than incrementally as each notification triggers cancellation of a linked signal.
+
+[19:04:37.0649] <bakkot>
+in principle a _really_ clever engine could optimize those out but no one does
+
+[19:05:29.0333] <sffc>
+As a note taker: There's a 5-10 second delay on the transcription bot, but rapid back-and-forths can have multiple changes of speaker within that time, and the transcription bot adds line breaks between speakers 80-90% of the time but not 100% of the time
+
+[19:06:51.0966] <sffc>
+The comments are sometimes one-word comments like "yeah" and "no" and "i guess" which have very different interpretations and seem important to attribute correctly but are sometimes difficult to hear
+
+[19:07:43.0435] <rbuckton>
+IMO, we should be able to pass a signal to `new Promise(init, { signal })`, `Promise.prototype.then(onfulfill, onreject, { signal })` (and `catch`, `finally`), `Promise.resolve(value, { signal })`, `Promise.all(iter, { signal })`, and many other places.
+
+[19:09:57.0665] <bakkot>
+for the `new Promise` one, you can always just pass the signal to `init` directly, right?
+
+[19:10:34.0626] <bakkot>
+for `Promise.resolve`, you just mean that if `value` is a thenable it forwards the signal to `value.then(f, r, { signal })`? or something else
+
+[19:10:53.0702] <bakkot>
+but yes, agreed re `then`/`catch`/all` etc
+
+[19:11:16.0953] <sffc>
+I primarily use my ultra-short-term memory of the sound of the voice when attributing comments, but this isn't 100% accurate, so when it fails I fall back to context of the conversation, but that also isn't 100% accurate.
+
+[19:11:39.0207] <Mathieu Hofman>
+> <@rbuckton:matrix.org> @erights Mark Miller (Agoric) MM: One of the original reasons for sync callbacks was related to this quote from Dean Tribble that is reposted in the README for the cancellation proposal:
+> 
+> > Cancellation is a race
+> > In an async system, new activities may be getting continuously scheduled by asks that are themselves scheduled but not currently running. The act of cancelling needs to run in this environment. When cancel starts, you can think of it as a signal racing out to catch up with all the computations launched to achieve the now-cancelled objective. Some of those may choose to complete (see the caching example above). Some may potentially keep launching more work before that work itself gets signaled (yeah it's a bug but people write buggy code). In an async system, cancellation is not prompt. Thus, it's infeasible to ask "has cancellation finished?" because that's not a well defined state. Indeed, there can be code scheduled that should and does not get cancelled (e.g., the result processor for a pub/sub system), but that schedules work that will be cancelled (parse the publication of an update to the now-cancelled query).
+> 
+> Another reason for sync notification is that it ensures an entire cancellation graph can be set to the canceled/aborted state all at once, rather than incrementally as each notification triggers cancellation of a linked signal.
+
+I don't particularly read that quote as requiring sync callback, but requiring some sync way of reading the cancelled state
+
+[19:12:54.0354] <sffc>
+What would help for note-taking is if speakers could wait until the other speaker could finish a sentence, and speak in complete sentences. Mid-sentence breaks are the hardest to track
+
+[19:12:58.0951] <bakkot>
+Mathieu Hofman sometimes the thing that is scheduling work cannot be modified to read from the signal itself, and needs to be actively notified, which you do by adding an abort callback to the signal and having that callback notify the thing scheduling work
+
+[19:13:09.0085] <rbuckton>
+Passing the signal to `new Promise` itself allows the runtime to affect how `.then` registrations occur. Passing the signal to `Promise.resolve()` affects how it handles adoption of a Promise passed as the value.
+
+[19:14:00.0521] <bakkot>
+say more about "allows the runtime to affect how `.then` registrations occur"?
+
+[19:14:31.0195] <bakkot>
+(or feel free not to, I might forget by the time this becomes relevant again, which will be a while)
+
+[19:18:18.0720] <rbuckton>
+If you abort a signal attached to the promise constructor before any `.then` registrations are made, then you can immediately reject the promise from the outside and use the fast path for new registrations via `.then` (i.e., enqueue promise jobs directly rather than queuing them in [[PromiseFulfillReactions]]/[[PromiseRejectReactions]]).
+
+[19:19:37.0948] <rbuckton>
+Or, if we don't reject canceled promises, we can have a different fast path for never-resolving promises. It depends on what behavior we would adopt for `.all`, et al.
+
+[19:23:15.0315] <rbuckton>
+One of the big features I wanted for cancellation/abortcontroller was having a fast path to release memory held by closures: For a cancellation graph, a way to "close"/"dispose" the graph to indicate it will never be canceled, so registered callbacks can be dropped. For Promises, a way to propagate cancellation so that registered continuations can be dropped, though that depends on whether cancellation is silent (never resolves) or noisy (rejects).
+
+[19:24:02.0110] <bakkot>
+I think it's gotta reject, never-settling Promises are very bad
+
+[19:25:38.0414] <rbuckton>
+bakkot: We can maybe get around the `DOMException` thing by specifying that an ES `AbortController` must take a reason when you abort? DOM layering could make it optional and create `DOMException` in those cases.
+
+[19:26:46.0189] <ljharb>
+i'm confused how parsing bigint literals wouldn't be easier than parsing number literals, since fewer things are valid?
+
+[19:29:00.0087] <Olivier Flückiger>
+it's not immediately clear if the result will be integral
+
+[19:29:12.0972] <Olivier Flückiger>
+you first need to find the exponent
+
+[19:29:25.0702] <Olivier Flückiger>
+then depending on the exponent parse from the start
+
+[19:29:42.0643] <ljharb>
+ah so the issue isn't with the parsing exactly, it's that at the stage you'd want to early error, you haven't necessarily computed the numeric value yet?
+
+[19:29:57.0184] <ljharb>
+(meaning, with Number literals you don't have to compute the actual value until runtime?)
+
+[19:30:17.0252] <Richard Gibson>
+I generally find enclosing brackets to be more readable than backslash prefixes (and am aware that this is a minority preference)
+
+[19:30:34.0262] <Jesse (🇯🇵)>
+for negative exponents, a bit more work is required; but if only non-negative exponents, I guess it should be required (comparing the length of the string before the `e` with the Number value of the exponent)
+
+[19:30:43.0045] <Jesse (🇯🇵)>
+* for negative exponents, a bit more work is required; but if only non-negative exponents are supported, I guess it should be required (comparing the length of the string before the `e` with the Number value of the exponent)
+
+[19:31:16.0556] <rkirsling>
+not sure about readability but I could see it being nice to avoid the situation where you need to escape a backslash
+
+[19:31:17.0172] <Jesse (🇯🇵)>
+I generally use `[.]`
+
+[19:33:12.0869] <Chris de Almeida>
+is there still popping sound on the audio for remote folk?
+
+[19:33:59.0656] <Jesse (🇯🇵)>
+* for negative exponents, a bit more work is required; but if only non-negative exponents are supported, I guess it should be fairly easy (comparing the length of the string before the `e` with the Number value of the exponent)
+
+[19:38:36.0471] <rbuckton>
+`{ objectPrototype: "null" | "default", arrayPrototype: "default" }`, never give another option for `arrayPrototype`?
+
+[19:40:58.0422] <sffc>
+ljharb keith_miller your comments got merged together and I wasn't confident where to break them, ptal: JHD/KM mixed transcription: It's not necessarily that it has to be functionally identical. It's that it's a weird inconsistency if it can't be. I mean, how would you even how would it even make sense? No, that's what I mean. It wouldn't. But the. But then you can use it to the extent that it makes sense but you can't use it beyond the point that it makes sense. But like if you typed your import attribute and you put something that in code would reference an object like array.prototype or something, and then you get a SyntaxError. That's just weird and confusing, I think. And that doesn't come into play if it's a Boolean.
+
+[19:45:37.0646] <rkirsling>
+ljharb: can't "null object" just refer to `null` itself?
+
+[19:46:03.0809] <ljharb>
+i can see that reading, but no, because null is famously not an object despite what typeof says
+
+[19:46:07.0649] <Mathieu Hofman>
+> <@bakkot:matrix.org> Mathieu Hofman sometimes the thing that is scheduling work cannot be modified to read from the signal itself, and needs to be actively notified, which you do by adding an abort callback to the signal and having that callback notify the thing scheduling work
+
+Ok so the argument is that some existing code is already expecting a push model, so there is just no way change it to accept a pull style check, even though internally something has to bottom out at a "have I been interrupted yet".
+
+[19:46:21.0846] <bakkot>
+that is one argument among several, yes
+
+[19:46:31.0004] <ljharb>
+* i can see that reading, but no, because null is famously not an object despite what typeof says (like, it's probably one of the most known things about JS among practitioners)
+
+[19:56:10.0977] <Ashley Claymore>
+Really cool to see all 3 major engines discuss and get consensus on that issue
+
+[19:56:23.0055] <Richard Gibson>
+ooh, or more legibly at small size: 😶
+
+[19:57:34.0072] <waldemar>
+Heh, I just upgraded to Firefox 157 and now Google Docs gives me an infinite error loop when I try to access the notes. Not sure if the two are correlated.,
+
+[20:31:08.0772] <bakkot>
+ooh, interesting thought. I think in practice it would be unfortunate if code could not rely on `.abort()` working? and checking for `.name === 'AbortError'` is a common pattern it would be nice to ensure people could keep using. but, something to consider, for sure
+
+[20:58:39.0993] <Chris de Almeida>
+_taps the sign_  ☝️
+
+[21:02:13.0931] <waldemar>
+Just a coincidence. Also started happening in Firefox 156 for our notes document.
+
+[21:04:23.0079] <bakkot>
+another important reason the callback needs to be sync is that cancellation fundamentally does not have anything to do with asynchronous code. it is entirely reasonable to have a purely synchronous code where you need to do cancellation; for example, you could have a task queue (of synchronous tasks) that various tasks push other tasks to, and you want the ability for one task to cancel specific other tasks sometimes (i.e., to remove them from the queue; if the tasks are themselves aware of the signal they can poll it once they're initiated if they remember to do so, but this now requires intrusive modifications and is also less efficient). AbortSignal is the natural way to do this. and since there is no async _at all_ in this world, having cancellation be deferred to the next tick would make it totally useless.
+
+[21:09:08.0923] <keith_miller>
+bakkot: Our Web Platform folks ok'd moving AbortController
+
+[21:09:37.0234] <keith_miller>
+* bakkot: Our Web Platform folks ok'd moving AbortController, in theory
+
+[21:09:41.0083] <keith_miller>
+* bakkot: Our Web Platform folks ok'd moving AbortController, in theory.
+
+[21:38:17.0215] <hax (HE Shi-Jun)>
+I still worry about changing scoping rule, even it might be web compatible, such change will confuse AI agents at least some years~ 😅
+
+[21:39:00.0547] <ljharb>
+bakkot: `private #x` is what's changing how `#x = 2` works in the class body already. what's wrong with removing the "duplicate field installation" error in that case also?
+
+[21:40:37.0378] <ljharb>
+* bakkot: `private #x` is what's changing how `#x = 2` works in the class body already (because it's not creating a brand new field, in that case) - so "changing how private fields work" is already true. what's wrong with removing the "duplicate field installation" error in that case also?
+
+[21:45:36.0777] <bakkot>
+In principle we could also make other changes, but I fought for duplicate installation being an error originally and I don't want to change it
+
+[21:45:49.0424] <bakkot>
+I think that that error is good
+
+[21:45:54.0413] <waldemar>
+Concatenating code was just an illustrative example; the scoping problem exists without naive concatenation.
+
+[21:45:59.0381] <Justin Ridgewell>
+I think this will be a bigger web compat risk
+
+[21:46:19.0615] <ljharb>
+it'd be new code, compat risk should be impossible
+
+[21:46:33.0080] <ljharb>
+right but that always exists for any bindings, no?
+
+[21:46:50.0797] <Justin Ridgewell>
+No, it'd fundamentally change `class WeakMap { #inner = … }`
+
+[21:47:10.0794] <ljharb>
+typing `private #inner`; already does that
+
+[21:47:11.0161] <waldemar>
+For lexically scoped bindings the problem doesn't arise.
+
+[21:47:41.0084] <bakkot>
+your proposal would either change the semantics of existing code, or would be making `private #x` a different kind of thing than existing private fields
+
+[21:47:43.0919] <ljharb>
+* typing `private #inner`; already fundamentally changes it
+
+[21:47:49.0217] <bakkot>
+I really do not want to have two different kinds of private fields
+
+[21:47:50.0802] <waldemar>
+An outer scope can't pluck a variable out of an inner scope.
+
+[21:48:17.0392] <ljharb>
+it would change the semantics of `#x = 1` from "error if the field is there, install the field, assign the field" to "install the field if it is not already there, assign the field". that's a pretty small chanbge
+
+[21:48:21.0376] <ljharb>
+* it would change the semantics of `#x = 1` from "error if the field is there, install the field, assign the field" to "install the field if it is not already there, assign the field". that's a pretty small change
+
+[21:48:32.0914] <ljharb>
+i understand you don't want it. but i don't think there's any technical reason we couldn't do it
+
+[21:48:33.0188] <bakkot>
+waldemar: my model is that this is still lexically scoped, it's just that, for convenience, `class { #x }` in a scope which doesn't already have one introduces the name into the class body's scope
+
+[21:49:00.0200] <bakkot>
+yes, it's a change we could make, but I agree with Justin Ridgewell that it's a much bigger web compat risk
+
+[21:49:13.0479] <bakkot>
+people are relying on that error
+
+[21:49:29.0122] <ljharb>
+something that requires new syntax *can not possibly be* a web compat risk. because no existing code uses `private #x`
+
+[21:49:46.0931] <ljharb>
+it could arguably be a refactoring hazard if they add that. but that's not "web compat"
+
+[21:50:14.0625] <ljharb>
+(and "refactoring hazard" might be a dealbreaker for it, sure - just clarifying "web compat")
+
+[21:50:37.0332] <bakkot>
+again, your proposal would change the semantics of _existing code_
+
+[21:50:50.0141] <bakkot>
+because _existing code_ already has `#x = 1`
+
+[21:51:01.0360] <ljharb>
+only when existing code is edited to add `private`
+
+[21:51:16.0613] <ljharb>
+and even as proposed, that DOES change the semantics of that existing code
+
+[21:51:24.0624] <waldemar>
+To make it lexically scoped, everyone would have to get into the habit of writing `class { private #x; #x }` instead of `class {#x}` whenever they're not using an outer-scope #x.
+
+[21:51:27.0973] <ljharb>
+it changes it from "make a new field" to "reuse the declared field"
+
+[21:51:53.0330] <bakkot>
+so your proposal is that fields declared with `private #x` would work differently than fields declared in the current way? that's the other arm of my fork above; I do not want to have two different kinds of private fields
+
+[21:51:55.0818] <ljharb>
+* it changes it from "make a new field" to "reuse the declared field". "changing the semantics of existing code when you type the new thing" is how every syntax proposal _works_, that's not "web compat"
+
+[21:52:16.0775] <ljharb>
+no, the field would *work* the same way. only the `#x = 1` line in the class body, which is already doing something different, would do something else different
+
+[21:52:41.0262] <ljharb>
+once installed it's identical. the change i'm suggesting is only in the line that's creating and installing it on a class instance
+
+[21:52:48.0023] <bakkot>
+right, so, you'd be changing the semantics of existing code, which can therefore be a web compat risk
+
+[21:52:49.0745] <ljharb>
+* once installed it's identical. the change i'm suggesting is only in the line that's creating and installing it on a class instance (which, your proposal already changes)
+
+[21:52:53.0121] <Justin Ridgewell>
+Would it help if we allowed `private #x; class { private #x }`, so you can preemptively declare that I don't want to share the outer?
+
+[21:52:53.0745] <ljharb>
+no
+
+[21:52:58.0848] <bakkot>
+I have argued that the specific change I want to make is likely to be web compat
+
+[21:53:04.0209] <ljharb>
+"existing code" requires not editing it
+
+[21:53:05.0590] <bakkot>
+I think the specific change you want to make is much less likely to be web compat
+
+[21:53:11.0223] <ljharb>
+using `private` means it's not pre-existing code anymore
+
+[21:53:23.0889] <bakkot>
+I  am not at all talking about examples with `private` and am very confused why you think I am
+
+[21:53:35.0247] <ljharb>
+i'm not suggesting changing things in the absence of `private`?
+
+[21:53:41.0500] <ljharb>
+i'm saying *only when `private` exists* this change should happen
+
+[21:53:49.0206] <ljharb>
+thus, impossible to be web compatible.
+
+[21:53:51.0062] <ljharb>
+* thus, impossible to be web incompatible.
+
+[21:54:02.0128] <ljharb>
+it would continue working the same if you don't use a private declaration
+
+[21:54:22.0389] <bakkot>
+right, ok, so your proposal is to have two different kinds of private fields
+
+[21:54:23.0282] <ljharb>
+(and if you use one, the semantics are ALREADY changing, so this is just another change)
+
+[21:54:24.0500] <bakkot>
+I do not want to have that
+
+[21:54:26.0838] <ljharb>
+no
+
+[21:54:29.0935] <ljharb>
+the field is the same
+
+[21:54:38.0297] <Justin Ridgewell>
+I think the biggest mistake that we made recently was allowing `class { #x }` instead of `class { private #x }`
+
+[21:54:43.0932] <ljharb>
+the syntactic line in the class body that you are already changing the semantics of would have an additional semantic change
+
+[21:54:55.0525] <ljharb>
+* the syntactic line in the class body that you are already changing the semantics of would have an additional semantic change. neither change alters how private fields work
+
+[21:54:55.0742] <Olivier Flückiger>
+that would be extremely confusing if private property declarations would be context dependent
+
+[21:55:02.0192] <ljharb>
+* the syntactic line in the class body that you are already changing the semantics of would have an additional semantic change. neither change alters how private fields work (it's not a private field til it's installed)
+
+[21:55:06.0214] <ljharb>
+they already are!
+
+[21:55:20.0937] <ljharb>
+the presence of `private #x` changes how things work
+
+[21:55:21.0068] <Olivier Flückiger>
+no, they are not
+
+[21:55:34.0242] <ljharb>
+if it didn't then the proposal wouldn't do anything
+
+[21:55:51.0995] <Olivier Flückiger>
+the `private` changes the place of declaration.
+
+[21:56:10.0508] <Olivier Flückiger>
+it does not change what `#x =1` means
+
+[21:56:21.0351] <ljharb>
+`class { #x = 1 } class { #x = 1 }` has two distinct private fields. `private #x; class { #x = 1 } class { #x = 1 }` has one. that is a semantic change based on the presence of the declaration
+
+[21:56:23.0903] <ljharb>
+it does
+
+[21:56:35.0229] <ljharb>
+because in the first, it means "make a new distinct field" and in the second it means "reuse the existing one"
+
+[21:56:39.0199] <ljharb>
+that is a change of what it means
+
+[21:57:49.0916] <ljharb>
+(concretely there is almost certainly a spec delta in the part of the spec that installs private fields as a result of the proposal *because the semantics change*)
+
+[21:58:00.0962] <ljharb>
+* (concretely there is almost certainly a normative spec delta in the part of the spec that installs private fields as a result of the proposal _because the semantics change_)
+
+[21:58:10.0200] <Olivier Flückiger>
+`class { #x = 1 }` means:
+1. declare a private name
+2. create a private propety with that name
+3. assign it to 1 
+`private #x; class { #x = 1 }` syntactically moves 1
+
+[21:58:20.0537] <ljharb>
+yes that is a semantics change
+
+[21:58:36.0327] <ljharb>
+because it makes *a change* to that 3-item list
+
+[21:58:50.0363] <ljharb>
+i'm really confused how this is confusing
+
+[21:59:03.0908] <ljharb>
+that list is the semantics. that list changes. ∴ it is a semantics change
+
+[21:59:25.0572] <bakkot>
+ljharb: 
+
+```
+class ROT {
+  constructor(o) { return o; }
+}
+
+class Stamp extends ROT {
+  #value;
+  constructor(o, value) {
+    super(o);
+    this.#value = value;
+  }
+}
+let stamp = (o, value) => { new Stamp(o, value); };
+
+const obj = {};
+stamp(obj, 1);
+stamp(obj, 2); // error
+```
+
+[21:59:42.0704] <bakkot>
+is your proposal:
+- this stops erroring?
+- or, if you put `private #x` at the top, now it stops erroring?
+
+[21:59:48.0641] <bakkot>
+for the first, I think there is a web compat risk
+
+[21:59:49.0035] <ljharb>
+the latter
+
+[21:59:59.0132] <ljharb>
+the former would indeed be a web compat risk which is why i never suggested it
+
+[22:00:02.0588] <bakkot>
+for the second, I think it would be very bad if that error was dependent on whether the field was declared with `private #x` or not
+
+[22:00:08.0974] <Olivier Flückiger>
+one is changing the scoping rules in the parser. the other is changing runtime behavior based on context. I would really not want the latter
+
+[22:00:10.0432] <ljharb>
+why?
+
+[22:00:14.0840] <bakkot>
+because I do not think it makes sense for that error to depend on how the name was declared
+
+[22:00:21.0017] <ljharb>
+ok but those are still both "semantics"
+
+[22:00:45.0574] <ljharb>
+why? changing between var/let/const - ie, how vars are declared - makes context-dependent errors
+
+[22:00:46.0664] <Justin Ridgewell>
+This feels very much like the protected override bug we had in Backbone
+
+[22:01:03.0954] <bakkot>
+those are _different kinds of variables_
+
+[22:01:09.0640] <bakkot>
+and I do not want there to be different kinds of private fields
+
+[22:01:16.0218] <Justin Ridgewell>
+If you try to override the same field in a subclass, it's not going to be the one that's present during the parent's constructor execution.
+
+[22:01:33.0655] <Justin Ridgewell>
+I think it's an error to try and override the field in the subclass at all.
+
+[22:02:32.0887] <bakkot>
+yes
+
+[22:02:47.0916] <ljharb>
+hm
+
+[22:03:26.0385] <Justin Ridgewell>
+Given that, I really want Olivier's example to throw an error. It should error very loudly that the type of code you're attempting to write has a bug.
+
+[22:04:06.0521] <ljharb>
+is `[#x] = 1` code this proposal would let you write?
+
+[22:04:20.0891] <bakkot>
+nope
+
+[22:04:23.0552] <ljharb>
+i think i saw that on the queue
+
+[22:04:31.0238] <bakkot>
+(it was last time I presented it but that confused everyone a lot)
+
+[22:04:34.0076] <bakkot>
+that was a suggestion
+
+[22:04:39.0870] <bakkot>
+from danielrosenwasser I think
+
+[22:04:40.0260] <ljharb>
+ok so you’d be forced to make one of the classes - but not the other - imperative?
+
+[22:05:05.0687] <bakkot>
+yes, the one where you are only assigning to an existing field, rather than declaring it, would have to use the syntax that is only assignment, not declaring it
+
+[22:05:09.0078] <bakkot>
+seems good to me
+
+[22:05:33.0004] <ljharb>
+ok, I’m convinced. Thank you (i stand by all my clarifications tho)
+
+[22:06:13.0507] <Olivier Flückiger>
+Unpopular opinion: we have too small timeboxes! If we spend all the next topics time to talk here that is kinda bad for the conversation
+
+[22:06:33.0214] <bakkot>
+I was considering making this one larger but I did already have > 3 hours on the agenda...
+
+[22:06:43.0754] <Mathieu Hofman>
+I never said anything about async code. My concern is about avoiding introducing new synchronous re-entrancy. If you have synchronous code doing cancellation, the receiving system handling the cancellation is not currently at the top of the stack (the triggering system of the abort is). What the callback does is ultimately modify some state in the system handling the abort. If that system is somewhere already on the call stack it needs to be capable of handling that state change when the stack unrolls to it, so checking for an abort state is already a requirement. Same story about entrypoints to the system, which must already check for aborted state. The only difference is how much "cleanup" you'd be able to do immediately vs when when the system checks for an aborted state. Concretely in your example, the queue loop can check the abort state of the signal associated with the task before executing it. I don't see how that requires any modification of the tasks themselves, or why that would be much less efficient than immediately removing the task from the queue.
+
+[22:06:49.0151] <ljharb>
+nobody will mind a Kevin day
+
+[22:06:51.0619] <Michael Ficarra>
+the process document is like that for a reason!
+
+[22:06:55.0914] <Michael Ficarra>
+no time to explain because note taking
+
+[22:06:59.0835] <Justin Ridgewell>
+Under Jordan's suggestion:
+```
+private #speak;
+class Parent {
+  constructor() {
+    this.#speak();
+  }
+
+  #speak () {
+    console.log('parent');
+  }
+}
+
+class Child extends Parent {
+  #speak() {
+    console.log('child')
+  }
+}
+
+new Child(); // "parent"
+```
+
+But if we kept the "can't install twice", this throws. I like the throwing.
+
+[22:07:16.0607] <bakkot>
+Michael Ficarra I can take over for notes for a minute
+
+[22:07:53.0529] <rkirsling>
+on the present topic, I think `Symbol.for` is a terrible name and shouldn't be mimicked
+
+[22:09:05.0193] <rkirsling>
+(but I really like the proposal and want it to advance)
+
+[22:10:55.0743] <Chris de Almeida>
+yes.. I always feel bad for presenters who have to follow a hotly debated topic that spills over into the chat for an extended period
+
+[22:11:09.0372] <Chris de Almeida>
+I'm not sure how to solve for this though...
+
+[22:11:28.0750] <Michael Ficarra>
+@softwarechris:matrix.org @aclaymore:matrix.org So on the Stage 2 wording, we intentionally want to add emphasis to the non-final nature of the proposal at that stage because the primary purpose of that explanation is for communicating to the community. We had a lot of issues in the past with earlier wording that made things sound too much like a commitment. The community had a lot of trouble with misunderstandings of our proces in the past.
+
+[22:11:44.0028] <Michael Ficarra>
+thanks @bakkot:matrix.org I will take back notes
+
+[22:12:02.0777] <Olivier Flückiger>
+maybe let attendees up/down vote timeboxes upfront :)
+
+[22:12:29.0961] <Michael Ficarra>
+no!
+
+[22:13:55.0572] <bakkot>
+in my example, the task queue does not need to have any awareness of signals at all, and there is no notion of signals being "associated with" a task
+
+[22:14:17.0569] <Michael Ficarra>
+it is rude to assume what somebody is going to say based on their queue topic and then pre-reply to a strawman
+
+[22:14:39.0923] <ljharb>
+why is that rude?
+
+[22:14:52.0870] <ljharb>
+it doesn't interfere with their ability to still speak their item
+
+[22:15:03.0528] <Michael Ficarra>
+because you're making a strawman
+
+[22:15:36.0880] <ljharb>
+i suppose if you're stating your interpretation of their comment as if it's fact, that'd be rude. but that's not requisite in pre-replying
+
+[22:16:00.0100] <ljharb>
+* i suppose if you're stating your interpretation of their comment as if it's fact, that'd be rude. but that's not inherent in pre-replying
+
+[22:17:08.0418] <Rob Palmer>
+regardless of whether it's rude - speculative queue entries risk being distracting by unnecessarily widening the conversation
+
+[22:17:18.0252] <ljharb>
+that's certainly true
+
+[22:17:26.0090] <ljharb>
+altho often the widening leads to useful discussion
+
+[22:18:43.0457] <bakkot>
+not sure if serious, but re keith's point: throw if the object's keys are not in alphabetical order?
+
+[22:18:53.0289] <ljharb>
+keith_miller: it's not just "insertion order" today tho; numeric keys get sorted already iirc?
+
+[22:18:59.0929] <bakkot>
+would make it more annoying to use, but like... works ok
+
+[22:28:37.0310] <Olivier Flückiger>
+I think there the order is actually implementation defined
+
+[22:29:08.0429] <Justin Ridgewell>
+^ We strongly defined the ordering of numeric keys and string keys
+
+[22:29:22.0441] <Justin Ridgewell>
+I remember that proposal
+
+[22:29:32.0745] <Olivier Flückiger>
+hmm, last time I looked there was more wiggle room than I expected
+
+[22:29:53.0979] <bakkot>
+there's wiggle room if you change out the prototype while in the middle of a for-of or something
+
+[22:29:56.0297] <bakkot>
+and in a few similar cases
+
+[22:30:05.0671] <Olivier Flückiger>
+ah, yes!
+
+[22:30:10.0424] <bakkot>
+but in the case of an object that is not changing during enumeration, it's fully defined
+
+[22:30:16.0505] <Olivier Flückiger>
+deleting numeric keys while iterating
+
+[22:30:44.0214] <Olivier Flückiger>
+(was the thing I looked at)
+
+[22:32:15.0372] <Michael Ficarra>
+reminder: the ♻️ button in TCQ has pre-saved messages that you can use (and add your own)
+
+[22:35:21.0912] <bakkot>
+I guess not being able to write `rgba` in that order is a moderately compelling reason not to go with my suggestion of throwing in on out-of-order keys
+
+[22:35:33.0318] <bakkot>
+* I guess not being able to write `"r" "g" "b" "a"` keys in that order is a moderately compelling reason not to go with my suggestion of throwing in on out-of-order keys
+
+[22:42:40.0202] <ljharb>
+@erights Mark Miller (Agoric) MM: why must a composite's realm not be observable?
+
+[22:42:50.0370] <ljharb>
+* @erights Mark Miller (Agoric) MM: why must a composite's realm not be observable? all other objects' realm is unavoidably observable
+
+[22:43:17.0211] <Chip Morningstar>
+If you require keys to be fed in in sorted order, then the first thing that will happen is somebody (probably several somebodies) will create an NPM package that wraps the Composite creator in something that makes a copy of the given object with its keys sorted. And then everybody will just use that, and complain about "why can't Composite just do this itself?"
+
+[22:43:35.0154] <bakkot>
+also true yes
+
+[22:45:57.0604] <Olivier Flückiger>
+Did I miss that part where we established the exact argument for why it has to be cross realm?
+
+[22:46:32.0877] <Rob Palmer>
+as an observation, this feels like the closest we've ever been to *genuine* consensus on composites / r&t.
+
+[22:46:35.0799] <ljharb>
+mark said something along the lines of "it's value-like, and values aren't tied to a realm" (i assume meaning primitives)
+
+[22:46:55.0372] <ljharb>
+but it has properties, and can contain an object, which in turn likely points to a realm, so i'm still unclear on the requirement
+
+[22:48:01.0590] <ljharb>
+also if you need to take a composite from one realm and use it in another and hide the original realm, you could `Composite(Object.fromEntries(Object.entries(otherRealmComposite)))` before handing it out i guess?
+
+[22:48:16.0286] <ljharb>
+* also if you need to take a composite from one realm and use it in another and hide the original realm, you could `Composite({ ...otherRealmComposite })` before handing it out i guess?
+
+[22:48:58.0633] <Olivier Flückiger>
+Right, but to mee this sounds more like a matter of taste. It might not be nicely uniform, but not strong enough if there are hard problems with the alternative.
+
+[22:49:18.0036] <ljharb>
+so far i agree with that take
+
+[22:49:41.0664] <ljharb>
+* so far i agree with that take, but i'm hoping mark or his compatriots can clarify further
+
+[22:49:49.0841] <Olivier Flückiger>
+(and the hard problems are clearly there, requiring distributed GC...)
+
+[22:49:54.0998] <Ashley Claymore>
+alternative for sorting is two phase api:
+
+```
+const makeRGB = defineComposite("r", "g", "b");
+
+function RGB(o) {
+  return makeRGB(o.r, o.g, o.b);
+}
+
+
+RGB(...) -> #Composite { b: _, g: _, r: _  }
+```
+```
+
+[22:50:44.0587] <Ashley Claymore>
+* alternative for (always) sorting is two phase api:
+
+```
+const makeRGB = defineComposite("r", "g", "b");
+
+function RGB(o) {
+  return makeRGB(o.r, o.g, o.b);
+}
+
+
+RGB(...) -> #Composite { b: _, g: _, r: _  }
+```
+
+[22:50:50.0623] <ljharb>
+oof, unnamed args make that bad news bears imo
+
+[22:55:21.0876] <Mathieu Hofman>
+I'm a little tired and fuzzy on the specifics right now, so I'll try to clarify with Mark before replying.
+
+[22:57:06.0799] <Ashley Claymore>
+I can bring Composites to a TG5 meeting too if that helps
+
+[22:57:17.0743] <Chris de Almeida>
+TG5?  or TG3 ? or both?
+
+[22:57:27.0216] <Ashley Claymore>
+All the TGs
+
+[22:57:32.0761] <Chris de Almeida>
+nice
+
+[22:57:38.0288] <Ashley Claymore>
+but yes TG3 sorry
+
+[22:57:49.0369] <Ashley Claymore>
+* I can bring Composites to a ~~TG5~~ TG3 meeting too if that helps
+
+[22:58:13.0436] <Jesse (🇯🇵)>
+I imagine that TG4 is neutral on composites
+
+[23:00:19.0110] <Chris de Almeida>
+ominous ☝️
+
+[23:02:42.0575] <James M Snell>
+I'm wondering what message did such that it had to be removed
+
+[23:03:08.0070] <Jesse (🇯🇵)>
+I thought it was harmless
+
+[23:06:49.0707] <nicolo-ribaudo>
+A message that belonged to TDZ and not here :P
+
+[23:19:24.0072] <Mathieu Hofman>
+Ok so I clarified things with Mark. keith_miller and Ashley Claymore 's description of the mechanism as a registry tied to the Composite "constructor" convinced him that same-realm interning is fine. He's actually asking that the mechanism be specified like that if possible, with the registry tied to the "constructor".
+
+[23:20:37.0216] <rkirsling>
+!
+
+[23:21:18.0627] <Ashley Claymore>
+thanks Mathieu Hofman !
+
+[23:23:19.0683] <Chris de Almeida>
+soooooo.... continuation?
+
+[23:25:55.0680] <James M Snell>
+I'm just catching up.. but if we can get the error code property proposal advanced then we have options there also. But I think it's not unreasonable to consider adding `AbortError` as an additional native error type such that `err.name === 'AbortError'` checks continue working even if `err instanceof DOMException` might not. The one thing I don't think we can necessarily do, however, is require that `abort()` always take a reason. There's way too much code out there that just calls `abort()` relying on the default reason.... we might be forced to just say that the default reason is an implementation specific detail
+
+[23:26:13.0566] <James M Snell>
+* I'm just catching up so sorry for throwing this in so late.. but if we can get the error code property proposal advanced then we have options there also. But I think it's not unreasonable to consider adding `AbortError` as an additional native error type such that `err.name === 'AbortError'` checks continue working even if `err instanceof DOMException` might not. The one thing I don't think we can necessarily do, however, is require that `abort()` always take a reason. There's way too much code out there that just calls `abort()` relying on the default reason.... we might be forced to just say that the default reason is an implementation specific detail
+
+[23:49:55.0988] <ljharb>
+and yet, ES6 broke many such guarantees :-(
+
+[00:03:23.0920] <Christian Ulbrich>
+MM has a point, although personally I do not see so much use of the WeakX stuff.
+
+[00:04:07.0353] <ljharb>
+nope, usage of weak stuff is probably super tiny
+
+[00:04:38.0377] <ljharb>
+and i'd bet creation of a weakref in a loop that isn't preserved across loop iterations is an infinitesimal % of that
+
+[00:05:59.0931] <Christian Ulbrich>
+Still its guessing. bakkot had some numbers for his arguments, which makes deciding things easier...
+
+[00:07:08.0604] <Christian Ulbrich>
+bakkot: How did you do your measuring across the top 17k npm packages for the "private stuff"?
+
+[00:08:02.0996] <Michael Ficarra>
+(last-ditch effort): @waldemarh:matrix.org can you check your DMs for a message from me?
+
+[00:08:29.0487] <Mathieu Hofman>
+Nicolo's audio is really bad for me, anyone else ?
+
+[00:08:51.0315] <peetk>
+sounds fine in the room
+
+[00:08:54.0591] <Christian Ulbrich>
+Mathieu Hofman: For us in the room it is good, albeit a bit creaky
+
+[00:08:55.0234] <Michael Ficarra>
+I think this is better than usual for NRO's audio
+
+[00:17:20.0443] <keith_miller>
+Mathieu Hofman: I also thought about it a bit more, I don't think the global registry is actually a blocking problem. The composite itself doesn't have to know about the realm it's from (we can reuse the same logic we use for wasm objects)
+
+[00:17:28.0730] <nicolo-ribaudo>
+I'm on a mac with airpods, I don't think I can make it better by changing _something_ in my setup
+
+[00:17:54.0484] <keith_miller>
+* Mathieu Hofman: I also thought about it a bit more, I don't think the global registry is actually a blocking problem. The composite itself doesn't have to know about the realm it's from (we can reuse the same logic we use for wasm objects). That said, I would still mildly prefer a per-realm cache
+
+[00:18:06.0405] <ljharb>
+i expect the risk to be small but i strongly disagree that most people avoid defaults
+
+[00:18:21.0697] <ljharb>
+the airbnb styleguide has always strongly recommended preferring them, as an example.
+
+[00:18:59.0792] <ljharb>
+(and they were all equally compatible iirc; the only argument i'm aware of is that IDEs automatic refactoring chooses not to support defaults as well as names)
+
+[00:20:10.0559] <Christian Ulbrich>
+I would regard all "people do this or that" as personal view, because w/o data, this is what it is. Defaults have certain usages and in React eco system they have been used extensively in the past...
+
+[00:20:32.0872] <Mathieu Hofman>
+It sounded to me like a combination of packet latency and slight clipping of the microphone
+
+[00:21:36.0571] <Mathieu Hofman>
+actually it sounds like the echo cancellation going crazy, possibly because there is echo in the room?
+
+[00:29:43.0543] <ljharb>
+absolutely. but it's totally possible to have a reasonable guestimation of usage even without data. i just have lots of anecdata that supports wide usage of defaults
+
+[00:30:03.0247] <ljharb>
+* absolutely. but it's totally possible to have a reasonable guestimation of usage even without data. i just have lots of anecdata that supports wide (but not majority, certainly) usage of defaults
+
+[00:30:30.0607] <Justin Ridgewell>
+There was an issue when trying to default export with named exports from libraries. We had to invent the es module wrapper pattern and get all bundlers to agree to it.
+
+[00:30:41.0160] <ljharb>
+ahh k
+
+[00:30:57.0451] <ljharb>
+i think by the time ESM usage become truly widespread that was already in the past tho
+
+[00:31:09.0149] <Justin Ridgewell>
+Yah
+
+[00:31:14.0456] <ljharb>
+(both were way before 2015 either way)
+
+[00:31:28.0292] <ljharb>
+* (both were way before 2015, either way)
+
+[00:31:55.0031] <ljharb>
+(also, thanks for helping with that work; the wrapper pattern is far superior to the other coping mechanisms people were using)
+
+[00:32:56.0559] <Christian Ulbrich>
+ljharb: I distinctly meant the *"all"* part, **personal** input or input from a developer's (mine) or a library author (yours) perspective is always good.
+
+[00:34:52.0551] <hax (HE Shi-Jun)>
+I still worry about export * from xxx. It was said the refacotor harzard issue is same as other named export. But I think it's not. I believe the original design is based on the assumption that `default` is special. It's obvious that the conflict possibility is very different between `default` and normal names.
+
+[00:35:52.0984] <peetk>
+but in the case of conflicts the key gets dropped?
+
+[00:37:15.0964] <ljharb>
+the refactoring hazard only applies to dynamic import, not static
+
+[00:37:34.0027] <ljharb>
+iow there'd have to be code doing `import()` that relied on the absence of `.default` or switched on its presence
+
+[00:37:57.0880] <ljharb>
+(altho changing the syntax might require import statement linters to make changes, like eslint-plugin-import)
+
+[00:39:25.0171] <hax (HE Shi-Jun)>
+I believe refactor hazard mentiond by AWB, Yahuda and Dave Herman was not dynamic but static import, because there was no dynamic import in that day.
+
+[00:39:37.0119] <Ashley Claymore>
+the refactoring hazard is immediately mitigated by having a single test for the default export.
+
+[00:39:43.0773] <Ashley Claymore>
+It's not a subtle issue
+
+[00:40:00.0654] <ljharb>
+current code that tries to import the default from a re-exporting module will have an early error
+
+[00:40:05.0777] <ljharb>
+so i'm not sure what the hazard would be
+
+[00:40:11.0698] <Ashley Claymore>
+right
+
+[00:40:15.0516] <ljharb>
+* current code that tries to import the default from a re-exporting module will have an early error, and with the proposal won't
+
+[00:40:39.0368] <Ashley Claymore>
+it's only a 'hazard' for a code change that is shipped to production without being run once
+
+[00:40:42.0412] <hax (HE Shi-Jun)>
+That's what I worry. Because we not fully understand the hazard they mentioned.
+
+[00:40:54.0100] <Ashley Claymore>
+I think we do fully understand it
+
+[00:41:16.0398] <ljharb>
+we might not understand what they meant - but i think we fully understand that there is no hazard. so either there's confusion or they were just wrong
+
+[00:41:37.0197] <Justin Ridgewell>
+Chris de Almeida: What were the security benefits? Did I miss that in the slides?
+
+[00:41:44.0365] <ljharb>
+(or they were talking about people migrating code from CJS/AMD/etc to ESM, and we're talking about ESM to ESM here)
+
+[00:43:00.0213] <hax (HE Shi-Jun)>
+Even it's what u understand, I don't agree `default` is same as named export. It has very higher conflict possibility than named exports.
+
+[00:44:32.0113] <Chris de Almeida>
+The People yearn for Composites
+
+[00:45:35.0295] <nicolo-ribaudo>
+I was not expecting support based on security since it's never being a selling point of the proposal, but if I had to guess is because you can statically tell whether your bundler will bundle something or not, thus avoid accidentally sending code to the front end that's not meant to be sent there?
+
+[00:47:29.0535] <Chris de Almeida>
+you are potentially reducing what is loaded and executed
+
+[00:47:35.0819] <Chris de Almeida>
+so decreased surface area
+
+[00:48:01.0127] <Chris de Almeida>
+and supply chain risk
+
+[00:48:51.0522] <ljharb>
+you'd just wrap it, no Mathieu Hofman ?
+
+[00:51:34.0408] <Michael Ficarra>
+parameter ordering before stage 2?!
+
+[00:55:27.0754] <nicolo-ribaudo>
+About the `export * from` refactoring hazard, to be clear it's this:
+```js
+// entry.js
+export * from "a.js";
+export * from "b.js";
+
+// a.js
+export let a = 1;
+export default 2;
+
+// b.js
+export let b = 3;
+```
+with this proposal `entry.js` would export `a`, `default`, and `b`.
+
+If `b.js` adds a default export, then `entrty.js` will only export `a` and `b`. This is the same as if `b.js` added an `a` export, then `entry.js` will stop exporting `a`.
+
+It is true that adding a `default` export is more likely than adding a `a` export, but it's also something that will be caught very easily
+
+[00:57:46.0566] <ljharb>
+frodo_secrets.png
+
+[00:58:34.0590] <Ashley Claymore>
+and tools can statically see if you have two `export *` with only one default and suggest making it explicit. CI can catch this.
+
+[01:00:40.0935] <Ashley Claymore>
+And right now they _have_ to do an explicit default export from the barrel file - so they should continue to do so
+
+[01:01:06.0176] <ljharb>
+more importantly they *can* continue to do so, and it'll just be redundant or back-compat-ful
+
+[01:03:26.0901] <Ashley Claymore>
+yeah, continuing to do so fully avoids the refactoring hazard
+
+[01:03:43.0220] <Ashley Claymore>
+explicit export always wins
+
+[02:01:14.0809] <rkirsling>
+Keith made a really good point that the way we're using RangeError would've in hindsight been better called ValueError
+
+[02:18:45.0491] <Michael Ficarra>
+> <@rkirsling:matrix.org> Keith made a really good point that the way we're using RangeError would've in hindsight been better called ValueError
+
+care to explain why?
+
+[02:27:10.0815] <rkirsling>
+'cause one can hung up on what counts as a "range" but it's really a matter of the value not adhering to expectations 
+
+[02:31:03.0034] <ljharb>
+exactly that. it’s not about “what a range is”, it’s about “it’s the right type but still an unacceptable value”
+
