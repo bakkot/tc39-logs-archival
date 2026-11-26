@@ -194,3 +194,140 @@ sffc: FYI, the link to your slides on the agenda is broken.
 [15:42:38.0365] <sffc>
 Fixed; thanks!
 
+
+2026-11-26
+[16:44:41.0804] <Mathieu Hofman>
+bakkot: I'd like us to make progress on the sync callback motivation. I still can't picture an example (besides easier compatibility with existing code), where you cannot structure the code to check the aborted state if you need to not wait for an async callback. I've opened https://github.com/tc39/proposal-cancellation/issues/36. Since we're adding a new way to register callbacks anyway, I really think those should be async.
+
+[17:23:08.0370] <bakkot>
+There is nothing about the proposal that relates to asynchrony; can you make a positive case for introducing it?
+
+[20:58:31.0749] <Mathieu Hofman>
+There is no synchronous notification system in Javascript, can you make a case for introducing it?
+
+[21:13:37.0910] <James M Snell>
+I find myself in the fun position of agreeing and disagreeing with both sides of that... And I'm still here wondering if we're going about this incorrectly. Still no where near convinced the AbortSignal pattern is actually what we should be pursuing... Even in slightly modified form. 
+
+[21:14:21.0550] <James M Snell>
+Hoping to have my thoughts on it actually worked through by the plenary
+
+[21:50:12.0836] <Mathieu Hofman>
+Having written a decent amount of code that cares about reasoning when it will can be re-entered, I would really like to have a way to "mark something as aborted" without opening myself to random code executing at that point. That's my concern with a synchronous notification system.
+
+There is possibly an argument to be made that's a behavior the code that creates / owns the controller get to chose.
+
+[01:00:00.0111] <Ashley Claymore>
+```
+function process(data, cb) {
+    while (looping) {
+         doSomething();
+         cb(nextItem);
+    }
+}
+```
+
+[01:01:16.0703] <Ashley Claymore>
+If that function doesn't want the callback to be re-entrant then what should it do? Should it `Promise.resolve().then(() => cb(nextItem))`, or should it put a guard at the top (probably this)
+
+[01:03:58.0550] <Ashley Claymore>
+```
+function process(data) {
+    const ac = new AbortController();
+    const source = new Source({ signal: ac.signal });
+    while (looping) {
+         if (getSomething()) {
+              ac.abort();
+              break;
+         }
+    }
+}
+```
+
+[01:06:16.0933] <Ashley Claymore>
+Then same for this ^^, if it doesn't want `.ac.abort()` to be re-entrant what should it do? Feels better to add a guard than rely on the notification being delivered async.
+
+[01:09:13.0263] <Ashley Claymore>
+And in practice I don't see code like the above, usually the abort is one of these two patterns:
+
+```
+process.on('SIGINT', () => {
+  ac.abort(); // no-re-entrancy risk here
+});
+```
+
+or
+
+```
+try {
+   ...
+} finally {
+   ac.abort(); // we've already finished on our side, just letting everyone else know
+}
+```
+
+[01:09:31.0398] <Ashley Claymore>
+* And in practice I don't see code like the above, usually the abort is one of these two patterns:
+
+```
+process.on('SIGINT', () => {
+  ac.abort(); // no re-entrancy risk here
+});
+```
+
+or
+
+```
+try {
+   ...
+} finally {
+   ac.abort(); // we've already finished on our side, just letting everyone else know
+}
+```
+
+[01:10:31.0949] <Ashley Claymore>
+* And in practice I don't see code like the above, usually the abort is one of these two patterns:
+
+```
+process.on('SIGINT', () => {
+  ac.abort(); // we're not doing any work to re-enter
+});
+```
+
+or
+
+```
+try {
+   ...
+} finally {
+   ac.abort(); // we've already finished on our side, just letting everyone else know
+}
+```
+
+[01:11:07.0844] <Ashley Claymore>
+* Then same for this ^^, if it doesn't want `ac.abort()` to be re-entrant what should it do? Feels better to add a guard than rely on the notification being delivered async.
+
+[01:12:09.0919] <Ashley Claymore>
+* And in practice I don't tend to see code like the above, usually the abort is one of these two patterns:
+
+```
+process.on('SIGINT', () => {
+  ac.abort(); // we're not doing any work to re-enter
+});
+```
+
+or
+
+```
+try {
+   ...
+} finally {
+   ac.abort(); // we've already finished on our side, just letting everyone else know
+}
+```
+
+[01:40:01.0184] <Mathieu Hofman>
+In my experience protecting from reentrancy is best accomplished by not interacting with code you don't trust, but that also assumes you're running with intrinsics that have not been modified. IMO calling untrusted `cb` here you need to be ready for reentrancy at that point. In that sense it's not quite comparable to tripping `abort`, which being on an intrinsic object I created I would expect not to execute untrusted code.
+
+[01:43:14.0605] <Mathieu Hofman>
+Yes I do expect the vast majority of cases to be like that. But also with the current proposal there is just no way to have the guarantee I'm looking for if I'm in a situation where I need to trip abort in a place where I cannot afford reentrancy 
+
